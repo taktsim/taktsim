@@ -1,5 +1,6 @@
 //! Output analysis for taktsim: confidence intervals from independent
-//! replications (spec §6 "Output analysis"; ADR-0014). Roadmap M8 and M9.
+//! replications and sequential replication control (spec §6 "Output
+//! analysis"; ADR-0014). Roadmap M8 and M9.
 //!
 //! Everything here is a pure function of its input: no randomness, no
 //! clock, no platform math (ADR-0013), so the same replication results give
@@ -12,13 +13,25 @@
 //! number of replications.
 //!
 //! ```
-//! use taktsim_stats::{ConfidenceInterval, ConfidenceLevel};
+//! use taktsim_stats::{
+//!     ConfidenceLevel, ReplicationControl, ReplicationPlan, ReplicationStatus,
+//! };
 //!
+//! // Replications until the 95 % half-width is within 2 % of the mean, at
+//! // most 100 of them.
+//! let plan = ReplicationPlan::new("2%".parse()?, 10, 100)?;
+//! let mut control = ReplicationControl::new(plan);
 //! let throughput = [101.2, 98.7, 100.4, 99.9, 100.8, 99.1, 100.3, 98.9, 101.0, 100.1];
-//! let ci = ConfidenceInterval::from_values(&throughput, ConfidenceLevel::DEFAULT)?;
-//! assert_eq!(ci.replications(), 10);
-//! assert!(ci.relative_half_width().unwrap() < 0.02);
-//! # Ok::<(), taktsim_stats::StatsError>(())
+//! let mut status = ReplicationStatus::Continue;
+//! for value in throughput {
+//!     status = control.push(value)?;
+//! }
+//! assert_eq!(status, ReplicationStatus::PrecisionReached);
+//! let report = control.report()?;
+//! assert_eq!(report.interval().replications(), 10);
+//! assert!(report.precision_reached());
+//! assert_eq!(report.interval().level(), ConfidenceLevel::DEFAULT);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
 #![forbid(unsafe_code)]
@@ -27,9 +40,11 @@
 mod error;
 mod interval;
 mod level;
+mod sequential;
 mod student_t;
 
 pub use error::StatsError;
 pub use interval::{ConfidenceInterval, Summary};
 pub use level::{ConfidenceLevel, Probability};
+pub use sequential::{PrecisionReport, ReplicationControl, ReplicationPlan, ReplicationStatus};
 pub use student_t::StudentT;
