@@ -1,12 +1,12 @@
 //! Output analysis for taktsim: confidence intervals from independent
-//! replications and sequential replication control (spec §6 "Output
-//! analysis"; ADR-0014). Roadmap M8 and M9.
+//! replications, sequential replication control and time-weighted
+//! statistics (spec §6 "Output analysis"; ADR-0014). Roadmap M8 and M9.
 //!
 //! Everything here is a pure function of its input: no randomness, no
 //! clock, no platform math (ADR-0013), so the same replication results give
 //! the same statistics on every platform. Inputs that cannot give a
-//! statistic (too few replications, NaN) are rejected with a typed
-//! [`StatsError`], never with a panic.
+//! statistic (too few replications, an empty window, NaN) are rejected with
+//! a typed [`StatsError`], never with a panic.
 //!
 //! Every estimate carries its uncertainty (spec §5): a
 //! [`ConfidenceInterval`] always holds its half-width, confidence level and
@@ -42,9 +42,11 @@ mod interval;
 mod level;
 mod sequential;
 mod student_t;
+mod time_weighted;
 
 pub use error::StatsError;
 pub use interval::{ConfidenceInterval, Summary};
 pub use level::{ConfidenceLevel, Probability};
 pub use sequential::{PrecisionReport, ReplicationControl, ReplicationPlan, ReplicationStatus};
 pub use student_t::StudentT;
+pub use time_weighted::{TimeWeighted, TimeWeightedAccumulator, Window, time_weighted};
