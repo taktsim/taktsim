@@ -29,7 +29,7 @@ measurements.
 | [0011](0011-toolchain-and-ci-tooling.md) | Toolchain, MSRV and CI tooling | accepted | M0 |
 | [0012](0012-units-implementation.md) | Units implementation | accepted | M1 |
 | [0013](0013-random-streams-and-math.md) | Random streams and platform-independent math | accepted | M2 |
-| [0018](0018-engine-architecture.md) | Engine architecture | proposed (M2b PR; one point needs explicit acceptance) | M2b |
+| [0018](0018-engine-architecture.md) | Engine architecture | proposed (needs explicit acceptance) | M2b |
 
 Open decisions from spec §15 that do **not** block v0.1, to be written
 before the tier that needs them: async boundary (v0.2), viewer rendering

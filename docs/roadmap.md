@@ -84,7 +84,7 @@ two instants, cannot be combined; error messages name the allowed units.
 
 Delivered in two pull requests:
 
-- **M2a, randomness** (in review; ADR-0013 accepted): Philox4x64-10 streams keyed by component and purpose, the
+- **M2a, randomness** (done, PR #3; ADR-0013 accepted): Philox4x64-10 streams keyed by component and purpose, the
   ADR-0003 duration distributions, `libm` for all transcendental math
   (enforced by clippy), statistical tests per distribution, and
   cross-platform golden digests.
@@ -107,7 +107,8 @@ Delivered in two pull requests:
   event; violation aborts with the event trace that led to it.
 - Trace events emitted through a sink trait; core does no I/O.
 - Event-queue benchmark on synthetic workloads; ADR-0001 updated with
-  numbers.
+  numbers. Follows M2b, once the benchmark infrastructure (track C) is
+  merged.
 
 **Proves:** A6 reached (100 % branch coverage in core). **Tests:** unit
 tests per primitive; proptest: queue pops in non-decreasing time with
