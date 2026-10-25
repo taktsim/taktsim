@@ -265,8 +265,15 @@ The full job on GitHub's `ubuntu-24.04` runner (x86-64), with Valgrind
 
 Pull request #7 was a scratch pull request and was closed without merging.
 These runs predate the review changes (removal list, base's gate, name
-without package directory); the run of the final version is recorded
-below.
+without package directory). The reviewed version, on 2026-10-26:
+
+| Run | Base → head | Result |
+| --- | --- | --- |
+| [40244226409](https://github.com/taktsim/taktsim/actions/runs/40244226409) | `main` → this pull request | judged by the pull request's own `ci/` (the base has none); 21 new; passed |
+| [40244316501](https://github.com/taktsim/taktsim/actions/runs/40244316501) | #6 → #6 without the `parse_ratio` benchmark (scratch #11) | judged by the base's `ci/`, both test suites run; `parse_ratio` "removed, not listed", job failed; the other 20 compared; the second runner install skipped (same version) |
+| [40244521385](https://github.com/taktsim/taktsim/actions/runs/40244521385) | as above, with `parse_ratio` in `ci/bench-removed.txt` (scratch #11) | "removed (listed)"; passed |
+
+Pull request #11 was a scratch pull request, closed without merging.
 
 The gate's tests (`ci/bench-test.sh`) pass with jq 1.7.1 and with the
 official jq 1.6 binary. Every non-equivalent mutant of
