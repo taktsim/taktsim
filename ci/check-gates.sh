@@ -12,13 +12,15 @@ gate_paths=(
 
 changed=$(git diff --name-only "$base"...HEAD -- "${gate_paths[@]}")
 
+# The root Cargo.toml at the base; empty if it did not exist yet.
+base_manifest() { git show "$base:Cargo.toml" 2>/dev/null || true; }
 # The [workspace.lints.*] sections of the root Cargo.toml.
 lints() { awk '/^\[/{on = /^\[workspace\.lints/} on' ; }
-if ! diff -q <(git show "$base:Cargo.toml" | lints) <(lints < Cargo.toml) >/dev/null; then
+if ! diff -q <(base_manifest | lints) <(lints < Cargo.toml) >/dev/null; then
   changed+=$'\n'"Cargo.toml [workspace.lints]"
 fi
 # rust-version (MSRV) in the root Cargo.toml.
-if [ "$(git show "$base:Cargo.toml" | grep '^rust-version')" != "$(grep '^rust-version' Cargo.toml)" ]; then
+if [ "$(base_manifest | grep '^rust-version' || true)" != "$(grep '^rust-version' Cargo.toml || true)" ]; then
   changed+=$'\n'"Cargo.toml rust-version"
 fi
 
