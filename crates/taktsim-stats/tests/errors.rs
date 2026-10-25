@@ -156,6 +156,15 @@ fn windows_and_signals() {
 
 #[test]
 fn warm_up_series() {
+    let mut huge = vec![1.0; 20];
+    huge[..5].fill(f64::MAX);
+    let err = mser5(&huge).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "the MSER-5 statistic overflows f64 at inputs of magnitude 1.7976931348623157e308; \
+         allowed: observations below about 1e154 in magnitude; \
+         example: express the observations in a larger unit"
+    );
     let err = mser5(&[1.0; 10]).unwrap_err();
     assert_eq!(
         err,
