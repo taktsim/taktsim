@@ -7,6 +7,8 @@
 /.github/             @ossScharom
 /ci/                  @ossScharom
 /.cargo/              @ossScharom
+# What the instruction-count gate measures (ADR-0016).
+/crates/taktsim-bench/ @ossScharom
 # Decisions: only the owner accepts an ADR.
 /docs/adr/            @ossScharom
 /docs/spec.md         @ossScharom
