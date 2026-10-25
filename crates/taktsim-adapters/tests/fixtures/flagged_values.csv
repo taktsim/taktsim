@@ -1,0 +1,9 @@
+timestamp,entity,signal,value,unit
+2026-03-02T06:00:00Z,M1,good_count,1520,parts
+2026-03-02T06:00:00Z,M1,scrap_count,,parts
+2026-03-02T07:00:00Z,M1,good_count,-3,parts
+2026-03-02T07:00:00Z,M1,parts_per_cycle,1.5,parts
+2026-03-02T07:00:00Z,M1,cycle_time,-0.5,s
+2026-03-02T07:00:00Z,M1,availability,-2,%
+2026-03-02T07:00:00Z,M1,temperature_delta,-1.5,1
+2026-03-02T07:00:00-00:00,M2,state,3,1

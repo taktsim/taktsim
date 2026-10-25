@@ -1,0 +1,7 @@
+timestamp,entity,signal,value,unit
+2026-10-25T01:30:00+02:00,M1,good_count,1200,parts
+2026-10-25T02:00:00+02:00,M1,good_count,1230,parts
+2026-10-25T02:30:00+02:00,M1,good_count,1260,parts
+2026-10-25T02:00:00+01:00,M1,good_count,1290,parts
+2026-10-25T02:30:00+01:00,M1,good_count,1320,parts
+2026-10-25T03:00:00+01:00,M1,good_count,1350,parts

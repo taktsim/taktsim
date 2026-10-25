@@ -1,0 +1,11 @@
+timestamp,entity,signal,value,unit
+2026-03-02T06:00:00+01:00,M1,good_count,1520,parts
+2026-03-02T07:00:00+01:00,M1,cycle_time,"60,4",s
+2026-03-02T07:00:00+01:00,M1,availability,NaN,%
+2026-03-02T07:00:00+01:00,M1,good_count,1578,pcs
+
+2026-13-02T08:00:00+01:00,M1,good_count,1637,parts
+2026-03-02T08:00:00+01:00,M1,good_count
+2026-03-02T08:00:00+01:00,"M1"2,good_count,1637,parts
+2026-03-02T08:00:00+01:00, M2,good_count,1102,parts
+2026-03-02T08:00:00+01:00,M2,good_count,1102,parts,

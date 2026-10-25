@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 76e8bd0bbe404b9d294a076da330e76ed36075520ee3fdd42d8b2436e0df5baf # shrinks to (names, rows, shuffled) = ([Name("é"), Name("é")], [(1772427603000000000, Known(UtcOffset(-1352)), 0, 1, -62094.0, Second), (1772427603000000000, Unknown, 1, 1, 8.709609559405953e-188, Hour)], [(1772427603000000000, Unknown, 1, 1, 8.709609559405953e-188, Hour), (1772427603000000000, Known(UtcOffset(-1352)), 0, 1, -62094.0, Second)])
