@@ -82,6 +82,16 @@ two instants, cannot be combined; error messages name the allowed units.
 
 ### M2 — Engine core (`taktsim-core`)
 
+Delivered in two pull requests:
+
+- **M2a, randomness** (in review; ADR-0013): Philox4x64-10 streams keyed
+  by component and purpose, the ADR-0003 duration distributions, `libm`
+  for all transcendental math (enforced by clippy), statistical tests per
+  distribution, and cross-platform golden digests.
+- **M2b, the engine**: event queue, clock, run loop, units and
+  conservation, the component trait, invariants, trace records, the
+  queue benchmark and the instruction-count regression gate.
+
 - Event queue per ADR-0001, with deterministic tie-breaking and
   cancellation (needed for failures that interrupt a cycle).
 - Simulation clock, run loop, budget and cancellation hook (synchronous;
@@ -276,11 +286,9 @@ written at the start of the milestone that uses them:
 - MSRV value (M0).
 - Coverage tooling: branch coverage in `cargo-llvm-cov` needs a nightly
   toolchain, while the project targets stable (M0, covered in ADR-0007).
-- RNG algorithm and platform-independent float math (M2): the spec lists
-  "Philox or PCG64" as counter-based, but only Philox is counter-based;
-  and `f64::ln`/`exp` call the platform math library, which can differ
-  between OSes, so sampling must use a pure-Rust implementation (e.g. the
-  `libm` crate) to meet A4 on both x86-64 and ARM64.
+- RNG algorithm and platform-independent float math (M2, ADR-0013):
+  Philox4x64-10 (PCG64 is not counter-based) and `libm` for all
+  transcendental functions.
 - Units implementation: `uom` vs own newtypes (M1, ADR-0012).
 - YAML parser crate (M4, inside ADR-0002).
 - Component registry (`inventory`) and schema generator (`schemars`)

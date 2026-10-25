@@ -47,7 +47,10 @@ exception explicitly in its description.
    - no `HashMap`/`HashSet` iteration where order can reach a trace or
      result (use `BTreeMap`, `IndexMap`, or sort);
    - no wall-clock time, thread scheduling or environment in engine logic;
-   - no platform math library for transcendental functions in sampling;
+   - no platform math library for transcendental functions anywhere: use
+     `libm` (ADR-0013; clippy's `disallowed-methods` enforces it);
+   - random numbers only from `taktsim_core::random::Stream`, one stream
+     per component and purpose;
    - parallelism only across replications; one replication is single-threaded.
 4. **Verifiable.** Reference models with analytical solutions, runtime
    invariants, error bounds. A result without an accuracy statement is not
