@@ -8,6 +8,8 @@ base=$1
 gate_paths=(
   rust-toolchain.toml clippy.toml deny.toml rustfmt.toml .gitattributes
   .github/workflows/ .github/CODEOWNERS ci/ .cargo/
+  # The benchmarks the instruction-count gate measures (ADR-0016).
+  crates/taktsim-bench/
 )
 
 changed=$(git diff --name-only "$base"...HEAD -- "${gate_paths[@]}")
