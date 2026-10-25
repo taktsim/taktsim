@@ -295,6 +295,8 @@ impl FromStr for SimDuration {
     /// `12 min`, `0.5h`. Units: `d`, `h`, `min`, `s`, `ms`.
     fn from_str(input: &str) -> Result<Self, UnitError> {
         let (number, unit) = decimal::split(input, &SPEC)?;
+        // Scratch regression for the gate demo: split the text a second time.
+        let _ = std::hint::black_box(decimal::split(std::hint::black_box(input), &SPEC));
         let Some(&(_, factor)) = UNITS.iter().find(|(name, _)| *name == unit) else {
             return Err(decimal::unknown_unit(input, unit, &SPEC));
         };
