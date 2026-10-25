@@ -1,12 +1,12 @@
 //! CSV import into the observation table.
 
 use std::fmt;
-use std::io::{self, BufReader, Read};
+use std::io::{self, BufRead};
 use std::num::NonZeroUsize;
 
-use super::record::{Record, RecordReader, Syntax};
+use super::record::{Next, Record, RecordReader, Syntax};
 use crate::observation::{
-    Implausibility, Measurement, NaiveTimestamps, NameError, ObservationTable, SourceOffset,
+    Implausibility, Measurement, NaiveTimestamps, Name, NameError, ObservationTable, SourceOffset,
     TableBuilder, Timestamp, TimestampError, Unit, UnknownUnit, ValueError, parse_value,
     validate_name,
 };
@@ -16,6 +16,8 @@ const HEADER_ALLOWED: &str = "a first row naming exactly the columns timestamp, 
      each once, in any order, separated by `,`";
 const HEADER_EXAMPLE: &str = "timestamp,entity,signal,value,unit";
 const ROW_ALLOWED: &str = "one field for each column of the header";
+const LENGTH_ALLOWED: &str = "rows no longer than `ReadOptions::max_row_bytes` (default 65536 bytes), \
+     with every quoted field closed";
 const ROW_EXAMPLE: &str = "2026-03-02T06:00:00+01:00,M1,good_count,1520,parts";
 const QUOTING_ALLOWED: &str = "an unquoted field without `\"`, or a field enclosed in `\"` with each inner `\"` doubled (RFC 4180)";
 const QUOTING_EXAMPLE: &str = "\"Press \"\"A\"\", left\"";
@@ -117,7 +119,6 @@ impl Column {
         Self::ALL.into_iter().find(|column| column.name() == name)
     }
 }
-
 /// Which field of a row an error is about.
 ///
 /// ```
@@ -147,8 +148,8 @@ pub enum FieldRef {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Problem {
-    /// The input is empty, or its first row is blank.
-    #[error("the first row must be the header")]
+    /// The input is empty or has only blank lines.
+    #[error("the input has no header row")]
     MissingHeader,
     /// The header is one field containing another separator, as written
     /// by spreadsheets in some locales.
@@ -173,6 +174,16 @@ pub enum Problem {
         fields: usize,
         /// Columns in the header.
         columns: usize,
+    },
+    /// A row longer than [`ReadOptions::max_row_bytes`]. Reading stops
+    /// there.
+    #[error(
+        "the row is longer than {limit} bytes; a quote that is never closed makes the rest of \
+         the input one row"
+    )]
+    RowTooLong {
+        /// The limit, in bytes as written, line breaks included.
+        limit: usize,
     },
     /// A `"` inside an unquoted field.
     #[error("a `\"` inside an unquoted field")]
@@ -214,10 +225,10 @@ fn syntax_problem(syntax: Syntax) -> Problem {
 /// One problem in an observation CSV: where (row and field), what was
 /// found, what is wrong, what is allowed and one valid example (spec §5).
 ///
-/// Rows are 1-based line numbers, the header being row 1. They are also
-/// the record numbers, since no valid field can contain a line break;
-/// blank lines are skipped but still counted, so the row is the line an
-/// editor shows.
+/// Rows are 1-based line numbers of the input. The header is the first
+/// line that is not blank, normally row 1. Rows are also the record
+/// numbers, since no valid field can contain a line break; blank lines are
+/// skipped but still counted, so the row is the line an editor shows.
 ///
 /// ```
 /// use taktsim_adapters::csv::{Column, FieldRef, Problem, ReadError, ReadOptions, read_observations};
@@ -239,18 +250,55 @@ fn syntax_problem(syntax: Syntax) -> Problem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct FieldError {
-    /// The 1-based row, the header being row 1.
+    /// The 1-based row (line) of the input.
     pub row: u64,
     /// The field in the row.
     pub field: FieldRef,
-    /// The field's text as found (invalid UTF-8 replaced by `�`, cut after
-    /// 100 characters); empty if there was none.
+    /// The text found, cut after 100 characters, with control and invisible
+    /// characters and `\` escaped as in Rust (`\n`, `\u{1b}`, `\u{feff}`,
+    /// `\\`), invalid UTF-8 replaced by `�`; empty if there was none. A
+    /// header problem shows the header as written.
     pub found: String,
     /// What is wrong.
     pub problem: Problem,
 }
 
+/// What kind of thing an error is about, for [`FieldError::allowed`] and
+/// [`FieldError::example`].
+enum Subject {
+    Header,
+    Row,
+    RowLength,
+    Quoting,
+    Field(Column),
+}
+
 impl FieldError {
+    fn subject(&self) -> Subject {
+        match self.problem {
+            Problem::MissingHeader
+            | Problem::Delimiter { .. }
+            | Problem::UnknownColumn
+            | Problem::DuplicateColumn
+            | Problem::MissingColumn => Subject::Header,
+            Problem::FieldCount { .. } => Subject::Row,
+            Problem::RowTooLong { .. } => Subject::RowLength,
+            Problem::StrayQuote | Problem::TextAfterQuote | Problem::UnterminatedQuote => {
+                Subject::Quoting
+            }
+            Problem::InvalidUtf8
+            | Problem::Whitespace
+            | Problem::Timestamp(_)
+            | Problem::Name(_)
+            | Problem::Value(_)
+            | Problem::Unit(_) => match self.field {
+                FieldRef::Column(column) => Subject::Field(column),
+                // Only header fields are not one of the columns.
+                FieldRef::Position(_) | FieldRef::Row => Subject::Header,
+            },
+        }
+    }
+
     /// What the field, row or header may contain.
     ///
     /// ```
@@ -263,25 +311,12 @@ impl FieldError {
     /// ```
     #[must_use]
     pub fn allowed(&self) -> &'static str {
-        match self.problem {
-            Problem::MissingHeader
-            | Problem::Delimiter { .. }
-            | Problem::UnknownColumn
-            | Problem::DuplicateColumn
-            | Problem::MissingColumn => HEADER_ALLOWED,
-            Problem::FieldCount { .. } => ROW_ALLOWED,
-            Problem::StrayQuote | Problem::TextAfterQuote | Problem::UnterminatedQuote => {
-                QUOTING_ALLOWED
-            }
-            Problem::InvalidUtf8
-            | Problem::Whitespace
-            | Problem::Timestamp(_)
-            | Problem::Name(_)
-            | Problem::Value(_)
-            | Problem::Unit(_) => match self.field {
-                FieldRef::Column(column) => column.allowed(),
-                FieldRef::Position(_) | FieldRef::Row => HEADER_ALLOWED,
-            },
+        match self.subject() {
+            Subject::Header => HEADER_ALLOWED,
+            Subject::Row => ROW_ALLOWED,
+            Subject::RowLength => LENGTH_ALLOWED,
+            Subject::Quoting => QUOTING_ALLOWED,
+            Subject::Field(column) => column.allowed(),
         }
     }
 
@@ -297,31 +332,18 @@ impl FieldError {
     /// ```
     #[must_use]
     pub fn example(&self) -> &'static str {
-        match self.problem {
-            Problem::MissingHeader
-            | Problem::Delimiter { .. }
-            | Problem::UnknownColumn
-            | Problem::DuplicateColumn
-            | Problem::MissingColumn => HEADER_EXAMPLE,
-            Problem::FieldCount { .. } => ROW_EXAMPLE,
-            Problem::StrayQuote | Problem::TextAfterQuote | Problem::UnterminatedQuote => {
-                QUOTING_EXAMPLE
-            }
-            Problem::InvalidUtf8
-            | Problem::Whitespace
-            | Problem::Timestamp(_)
-            | Problem::Name(_)
-            | Problem::Value(_)
-            | Problem::Unit(_) => match self.field {
-                FieldRef::Column(column) => column.example(),
-                FieldRef::Position(_) | FieldRef::Row => HEADER_EXAMPLE,
-            },
+        match self.subject() {
+            Subject::Header => HEADER_EXAMPLE,
+            Subject::Row | Subject::RowLength => ROW_EXAMPLE,
+            Subject::Quoting => QUOTING_EXAMPLE,
+            Subject::Field(column) => column.example(),
         }
     }
 }
 
 impl fmt::Display for FieldError {
-    /// `row R, column `C`: problem; found `F`; allowed: …; example: …`.
+    /// `row R, column `C`: problem; found `F`; allowed: …; example: …`, on
+    /// one line.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "row {}", self.row)?;
         match self.field {
@@ -353,9 +375,10 @@ impl std::error::Error for FieldError {
 /// Why an observation CSV could not be read.
 ///
 /// ```
-/// use taktsim_adapters::csv::{ReadError, ReadOptions, read_observations};
+/// use taktsim_adapters::csv::{ReadError, ReadOptions, Stopped, read_observations};
 ///
 /// let err = read_observations(&b"timestamp,entity\n"[..], &ReadOptions::default()).unwrap_err();
+/// assert!(matches!(err, ReadError::Invalid { stopped: Some(Stopped::InvalidHeader), .. }));
 /// let text = err.to_string();
 /// assert!(text.starts_with("3 errors in the observation CSV:\n"));
 /// assert!(text.contains("row 1, column `signal`: the column is missing from the header"));
@@ -368,30 +391,54 @@ pub enum ReadError {
     /// The CSV has problems; nothing was imported.
     Invalid {
         /// Every problem found, in row order, up to
-        /// [`ReadOptions::max_errors`]. A header problem stops reading.
+        /// [`ReadOptions::max_errors`].
         errors: Vec<FieldError>,
-        /// Reading stopped at the error limit, so later rows were not
-        /// checked.
-        truncated: bool,
+        /// Why reading stopped before the end, if it did: then rows after
+        /// the last error were not checked.
+        stopped: Option<Stopped>,
     },
+}
+
+/// Why reading an invalid CSV stopped before the end of the input.
+///
+/// ```
+/// use taktsim_adapters::csv::Stopped;
+///
+/// assert_eq!(
+///     Stopped::UnclosedQuote.to_string(),
+///     "a quoted field is not closed, so the rest of the input could not be split into rows"
+/// );
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum Stopped {
+    /// The header is invalid, so no data row was checked.
+    #[error("the header is invalid, so no data row was checked")]
+    InvalidHeader,
+    /// [`ReadOptions::max_errors`] errors were found.
+    #[error("stopped at the error limit; the rest of the input was not checked")]
+    ErrorLimit,
+    /// A quoted field is never closed, so everything after its quote is one
+    /// field.
+    #[error("a quoted field is not closed, so the rest of the input could not be split into rows")]
+    UnclosedQuote,
+    /// A row is longer than [`ReadOptions::max_row_bytes`].
+    #[error("stopped at a row longer than the limit; the rest of the input was not checked")]
+    RowTooLong,
 }
 
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "cannot read the observation CSV: {err}"),
-            Self::Invalid { errors, truncated } => {
+            Self::Invalid { errors, stopped } => {
                 let plural = if errors.len() == 1 { "" } else { "s" };
                 write!(f, "{} error{plural} in the observation CSV:", errors.len())?;
                 for error in errors {
                     write!(f, "\n  {error}")?;
                 }
-                if *truncated {
-                    write!(
-                        f,
-                        "\n  (stopped at the limit of {} errors; later rows were not checked)",
-                        errors.len()
-                    )?;
+                if let Some(stopped) = stopped {
+                    write!(f, "\n  ({stopped})")?;
                 }
                 Ok(())
             }
@@ -426,6 +473,7 @@ impl From<io::Error> for ReadError {
 /// options.naive_timestamps = NaiveTimestamps::AtOffset(UtcOffset::UTC);
 /// options.max_errors = NonZeroUsize::MIN;
 /// assert_eq!(ReadOptions::default().max_errors.get(), 100);
+/// assert_eq!(ReadOptions::default().max_row_bytes.get(), 65_536);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -435,6 +483,11 @@ pub struct ReadOptions {
     pub naive_timestamps: NaiveTimestamps,
     /// Stop after this many errors (default 100).
     pub max_errors: NonZeroUsize,
+    /// The longest row, in bytes as written, line breaks included (default
+    /// 64 KiB; a valid row is rarely above 1 KiB). A longer row stops
+    /// reading with [`Problem::RowTooLong`], so an input without line breaks
+    /// or with a quote that is never closed is not read into memory whole.
+    pub max_row_bytes: NonZeroUsize,
 }
 
 impl Default for ReadOptions {
@@ -442,6 +495,7 @@ impl Default for ReadOptions {
         Self {
             naive_timestamps: NaiveTimestamps::Reject,
             max_errors: NonZeroUsize::new(100).unwrap_or(NonZeroUsize::MIN),
+            max_row_bytes: NonZeroUsize::new(64 * 1024).unwrap_or(NonZeroUsize::MIN),
         }
     }
 }
@@ -459,6 +513,8 @@ impl Default for ReadOptions {
 /// assert_eq!(import.table.len(), 1);
 /// assert_eq!(import.flags.len(), 2);
 /// assert_eq!((import.flags[0].row, import.flags[0].issue), (2, QualityIssue::MissingValue));
+/// assert_eq!(import.flags[0].table_index, None);
+/// assert_eq!(import.flags[1].table_index, Some(0));
 /// # Ok::<(), taktsim_adapters::csv::ReadError>(())
 /// ```
 #[derive(Debug, Clone, PartialEq)]
@@ -471,31 +527,56 @@ pub struct Import {
     pub flags: Vec<QualityFlag>,
 }
 
-/// A data-quality flag on one row of the CSV (spec §8).
+/// A data-quality flag on one row of the CSV (spec §8): which row, the
+/// observation's timestamp, entity and signal, where it is in the table (if
+/// it is), and what is flagged.
 ///
 /// ```
 /// use taktsim_adapters::csv::{ReadOptions, read_observations};
 ///
 /// let csv = "timestamp,entity,signal,value,unit\n2026-03-02T06:00:00Z,M1,cycle_time,-4.5,s\n";
 /// let import = read_observations(csv.as_bytes(), &ReadOptions::default())?;
+/// let flag = &import.flags[0];
+/// assert_eq!((flag.entity.as_str(), flag.signal.as_str()), ("M1", "cycle_time"));
+/// assert_eq!(import.table.get(flag.table_index.unwrap()).unwrap().signal, &flag.signal);
 /// assert_eq!(
-///     import.flags[0].to_string(),
-///     "row 2, column `value`: implausible -4.5 s: negative, but the unit measures a quantity that cannot be"
+///     flag.to_string(),
+///     "row 2, column `value` (M1 cycle_time at 2026-03-02T06:00:00Z): implausible -4.5 s: \
+///      negative, but the unit measures a quantity that cannot be"
 /// );
 /// # Ok::<(), taktsim_adapters::csv::ReadError>(())
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct QualityFlag {
-    /// The 1-based row, the header being row 1.
+    /// The 1-based row (line) of the input.
     pub row: u64,
+    /// The row's timestamp.
+    pub timestamp: Timestamp,
+    /// The UTC offset the source wrote the timestamp in.
+    pub source_offset: SourceOffset,
+    /// The row's entity.
+    pub entity: Name,
+    /// The row's signal.
+    pub signal: Name,
+    /// The index of the row in [`Import::table`]; `None` for a missing
+    /// value, whose row is not in the table.
+    pub table_index: Option<usize>,
     /// What is flagged.
     pub issue: QualityIssue,
 }
 
 impl fmt::Display for QualityFlag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "row {}, column `value`: {}", self.row, self.issue)
+        write!(
+            f,
+            "row {}, column `value` ({} {} at {}): {}",
+            self.row,
+            visible(self.entity.as_str()),
+            visible(self.signal.as_str()),
+            self.timestamp.rfc3339(self.source_offset),
+            self.issue
+        )
     }
 }
 
@@ -510,7 +591,7 @@ impl fmt::Display for QualityFlag {
 #[non_exhaustive]
 pub enum QualityIssue {
     /// The `value` field is empty. A row needs a value, so it is not in the
-    /// table; the flag is its only trace.
+    /// table; the flag keeps its row, timestamp, entity and signal.
     MissingValue,
     /// The value is implausible for its unit. The row is in the table.
     Implausible {
@@ -528,12 +609,7 @@ impl fmt::Display for QualityIssue {
             Self::Implausible {
                 measurement,
                 implausibility,
-            } => write!(
-                f,
-                "implausible {} {}: {implausibility}",
-                measurement.value(),
-                measurement.unit()
-            ),
+            } => write!(f, "implausible {measurement}: {implausibility}"),
         }
     }
 }
@@ -541,14 +617,15 @@ impl fmt::Display for QualityIssue {
 /// Reads an observation CSV into an [`ObservationTable`].
 ///
 /// The input is UTF-8 CSV (RFC 4180, `,` between fields, `\n` or `\r\n`
-/// between rows, an optional byte-order mark) whose first row is a header
-/// naming exactly the columns `timestamp`, `entity`, `signal`, `value` and
-/// `unit`, in any order. Each field is read as its column says:
+/// between rows, an optional byte-order mark) whose first line that is not
+/// blank is a header naming exactly the columns `timestamp`, `entity`,
+/// `signal`, `value` and `unit`, in any order. Each field is read as its
+/// column says:
 ///
 /// - `timestamp`: RFC 3339 with `Z` or `±hh:mm`
 ///   ([`Timestamp::parse`]); without an offset only if
 ///   [`ReadOptions::naive_timestamps`] declares one.
-/// - `entity`, `signal`: a [`Name`](crate::observation::Name).
+/// - `entity`, `signal`: a [`Name`].
 /// - `value`: a finite decimal number, or empty for a missing value.
 /// - `unit`: a [`Unit`].
 ///
@@ -557,8 +634,10 @@ impl fmt::Display for QualityIssue {
 /// found, what is allowed and an example. Missing and implausible values are
 /// not errors but [`QualityFlag`]s.
 ///
-/// The function reads only from `input`; it opens no files and no network
-/// connections.
+/// The input is any [`BufRead`]: a byte slice, or a file wrapped in a
+/// [`BufReader`](std::io::BufReader). The function reads only from it; it
+/// opens no files and no network connections, and holds at most one row of
+/// [`ReadOptions::max_row_bytes`] in memory besides the table.
 ///
 /// # Errors
 ///
@@ -576,26 +655,33 @@ impl fmt::Display for QualityIssue {
 /// assert_eq!(row.measurement.value(), 1520.0);
 /// # Ok::<(), taktsim_adapters::csv::ReadError>(())
 /// ```
-pub fn read_observations<R: Read>(input: R, options: &ReadOptions) -> Result<Import, ReadError> {
-    let mut reader = RecordReader::new(BufReader::new(input));
+pub fn read_observations<R: BufRead>(input: R, options: &ReadOptions) -> Result<Import, ReadError> {
+    let limit = options.max_errors.get();
+    let max_row_bytes = options.max_row_bytes.get();
+    let mut reader = RecordReader::new(input, max_row_bytes);
     let mut record = Record::default();
-    if !reader.read(&mut record)? || record.row() != 1 {
-        return Err(ReadError::Invalid {
-            errors: vec![FieldError {
+    let invalid = |mut errors: Vec<FieldError>, stopped| {
+        errors.truncate(limit);
+        ReadError::Invalid { errors, stopped }
+    };
+    match reader.read(&mut record)? {
+        Next::Record => {}
+        Next::End => {
+            let missing = FieldError {
                 row: 1,
                 field: FieldRef::Row,
                 found: String::new(),
                 problem: Problem::MissingHeader,
-            }],
-            truncated: false,
-        });
+            };
+            return Err(invalid(vec![missing], None));
+        }
+        Next::TooLong => {
+            let error = too_long(&record, max_row_bytes);
+            return Err(invalid(vec![error], Some(Stopped::RowTooLong)));
+        }
     }
-    let limit = options.max_errors.get();
-    let columns = header(&record).map_err(|mut errors| {
-        let truncated = errors.len() > limit;
-        errors.truncate(limit);
-        ReadError::Invalid { errors, truncated }
-    })?;
+    let columns =
+        header(&record).map_err(|errors| invalid(errors, Some(Stopped::InvalidHeader)))?;
     let mut rows = Rows {
         columns,
         naive: options.naive_timestamps,
@@ -603,35 +689,63 @@ pub fn read_observations<R: Read>(input: R, options: &ReadOptions) -> Result<Imp
         flags: Vec::new(),
         errors: Vec::new(),
     };
-    while reader.read(&mut record)? {
-        rows.add(&record);
-        if rows.errors.len() >= limit {
-            let dropped = rows.errors.len() > limit;
-            rows.errors.truncate(limit);
-            let unread = reader.read(&mut record)?;
-            return Err(ReadError::Invalid {
-                errors: rows.errors,
-                truncated: dropped || unread,
-            });
+    let mut stopped = None;
+    loop {
+        match reader.read(&mut record)? {
+            Next::End => break,
+            Next::TooLong => {
+                rows.errors.push(too_long(&record, max_row_bytes));
+                stopped = Some(Stopped::RowTooLong);
+                break;
+            }
+            Next::Record => {
+                rows.add(&record);
+                if record.unclosed() {
+                    stopped = Some(Stopped::UnclosedQuote);
+                    break;
+                }
+                if rows.errors.len() >= limit {
+                    // Whether anything is left is checked without reading
+                    // it, so no error found so far can be lost.
+                    if rows.errors.len() > limit || reader.has_more() {
+                        stopped = Some(Stopped::ErrorLimit);
+                    }
+                    break;
+                }
+            }
         }
     }
-    if rows.errors.is_empty() {
-        Ok(Import {
-            table: rows.builder.finish(),
-            flags: rows.flags,
-        })
-    } else {
-        Err(ReadError::Invalid {
-            errors: rows.errors,
-            truncated: false,
-        })
+    if !rows.errors.is_empty() {
+        return Err(invalid(rows.errors, stopped));
+    }
+    let (table, order) = rows.builder.finish();
+    let mut flags = rows.flags;
+    if flags.iter().any(|flag| flag.table_index.is_some()) {
+        // Flags hold the order rows were added in; the table is sorted.
+        let mut position = vec![0; order.len()];
+        for (sorted, &added) in order.iter().enumerate() {
+            position[added] = sorted;
+        }
+        for flag in &mut flags {
+            flag.table_index = flag.table_index.map(|added| position[added]);
+        }
+    }
+    Ok(Import { table, flags })
+}
+
+fn too_long(record: &Record, limit: usize) -> FieldError {
+    FieldError {
+        row: record.row(),
+        field: FieldRef::Row,
+        found: found(record.raw()),
+        problem: Problem::RowTooLong { limit },
     }
 }
 
 /// The header's column for each position, or every header problem.
 fn header(record: &Record) -> Result<Vec<Column>, Vec<FieldError>> {
     let error = |field, found, problem| FieldError {
-        row: 1,
+        row: record.row(),
         field,
         found,
         problem,
@@ -642,7 +756,7 @@ fn header(record: &Record) -> Result<Vec<Column>, Vec<FieldError>> {
         let problem = Problem::Delimiter {
             delimiter: char::from(delimiter),
         };
-        return Err(vec![error(FieldRef::Row, found(only), problem)]);
+        return Err(vec![error(FieldRef::Row, found(record.raw()), problem)]);
     }
     let mut columns = Vec::with_capacity(record.len());
     let mut errors = Vec::new();
@@ -662,12 +776,11 @@ fn header(record: &Record) -> Result<Vec<Column>, Vec<FieldError>> {
             Err(problem) => errors.push(error(field, found(bytes), problem)),
         }
     }
-    let line = record.fields().map(found).collect::<Vec<_>>().join(",");
     for column in Column::ALL {
         if !columns.contains(&column) {
             errors.push(error(
                 FieldRef::Column(column),
-                line.clone(),
+                found(record.raw()),
                 Problem::MissingColumn,
             ));
         }
@@ -689,13 +802,67 @@ fn text(bytes: &[u8]) -> Result<&str, Problem> {
     }
 }
 
-/// A field's text for an error message.
+/// Text as found, for an error message: cut after 100 characters, and
+/// [`visible`].
 fn found(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     match text.char_indices().nth(FOUND_LIMIT) {
-        Some((cut, _)) => format!("{}…", &text[..cut]),
-        None => text.into_owned(),
+        Some((cut, _)) => format!("{}…", visible(&text[..cut])),
+        None => visible(&text),
     }
+}
+
+/// `text` with control and invisible characters and `\` escaped, so a
+/// message is one line and shows what is there: `\\`, `\n`, `\r`, `\t`,
+/// and `\u{…}` for every other control character (Unicode category Cc), the
+/// format characters (Cf: byte-order mark, zero-width and bidirectional
+/// marks, soft hyphen, …) and the line and paragraph separators. The set is
+/// fixed here rather than taken from `str::escape_debug`, whose tables
+/// change between Rust releases, so messages are the same with every
+/// toolchain.
+pub(crate) fn visible(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() || is_format(c) => out.extend(c.escape_unicode()),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Unicode 16.0 general category Cf (format), plus U+2028 and U+2029 (Zl,
+/// Zp): characters that are invisible or change how text around them is
+/// shown.
+fn is_format(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x00AD
+            | 0x0600..=0x0605
+            | 0x061C
+            | 0x06DD
+            | 0x070F
+            | 0x0890..=0x0891
+            | 0x08E2
+            | 0x180E
+            | 0x200B..=0x200F
+            | 0x2028..=0x202E
+            | 0x2060..=0x2064
+            | 0x2066..=0x206F
+            | 0xFEFF
+            | 0xFFF9..=0xFFFB
+            | 0x110BD
+            | 0x110CD
+            | 0x13430..=0x1343F
+            | 0x1BCA0..=0x1BCA3
+            | 0x1D173..=0x1D17A
+            | 0xE0001
+            | 0xE0020..=0xE007F
+    )
 }
 
 /// One parsed field.
@@ -713,6 +880,7 @@ struct Rows {
     columns: Vec<Column>,
     naive: NaiveTimestamps,
     builder: TableBuilder,
+    /// Flags, with the index each row was added to the builder at.
     flags: Vec<QualityFlag>,
     errors: Vec<FieldError>,
 }
@@ -742,7 +910,7 @@ impl Rows {
                 }),
             }
         }
-        // After the field errors, so a row's errors are in column order.
+        // After the field errors, so a row's errors are in field order.
         let (fields, columns) = (record.len(), self.columns.len());
         if fields < columns {
             let field = self
@@ -762,34 +930,50 @@ impl Rows {
                 found: record.field(columns).map(found).unwrap_or_default(),
                 problem: Problem::FieldCount { fields, columns },
             });
+            // Syntax problems in the extra fields are reported too.
+            for index in columns..fields {
+                if let (Some(syntax), Some(bytes)) = (record.syntax(index), record.field(index)) {
+                    self.errors.push(FieldError {
+                        row,
+                        field: FieldRef::Position(index + 1),
+                        found: found(bytes),
+                        problem: syntax_problem(syntax),
+                    });
+                }
+            }
         }
         if self.errors.len() > errors_before {
             return;
         }
-        let (Some((timestamp, offset)), Some(entity), Some(signal), Some(value), Some(unit)) =
+        let (Some((timestamp, source_offset)), Some(entity), Some(signal), Some(value), Some(unit)) =
             (timestamp, entity, signal, value, unit)
         else {
             return;
         };
+        let flag = |table_index, issue| QualityFlag {
+            row,
+            timestamp,
+            source_offset,
+            entity: Name::new_unchecked(entity),
+            signal: Name::new_unchecked(signal),
+            table_index,
+            issue,
+        };
         let Some(value) = value else {
-            self.flags.push(QualityFlag {
-                row,
-                issue: QualityIssue::MissingValue,
-            });
+            self.flags.push(flag(None, QualityIssue::MissingValue));
             return;
         };
         let measurement = Measurement::from_finite(value, unit);
+        let added = self
+            .builder
+            .push(timestamp, source_offset, entity, signal, measurement);
         if let Some(implausibility) = measurement.implausibility() {
-            self.flags.push(QualityFlag {
-                row,
-                issue: QualityIssue::Implausible {
-                    measurement,
-                    implausibility,
-                },
-            });
+            let issue = QualityIssue::Implausible {
+                measurement,
+                implausibility,
+            };
+            self.flags.push(flag(Some(added), issue));
         }
-        self.builder
-            .push(timestamp, offset, entity, signal, measurement);
     }
 }
 
@@ -821,15 +1005,25 @@ fn parse(
 
 #[cfg(test)]
 mod tests {
+    use std::io::{BufReader, Read};
+
     use super::*;
 
     const HEADER: &str = "timestamp,entity,signal,value,unit\n";
 
-    fn errors(csv: &str) -> Vec<FieldError> {
-        match read_observations(csv.as_bytes(), &ReadOptions::default()) {
-            Err(ReadError::Invalid { errors, .. }) => errors,
+    fn read(csv: &str) -> Result<Import, ReadError> {
+        read_observations(csv.as_bytes(), &ReadOptions::default())
+    }
+
+    fn invalid(csv: &str) -> (Vec<FieldError>, Option<Stopped>) {
+        match read(csv) {
+            Err(ReadError::Invalid { errors, stopped }) => (errors, stopped),
             other => panic!("{other:?}"),
         }
+    }
+
+    fn errors(csv: &str) -> Vec<FieldError> {
+        invalid(csv).0
     }
 
     fn field_error(row: u64, field: FieldRef, found: &str, problem: Problem) -> FieldError {
@@ -847,11 +1041,14 @@ mod tests {
             field_error(1, FieldRef::Column(column), line, Problem::MissingColumn)
         };
         assert_eq!(
-            errors("timestamp,entity,signal,value,unit,unit,extra\n"),
-            [
-                field_error(1, FieldRef::Position(6), "unit", Problem::DuplicateColumn),
-                field_error(1, FieldRef::Position(7), "extra", Problem::UnknownColumn),
-            ]
+            invalid("timestamp,entity,signal,value,unit,unit,extra\n"),
+            (
+                vec![
+                    field_error(1, FieldRef::Position(6), "unit", Problem::DuplicateColumn),
+                    field_error(1, FieldRef::Position(7), "extra", Problem::UnknownColumn),
+                ],
+                Some(Stopped::InvalidHeader)
+            )
         );
         assert_eq!(
             errors("Timestamp,entity, signal,value\n"),
@@ -873,7 +1070,7 @@ mod tests {
             [field_error(
                 1,
                 FieldRef::Row,
-                "timestamp\tentity\tsignal\tvalue\tunit",
+                "timestamp\\tentity\\tsignal\\tvalue\\tunit",
                 Problem::Delimiter { delimiter: '\t' }
             )]
         );
@@ -899,13 +1096,93 @@ mod tests {
     }
 
     #[test]
-    fn missing_header() {
-        let expected = [field_error(1, FieldRef::Row, "", Problem::MissingHeader)];
-        assert_eq!(errors(""), expected);
-        assert_eq!(errors("\ntimestamp,entity,signal,value,unit\n"), expected);
+    fn missing_columns_show_the_header_as_written() {
+        // Quoting is kept, so a quoted `"value,unit"` does not look like two
+        // valid columns.
+        let quoted = "timestamp,entity,signal,\"value,unit\"";
+        let errs = errors(&format!("{quoted}\n"));
         assert_eq!(
-            expected[0].to_string(),
-            "row 1: the first row must be the header; found nothing; allowed: a first row naming \
+            errs[1..],
+            [
+                field_error(
+                    1,
+                    FieldRef::Column(Column::Value),
+                    quoted,
+                    Problem::MissingColumn
+                ),
+                field_error(
+                    1,
+                    FieldRef::Column(Column::Unit),
+                    quoted,
+                    Problem::MissingColumn
+                ),
+            ]
+        );
+        // A long header is cut like any other text.
+        let long = format!("timestamp,entity,signal,value,{}", "x".repeat(200));
+        let errs = errors(&format!("{long}\n"));
+        let missing = errs.last().unwrap();
+        assert_eq!(missing.problem, Problem::MissingColumn);
+        assert_eq!(missing.found, format!("{}…", &long[..100]));
+    }
+
+    #[test]
+    fn found_text_is_escaped() {
+        let csv = format!(
+            "{HEADER}2026-03-02T06:00:00Z,\"M1\u{1b}[2J\r\nX\",\u{feff}sig\u{200b}\u{7},1,\"pa\"\"rts\"\n"
+        );
+        let errs = errors(&csv);
+        let texts: Vec<&str> = errs.iter().map(|e| e.found.as_str()).collect();
+        assert_eq!(
+            texts,
+            [
+                "M1\\u{1b}[2J\\r\\nX",
+                "\\u{feff}sig\\u{200b}\\u{7}",
+                "pa\"rts",
+            ]
+        );
+        // Each error is one line, so the report has one line per error.
+        let err = read(&csv).unwrap_err();
+        assert_eq!(err.to_string().lines().count(), 1 + errs.len());
+        // Quotes, accents and other scripts stay; control and format
+        // characters do not, whatever the toolchain's Unicode tables.
+        assert_eq!(
+            visible("a\\b 'q' \"x\u{301} Fräse 工位 \u{2028}\u{2029}"),
+            "a\\\\b 'q' \"x\u{301} Fräse 工位 \\u{2028}\\u{2029}"
+        );
+        assert_eq!(
+            visible("\0\u{7f}\u{85}\u{ad}\u{202e}\u{2066}\u{e0041}"),
+            "\\u{0}\\u{7f}\\u{85}\\u{ad}\\u{202e}\\u{2066}\\u{e0041}"
+        );
+        assert_eq!(
+            found(&"é".repeat(150).into_bytes()),
+            format!("{}…", "é".repeat(100))
+        );
+        assert_eq!(found(b"short"), "short");
+    }
+
+    #[test]
+    fn blank_lines_before_the_header_are_skipped() {
+        let csv = format!("\n\r\n{HEADER}2026-03-02T06:00:00Z,M1,state,1,1\n\n");
+        assert_eq!(read(&csv).unwrap().table.len(), 1);
+        // Rows still count every line.
+        let csv = format!("\n{HEADER}2026-03-02T06:00:00Z,M1,state,1,pcs\n");
+        assert_eq!(errors(&csv)[0].row, 3);
+        let csv = "\n\ntimestamp,entity\n";
+        assert_eq!(errors(csv)[0].row, 3);
+    }
+
+    #[test]
+    fn missing_header() {
+        let expected = (
+            vec![field_error(1, FieldRef::Row, "", Problem::MissingHeader)],
+            None,
+        );
+        assert_eq!(invalid(""), expected);
+        assert_eq!(invalid("\n\r\n\n"), expected);
+        assert_eq!(
+            expected.0[0].to_string(),
+            "row 1: the input has no header row; found nothing; allowed: a first row naming \
              exactly the columns timestamp, entity, signal, value and unit, each once, in any \
              order, separated by `,`; example: timestamp,entity,signal,value,unit"
         );
@@ -951,6 +1228,97 @@ mod tests {
     }
 
     #[test]
+    fn syntax_problems_in_extra_fields_are_reported() {
+        let csv = format!("{HEADER}2026-03-02T06:00:00Z,M1,state,1,1,x\"y,\"a\"b\n");
+        let count = Problem::FieldCount {
+            fields: 7,
+            columns: 5,
+        };
+        assert_eq!(
+            invalid(&csv),
+            (
+                vec![
+                    field_error(2, FieldRef::Position(6), "x\"y", count.clone()),
+                    field_error(2, FieldRef::Position(6), "x\"y", Problem::StrayQuote),
+                    field_error(2, FieldRef::Position(7), "ab", Problem::TextAfterQuote),
+                ],
+                None
+            )
+        );
+    }
+
+    #[test]
+    fn an_unclosed_quote_stops_reading_and_says_so() {
+        // In an extra field: before, only the field count was reported.
+        let csv = format!(
+            "{HEADER}2026-03-02T06:00:00Z,M1,state,1,1,\"open\n\
+             2026-03-02T07:00:00Z,M1,state,bad,1\n"
+        );
+        let (errs, stopped) = invalid(&csv);
+        assert_eq!(stopped, Some(Stopped::UnclosedQuote));
+        assert_eq!(
+            errs[1],
+            field_error(
+                2,
+                FieldRef::Position(6),
+                "open\\n2026-03-02T07:00:00Z,M1,state,bad,1\\n",
+                Problem::UnterminatedQuote
+            )
+        );
+        assert!(read(&csv).unwrap_err().to_string().ends_with(
+            "(a quoted field is not closed, so the rest of the input could not be split into rows)"
+        ));
+        // In a column.
+        let csv = format!("{HEADER}2026-03-02T06:00:00Z,\"M1,state,1,1\n");
+        assert_eq!(invalid(&csv).1, Some(Stopped::UnclosedQuote));
+        // In the header.
+        assert_eq!(
+            invalid("timestamp,\"entity\n").1,
+            Some(Stopped::InvalidHeader)
+        );
+    }
+
+    #[test]
+    fn rows_longer_than_the_limit_stop_reading() {
+        let options = ReadOptions {
+            max_row_bytes: NonZeroUsize::new(64).unwrap(),
+            ..ReadOptions::default()
+        };
+        let read = |csv: &[u8]| match read_observations(csv, &options) {
+            Err(ReadError::Invalid { errors, stopped }) => (errors, stopped),
+            other => panic!("{other:?}"),
+        };
+        let long = [b'x'; 1000];
+        let mut csv = HEADER.as_bytes().to_vec();
+        csv.extend_from_slice(&long);
+        let (errs, stopped) = read(&csv);
+        assert_eq!(stopped, Some(Stopped::RowTooLong));
+        // Only the limit was read; the error shows the start of the row.
+        assert_eq!(
+            errs,
+            [field_error(
+                2,
+                FieldRef::Row,
+                &"x".repeat(64),
+                Problem::RowTooLong { limit: 64 }
+            )]
+        );
+        assert_eq!(errs[0].allowed(), LENGTH_ALLOWED);
+        assert_eq!(errs[0].example(), ROW_EXAMPLE);
+        // An unclosed quote in a large input stops at the limit too.
+        let mut csv = format!("{HEADER}2026-03-02T06:00:00Z,\"M1,state,1,1\n").into_bytes();
+        for _ in 0..100 {
+            csv.extend_from_slice(b"2026-03-02T07:00:00Z,M1,state,2,1\n");
+        }
+        let (errs, stopped) = read(&csv);
+        assert_eq!(stopped, Some(Stopped::RowTooLong));
+        assert_eq!(errs[0].row, 2);
+        // A header longer than the limit.
+        let (errs, stopped) = read(&long);
+        assert_eq!((errs[0].row, stopped), (1, Some(Stopped::RowTooLong)));
+    }
+
+    #[test]
     fn every_field_problem_is_reported() {
         let csv = format!(
             "{HEADER}2026-13-02T06:00:00Z, M1,a\tb,\"12,5\",pcs\n\
@@ -980,7 +1348,7 @@ mod tests {
                 field_error(
                     2,
                     FieldRef::Column(Column::Signal),
-                    "a\tb",
+                    "a\\tb",
                     Problem::Name(NameError::ControlCharacter { position: 2 })
                 ),
                 field_error(
@@ -1020,35 +1388,68 @@ mod tests {
             ..ReadOptions::default()
         };
         let read = |csv: &str| match read_observations(csv.as_bytes(), &options) {
-            Err(ReadError::Invalid { errors, truncated }) => (errors.len(), truncated),
+            Err(ReadError::Invalid { errors, stopped }) => (errors.len(), stopped),
             other => panic!("{other:?}"),
         };
-        assert_eq!(read(&csv), (3, true));
+        let limit = Some(Stopped::ErrorLimit);
+        assert_eq!(read(&csv), (3, limit));
         // Exactly at the limit with nothing left: nothing unchecked.
         let three = format!("{HEADER}{}", "x,M1,state,1,1\n".repeat(3));
-        assert_eq!(read(&three), (3, false));
+        assert_eq!(read(&three), (3, None));
         // One row with more problems than the limit.
-        assert_eq!(read(&format!("{HEADER}x,,,x,x\n")), (3, true));
+        assert_eq!(read(&format!("{HEADER}x,,,x,x\n")), (3, limit));
         // The limit holds for the header, too: 4 unknown, 5 missing columns.
-        assert_eq!(read("a,b,c,d\n"), (3, true));
-        assert_eq!(read("timestamp,entity,signal,value\n"), (1, false));
+        assert_eq!(read("a,b,c,d\n"), (3, Some(Stopped::InvalidHeader)));
         let err = read_observations(csv.as_bytes(), &options).unwrap_err();
         assert!(
             err.to_string()
-                .ends_with("(stopped at the limit of 3 errors; later rows were not checked)")
+                .ends_with("(stopped at the error limit; the rest of the input was not checked)")
         );
         assert!(std::error::Error::source(&err).is_some());
     }
 
+    /// Reads `data`, then fails.
+    struct FailsAfter<'a> {
+        data: &'a [u8],
+    }
+
+    impl Read for FailsAfter<'_> {
+        fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+            if self.data.is_empty() {
+                return Err(io::Error::other("disk on fire"));
+            }
+            self.data.read(out)
+        }
+    }
+
+    #[test]
+    fn errors_at_the_limit_survive_a_failing_input() {
+        // Before, one more row was read to see whether there was more, and
+        // the I/O error replaced the errors found.
+        let csv = format!("{HEADER}x,M1,state,1,1\n");
+        let options = ReadOptions {
+            max_errors: NonZeroUsize::MIN,
+            ..ReadOptions::default()
+        };
+        let input = BufReader::with_capacity(
+            4096,
+            FailsAfter {
+                data: csv.as_bytes(),
+            },
+        );
+        match read_observations(input, &options) {
+            Err(ReadError::Invalid { errors, stopped }) => {
+                assert_eq!(errors.len(), 1);
+                assert_eq!(stopped, Some(Stopped::ErrorLimit));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
     #[test]
     fn io_errors_are_passed_on() {
-        struct Failing;
-        impl Read for Failing {
-            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-                Err(io::Error::other("disk on fire"))
-            }
-        }
-        let err = read_observations(Failing, &ReadOptions::default()).unwrap_err();
+        let input = BufReader::new(FailsAfter { data: &[] });
+        let err = read_observations(input, &ReadOptions::default()).unwrap_err();
         assert!(matches!(err, ReadError::Io(_)));
         assert_eq!(
             err.to_string(),
@@ -1059,7 +1460,7 @@ mod tests {
 
     #[test]
     fn display_of_one_error_and_its_source() {
-        let err = read_observations(&b""[..], &ReadOptions::default()).unwrap_err();
+        let err = read("").unwrap_err();
         assert!(
             err.to_string()
                 .starts_with("1 error in the observation CSV:\n  row 1: ")
@@ -1069,28 +1470,45 @@ mod tests {
     }
 
     #[test]
-    fn found_text_is_cut() {
-        assert_eq!(
-            found(&"é".repeat(150).into_bytes()),
-            format!("{}…", "é".repeat(100))
-        );
-        assert_eq!(found(b"short"), "short");
-    }
-
-    #[test]
-    fn flags_read_well() {
+    fn flags_carry_the_row_and_link_to_the_table() {
         let csv = format!(
-            "{HEADER}1970-01-01T00:00:00Z,M1,c,,parts\n1970-01-01T00:00:00Z,M1,c,0.5,parts\n"
+            "{HEADER}1970-01-01T01:00:00+01:00,M1,c,,parts\n\
+             1970-01-01T00:00:01Z,M2,c,-1e300,parts\n\
+             1970-01-01T00:00:00Z,M1,c,0.5,parts\n"
         );
-        let import = read_observations(csv.as_bytes(), &ReadOptions::default()).unwrap();
-        let flags: Vec<String> = import.flags.iter().map(ToString::to_string).collect();
+        let import = read(&csv).unwrap();
+        let text: Vec<String> = import.flags.iter().map(ToString::to_string).collect();
         assert_eq!(
-            flags,
+            text,
             [
-                "row 2, column `value`: missing value; the row is not in the table",
-                "row 3, column `value`: implausible 0.5 parts: a count that is not a whole number",
+                "row 2, column `value` (M1 c at 1970-01-01T01:00:00+01:00): missing value; \
+                 the row is not in the table",
+                "row 3, column `value` (M2 c at 1970-01-01T00:00:01Z): implausible -1e300 parts: \
+                 negative, but the unit measures a quantity that cannot be",
+                "row 4, column `value` (M1 c at 1970-01-01T00:00:00Z): implausible 0.5 parts: \
+                 a count that is not a whole number",
             ]
         );
+        let missing = &import.flags[0];
+        assert_eq!(missing.table_index, None);
+        assert_eq!(missing.timestamp, Timestamp::UNIX_EPOCH);
+        // The table is sorted, so row 4 comes first.
+        let index: Vec<Option<usize>> = import.flags.iter().map(|f| f.table_index).collect();
+        assert_eq!(index, [None, Some(1), Some(0)]);
+        for flag in &import.flags[1..] {
+            let row = import.table.get(flag.table_index.unwrap()).unwrap();
+            assert_eq!((row.entity, row.timestamp), (&flag.entity, flag.timestamp));
+        }
+        // Too large for taktsim-units: flagged like the other implausible values.
+        let csv = format!("{HEADER}1970-01-01T00:00:00Z,M1,c,1e20,parts\n");
+        let flags = read(&csv).unwrap().flags;
+        assert!(matches!(
+            flags[0].issue,
+            QualityIssue::Implausible {
+                implausibility: Implausibility::TooLarge,
+                ..
+            }
+        ));
     }
 
     #[test]

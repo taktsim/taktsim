@@ -207,15 +207,19 @@ impl UnknownUnit {
 /// An observed value with its unit: a finite number, never NaN or infinite.
 ///
 /// Negative zero is stored as zero, so equal measurements have equal bits.
-/// A value may be negative or fractional even where the unit does not allow
-/// it (a negative count): the table keeps it and
-/// [`Measurement::implausibility`] flags it, rather than dropping it.
+/// A value may be implausible for its unit (a negative count): the table
+/// keeps it and [`Measurement::implausibility`] flags it, rather than
+/// dropping it. [`Display`](fmt::Display) writes the value and the unit, the
+/// value as the shortest text that reads back to it, with an exponent below
+/// 10⁻⁵ and from 10¹⁶.
 ///
 /// ```
 /// use taktsim_adapters::observation::{Measurement, Unit, ValueError};
 ///
 /// let m = Measurement::new(42.5, Unit::Second)?;
 /// assert_eq!((m.value(), m.unit()), (42.5, Unit::Second));
+/// assert_eq!(m.to_string(), "42.5 s");
+/// assert_eq!(Measurement::new(-1e300, Unit::Parts)?.to_string(), "-1e300 parts");
 /// assert_eq!(Measurement::new(f64::NAN, Unit::Second), Err(ValueError::NotFinite));
 /// # Ok::<(), ValueError>(())
 /// ```
@@ -283,12 +287,14 @@ impl Measurement {
         self.unit
     }
 
-    /// Why the value is implausible for its unit, if it is.
+    /// Why the value is implausible for its unit, if it is: exactly when
+    /// [`Measurement::to_quantity`] fails.
     ///
     /// Checked from the unit alone: a negative duration, count, rate or
-    /// percentage, and a count that is not whole. What needs the meaning of
-    /// the signal (a cumulative counter that decreases, gaps, stuck values)
-    /// is left to the data-quality report in v0.3 (ADR-0017).
+    /// percentage, a count that is not whole, and a duration or count too
+    /// large for `taktsim-units`. What needs the meaning of the signal (a
+    /// cumulative counter that decreases, gaps, stuck values) is left to the
+    /// data-quality report in v0.3 (ADR-0017).
     ///
     /// ```
     /// use taktsim_adapters::observation::{Implausibility, Measurement, Unit};
@@ -296,20 +302,14 @@ impl Measurement {
     /// let check = |v, u| Measurement::new(v, u).map(Measurement::implausibility);
     /// assert_eq!(check(-3.0, Unit::Parts)?, Some(Implausibility::Negative));
     /// assert_eq!(check(2.5, Unit::Parts)?, Some(Implausibility::NotWhole));
+    /// assert_eq!(check(1e20, Unit::Parts)?, Some(Implausibility::TooLarge));
     /// assert_eq!(check(-1.0, Unit::One)?, None);
     /// assert_eq!(check(2.5, Unit::Second)?, None);
     /// # Ok::<(), taktsim_adapters::observation::ValueError>(())
     /// ```
     #[must_use]
     pub fn implausibility(self) -> Option<Implausibility> {
-        let dimension = self.unit.dimension();
-        if self.value < 0.0 && dimension != Dimension::Dimensionless {
-            Some(Implausibility::Negative)
-        } else if dimension == Dimension::Count && self.value.fract() != 0.0 {
-            Some(Implausibility::NotWhole)
-        } else {
-            None
-        }
+        self.convert().err()
     }
 
     /// The value as the `taktsim-units` quantity of its unit.
@@ -320,6 +320,7 @@ impl Measurement {
     ///
     /// # Errors
     ///
+    /// Exactly when [`Measurement::implausibility`] says why:
     /// [`UnitError::Negative`] for a negative duration, count, rate or
     /// percentage, [`UnitError::NotWhole`] for a fractional count, and
     /// [`UnitError::Overflow`] for a duration beyond about 584 years or a
@@ -335,23 +336,86 @@ impl Measurement {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn to_quantity(self) -> Result<Quantity, UnitError> {
-        let value = self.value;
-        let unit = self.unit;
-        let negative = |quantity, example| UnitError::Negative {
-            input: format!("{value} {unit}"),
-            quantity,
-            example,
-        };
-        match unit.dimension() {
-            Dimension::Duration if value < 0.0 => Err(negative("duration", "42s")),
-            Dimension::Count if value < 0.0 => Err(negative("count", "20 parts")),
-            Dimension::Rate if value < 0.0 => Err(negative("rate", "120 parts/h")),
-            Dimension::Ratio if value < 0.0 => Err(negative("percentage", "2%")),
-            Dimension::Duration => duration(value, unit).map(Quantity::Duration),
+        self.convert().map_err(|why| self.unit_error(why))
+    }
+
+    /// The quantity, or why there is none: the one place both
+    /// [`Measurement::implausibility`] and [`Measurement::to_quantity`]
+    /// decide.
+    fn convert(self) -> Result<Quantity, Implausibility> {
+        let (value, unit) = (self.value, self.unit);
+        let dimension = unit.dimension();
+        if value < 0.0 && dimension != Dimension::Dimensionless {
+            return Err(Implausibility::Negative);
+        }
+        match dimension {
+            Dimension::Duration => duration_nanos(value, nanos_per_unit(unit))
+                .map(|nanos| Quantity::Duration(SimDuration::from_nanos(nanos)))
+                .ok_or(Implausibility::TooLarge),
             Dimension::Count => count(value).map(Quantity::Count),
-            Dimension::Rate => Rate::per_second(value / rate_seconds(unit)).map(Quantity::Rate),
-            Dimension::Ratio => Ratio::from_percent(value).map(Quantity::Ratio),
+            // Cannot fail: the value is finite and not negative.
+            Dimension::Rate => Rate::per_second(value / rate_seconds(unit))
+                .map(Quantity::Rate)
+                .map_err(|_| Implausibility::Negative),
+            Dimension::Ratio => Ratio::from_percent(value)
+                .map(Quantity::Ratio)
+                .map_err(|_| Implausibility::Negative),
             Dimension::Dimensionless => Ok(Quantity::Number(value)),
+        }
+    }
+
+    /// The `taktsim-units` error for `why`.
+    fn unit_error(self, why: Implausibility) -> UnitError {
+        let (quantity, example, limit) = match self.unit.dimension() {
+            Dimension::Duration => (
+                "duration",
+                "42s",
+                "18446744073.709551615s (about 584 years)",
+            ),
+            Dimension::Count => ("count", "20 parts", "18446744073709551615 parts"),
+            Dimension::Rate => ("rate", "120 parts/h", ""),
+            Dimension::Ratio => ("percentage", "2%", ""),
+            Dimension::Dimensionless => ("number", "1", ""),
+        };
+        match why {
+            Implausibility::Negative => UnitError::Negative {
+                input: self.to_string(),
+                quantity,
+                example,
+            },
+            Implausibility::NotWhole => UnitError::NotWhole {
+                input: self.to_string(),
+                unit: self.unit.as_str().to_owned(),
+            },
+            Implausibility::TooLarge => UnitError::Overflow {
+                what: format!("{quantity} `{self}`"),
+                limit,
+            },
+        }
+    }
+}
+
+impl fmt::Display for Measurement {
+    /// `<value> <unit>`, e.g. `42.5 s`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", Shortest(self.value), self.unit)
+    }
+}
+
+/// An `f64` as the shortest text that reads back to the same bits: plain
+/// decimal from 10⁻⁵ to below 10¹⁶ and for zero, otherwise with an
+/// exponent (`1e-7`, `1e16`), so no number takes hundreds of digits.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Shortest(pub(crate) f64);
+
+impl fmt::Display for Shortest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let x = self.0;
+        let magnitude = x.abs();
+        if (magnitude > 0.0 && magnitude < 1e-5) || magnitude >= 1e16 {
+            write!(f, "{x:e}")
+        } else {
+            write!(f, "{x}")
         }
     }
 }
@@ -390,13 +454,10 @@ fn nanos_per_unit(unit: Unit) -> u64 {
     }
 }
 
-/// `value` (finite, ≥ 0) in `unit` as whole nanoseconds, rounded once, half
-/// to even, from the exact product of the binary value and the unit.
-fn duration(value: f64, unit: Unit) -> Result<SimDuration, UnitError> {
-    let overflow = || UnitError::Overflow {
-        what: format!("duration {value} {unit}"),
-        limit: "18446744073.709551615s (about 584 years)",
-    };
+/// `value` (finite, ≥ 0) units of `unit_nanos` nanoseconds as whole
+/// nanoseconds, rounded once, half to even, from the exact product of the
+/// binary value and the unit; `None` beyond `u64::MAX`.
+fn duration_nanos(value: f64, unit_nanos: u64) -> Option<u64> {
     // value = mantissa × 2^(exponent - 1075), exactly (IEEE 754 binary64).
     let bits = value.to_bits();
     let biased = (bits >> 52) & 0x7ff;
@@ -406,17 +467,17 @@ fn duration(value: f64, unit: Unit) -> Result<SimDuration, UnitError> {
     } else {
         (fraction | (1 << 52), biased)
     };
-    // mantissa < 2^53 and nanos per unit < 2^47, so the product < 2^100.
-    let product = u128::from(mantissa) * u128::from(nanos_per_unit(unit));
+    // mantissa < 2^53 and nanoseconds per unit < 2^47, so the product < 2^100.
+    let product = u128::from(mantissa) * u128::from(unit_nanos);
     let nanos = if biased >= 1075 {
-        let shift = u32::try_from(biased - 1075).map_err(|_| overflow())?;
+        let shift = u32::try_from(biased - 1075).ok()?;
         // Any shift past the leading zeros of the product overflows.
         if product != 0 && shift >= product.leading_zeros() {
-            return Err(overflow());
+            return None;
         }
         product << shift
     } else {
-        let shift = u32::try_from(1075 - biased).map_err(|_| overflow())?;
+        let shift = u32::try_from(1075 - biased).ok()?;
         if shift >= 101 {
             // product < 2^100 ≤ half of 2^shift: rounds to zero.
             0
@@ -428,25 +489,17 @@ fn duration(value: f64, unit: Unit) -> Result<SimDuration, UnitError> {
             quotient + u128::from(round_up)
         }
     };
-    u64::try_from(nanos)
-        .map(SimDuration::from_nanos)
-        .map_err(|_| overflow())
+    u64::try_from(nanos).ok()
 }
 
 /// `value` (finite, ≥ 0) as a whole count.
-fn count(value: f64) -> Result<Count, UnitError> {
+fn count(value: f64) -> Result<Count, Implausibility> {
     if value.fract() != 0.0 {
-        return Err(UnitError::NotWhole {
-            input: format!("{value} parts"),
-            unit: "parts".to_owned(),
-        });
+        return Err(Implausibility::NotWhole);
     }
     // 2^64 is the first whole f64 beyond u64::MAX.
     if value >= 18_446_744_073_709_551_616.0 {
-        return Err(UnitError::Overflow {
-            what: format!("count {value} parts"),
-            limit: "18446744073709551615 parts",
-        });
+        return Err(Implausibility::TooLarge);
     }
     // Whole, non-negative and below 2^64: the cast is exact.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -473,6 +526,10 @@ pub enum Implausibility {
     /// A count (`parts`) that is not a whole number.
     #[error("a count that is not a whole number")]
     NotWhole,
+    /// A duration beyond about 584 years, or a count beyond
+    /// 18446744073709551615 parts: more than `taktsim-units` can hold.
+    #[error("too large: durations end at about 584 years, counts at 18446744073709551615 parts")]
+    TooLarge,
 }
 
 /// A [`Measurement`] as the `taktsim-units` type of its unit; see
@@ -587,6 +644,73 @@ mod tests {
         }
     }
 
+    /// The units each taktsim-units parser accepts, as its error lists them.
+    fn taktsim_units_allowed(err: &UnitError) -> &'static [&'static str] {
+        let &UnitError::UnknownUnit { allowed, .. } = err else {
+            panic!("{err:?}");
+        };
+        allowed
+    }
+
+    #[test]
+    fn every_taktsim_units_unit_is_known_and_converts_alike() {
+        // The other direction of `units_match_taktsim_units`: a unit added to
+        // taktsim-units but not here fails this test.
+        let lists = [
+            (
+                Dimension::Duration,
+                taktsim_units_allowed(&"1xyz".parse::<SimDuration>().unwrap_err()),
+            ),
+            (
+                Dimension::Count,
+                taktsim_units_allowed(&"1 xyz".parse::<Count>().unwrap_err()),
+            ),
+            (
+                Dimension::Rate,
+                taktsim_units_allowed(&"1 xyz".parse::<Rate>().unwrap_err()),
+            ),
+            (
+                Dimension::Ratio,
+                taktsim_units_allowed(&"1xyz".parse::<Ratio>().unwrap_err()),
+            ),
+        ];
+        let mut seen = 0;
+        for (dimension, allowed) in lists {
+            for &text in allowed {
+                let unit: Unit = text.parse().unwrap();
+                assert_eq!(unit.dimension(), dimension, "{text}");
+                seen += 1;
+                // Thousandths below 64 convert exactly both ways, for every
+                // duration unit up to days; whole numbers in any range.
+                let thousandths = (0..64_000).step_by(37).map(|n| (n / 1000, n % 1000));
+                let whole = [1, 7, 60, 1000, 100_000, 213_503].map(|n| (n, 0));
+                for (int, frac) in thousandths.chain(whole) {
+                    let number = format!("{int}.{frac:03}");
+                    let ours = Measurement::new(number.parse().unwrap(), unit)
+                        .unwrap()
+                        .to_quantity();
+                    let theirs = match dimension {
+                        Dimension::Duration => {
+                            format!("{number}{text}").parse().map(Quantity::Duration)
+                        }
+                        Dimension::Count if frac == 0 => {
+                            format!("{int} {text}").parse().map(Quantity::Count)
+                        }
+                        Dimension::Count => continue,
+                        Dimension::Rate => format!("{number} {text}").parse().map(Quantity::Rate),
+                        Dimension::Ratio => format!("{number}{text}").parse().map(Quantity::Ratio),
+                        Dimension::Dimensionless => unreachable!(),
+                    };
+                    assert_eq!(ours, theirs, "{number} {text}");
+                }
+            }
+        }
+        // Every taktsim-units unit, and the adapter's own: the ten canonical
+        // units, four singular forms; `1` is the adapter's addition.
+        assert_eq!(seen, 14);
+        assert_eq!(Unit::ALL.len(), 11);
+    }
+
     #[test]
     fn values() {
         assert_eq!(parse_value("1520"), Ok(1520.0));
@@ -627,6 +751,52 @@ mod tests {
         );
     }
 
+    proptest::proptest! {
+        /// A value is flagged implausible exactly when it has no
+        /// taktsim-units quantity.
+        #[test]
+        fn implausible_exactly_when_not_convertible(
+            bits in proptest::prelude::any::<u64>(),
+            unit in proptest::sample::select(Unit::ALL.to_vec()),
+        ) {
+            let x = f64::from_bits(bits);
+            proptest::prop_assume!(x.is_finite());
+            let m = Measurement::new(x, unit).unwrap();
+            proptest::prop_assert_eq!(m.implausibility().is_some(), m.to_quantity().is_err());
+            // The message never spells out hundreds of digits.
+            proptest::prop_assert!(m.to_string().len() < 40, "{}", m);
+        }
+    }
+
+    #[test]
+    fn display_is_short() {
+        let show = |v, u| Measurement::new(v, u).unwrap().to_string();
+        assert_eq!(show(1e300, Unit::Parts), "1e300 parts");
+        assert_eq!(show(-2.5e-9, Unit::Second), "-2.5e-9 s");
+        assert_eq!(show(1520.0, Unit::Parts), "1520 parts");
+        assert_eq!(show(0.0, Unit::One), "0 1");
+        let err = Measurement::new(1e300, Unit::Parts)
+            .unwrap()
+            .to_quantity()
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "count `1e300 parts` overflows; the largest value is 18446744073709551615 parts"
+        );
+        let err = Measurement::new(1e300, Unit::Day)
+            .unwrap()
+            .to_quantity()
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "duration `1e300 d` overflows; the largest value is 18446744073.709551615s (about 584 years)"
+        );
+        assert_eq!(
+            Implausibility::TooLarge.to_string(),
+            "too large: durations end at about 584 years, counts at 18446744073709551615 parts"
+        );
+    }
+
     #[test]
     fn durations_from_2_to_the_52_overflow() {
         // 2^52 ms is about 143,000 years: the exact product is formed, then
@@ -646,8 +816,23 @@ mod tests {
         }
         assert_eq!(check(-2.5, Unit::Parts), Some(Implausibility::Negative));
         assert_eq!(check(0.5, Unit::Parts), Some(Implausibility::NotWhole));
-        assert_eq!(check(1e300, Unit::Parts), None);
         assert_eq!(check(0.5, Unit::Percent), None);
+        // Beyond what taktsim-units holds, so to_quantity would fail too.
+        assert_eq!(check(1e300, Unit::Parts), Some(Implausibility::TooLarge));
+        assert_eq!(
+            check(18_446_744_073_709_551_616.0, Unit::Parts),
+            Some(Implausibility::TooLarge)
+        );
+        assert_eq!(check(18_446_744_073_709_549_568.0, Unit::Parts), None);
+        assert_eq!(check(1e12, Unit::Hour), Some(Implausibility::TooLarge));
+        assert_eq!(
+            check(18_446_744_074.0, Unit::Second),
+            Some(Implausibility::TooLarge)
+        );
+        assert_eq!(check(18_446_744_073.0, Unit::Second), None);
+        assert_eq!(check(1e300, Unit::PartsPerHour), None);
+        assert_eq!(check(1e300, Unit::Percent), None);
+        assert_eq!(check(-1e300, Unit::One), None);
         assert_eq!(
             Implausibility::NotWhole.to_string(),
             "a count that is not a whole number"

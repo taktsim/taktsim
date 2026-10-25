@@ -48,6 +48,6 @@ pub use name::{Name, NameError};
 pub use table::{Iter, Observation, ObservationTable};
 pub use time::{NaiveTimestamps, Rfc3339, SourceOffset, Timestamp, TimestampError, UtcOffset};
 
-pub(crate) use measurement::parse_value;
+pub(crate) use measurement::{Shortest, parse_value};
 pub(crate) use name::validate as validate_name;
 pub(crate) use table::TableBuilder;

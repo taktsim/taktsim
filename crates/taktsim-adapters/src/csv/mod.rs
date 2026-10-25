@@ -27,6 +27,6 @@ mod write;
 
 pub use read::{
     Column, FieldError, FieldRef, Import, Problem, QualityFlag, QualityIssue, ReadError,
-    ReadOptions, read_observations,
+    ReadOptions, Stopped, read_observations,
 };
 pub use write::{Cell, CsvWriter, WriteError, write_observations};

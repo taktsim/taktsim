@@ -4,13 +4,14 @@
 use std::io::{self, BufWriter, Write};
 
 use super::Column;
-use crate::observation::{Name, ObservationTable, SourceOffset, Timestamp, Unit};
+use super::read::visible;
+use crate::observation::{Name, ObservationTable, Shortest, SourceOffset, Timestamp, Unit};
 
 /// One field of a CSV row, typed, so every writer formats numbers and
 /// timestamps the same way and the reader accepts them back.
 ///
 /// - Text is written as is, quoted (RFC 4180) only if it contains `,`, `"`
-///   or a line break.
+///   or a line break, or starts with a byte-order mark.
 /// - Integers in decimal.
 /// - Floats as the shortest decimal text that reads back to the same `f64`,
 ///   with an exponent below 10⁻⁵ and from 10¹⁶ (e.g. `1e-7`, `1e16`).
@@ -163,7 +164,7 @@ impl<W: Write> CsvWriter<W> {
     /// let mut writer = CsvWriter::new(Vec::new(), &["x"])?;
     /// writer.write_row(&[Cell::from(1.5)])?;
     /// let err = writer.write_row(&[Cell::from(f64::NAN)]).unwrap_err();
-    /// assert_eq!(err.to_string(), "row 3, column `x`: NaN is not a finite number");
+    /// assert!(err.to_string().starts_with("row 3, column `x`: not a finite number; found NaN; allowed: "));
     /// assert_eq!(writer.finish()?, b"x\n1.5\n");
     /// # Ok::<(), WriteError>(())
     /// ```
@@ -226,10 +227,13 @@ impl<W: Write> CsvWriter<W> {
     }
 }
 
-/// Text, quoted if it contains a separator, a quote or a line break, or if
-/// it is empty and the only field (an unquoted one would be a blank line).
+/// Text, quoted if it contains a separator, a quote or a line break, if it
+/// starts with a byte-order mark (which the reader removes from the start
+/// of the input), or if it is empty and the only field (an unquoted one
+/// would be a blank line).
 fn push_text(line: &mut Vec<u8>, text: &str, only: bool) {
     let quote = (only && text.is_empty())
+        || text.starts_with('\u{feff}')
         || text
             .bytes()
             .any(|b| matches!(b, b',' | b'"' | b'\r' | b'\n'));
@@ -247,50 +251,47 @@ fn push_text(line: &mut Vec<u8>, text: &str, only: bool) {
     }
 }
 
-/// The shortest text that reads back to `x` (finite): plain decimal from
-/// 10⁻⁵ to below 10¹⁶ and for zero, otherwise with an exponent.
+/// The shortest text that reads back to `x` (finite), see [`Shortest`].
 fn push_float(line: &mut Vec<u8>, x: f64) -> io::Result<()> {
-    let magnitude = x.abs();
-    let tiny = magnitude > 0.0 && magnitude < 1e-5;
-    if tiny || magnitude >= 1e16 {
-        write!(line, "{x:e}")
-    } else {
-        write!(line, "{x}")
-    }
+    write!(line, "{}", Shortest(x))
 }
 
 /// Why CSV could not be written.
+///
+/// [`Display`](std::fmt::Display) says what is wrong, where (row and
+/// column) and what was found; [`WriteError::allowed`] and
+/// [`WriteError::example`] say what would be accepted, and the message
+/// ends with both.
 ///
 /// ```
 /// use taktsim_adapters::csv::{CsvWriter, WriteError};
 ///
 /// let err = CsvWriter::new(Vec::new(), &[]).unwrap_err();
 /// assert!(matches!(err, WriteError::NoColumns));
-/// assert_eq!(err.to_string(), "a CSV header needs at least one column");
+/// assert_eq!(
+///     err.to_string(),
+///     "a CSV header needs at least one column; found no columns; \
+///      allowed: one or more distinct, non-empty column names; example: [\"entity\", \"value\"]"
+/// );
 /// ```
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum WriteError {
     /// The output failed.
-    #[error("cannot write the CSV: {0}")]
-    Io(#[from] io::Error),
+    Io(io::Error),
     /// The header has no columns.
-    #[error("a CSV header needs at least one column")]
     NoColumns,
     /// A column name is empty.
-    #[error("column {position} of the CSV header has an empty name")]
     EmptyColumnName {
         /// 1-based position in the header.
         position: usize,
     },
     /// A column name appears twice.
-    #[error("the column `{column}` appears more than once in the CSV header")]
     DuplicateColumn {
         /// The name.
         column: String,
     },
     /// A row with more or fewer cells than the header has columns.
-    #[error("row {row} has {cells} cells, but the CSV header has {columns} columns")]
     CellCount {
         /// The 1-based row, the header being row 1.
         row: u64,
@@ -300,7 +301,6 @@ pub enum WriteError {
         columns: usize,
     },
     /// A float that is NaN or infinite, which the reader would refuse.
-    #[error("row {row}, column `{column}`: {value} is not a finite number")]
     NotFinite {
         /// The 1-based row, the header being row 1.
         row: u64,
@@ -309,6 +309,112 @@ pub enum WriteError {
         /// The value.
         value: f64,
     },
+}
+
+impl WriteError {
+    /// What the writer accepts where this error happened.
+    ///
+    /// ```
+    /// use taktsim_adapters::csv::{Cell, CsvWriter};
+    ///
+    /// let mut writer = CsvWriter::new(Vec::new(), &["x"])?;
+    /// let err = writer.write_row(&[Cell::from(f64::NAN)]).unwrap_err();
+    /// assert!(err.allowed().starts_with("a finite number"));
+    /// # Ok::<(), taktsim_adapters::csv::WriteError>(())
+    /// ```
+    #[must_use]
+    pub fn allowed(&self) -> &'static str {
+        match self {
+            Self::Io(_) => "an output that accepts every write and the final flush",
+            Self::NoColumns | Self::EmptyColumnName { .. } | Self::DuplicateColumn { .. } => {
+                "one or more distinct, non-empty column names"
+            }
+            Self::CellCount { .. } => "one cell for each column of the header, in header order",
+            Self::NotFinite { .. } => {
+                "a finite number, which reads back; for a missing value, an empty cell"
+            }
+        }
+    }
+
+    /// One valid header, row or cell for this error.
+    ///
+    /// ```
+    /// use taktsim_adapters::csv::{CsvWriter, WriteError};
+    ///
+    /// let err = CsvWriter::new(Vec::new(), &["a", "a"]).unwrap_err();
+    /// assert_eq!(err.example(), "[\"entity\", \"value\"]");
+    /// ```
+    #[must_use]
+    pub fn example(&self) -> &'static str {
+        match self {
+            Self::Io(_) => "a `Vec<u8>`, or a file created for writing",
+            Self::NoColumns | Self::EmptyColumnName { .. } | Self::DuplicateColumn { .. } => {
+                "[\"entity\", \"value\"]"
+            }
+            Self::CellCount { .. } => {
+                "[Cell::from(\"M1\"), Cell::from(1.5)] for the header [\"entity\", \"value\"]"
+            }
+            Self::NotFinite { .. } => "Cell::from(1.5), or Cell::Empty",
+        }
+    }
+}
+
+impl std::fmt::Display for WriteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "cannot write the CSV: {err}"),
+            Self::NoColumns => {
+                f.write_str("a CSV header needs at least one column; found no columns")
+            }
+            Self::EmptyColumnName { position } => write!(
+                f,
+                "column {position} of the CSV header has an empty name; found ``"
+            ),
+            Self::DuplicateColumn { column } => write!(
+                f,
+                "a column appears more than once in the CSV header; found `{}` twice",
+                visible(column)
+            ),
+            Self::CellCount {
+                row,
+                cells,
+                columns,
+            } => write!(
+                f,
+                "row {row}: the CSV header has {columns} columns; found {cells} cells"
+            ),
+            Self::NotFinite { row, column, value } => write!(
+                f,
+                "row {row}, column `{}`: not a finite number; found {value}",
+                visible(column)
+            ),
+        }?;
+        write!(
+            f,
+            "; allowed: {}; example: {}",
+            self.allowed(),
+            self.example()
+        )
+    }
+}
+
+impl std::error::Error for WriteError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(err) => Some(err),
+            Self::NoColumns
+            | Self::EmptyColumnName { .. }
+            | Self::DuplicateColumn { .. }
+            | Self::CellCount { .. }
+            | Self::NotFinite { .. } => None,
+        }
+    }
+}
+
+impl From<io::Error> for WriteError {
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
+    }
 }
 
 /// Writes an observation table as CSV: the header
@@ -360,7 +466,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::csv::record::{Record, RecordReader};
+    use crate::csv::record::{Next, Record, RecordReader};
 
     fn row(cells: &[Cell<'_>]) -> String {
         let columns: Vec<String> = (0..cells.len()).map(|i| format!("c{i}")).collect();
@@ -411,6 +517,9 @@ mod tests {
 
     #[test]
     fn header_and_row_errors() {
+        let messages = |err: WriteError| (err.to_string(), err.allowed(), err.example());
+        let (text, ..) = messages(CsvWriter::new(Vec::new(), &[]).unwrap_err());
+        assert!(text.starts_with("a CSV header needs at least one column; found no columns; "));
         assert!(matches!(
             CsvWriter::new(Vec::new(), &[]),
             Err(WriteError::NoColumns)
@@ -419,30 +528,51 @@ mod tests {
             CsvWriter::new(Vec::new(), &["a", ""]),
             Err(WriteError::EmptyColumnName { position: 2 })
         ));
-        let err = CsvWriter::new(Vec::new(), &["a", "b", "a"]).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "the column `a` appears more than once in the CSV header"
+        let header = (
+            "one or more distinct, non-empty column names",
+            "[\"entity\", \"value\"]",
         );
+        let (text, allowed, example) =
+            messages(CsvWriter::new(Vec::new(), &["a", "b", "a"]).unwrap_err());
+        assert_eq!((allowed, example), header);
         assert_eq!(
-            CsvWriter::new(Vec::new(), &[""]).unwrap_err().to_string(),
-            "column 1 of the CSV header has an empty name"
+            text,
+            "a column appears more than once in the CSV header; found `a` twice; \
+             allowed: one or more distinct, non-empty column names; example: [\"entity\", \"value\"]"
+        );
+        let (text, ..) = messages(CsvWriter::new(Vec::new(), &[""]).unwrap_err());
+        assert!(
+            text.starts_with("column 1 of the CSV header has an empty name; found ``; allowed: ")
         );
         let mut writer = CsvWriter::new(Vec::new(), &["a", "b"]).unwrap();
-        let err = writer.write_row(&[Cell::Empty]).unwrap_err();
+        let (text, allowed, example) = messages(writer.write_row(&[Cell::Empty]).unwrap_err());
         assert_eq!(
-            err.to_string(),
-            "row 2 has 1 cells, but the CSV header has 2 columns"
+            text,
+            format!(
+                "row 2: the CSV header has 2 columns; found 1 cells; allowed: {allowed}; example: {example}"
+            )
+        );
+        assert_eq!(
+            allowed,
+            "one cell for each column of the header, in header order"
         );
         let err = writer
             .write_row(&[Cell::Empty, Cell::from(f64::NEG_INFINITY)])
             .unwrap_err();
+        assert!(std::error::Error::source(&err).is_none());
+        let (text, allowed, example) = messages(err);
         assert_eq!(
-            err.to_string(),
-            "row 2, column `b`: -inf is not a finite number"
+            text,
+            format!(
+                "row 2, column `b`: not a finite number; found -inf; allowed: {allowed}; example: {example}"
+            )
         );
+        assert_eq!(example, "Cell::from(1.5), or Cell::Empty");
         writer.write_row(&[Cell::Empty, Cell::from(1.0)]).unwrap();
         assert_eq!(writer.finish().unwrap(), b"a,b\n,1\n");
+        // Names in messages are shown with invisible characters escaped.
+        let (text, ..) = messages(CsvWriter::new(Vec::new(), &["\u{1b}x", "\u{1b}x"]).unwrap_err());
+        assert!(text.contains("found `\\u{1b}x` twice"));
     }
 
     #[test]
@@ -457,9 +587,20 @@ mod tests {
                 Err(io::Error::other("disk full"))
             }
         }
-        let writer = CsvWriter::new(Failing, &["a"]).unwrap();
+        // A row larger than the buffer goes straight to the output.
+        let mut writer = CsvWriter::new(Failing, &["a"]).unwrap();
+        let big = "x".repeat(100_000);
+        assert!(matches!(
+            writer.write_row(&[Cell::from(big.as_str())]),
+            Err(WriteError::Io(_))
+        ));
         let err = writer.finish().unwrap_err();
-        assert_eq!(err.to_string(), "cannot write the CSV: disk full");
+        assert!(std::error::Error::source(&err).is_some());
+        assert_eq!(
+            err.to_string(),
+            "cannot write the CSV: disk full; allowed: an output that accepts every write and the \
+             final flush; example: a `Vec<u8>`, or a file created for writing"
+        );
         let table = crate::csv::read_observations(
             "timestamp,entity,signal,value,unit\n1970-01-01T00:00:00Z,M,s,1,1\n".as_bytes(),
             &crate::csv::ReadOptions::default(),
@@ -472,11 +613,23 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn a_leading_byte_order_mark_is_quoted() {
+        // The reader removes a BOM from the start of the input, so a header
+        // that starts with one must be quoted to read back.
+        let writer = CsvWriter::new(Vec::new(), &["\u{feff}a", "b"]).unwrap();
+        let out = writer.finish().unwrap();
+        assert_eq!(out, "\"\u{feff}a\",b\n".as_bytes());
+        assert_eq!(read_back(&out), [["\u{feff}a", "b"]]);
+        assert_eq!(row(&[Cell::from("\u{feff}x")]), "\"\u{feff}x\"\n");
+        assert_eq!(row(&[Cell::from("x\u{feff}")]), "x\u{feff}\n");
+    }
+
     fn read_back(csv: &[u8]) -> Vec<Vec<String>> {
-        let mut reader = RecordReader::new(csv);
+        let mut reader = RecordReader::new(csv, usize::MAX);
         let mut record = Record::default();
         let mut rows = Vec::new();
-        while reader.read(&mut record).unwrap() {
+        while reader.read(&mut record).unwrap() == Next::Record {
             assert_eq!(record.syntax(0), None);
             rows.push(
                 record
@@ -488,22 +641,32 @@ mod tests {
         rows
     }
 
+    /// Distinct, non-empty column names, any of them possibly starting with
+    /// a byte-order mark.
+    fn header() -> impl Strategy<Value = Vec<String>> {
+        prop::collection::btree_set("\u{feff}?[a-z,\"\r\n ]{1,5}|\\PC{1,4}", 1..4)
+            .prop_map(|names| names.into_iter().collect())
+    }
+
     proptest! {
-        /// Any text survives the writer and the strict reader unchanged,
-        /// whatever separators, quotes and line breaks it contains.
+        /// Any header and any text survive the writer and the strict reader
+        /// unchanged, whatever separators, quotes, line breaks and
+        /// byte-order marks they contain.
         #[test]
-        fn text_round_trips(rows in prop::collection::vec(
-            prop::collection::vec("[a-z,\"\r\n ]{0,6}|\\PC{0,4}", 3),
-            0..6,
-        )) {
-            let mut writer = CsvWriter::new(Vec::new(), &["a", "b", "c"]).unwrap();
+        fn text_round_trips((header, rows) in header().prop_flat_map(|header| {
+            let n = header.len();
+            let cell = "\u{feff}?[a-z,\"\r\n ]{0,6}|\\PC{0,4}";
+            (Just(header), prop::collection::vec(prop::collection::vec(cell, n), 0..6))
+        })) {
+            let columns: Vec<&str> = header.iter().map(String::as_str).collect();
+            let mut writer = CsvWriter::new(Vec::new(), &columns).unwrap();
             for row in &rows {
                 let cells: Vec<Cell<'_>> = row.iter().map(|t| Cell::from(t.as_str())).collect();
                 writer.write_row(&cells).unwrap();
             }
             let out = writer.finish().unwrap();
             let read = read_back(&out);
-            prop_assert_eq!(&read[0], &["a", "b", "c"]);
+            prop_assert_eq!(&read[0], &header);
             prop_assert_eq!(&read[1..], &rows[..]);
         }
 
