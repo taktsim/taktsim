@@ -211,6 +211,7 @@ schemas/  committed JSON Schemas, one per format version
 
 ## Status
 
-M0 done. M1 (units) in review; ADR-0012 proposed in the M1 PR. ADR-0001 to
-ADR-0011 accepted. `main` is protected: PRs only, rebase merge, all CI jobs
+M0 and M1 done. M2 (engine core) in progress, in two PRs: M2a (random
+streams and distributions), M2b (event queue and engine). ADR-0001 to
+ADR-0012 accepted. `main` is protected: PRs only, rebase merge, all CI jobs
 except mutants required.

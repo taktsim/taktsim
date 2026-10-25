@@ -1,6 +1,6 @@
 # ADR-0012: Units implementation
 
-- Status: proposed (accepted when the M1 pull request is merged)
+- Status: accepted (2026-10-25, M1 pull request #2 merged by the owner)
 - Date: 2026-10-25
 - Blocks: M1
 - Spec: §4 Rules ("every quantity carries a unit"), §7 Layer 1 ("units are

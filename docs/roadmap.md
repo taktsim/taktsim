@@ -63,7 +63,7 @@ uncovered branch in core) fails the matching gate.
 
 ### M1 — Units (`taktsim-units`)
 
-Status: in review (pull request). Implementation: ADR-0012.
+Status: done (PR #2, 2026-10-25). Implementation: ADR-0012.
 
 - Own newtypes (ADR-0012): `SimDuration` and `SimTime` (integer
   nanoseconds, ADR-0001), `Count` (`parts`), `Rate` (`parts/s`, `/min`,
