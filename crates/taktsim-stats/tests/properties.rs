@@ -109,11 +109,12 @@ proptest! {
 }
 
 /// A piecewise-constant signal: values at strictly increasing times from 0,
-/// and a window end after the last change.
+/// and a window end at least 2 ns after the last change, so the window
+/// always has an interior point to split at.
 fn signal() -> impl Strategy<Value = (Vec<(SimTime, f64)>, SimTime)> {
     (
         vec((1_u64..10_000_000_000, -1e3..1e3_f64), 1..40),
-        1_u64..10_000_000_000,
+        2_u64..10_000_000_000,
     )
         .prop_map(|(steps, tail)| {
             let mut time = 0_u64;
@@ -126,6 +127,37 @@ fn signal() -> impl Strategy<Value = (Vec<(SimTime, f64)>, SimTime)> {
             }
             (changes, SimTime::from_nanos(time + tail))
         })
+}
+
+/// The mean over [0, end] is the duration-weighted mean of the means over
+/// [0, m] and [m, end], for the split point m in (0, end) chosen by `at`. A
+/// window of 1 ns has no interior point and nothing to check.
+#[allow(clippy::unwrap_used)] // test helper
+fn mean_combines_at_split(
+    changes: &[(SimTime, f64)],
+    end: SimTime,
+    at: u64,
+) -> Result<(), TestCaseError> {
+    let Some(interior) = end.as_nanos().checked_sub(1).filter(|&n| n > 0) else {
+        return Ok(());
+    };
+    let m = SimTime::from_nanos(1 + at % interior);
+    let whole = stats(changes, Window::new(SimTime::START, end).unwrap());
+    let first = stats(changes, Window::new(SimTime::START, m).unwrap());
+    let second = stats(changes, Window::new(m, end).unwrap());
+    let (t1, t2) = (m.as_secs_f64(), end.as_secs_f64() - m.as_secs_f64());
+    let combined = (t1 * first.mean() + t2 * second.mean()) / (t1 + t2);
+    let scale = 1.0 + whole.max().abs().max(whole.min().abs());
+    prop_assert!((whole.mean() - combined).abs() <= 1e-9 * scale);
+    Ok(())
+}
+
+/// Regression: a 1 ns window once divided by zero when choosing m.
+#[test]
+fn window_split_needs_an_interior_point() {
+    let changes = [(SimTime::START, 3.0)];
+    assert!(mean_combines_at_split(&changes, SimTime::from_nanos(1), 12_345).is_ok());
+    assert!(mean_combines_at_split(&changes, SimTime::from_nanos(2), 12_345).is_ok());
 }
 
 #[allow(clippy::unwrap_used)] // test helper
@@ -193,14 +225,8 @@ proptest! {
     /// Splitting the window: the mean over [0, end] is the duration-weighted
     /// mean of the means over [0, m] and [m, end].
     #[test]
-    fn mean_over_a_window_combines_its_parts((changes, end) in signal(), at in 1_u64..u64::MAX) {
-        let m = SimTime::from_nanos(1 + at % (end.as_nanos() - 1));
-        let whole = stats(&changes, Window::new(SimTime::START, end).unwrap());
-        let first = stats(&changes, Window::new(SimTime::START, m).unwrap());
-        let second = stats(&changes, Window::new(m, end).unwrap());
-        let (t1, t2) = (m.as_secs_f64(), end.as_secs_f64() - m.as_secs_f64());
-        let combined = (t1 * first.mean() + t2 * second.mean()) / (t1 + t2);
-        prop_assert!((whole.mean() - combined).abs() <= 1e-9 * (1.0 + whole.max().abs().max(whole.min().abs())));
+    fn mean_over_a_window_combines_its_parts((changes, end) in signal(), at in 0_u64..u64::MAX) {
+        mean_combines_at_split(&changes, end, at)?;
     }
 
     /// The statistics agree with the direct two-pass definition, and stay
