@@ -493,18 +493,11 @@ impl DurationDistribution {
         let cv = positive_number("gamma", "cv", cv, GAMMA)?;
         let shape = 1.0 / (cv * cv);
         let scale_s = mean.as_secs_f64() * cv * cv;
-        // Shape, scale and 1/shape must all be finite and above zero.
-        let usable = [shape, scale_s, 1.0 / shape]
-            .iter()
-            .all(|x| x.is_finite() && *x > 0.0);
-        if !usable {
-            return Err(DistributionError::TooExtreme {
-                distribution: "gamma",
-                parameter: "cv",
-                found: cv,
-                example: GAMMA,
-            });
-        }
+        // Shape, scale and 1/shape (the boost exponent) must be finite. They
+        // are then also above zero. 1/shape can overflow on its own: for a
+        // mean of 1 ns and cv = sqrt(f64::MAX), shape and scale are finite
+        // but every boosted sample would be 0.
+        derived_finite("gamma", "cv", cv, &[shape, scale_s, 1.0 / shape], GAMMA)?;
         Ok(Self(Kind::Gamma {
             mean,
             cv,
