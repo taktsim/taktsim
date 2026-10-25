@@ -169,6 +169,27 @@ proptest! {
         prop_assert_eq!(stats(&split, window), stats(&changes, window));
     }
 
+    /// Changes to other values and back at one instant have no duration and
+    /// change nothing, bit for bit.
+    #[test]
+    fn blips_at_one_instant_change_nothing(
+        (changes, end) in signal(),
+        at in 0_u64..u64::MAX,
+        blips in vec(-1e3..1e3_f64, 1..4),
+    ) {
+        let window = Window::new(SimTime::START, end).unwrap();
+        let instant = SimTime::from_nanos(at % end.as_nanos());
+        let position = changes.partition_point(|&(t, _)| t <= instant);
+        let current = changes[position - 1].1;
+        let mut blipped = changes.clone();
+        let inserted = blips.iter().map(|&v| (instant, v)).chain(std::iter::once((instant, current)));
+        blipped.splice(position..position, inserted);
+        let (a, b) = (stats(&blipped, window), stats(&changes, window));
+        prop_assert_eq!(a.mean().to_bits(), b.mean().to_bits());
+        prop_assert_eq!(a.variance().to_bits(), b.variance().to_bits());
+        prop_assert_eq!((a.min().to_bits(), a.max().to_bits()), (b.min().to_bits(), b.max().to_bits()));
+    }
+
     /// Splitting the window: the mean over [0, end] is the duration-weighted
     /// mean of the means over [0, m] and [m, end].
     #[test]

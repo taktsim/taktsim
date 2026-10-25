@@ -3,9 +3,13 @@
 //!
 //! A signal is given by its change points `(time, value)`: from each time on,
 //! the signal has that value until the next change. Several changes at the
-//! same time are allowed; the last one holds. The statistics cover the window
-//! from the end of the warm-up to the end, so the warm-up is excluded
-//! (spec §6).
+//! same time are allowed; only the last one counts, as if the others had
+//! never happened. The statistics cover the window from the end of the
+//! warm-up to the end, so the warm-up is excluded (spec §6).
+//!
+//! Values are bare `f64` in one unit that the caller declares and keeps for
+//! the whole signal (e.g. parts for WIP); the statistics are unit-agnostic,
+//! and the KPI layer wraps them in typed quantities (ADR-0014).
 
 use taktsim_units::{SimDuration, SimTime};
 
@@ -358,10 +362,11 @@ pub fn time_weighted(
 /// Time-weighted statistics computed while a run records the signal, one
 /// change at a time, without storing the changes.
 ///
-/// Segments of equal value are merged before they are weighted, so
-/// splitting a segment into two with the same value never changes a
-/// result. The weighted update is West's (1979) form of Welford's
-/// algorithm, with weights in seconds of simulated time.
+/// Changes at the same instant collapse to the last of them, and segments
+/// of equal value are merged before they are weighted, so neither
+/// splitting a segment nor a zero-length blip to another value ever changes
+/// a bit of the result. The weighted update is West's (1979) form of
+/// Welford's algorithm, with weights in seconds of simulated time.
 ///
 /// ```
 /// use taktsim_stats::{TimeWeightedAccumulator, Window};
@@ -379,8 +384,9 @@ pub struct TimeWeightedAccumulator {
     window: Window,
     /// Changes recorded so far, for error messages.
     recorded: usize,
-    /// The time of the last change, to check the order.
-    last_time: Option<SimTime>,
+    /// The latest change, not yet applied: a later change at the same
+    /// instant replaces it.
+    pending: Option<(SimTime, f64)>,
     /// The value of the open segment, once there is one.
     value: Option<f64>,
     /// Where the open segment starts (never before the warm-up end).
@@ -411,7 +417,7 @@ impl TimeWeightedAccumulator {
         Self {
             window,
             recorded: 0,
-            last_time: None,
+            pending: None,
             value: None,
             segment_start: window.warm_up_end,
             weight: 0,
@@ -422,9 +428,10 @@ impl TimeWeightedAccumulator {
         }
     }
 
-    /// Records that the signal changes to `value` at `time`. Changes before
-    /// the end of the warm-up only set the value the observed part starts
-    /// with; changes after the end of the window are checked and ignored.
+    /// Records that the signal changes to `value` at `time`. A change at the
+    /// same instant as the one before replaces it. Changes before the end of
+    /// the warm-up only set the value the observed part starts with; changes
+    /// after the end of the window are checked and ignored.
     ///
     /// # Errors
     ///
@@ -453,7 +460,7 @@ impl TimeWeightedAccumulator {
                 found: value,
             });
         }
-        if let Some(previous) = self.last_time
+        if let Some((previous, _)) = self.pending
             && time < previous
         {
             return Err(StatsError::TimesOutOfOrder {
@@ -464,31 +471,38 @@ impl TimeWeightedAccumulator {
             });
         }
         let start = self.window.warm_up_end;
-        let current = match self.value {
-            None if time > start => {
-                return Err(StatsError::NoValueAtStart {
-                    start,
-                    first: Some(time),
-                });
-            }
-            None => None,
-            Some(current) => Some(current),
-        };
+        if self.recorded == 0 && time > start {
+            return Err(StatsError::NoValueAtStart {
+                start,
+                first: Some(time),
+            });
+        }
         self.recorded += 1;
-        self.last_time = Some(time);
-        match current {
-            Some(current) if time > start => {
-                // An identical value extends the open segment instead of closing
-                // it, so splitting a segment never changes a result.
+        if let Some((pending_time, pending_value)) = self.pending
+            && pending_time < time
+        {
+            self.apply(pending_time, pending_value);
+        }
+        self.pending = Some((time, value));
+        Ok(())
+    }
+
+    /// The signal takes `value` from `time` on; `time` is later than every
+    /// change applied before.
+    fn apply(&mut self, time: SimTime, value: f64) {
+        match self.value {
+            // An identical value extends the open segment instead of
+            // closing it, so splitting a segment never changes a result.
+            Some(current) if time > self.window.warm_up_end => {
                 if value.to_bits() != current.to_bits() {
-                    let until = time.min(self.window.end);
-                    self.close_segment(current, until);
+                    self.close_segment(current, time.min(self.window.end));
                     self.value = Some(value);
                 }
             }
+            // At or before the end of the warm-up: the value the observed
+            // part starts with.
             Some(_) | None => self.value = Some(value),
         }
-        Ok(())
     }
 
     /// Adds the segment [segment start, `until`) with `value` to the
@@ -536,6 +550,9 @@ impl TimeWeightedAccumulator {
     /// # Ok::<(), taktsim_stats::StatsError>(())
     /// ```
     pub fn finish(mut self) -> Result<TimeWeighted, StatsError> {
+        if let Some((time, value)) = self.pending.take() {
+            self.apply(time, value);
+        }
         let Some(value) = self.value else {
             return Err(StatsError::NoValueAtStart {
                 start: self.window.warm_up_end,
@@ -636,6 +653,25 @@ mod tests {
             err.to_string(),
             "signal changes: times must not decrease, but value 2 at 30min follows one at 1h"
         );
+    }
+
+    #[test]
+    fn a_blip_at_one_instant_changes_nothing() {
+        // A change to another value and back at the same instant has no
+        // duration, so it must not split the segment around it.
+        let w = Window::new(t("0s"), t("3h")).unwrap();
+        let base = [(t("0s"), 0.1), (t("1h"), 0.7)];
+        let blip = [
+            (t("0s"), 0.1),
+            (t("1h"), 0.7),
+            (t("100min"), 9.0),
+            (t("100min"), 0.7),
+        ];
+        let a = time_weighted(&base, w).unwrap();
+        let b = time_weighted(&blip, w).unwrap();
+        assert_eq!(a.mean().to_bits(), b.mean().to_bits());
+        assert_eq!(a.variance().to_bits(), b.variance().to_bits());
+        assert_eq!((a.min(), a.max()), (b.min(), b.max()));
     }
 
     #[test]
