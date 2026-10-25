@@ -19,7 +19,6 @@ edition = "2024"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/taktsim/taktsim"
-homepage = "https://github.com/taktsim/taktsim"
 authors = ["The taktsim contributors"]
 # Nothing is published before the v0.1 release (M13).
 publish = false

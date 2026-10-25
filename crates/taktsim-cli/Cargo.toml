@@ -6,13 +6,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 authors.workspace = true
 publish.workspace = true
 
 [[bin]]
 name = "taktsim"
 path = "src/main.rs"
+# The CLI is documented by --help; its rustdoc page would collide with the
+# Python module's, which is also named `taktsim`.
+doc = false
 
 [lints]
 workspace = true
