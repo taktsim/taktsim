@@ -424,6 +424,11 @@ dependencies = [
 [[package]]
 name = "taktsim-adapters"
 version = "0.0.0"
+dependencies = [
+ "proptest",
+ "taktsim-units",
+ "thiserror",
+]
 
 [[package]]
 name = "taktsim-cli"
