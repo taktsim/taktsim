@@ -21,8 +21,12 @@ pub fn built<T, E: Debug>(input: Result<T, E>) -> T {
     input.expect("benchmark workload succeeds (checked by tests/workloads.rs)")
 }
 
-/// Teardown of a benchmark that returns a `Result`: stops the run on an
-/// error (see [`built`]).
-pub fn check<T, E: Debug>(result: Result<T, E>) {
+/// Teardown of every benchmark whose workload returns a `Result`. The
+/// benchmark returns the result and the inputs it used; this stops the run
+/// on an error (see [`built`]) and frees the inputs here, outside the
+/// measurement.
+pub fn check<T, E: Debug, I>(output: (Result<T, E>, I)) {
+    let (result, inputs) = output;
     black_box(built(result));
+    drop(inputs);
 }

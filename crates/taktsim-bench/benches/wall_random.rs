@@ -30,9 +30,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     for case in DistributionCase::ALL {
         let distribution = case.distribution()?;
         let mut stream = random::stream();
+        // A failed sample ends the loop early and would time less work, as
+        // in the gungraun benchmarks' teardown: count failures, fail after.
+        let mut failures = 0_u64;
         group.bench_function(case.name(), |b| {
-            b.iter(|| random::sample_n(black_box(&distribution), black_box(&mut stream), DRAWS));
+            b.iter(|| {
+                let total =
+                    random::sample_n(black_box(&distribution), black_box(&mut stream), DRAWS);
+                failures += u64::from(total.is_err());
+                total
+            });
         });
+        if failures > 0 {
+            return Err(format!("{}: {failures} iterations failed", case.name()).into());
+        }
     }
     group.finish();
 
