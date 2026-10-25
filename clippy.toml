@@ -3,3 +3,38 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-print-in-tests = true
+
+# Determinism (spec §9, ADR-0013): the platform math library may differ
+# between OSes and CPUs, so transcendental functions come from `libm`.
+# `sqrt` is correctly rounded everywhere and stays allowed. Randomly seeded
+# hash maps would make iteration order differ between runs.
+disallowed-methods = [
+    { path = "f64::ln", reason = "use libm::log (ADR-0013)" },
+    { path = "f64::log", reason = "use libm (ADR-0013)" },
+    { path = "f64::log2", reason = "use libm::log2 (ADR-0013)" },
+    { path = "f64::log10", reason = "use libm::log10 (ADR-0013)" },
+    { path = "f64::ln_1p", reason = "use libm::log1p (ADR-0013)" },
+    { path = "f64::exp", reason = "use libm::exp (ADR-0013)" },
+    { path = "f64::exp2", reason = "use libm::exp2 (ADR-0013)" },
+    { path = "f64::exp_m1", reason = "use libm::expm1 (ADR-0013)" },
+    { path = "f64::powf", reason = "use libm::pow (ADR-0013)" },
+    { path = "f64::powi", reason = "multiply explicitly or use libm::pow (ADR-0013)" },
+    { path = "f64::sin", reason = "use libm::sin (ADR-0013)" },
+    { path = "f64::cos", reason = "use libm::cos (ADR-0013)" },
+    { path = "f64::tan", reason = "use libm::tan (ADR-0013)" },
+    { path = "f64::sin_cos", reason = "use libm::sin and libm::cos (ADR-0013)" },
+    { path = "f64::asin", reason = "use libm::asin (ADR-0013)" },
+    { path = "f64::acos", reason = "use libm::acos (ADR-0013)" },
+    { path = "f64::atan", reason = "use libm::atan (ADR-0013)" },
+    { path = "f64::atan2", reason = "use libm::atan2 (ADR-0013)" },
+    { path = "f64::sinh", reason = "use libm::sinh (ADR-0013)" },
+    { path = "f64::cosh", reason = "use libm::cosh (ADR-0013)" },
+    { path = "f64::tanh", reason = "use libm::tanh (ADR-0013)" },
+    { path = "f64::cbrt", reason = "use libm::cbrt (ADR-0013)" },
+    { path = "f64::hypot", reason = "use libm::hypot (ADR-0013)" },
+    { path = "f64::mul_add", reason = "no fused multiply-add in engine or sampling code (ADR-0010)" },
+    { path = "std::collections::HashMap::new", reason = "random iteration order; use BTreeMap or a fixed hasher" },
+    { path = "std::collections::HashMap::with_capacity", reason = "random iteration order; use BTreeMap or a fixed hasher" },
+    { path = "std::collections::HashSet::new", reason = "random iteration order; use BTreeSet or a fixed hasher" },
+    { path = "std::collections::HashSet::with_capacity", reason = "random iteration order; use BTreeSet or a fixed hasher" },
+]
