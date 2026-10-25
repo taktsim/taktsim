@@ -24,8 +24,10 @@ fn offset() -> impl Strategy<Value = SourceOffset> {
 
 fn name() -> impl Strategy<Value = Name> {
     // Separators, quotes and non-ASCII text, which the writer must quote or
-    // pass through; names with surrounding spaces are not valid and dropped.
-    "[A-Za-z0-9_ ,\"'.;=/äé工-]{1,12}".prop_filter_map("not a valid name", |s| Name::new(&s).ok())
+    // pass through, and a leading byte-order mark; names with surrounding
+    // spaces are not valid and dropped.
+    "\u{feff}?[A-Za-z0-9_ ,\"'.;=/äé工-]{1,12}"
+        .prop_filter_map("not a valid name", |s| Name::new(&s).ok())
 }
 
 fn value() -> impl Strategy<Value = f64> {
@@ -123,8 +125,20 @@ proptest! {
         // Exactly the implausible rows are flagged; none is missing.
         let implausible = original.iter().filter(|o| o.measurement.implausibility().is_some()).count();
         prop_assert_eq!(import.flags.len(), implausible);
-        let all_implausible = import.flags.iter().all(|f| matches!(f.issue, QualityIssue::Implausible { .. }));
-        prop_assert!(all_implausible);
+        // Each flag points at its row, and every flagged row is a
+        // different one.
+        let mut flagged = std::collections::BTreeSet::new();
+        for flag in &import.flags {
+            let QualityIssue::Implausible { measurement, .. } = flag.issue else {
+                return Err(TestCaseError::fail(format!("not implausible: {flag}")));
+            };
+            let index = flag.table_index.unwrap();
+            let row = import.table.get(index).unwrap();
+            prop_assert_eq!(row.measurement, measurement);
+            prop_assert_eq!((row.timestamp, row.source_offset), (flag.timestamp, flag.source_offset));
+            prop_assert_eq!((row.entity, row.signal), (&flag.entity, &flag.signal));
+            prop_assert!(flagged.insert(index));
+        }
     }
 
     /// The table is sorted by (timestamp, entity, signal), whatever order

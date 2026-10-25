@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use taktsim_adapters::csv::{
-    Column, FieldError, FieldRef, Import, Problem, QualityIssue, ReadError, ReadOptions,
+    Column, FieldError, FieldRef, Import, Problem, QualityIssue, ReadError, ReadOptions, Stopped,
     read_observations, write_observations,
 };
 use taktsim_adapters::observation::{
@@ -42,16 +42,23 @@ fn import(name: &str) -> Import {
 }
 
 /// Each error as (row, field, found, problem).
-#[allow(clippy::panic)] // test helper
 fn errors(name: &str) -> Vec<(u64, FieldRef, String, Problem)> {
+    invalid(name)
+        .0
+        .into_iter()
+        .map(|e| (e.row, e.field, e.found.clone(), e.problem.clone()))
+        .collect()
+}
+
+/// Why reading stopped early, if it did.
+fn stopped(name: &str) -> Option<Stopped> {
+    invalid(name).1
+}
+
+#[allow(clippy::panic)] // test helper
+fn invalid(name: &str) -> (Vec<FieldError>, Option<Stopped>) {
     match read_observations(fixture(name).as_slice(), &ReadOptions::default()) {
-        Err(ReadError::Invalid { errors, truncated }) => {
-            assert!(!truncated);
-            errors
-                .into_iter()
-                .map(|e| (e.row, e.field, e.found.clone(), e.problem.clone()))
-                .collect()
-        }
+        Err(ReadError::Invalid { errors, stopped }) => (errors, stopped),
         other => panic!("{name}: {other:?}"),
     }
 }
@@ -190,10 +197,28 @@ fn daylight_saving_fall_back() {
 }
 
 #[test]
-fn missing_and_implausible_values_are_flagged_not_dropped() {
+fn missing_and_implausible_values_are_flagged() {
     let Import { table, flags, .. } = import("flagged_values.csv");
     // Every row but the one without a value.
     assert_eq!(table.len(), 7);
+    // The missing value's row is not in the table; its flag keeps the row's
+    // timestamp, entity and signal.
+    let missing = &flags[0];
+    assert_eq!(missing.table_index, None);
+    assert_eq!(
+        (missing.entity.as_str(), missing.signal.as_str()),
+        ("M1", "scrap_count")
+    );
+    assert_eq!(missing.timestamp.as_unix_nanos(), 1_772_431_200_000_000_000);
+    assert_eq!(missing.source_offset, SourceOffset::Known(UtcOffset::UTC));
+    // The implausible ones point at their row of the sorted table.
+    for flag in &flags[1..] {
+        let row = table.get(flag.table_index.unwrap()).unwrap();
+        assert_eq!(
+            (row.timestamp, row.entity, row.signal),
+            (flag.timestamp, &flag.entity, &flag.signal)
+        );
+    }
     let flags: Vec<(u64, QualityIssue)> = flags.iter().map(|f| (f.row, f.issue)).collect();
     let implausible = |row| match flags.iter().find(|(r, _)| *r == row) {
         Some((
@@ -249,6 +274,7 @@ fn missing_and_implausible_values_are_flagged_not_dropped() {
 
 #[test]
 fn malformed_rows_are_rejected_with_row_and_column() {
+    assert_eq!(stopped("malformed_rows.csv"), None);
     let at = |column| FieldRef::Column(column);
     assert_eq!(
         errors("malformed_rows.csv"),
@@ -344,13 +370,18 @@ fn malformed_rows_messages() {
 
 #[test]
 fn unterminated_quote() {
+    // Everything after the quote is one field, so the second row is not read.
+    assert_eq!(
+        stopped("malformed_unterminated_quote.csv"),
+        Some(Stopped::UnclosedQuote)
+    );
     assert_eq!(
         errors("malformed_unterminated_quote.csv"),
         [
             (
                 2,
                 FieldRef::Column(Column::Entity),
-                "M1,state,1,1\n2026-03-02T07:00:00+01:00,M1,state,2,1\n".into(),
+                "M1,state,1,1\\n2026-03-02T07:00:00+01:00,M1,state,2,1\\n".into(),
                 Problem::UnterminatedQuote
             ),
             (
@@ -368,6 +399,10 @@ fn unterminated_quote() {
 
 #[test]
 fn header_with_unknown_and_missing_columns() {
+    assert_eq!(
+        stopped("malformed_header.csv"),
+        Some(Stopped::InvalidHeader)
+    );
     let header = "time,entity,signal,value,unit,comment";
     assert_eq!(
         errors("malformed_header.csv"),
@@ -403,6 +438,10 @@ fn header_with_unknown_and_missing_columns() {
 #[test]
 fn header_with_semicolons() {
     assert_eq!(
+        stopped("malformed_semicolons.csv"),
+        Some(Stopped::InvalidHeader)
+    );
+    assert_eq!(
         errors("malformed_semicolons.csv"),
         [(
             1,
@@ -422,6 +461,7 @@ fn header_with_semicolons() {
 
 #[test]
 fn not_utf8() {
+    assert_eq!(stopped("malformed_latin1.csv"), None);
     assert_eq!(
         errors("malformed_latin1.csv"),
         [(

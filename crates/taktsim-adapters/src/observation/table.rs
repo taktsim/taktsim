@@ -200,7 +200,7 @@ impl<'a> FromIterator<Observation<'a>> for ObservationTable {
                 row.measurement,
             );
         }
-        builder.finish()
+        builder.finish().0
     }
 }
 
@@ -277,7 +277,8 @@ pub(crate) struct TableBuilder {
 }
 
 impl TableBuilder {
-    /// `entity` and `signal` must be valid names.
+    /// Adds a row and returns the index it was added at. `entity` and
+    /// `signal` must be valid names.
     pub(crate) fn push(
         &mut self,
         timestamp: Timestamp,
@@ -285,7 +286,8 @@ impl TableBuilder {
         entity: &str,
         signal: &str,
         measurement: Measurement,
-    ) {
+    ) -> usize {
+        let added = self.timestamps.len();
         let entity = self.intern(entity);
         let signal = self.intern(signal);
         self.timestamps.push(timestamp);
@@ -294,6 +296,7 @@ impl TableBuilder {
         self.signals.push(signal);
         self.values.push(measurement.value());
         self.units.push(measurement.unit());
+        added
     }
 
     fn intern(&mut self, name: &str) -> usize {
@@ -305,32 +308,58 @@ impl TableBuilder {
         id
     }
 
-    pub(crate) fn finish(self) -> ObservationTable {
+    /// The sorted table, and for each of its rows the index it was added
+    /// at.
+    ///
+    /// Columns are reordered one at a time, each original dropped before
+    /// the next is copied, so besides the columns themselves the peak is
+    /// one column and the order: about 53 bytes per row on a 64-bit target,
+    /// against 37 for the finished table.
+    pub(crate) fn finish(self) -> (ObservationTable, Vec<usize>) {
+        let Self {
+            ids,
+            timestamps,
+            source_offsets,
+            mut entities,
+            mut signals,
+            values,
+            units,
+        } = self;
         // Renumber names in sorted order, so indexes compare like names.
-        let mut rank = vec![0; self.ids.len()];
-        let mut names = Vec::with_capacity(self.ids.len());
-        for (sorted, (name, first_seen)) in self.ids.into_iter().enumerate() {
+        let mut rank = vec![0; ids.len()];
+        let mut names = Vec::with_capacity(ids.len());
+        for (sorted, (name, first_seen)) in ids.into_iter().enumerate() {
             // Ids are 0..len, each once, so every slot is filled.
             if let Some(slot) = rank.get_mut(first_seen) {
                 *slot = sorted;
             }
             names.push(name);
         }
-        let entities: Vec<usize> = self.entities.iter().map(|&id| rank[id]).collect();
-        let signals: Vec<usize> = self.signals.iter().map(|&id| rank[id]).collect();
-        // A stable sort keeps the insertion order of rows with equal keys.
-        let mut order: Vec<usize> = (0..self.timestamps.len()).collect();
-        order.sort_by_key(|&i| (self.timestamps[i], entities[i], signals[i]));
-        ObservationTable {
-            timestamps: order.iter().map(|&i| self.timestamps[i]).collect(),
-            source_offsets: order.iter().map(|&i| self.source_offsets[i]).collect(),
-            entities: order.iter().map(|&i| entities[i]).collect(),
-            signals: order.iter().map(|&i| signals[i]).collect(),
-            values: order.iter().map(|&i| self.values[i]).collect(),
-            units: order.iter().map(|&i| self.units[i]).collect(),
-            names,
+        for id in entities.iter_mut().chain(signals.iter_mut()) {
+            *id = rank[*id];
         }
+        // A stable sort keeps the insertion order of rows with equal keys.
+        let mut order: Vec<usize> = (0..timestamps.len()).collect();
+        order.sort_by_key(|&i| (timestamps[i], entities[i], signals[i]));
+        // Fields are built in order; each `reorder` frees its input.
+        let table = ObservationTable {
+            timestamps: reorder(timestamps, &order),
+            source_offsets: reorder(source_offsets, &order),
+            entities: reorder(entities, &order),
+            signals: reorder(signals, &order),
+            values: reorder(values, &order),
+            units: reorder(units, &order),
+            names,
+        };
+        (table, order)
     }
+}
+
+/// `column` in `order`; `column` itself is freed on return.
+fn reorder<T: Copy>(column: Vec<T>, order: &[usize]) -> Vec<T> {
+    let sorted = order.iter().map(|&i| column[i]).collect();
+    drop(column);
+    sorted
 }
 
 #[cfg(test)]

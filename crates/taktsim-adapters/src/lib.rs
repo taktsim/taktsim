@@ -6,7 +6,7 @@
 //! comparison never depend on where data came from. Adapters are read-only
 //! toward production systems, and library code does no network or file
 //! access of its own: it reads and writes only the
-//! [`Read`](std::io::Read) and [`Write`](std::io::Write) values the caller
+//! [`BufRead`](std::io::BufRead) and [`Write`](std::io::Write) values the caller
 //! passes in. Decisions: ADR-0017.
 //!
 //! Without features the crate is empty. With `csv`:
