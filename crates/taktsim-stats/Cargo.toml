@@ -11,3 +11,13 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+taktsim-units.workspace = true
+libm.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# Test data only: seeded streams and duration distributions.
+taktsim-core.workspace = true
+proptest.workspace = true
