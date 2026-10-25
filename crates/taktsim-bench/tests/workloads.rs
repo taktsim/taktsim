@@ -12,21 +12,28 @@ use taktsim_bench::units::{
     self, COUNT_TEXTS, COUNTS, DURATION_TEXTS, DURATIONS, RATE_TEXTS, RATIO_TEXTS,
 };
 use taktsim_core::random::{DurationDistribution, Stream, StreamKey};
-use taktsim_units::{Count, Rate, Ratio, SimDuration};
+use taktsim_units::{Count, Rate, Ratio, SimDuration, UnitError};
 
 const NANOS_PER_SEC: u64 = 1_000_000_000;
 
-/// Theoretical mean and standard deviation of one sample, in seconds.
+/// Theoretical mean and standard deviation of one sample, rounded to the
+/// nanosecond (far finer than the 5-standard-error bounds below).
+struct Theory {
+    mean: SimDuration,
+    sd: SimDuration,
+}
+
+/// The theory of each case.
 ///
 /// Truncating the normal at zero changes nothing visible: zero is 14
 /// standard deviations below the mean. Lognormal: sd = mean × √(e^σ² − 1).
-/// Triangular: var = (a² + b² + c² − ab − ac − bc) / 18 = 84 / 18. Gamma
+/// Triangular: var = (a² + b² + c² − ab − ac − bc) / 18 = 84 / 18 s². Gamma
 /// and Erlang: sd = cv × mean, cv = 1/√k for Erlang. Weibull with scale λ
 /// and shape k: mean = λ Γ(1 + 1/k), var = λ² (Γ(1 + 2/k) − Γ(1 + 1/k)²),
 /// with Γ(5/3) = 0.902745292950934 and Γ(7/3) = (4/3) Γ(4/3) =
 /// (4/3) × 0.892979511569249 (Abramowitz and Stegun, table 6.1).
-fn theory(case: DistributionCase) -> (f64, f64) {
-    match case {
+fn theory(case: DistributionCase) -> Result<Theory, UnitError> {
+    let (mean, sd) = match case {
         DistributionCase::Constant => (45.0, 0.0),
         DistributionCase::Exponential => (720.0, 720.0),
         DistributionCase::Normal => (42.0, 3.0),
@@ -37,11 +44,15 @@ fn theory(case: DistributionCase) -> (f64, f64) {
         DistributionCase::GammaLowShape => (720.0, 2.0 * 720.0),
         DistributionCase::Erlang => (720.0, 720.0 / 3.0_f64.sqrt()),
         DistributionCase::Weibull => {
-            let (lambda, g1) = (21_600.0, 0.902_745_292_950_934);
+            let (lambda, g1): (f64, f64) = (21_600.0, 0.902_745_292_950_934);
             let g2 = 4.0 / 3.0 * 0.892_979_511_569_249;
             (lambda * g1, lambda * (g2 - g1 * g1).sqrt())
         }
-    }
+    };
+    Ok(Theory {
+        mean: SimDuration::from_secs_f64(mean)?,
+        sd: SimDuration::from_secs_f64(sd)?,
+    })
 }
 
 #[test]
@@ -61,6 +72,49 @@ fn every_case_builds_with_the_parameters_its_docs_name() {
     for (case, text) in DistributionCase::ALL.into_iter().zip(expected) {
         assert_eq!(case.distribution().unwrap().to_string(), text, "{case:?}");
     }
+}
+
+/// `ALL` lists every variant once, in declaration order. The match has no
+/// wildcard, so a new variant does not compile until it is added here, and
+/// then this test fails until it is in `ALL`.
+#[test]
+fn all_lists_every_case() {
+    let position = |case: DistributionCase| match case {
+        DistributionCase::Constant => 0,
+        DistributionCase::Exponential => 1,
+        DistributionCase::Normal => 2,
+        DistributionCase::LogNormal => 3,
+        DistributionCase::Uniform => 4,
+        DistributionCase::Triangular => 5,
+        DistributionCase::Gamma => 6,
+        DistributionCase::GammaLowShape => 7,
+        DistributionCase::Erlang => 8,
+        DistributionCase::Weibull => 9,
+    };
+    for (i, case) in DistributionCase::ALL.into_iter().enumerate() {
+        assert_eq!(position(case), i, "{case:?}");
+    }
+}
+
+/// Every case is a gated benchmark: the gungraun file has a
+/// `#[bench::<name>(DistributionCase::<Variant>)]` line for each, so a
+/// case cannot be added without its instruction count being gated.
+#[test]
+fn every_case_is_a_gated_benchmark() {
+    let source = include_str!("../benches/instructions_random.rs");
+    let ids: Vec<&str> = source
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("#[bench::"))
+        .filter(|rest| rest.contains("(DistributionCase::"))
+        .collect();
+    for case in DistributionCase::ALL {
+        let line = format!("{}(DistributionCase::{case:?})]", case.name());
+        assert!(
+            ids.contains(&line.as_str()),
+            "no #[bench::{line} in instructions_random.rs"
+        );
+    }
+    assert_eq!(ids.len(), DistributionCase::ALL.len(), "{ids:?}");
 }
 
 #[test]
@@ -86,13 +140,14 @@ fn sample_n_draws_from_each_distribution() {
     for case in DistributionCase::ALL {
         let distribution = case.distribution().unwrap();
         let total = random::sample_n(&distribution, &mut random::stream(), DRAWS).unwrap();
-        let (mean, sd) = theory(case);
+        let Theory { mean, sd } = theory(case).unwrap();
         let n = f64::from(DRAWS);
-        let observed = total.as_secs_f64() / n;
-        let bound = 5.0 * sd / n.sqrt();
+        let observed = SimDuration::from_secs_f64(total.as_secs_f64() / n).unwrap();
+        let bound = SimDuration::from_secs_f64(5.0 * sd.as_secs_f64() / n.sqrt()).unwrap();
+        let error = observed.max(mean).checked_sub(observed.min(mean)).unwrap();
         assert!(
-            (observed - mean).abs() <= bound,
-            "{case:?}: sample mean {observed} s, theory {mean} s ± {bound} s"
+            error <= bound,
+            "{case:?}: sample mean {observed}, theory {mean} ± {bound}"
         );
     }
 }
