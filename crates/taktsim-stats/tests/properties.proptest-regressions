@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6f3b6da86fb5c0103f3c4f94c6412da009ee127896b8c5ab13dba3be591b721f # shrinks to (changes, end) = ([(SimTime(0), 0.0), (SimTime(679546210), 309.84928480729724), (SimTime(9718763218), 403.3794392657823), (SimTime(12446014573), 0.0), (SimTime(16420795794), 0.0), (SimTime(18611838877), 456.6441693657485), (SimTime(23647002890), 0.0), (SimTime(25570945680), 0.0), (SimTime(30195487036), 0.0), (SimTime(36125363636), 0.0), (SimTime(37071819230), 0.0), (SimTime(38436106539), 0.0), (SimTime(44256126191), -982.3006236329336), (SimTime(48212018665), 862.3345262264137), (SimTime(52404767702), 0.0), (SimTime(59011894028), 0.0), (SimTime(62221136530), 0.0), (SimTime(63610366620), 369.07398325609984), (SimTime(65948788287), -439.41527883529375), (SimTime(71457289519), 0.0), (SimTime(77191149606), 0.0), (SimTime(77644326523), 0.0), (SimTime(80027197914), -251.226262798204), (SimTime(83217206222), 0.0), (SimTime(84716492737), 0.0)], SimTime(90449930407)), at = 94561278223818577, blips = [-412.6160434790069]
