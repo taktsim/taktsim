@@ -132,7 +132,8 @@ impl MserTruncation {
 }
 
 /// The MSER-5 truncation point of `observations`, e.g. the WIP sampled at
-/// regular times or the lead time of each unit in completion order.
+/// regular times or the lead time of each unit in completion order, all in
+/// one declared unit (see the crate documentation).
 ///
 /// Ties go to the smallest truncation. The result is the same on every
 /// platform: batch means and sums are formed in a fixed order.
@@ -141,7 +142,7 @@ impl MserTruncation {
 ///
 /// [`StatsError::SeriesTooShort`] below 15 observations (3 batches),
 /// [`StatsError::NotFinite`] for NaN or infinity, [`StatsError::Overflow`]
-/// if the values are so large that their squared deviations overflow.
+/// if a batch sum or the statistic overflows (values beyond about 1e154).
 ///
 /// ```
 /// use taktsim_stats::{mser5, StatsError};
@@ -153,31 +154,52 @@ impl MserTruncation {
 /// # Ok::<(), StatsError>(())
 /// ```
 pub fn mser5(observations: &[f64]) -> Result<MserTruncation, StatsError> {
+    truncate(observations.iter().copied())
+}
+
+/// MSER-5 over `observations` in order, without copying them.
+fn truncate(
+    observations: impl ExactSizeIterator<Item = f64>,
+) -> Result<MserTruncation, StatsError> {
     let required = MIN_BATCHES * MSER_BATCH_SIZE;
-    if observations.len() < required {
+    let n = observations.len();
+    if n < required {
         return Err(StatsError::SeriesTooShort {
             what: "MSER-5",
-            found: observations.len(),
+            found: n,
             required,
         });
     }
-    if let Some((index, &found)) = observations
-        .iter()
-        .enumerate()
-        .find(|(_, x)| !x.is_finite())
-    {
-        return Err(StatsError::NotFinite {
-            what: "MSER-5 observations",
-            index,
-            found,
-        });
+    let overflow = |found: f64| StatsError::Overflow {
+        what: "the MSER-5 statistic",
+        found,
+        allowed: "observations below about 1e154 in magnitude",
+        example: "express the observations in a larger unit",
+    };
+    // Batch means in a fixed order; observations after the last complete
+    // batch are checked but not used.
+    let mut batch_means = Vec::with_capacity(n / MSER_BATCH_SIZE);
+    let (mut sum, mut in_batch, mut largest) = (0.0_f64, 0, 0.0_f64);
+    for (index, x) in observations.enumerate() {
+        if !x.is_finite() {
+            return Err(StatsError::NotFinite {
+                what: "MSER-5 observations",
+                index,
+                found: x,
+            });
+        }
+        sum += x;
+        in_batch += 1;
+        largest = largest.max(x.abs());
+        if in_batch == MSER_BATCH_SIZE {
+            let mean = sum / BATCH_SIZE_F64;
+            if !mean.is_finite() {
+                return Err(overflow(largest));
+            }
+            batch_means.push(mean);
+            (sum, in_batch) = (0.0, 0);
+        }
     }
-    let batch_means: Vec<f64> = observations
-        .as_chunks::<MSER_BATCH_SIZE>()
-        .0
-        .iter()
-        .map(|batch| batch.iter().sum::<f64>() / BATCH_SIZE_F64)
-        .collect();
     let k = batch_means.len();
     let limit = k / 2;
     // Welford's update over the batches from the end, so that after adding
@@ -191,20 +213,18 @@ pub fn mser5(observations: &[f64]) -> Result<MserTruncation, StatsError> {
         m2 += delta * (z - mean);
         if d <= limit {
             let statistic = m2 / (count * count);
+            // Never skip a NaN or infinity: it would silently drop the
+            // truncation points that keep the overflowing batches.
+            if !statistic.is_finite() {
+                return Err(overflow(largest));
+            }
             // `<=` while d falls: ties go to the smallest d.
             if statistic <= best.1 {
                 best = (d, statistic);
             }
         }
     }
-    if !best.1.is_finite() {
-        return Err(StatsError::Overflow {
-            what: "the MSER-5 statistic",
-            found: observations.iter().fold(0.0, |m: f64, x| m.max(x.abs())),
-            allowed: "observations below about 1e154 in magnitude",
-            example: "express the observations in a larger unit",
-        });
-    }
+    // d = 0 is always searched, so `best` holds a finite statistic.
     Ok(MserTruncation {
         deleted_batches: best.0,
         batches: k,
@@ -304,8 +324,7 @@ pub fn mser5_timed(observations: &[(SimTime, f64)]) -> Result<TimedMserTruncatio
             found: observations[index + 1].0,
         });
     }
-    let values: Vec<f64> = observations.iter().map(|&(_, value)| value).collect();
-    let truncation = mser5(&values)?;
+    let truncation = truncate(observations.iter().map(|&(_, value)| value))?;
     let deleted = truncation.deleted_observations();
     let warm_up_end = if deleted == 0 {
         None
@@ -352,6 +371,20 @@ mod tests {
         ));
         let mut series = vec![f64::MAX; 20];
         series[0] = -f64::MAX;
+        assert!(matches!(mser5(&series), Err(StatsError::Overflow { .. })));
+    }
+
+    #[test]
+    fn finite_values_whose_batch_sum_overflows_are_an_error() {
+        // Each value is finite, but the first batch's sum is not; the
+        // statistic of every truncation that keeps that batch is NaN.
+        let mut series = vec![1.0; 30];
+        series[..5].fill(f64::MAX);
+        let err = mser5(&series).unwrap_err();
+        assert!(matches!(err, StatsError::Overflow { .. }), "{err:?}");
+        // The same in the last batch, which every truncation keeps.
+        let mut series = vec![1.0; 30];
+        series[25..].fill(-f64::MAX);
         assert!(matches!(mser5(&series), Err(StatsError::Overflow { .. })));
     }
 
