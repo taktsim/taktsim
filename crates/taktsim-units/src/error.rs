@@ -66,16 +66,22 @@ pub enum UnitError {
         unit: String,
     },
     /// A duration finer than the 1 ns resolution of simulation time.
-    #[error("`{input}` is finer than the 1 ns resolution of simulation time")]
+    #[error(
+        "`{input}` is finer than the 1 ns resolution of simulation time; \
+         use at most 9 decimal places of seconds, e.g. 0.000000001s"
+    )]
     TooPrecise {
         /// The text that was parsed.
         input: String,
     },
     /// The result does not fit (simulation time ends after about 584 years).
-    #[error("{what} overflows")]
+    #[error("{what} overflows; the largest value is {limit}")]
     Overflow {
-        /// What overflowed, e.g. "duration `600000y`" or "time 8h + 584y".
+        /// What overflowed, e.g. "duration `600000000d`" or "time 8h + 1d".
         what: String,
+        /// The largest representable value, e.g. "18446744073.709551615s
+        /// (about 584 years)".
+        limit: &'static str,
     },
     /// A subtraction would go below zero.
     #[error("{what} would be negative")]

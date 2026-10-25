@@ -6,6 +6,9 @@ use std::str::FromStr;
 use crate::decimal::{self, Scaled, Spec};
 use crate::{SimDuration, UnitError};
 
+/// The largest count, for error messages.
+const COUNT_LIMIT: &str = "18446744073709551615 parts";
+
 const COUNT: Spec = Spec {
     quantity: "count",
     allowed: &["parts", "part"],
@@ -74,6 +77,7 @@ impl Count {
             .map(Self)
             .ok_or_else(|| UnitError::Overflow {
                 what: format!("count {self} + {other}"),
+                limit: COUNT_LIMIT,
             })
     }
 
@@ -133,16 +137,16 @@ impl FromStr for Count {
         if !COUNT.allowed.contains(&unit) {
             return Err(decimal::unknown_unit(input, unit, &COUNT));
         }
-        if number.has_fraction() {
-            return Err(UnitError::NotWhole {
-                input: input.to_owned(),
-                unit: unit.to_owned(),
-            });
-        }
+        // Scaling by 1 is inexact exactly when there is a fractional part.
         match number.scale(1) {
             Scaled::Exact(n) => Ok(Self(n)),
-            Scaled::Inexact | Scaled::Overflow => Err(UnitError::Overflow {
+            Scaled::Inexact => Err(UnitError::NotWhole {
+                input: input.to_owned(),
+                unit: unit.to_owned(),
+            }),
+            Scaled::Overflow => Err(UnitError::Overflow {
                 what: format!("count `{input}`"),
+                limit: COUNT_LIMIT,
             }),
         }
     }
@@ -157,7 +161,14 @@ impl fmt::Display for Count {
 
 const RATE: Spec = Spec {
     quantity: "rate",
-    allowed: &["parts/s", "parts/min", "parts/h"],
+    allowed: &[
+        "parts/s",
+        "parts/min",
+        "parts/h",
+        "part/s",
+        "part/min",
+        "part/h",
+    ],
     example: "120 parts/h",
 };
 
@@ -239,13 +250,14 @@ impl Rate {
 impl FromStr for Rate {
     type Err = UnitError;
 
-    /// Parses `<number> parts/s`, `parts/min` or `parts/h`.
+    /// Parses `<number> parts/s`, `parts/min` or `parts/h`; `part/…` is
+    /// accepted too, as for [`Count`].
     fn from_str(input: &str) -> Result<Self, UnitError> {
         let (number, unit) = decimal::split(input, &RATE)?;
         let secs = match unit {
-            "parts/s" => 1.0,
-            "parts/min" => 60.0,
-            "parts/h" => 3600.0,
+            "parts/s" | "part/s" => 1.0,
+            "parts/min" | "part/min" => 60.0,
+            "parts/h" | "part/h" => 3600.0,
             _ => return Err(decimal::unknown_unit(input, unit, &RATE)),
         };
         // Cannot fail: the text is digits with at most one dot. A value too
@@ -325,6 +337,10 @@ mod tests {
         let r: Rate = "3 parts/min".parse().unwrap();
         assert!((r.as_per_second() - 0.05).abs() < f64::EPSILON);
         assert_eq!("2 parts/s".parse::<Rate>().unwrap().as_per_second(), 2.0);
+        assert_eq!(
+            "1 part/min".parse::<Rate>().unwrap(),
+            "1 parts/min".parse().unwrap()
+        );
         let r: Rate = "120 parts/h".parse().unwrap();
         assert!((r.as_per_hour() - 120.0).abs() < 1e-9);
     }
@@ -350,7 +366,8 @@ mod tests {
                 .checked_add(Count::new(1))
                 .unwrap_err()
                 .to_string(),
-            "count 18446744073709551615 parts + 1 parts overflows"
+            "count 18446744073709551615 parts + 1 parts overflows; \
+             the largest value is 18446744073709551615 parts"
         );
     }
 }

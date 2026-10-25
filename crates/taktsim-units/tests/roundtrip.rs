@@ -13,6 +13,56 @@ const UNITS: [(&str, u64); 5] = [
     ("ms", 1_000_000),
 ];
 
+/// Finite non-negative floats across every magnitude (zero, subnormal,
+/// normal), plus a dense sample of realistic values.
+fn non_negative_f64() -> impl Strategy<Value = f64> {
+    use proptest::num::f64::{NORMAL, POSITIVE, SUBNORMAL, ZERO};
+    prop_oneof![POSITIVE | ZERO | SUBNORMAL | NORMAL, 0.0_f64..1_000.0]
+}
+
+/// The nearest tick to `secs`, computed from its exact decimal expansion
+/// (an f64 has at most 1074 fractional digits), independently of the
+/// integer method in `SimDuration::from_secs_f64`.
+#[allow(clippy::unwrap_used)] // test helper; the expansion always has this shape
+fn nearest_tick_reference(secs: f64) -> Option<u64> {
+    let text = format!("{secs:.1100}");
+    let (int, frac) = text.split_once('.').unwrap();
+    let (ns_digits, tail) = frac.split_at(9);
+    let nanos = int.parse::<u128>().unwrap() * 1_000_000_000 + ns_digits.parse::<u128>().unwrap();
+    let tail = tail.trim_end_matches('0');
+    let round_up = match tail.as_bytes().first() {
+        None => false,
+        Some(b'5') if tail.len() == 1 => nanos % 2 == 1,
+        Some(&d) => d >= b'5',
+    };
+    u64::try_from(nanos + u128::from(round_up)).ok()
+}
+
+proptest! {
+    #[test]
+    fn sampled_durations_match_the_decimal_reference(
+        // Non-negative floats order like their bits, so this covers zero,
+        // subnormals and every magnitude up to 2e10 s (beyond 2^64 ns).
+        secs in (0..=2e10_f64.to_bits()).prop_map(f64::from_bits)
+    ) {
+        prop_assert_eq!(
+            SimDuration::from_secs_f64(secs).ok().map(SimDuration::as_nanos),
+            nearest_tick_reference(secs)
+        );
+    }
+
+    #[test]
+    fn sampled_ties_match_the_decimal_reference(k in 0_u64..1 << 40, shift in 1_u32..30) {
+        // k × 2^-shift seconds includes exact ties (e.g. 1/1024 s).
+        #[allow(clippy::cast_precision_loss)] // k < 2^40 is exact in f64
+        let secs = k as f64 / f64::from(1_u32 << shift);
+        prop_assert_eq!(
+            SimDuration::from_secs_f64(secs).ok().map(SimDuration::as_nanos),
+            nearest_tick_reference(secs)
+        );
+    }
+}
+
 proptest! {
     #[test]
     fn durations_round_trip(nanos: u64) {
@@ -21,11 +71,18 @@ proptest! {
     }
 
     #[test]
-    fn instants_display_like_durations(nanos: u64) {
-        prop_assert_eq!(
-            SimTime::from_nanos(nanos).to_string(),
-            SimDuration::from_nanos(nanos).to_string()
-        );
+    fn instants_round_trip(nanos: u64) {
+        let t = SimTime::from_nanos(nanos);
+        prop_assert_eq!(t.to_string().parse::<SimTime>().unwrap(), t);
+        prop_assert_eq!(t.to_string(), SimDuration::from_nanos(nanos).to_string());
+    }
+
+    #[test]
+    fn seconds_round_trip_through_f64(nanos in 0_u64..(1 << 52)) {
+        // Below 2^52 ns the f64 error of as_secs_f64 is under half a tick,
+        // so rounding to the nearest tick recovers the duration.
+        let d = SimDuration::from_nanos(nanos);
+        prop_assert_eq!(SimDuration::from_secs_f64(d.as_secs_f64()).unwrap(), d);
     }
 
     #[test]
@@ -59,13 +116,13 @@ proptest! {
     }
 
     #[test]
-    fn rates_round_trip(per_second in 0.0_f64..=f64::MAX) {
+    fn rates_round_trip(per_second in non_negative_f64()) {
         let r = Rate::per_second(per_second).unwrap();
         prop_assert_eq!(r.to_string().parse::<Rate>().unwrap(), r);
     }
 
     #[test]
-    fn ratios_round_trip(percent in 0.0_f64..=f64::MAX) {
+    fn ratios_round_trip(percent in non_negative_f64()) {
         let r = Ratio::from_percent(percent).unwrap();
         prop_assert_eq!(r.to_string().parse::<Ratio>().unwrap(), r);
     }

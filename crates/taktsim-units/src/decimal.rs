@@ -23,11 +23,6 @@ pub(crate) struct Decimal<'a> {
 }
 
 impl Decimal<'_> {
-    /// Whether the number has a non-zero fractional part.
-    pub(crate) fn has_fraction(&self) -> bool {
-        !self.frac.is_empty()
-    }
-
     /// `self × factor`: an exact integer, not an integer, or too large for a
     /// `u64`.
     pub(crate) fn scale(&self, factor: u64) -> Scaled {
@@ -159,8 +154,8 @@ mod tests {
         assert_eq!(dec("42").scale(1_000), Scaled::Exact(42_000));
         assert_eq!(dec("0.1").scale(3_600), Scaled::Exact(360));
         assert_eq!(dec("2.500").scale(4), Scaled::Exact(10));
-        assert!(dec("2.500").has_fraction());
-        assert!(!dec("2.000").has_fraction());
+        assert_eq!(dec("2.000").scale(1), Scaled::Exact(2));
+        assert_eq!(dec("2.500").scale(1), Scaled::Inexact);
     }
 
     #[test]
