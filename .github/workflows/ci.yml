@@ -154,6 +154,10 @@ jobs:
             -D warnings -Z unstable-options
             -Zcrate-attr=feature(rustdoc_missing_doc_code_examples)
             -D rustdoc::missing-doc-code-examples
+      # Stable rustdoc only checks that a compile_fail example fails; nightly
+      # also checks its error code (e.g. E0308), so it fails for the right reason.
+      - name: doc tests with compile_fail error codes checked
+        run: cargo +"$NIGHTLY" test --workspace --exclude taktsim-python --all-features --doc --locked
 
   mutants:
     name: mutants (core, changed code, advisory)
