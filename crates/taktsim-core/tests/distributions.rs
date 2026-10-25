@@ -382,6 +382,11 @@ fn parameters_too_extreme_to_sample_are_rejected() {
     let extreme = [
         (DurationDistribution::gamma(mean, 1e-160).unwrap_err(), "cv"),
         (DurationDistribution::gamma(mean, 1e200).unwrap_err(), "cv"),
+        // Shape and scale finite, but 1/shape overflows (tiny mean).
+        (
+            DurationDistribution::gamma(SimDuration::from_nanos(1), f64::MAX.sqrt()).unwrap_err(),
+            "cv",
+        ),
         (
             DurationDistribution::lognormal(mean, 1e200).unwrap_err(),
             "sigma",
