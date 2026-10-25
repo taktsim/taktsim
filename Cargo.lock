@@ -462,6 +462,13 @@ dependencies = [
 [[package]]
 name = "taktsim-stats"
 version = "0.0.0"
+dependencies = [
+ "libm",
+ "proptest",
+ "taktsim-core",
+ "taktsim-units",
+ "thiserror",
+]
 
 [[package]]
 name = "taktsim-trace"

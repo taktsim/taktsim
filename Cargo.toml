@@ -25,6 +25,7 @@ publish = false
 
 [workspace.dependencies]
 taktsim-units = { path = "crates/taktsim-units", version = "0.0.0" }
+taktsim-core = { path = "crates/taktsim-core", version = "0.0.0" }
 # Pure-Rust math, so sampling is identical on every platform (ADR-0013).
 # Default features off: no hardware code paths at all.
 libm = { version = "0.2.16", default-features = false }
