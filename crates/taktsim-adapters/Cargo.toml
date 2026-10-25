@@ -12,7 +12,15 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[dependencies]
+taktsim-units = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
+
 [features]
 default = []
-# CSV import into the observation table and CSV export of results and traces (M11).
-csv = []
+# CSV import into the observation table, CSV export of it, and a typed CSV
+# writer for results and traces (M11, ADR-0017).
+csv = ["dep:taktsim-units", "dep:thiserror"]
