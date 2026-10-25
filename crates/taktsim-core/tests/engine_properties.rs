@@ -179,9 +179,18 @@ proptest! {
         }
         // Checks are on: any conservation slip would be an error here.
         engine.run(RunLimits::until(SimTime::from_nanos(horizon)), &mut NoTrace).unwrap();
+        prop_assert_eq!(engine.now(), SimTime::from_nanos(horizon));
         let c = engine.item_counts();
-        prop_assert_eq!(c.created, horizon / every);
-        prop_assert_eq!(c.in_transit, 0);
-        prop_assert_eq!(c.created, c.held + c.delivered + c.scrapped + c.consumed);
+        prop_assert_eq!(c.created.get(), horizon / every);
+        prop_assert_eq!(c.in_transit.get(), 0);
+        let disposed = c.delivered.get() + c.scrapped.get() + c.consumed.get();
+        prop_assert_eq!(c.created.get(), c.held.get() + disposed);
     }
+}
+
+#[test]
+fn the_default_priority_is_zero() {
+    // Part of the trace contract (ADR-0001): changing the default would
+    // change the traces of every model whose messages rely on it.
+    assert_eq!(Flow::Make.priority(), 0);
 }

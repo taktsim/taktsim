@@ -5,9 +5,11 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use taktsim_units::{SimDuration, SimTime};
+use taktsim_units::{Count, SimDuration, SimTime};
 
-use crate::error::{ComponentError, EngineError, RecentEvent, RunError, Violation};
+use crate::error::{
+    ComponentError, ConservationProblem, EngineError, RecentEvent, RunError, Violation,
+};
 use crate::queue::{CancelError, EventQueue, Next, Pending, Scheduled};
 use crate::random::{Stream, StreamKey};
 use crate::trace::{TraceRecord, TraceSink};
@@ -157,12 +159,14 @@ pub enum Disposal {
 }
 
 /// The messages of a model: one type for all events, usually an enum
-/// defined by the component package. The engine never looks inside.
+/// defined by the component package. The engine never looks inside; it
+/// only asks for the priority and the `Debug` text for error reports.
+/// `Send`, so a run can move to another thread (ADR-0005).
 ///
 /// ```
 /// use taktsim_core::Message;
 ///
-/// #[derive(Debug, Clone)]
+/// #[derive(Debug)]
 /// enum Flow {
 ///     Failure,
 ///     CycleDone,
@@ -179,7 +183,7 @@ pub enum Disposal {
 /// }
 /// assert!(Flow::Failure.priority() < Flow::CycleDone.priority());
 /// ```
-pub trait Message: Clone + fmt::Debug + 'static {
+pub trait Message: fmt::Debug + Send + 'static {
     /// Order among events at the same instant: lower first, then in the
     /// order they were scheduled (ADR-0001). Part of the trace contract:
     /// changing a priority changes traces.
@@ -188,7 +192,8 @@ pub trait Message: Clone + fmt::Debug + 'static {
     }
 }
 
-/// An event as a component receives it.
+/// An event as a component receives it. The message stays with the engine,
+/// which keeps it for error reports; the component sees a reference.
 ///
 /// ```
 /// use taktsim_core::{ComponentId, Delivery, EventId};
@@ -196,26 +201,27 @@ pub trait Message: Clone + fmt::Debug + 'static {
 /// let d = Delivery {
 ///     id: EventId::from_raw(0),
 ///     from: ComponentId::from_index(1),
-///     message: "Arrive",
+///     message: &"Arrive",
 ///     item: None,
 /// };
-/// assert_eq!(d.message, "Arrive");
+/// assert_eq!(*d.message, "Arrive");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Delivery<M> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Delivery<'a, M> {
     /// The event.
     pub id: EventId,
     /// The sender (the receiving component itself for a timer).
     pub from: ComponentId,
     /// The message.
-    pub message: M,
+    pub message: &'a M,
     /// The item the event carries, which the component must
     /// [`receive`](Context::receive) while handling it.
     pub item: Option<ItemId>,
 }
 
 /// A building block of a model: a typed state machine over engine events
-/// with runtime invariants (spec §4, "Extensibility").
+/// with runtime invariants (spec §4, "Extensibility"). `Send`, so a run can
+/// move to another thread (ADR-0005).
 ///
 /// The engine calls [`start`](Self::start) once at time zero, then
 /// [`handle`](Self::handle) for every event addressed to the component.
@@ -226,7 +232,7 @@ pub struct Delivery<M> {
 /// ```
 /// use taktsim_core::{Component, ComponentError, Context, Delivery, Disposal, ItemId};
 ///
-/// #[derive(Debug, Clone)]
+/// #[derive(Debug)]
 /// struct Arrive;
 /// impl taktsim_core::Message for Arrive {}
 ///
@@ -234,7 +240,7 @@ pub struct Delivery<M> {
 /// struct Sink;
 ///
 /// impl Component<Arrive> for Sink {
-///     fn handle(&mut self, d: Delivery<Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
+///     fn handle(&mut self, d: Delivery<'_, Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
 ///         if let Some(item) = d.item {
 ///             ctx.receive(item)?;
 ///             ctx.dispose(item, Disposal::Delivered)?;
@@ -243,15 +249,14 @@ pub struct Delivery<M> {
 ///     }
 /// }
 /// ```
-pub trait Component<M: Message> {
+pub trait Component<M: Message>: Send {
     /// Called once at time zero, before the first event: look up
     /// neighbours, take random streams, schedule the first events.
     ///
     /// # Errors
     ///
     /// Any [`ComponentError`]; the run stops with it.
-    fn start(&mut self, ctx: &mut Context<'_, M>) -> Result<(), ComponentError> {
-        let _ = ctx;
+    fn start(&mut self, _ctx: &mut Context<'_, M>) -> Result<(), ComponentError> {
         Ok(())
     }
 
@@ -262,15 +267,13 @@ pub trait Component<M: Message> {
     /// Any [`ComponentError`]; the run stops with it.
     fn handle(
         &mut self,
-        delivery: Delivery<M>,
+        delivery: Delivery<'_, M>,
         ctx: &mut Context<'_, M>,
     ) -> Result<(), ComponentError>;
 
     /// Calls `visit` once for every item the component holds, from its own
     /// data structures. The default holds none.
-    fn held_items(&self, visit: &mut dyn FnMut(ItemId)) {
-        let _ = visit;
-    }
+    fn held_items(&self, _visit: &mut dyn FnMut(ItemId)) {}
 
     /// Checks the component's invariants. The default has none.
     ///
@@ -290,7 +293,8 @@ pub trait Component<M: Message> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Location {
     Held(ComponentId),
-    InTransit { to: ComponentId },
+    /// Carried by an event to the component that must receive it.
+    InTransit,
 }
 
 /// Counts of items by where they are or how they left (spec §4).
@@ -299,22 +303,36 @@ enum Location {
 /// use taktsim_core::ItemCounts;
 ///
 /// let c = ItemCounts::default();
-/// assert_eq!(c.created, c.held + c.in_transit + c.delivered + c.scrapped + c.consumed);
+/// assert_eq!(c.created.get(), 0);
 /// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ItemCounts {
     /// Items created so far.
-    pub created: u64,
+    pub created: Count,
     /// Items held by a component.
-    pub held: u64,
-    /// Items moving between components (always zero between events).
-    pub in_transit: u64,
+    pub held: Count,
+    /// Items carried by an event that has not been delivered yet: zero
+    /// whenever no item-carrying event is pending, e.g. after a run that
+    /// reached its horizon or went idle, but not necessarily after a run
+    /// stopped by an event limit or the cancel flag.
+    pub in_transit: Count,
     /// Items delivered to a sink.
-    pub delivered: u64,
+    pub delivered: Count,
     /// Items scrapped.
-    pub scrapped: u64,
+    pub scrapped: Count,
     /// Items consumed.
-    pub consumed: u64,
+    pub consumed: Count,
+}
+
+/// The counts behind [`ItemCounts`], as plain integers for speed.
+#[derive(Debug, Clone, Copy, Default)]
+struct Counters {
+    created: u64,
+    held: u64,
+    in_transit: u64,
+    delivered: u64,
+    scrapped: u64,
+    consumed: u64,
 }
 
 /// Every live item and the counts conservation is checked against.
@@ -322,30 +340,21 @@ pub struct ItemCounts {
 struct Items {
     live: BTreeMap<ItemId, Location>,
     held_by: Vec<u64>,
-    counts: ItemCounts,
+    counts: Counters,
 }
 
 /// The state components can act on, separate from the components
 /// themselves so a component and its context can be borrowed together.
 struct State<M> {
-    seed: u64,
+    config: EngineConfig,
     now: SimTime,
     queue: EventQueue<M>,
     items: Items,
     names: Vec<String>,
     ids: BTreeMap<String, ComponentId>,
     streams: BTreeMap<StreamKey, (ComponentId, String)>,
-    recent: VecDeque<RecentRaw<M>>,
-}
-
-/// An event as kept for error reports, rendered only if one is needed.
-struct RecentRaw<M> {
-    seq: u64,
-    time: SimTime,
-    target: ComponentId,
-    from: ComponentId,
-    message: M,
-    item: Option<ItemId>,
+    /// The last delivered events, for error reports.
+    recent: VecDeque<Scheduled<M>>,
 }
 
 /// What a component can do while it starts or handles an event.
@@ -355,6 +364,8 @@ struct RecentRaw<M> {
 /// time.
 pub struct Context<'a, M: Message> {
     me: ComponentId,
+    /// Whether the component is starting (streams can only be taken then).
+    starting: bool,
     /// The item carried by the event being handled, until received.
     arriving: Option<ItemId>,
     state: &'a mut State<M>,
@@ -366,21 +377,21 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct Tick;
+    /// # #[derive(Debug)] struct Tick;
     /// # impl Message for Tick {}
-    /// struct Clock(Vec<taktsim_units::SimTime>);
+    /// struct Clock;
     /// impl Component<Tick> for Clock {
     ///     fn start(&mut self, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
     ///         ctx.schedule("5s".parse()?, Tick)?;
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
+    ///     fn handle(&mut self, _: Delivery<'_, Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
     ///         assert_eq!(ctx.now().to_string(), "5s");
     ///         Ok(())
     ///     }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
-    /// engine.add_component("clock", Box::new(Clock(vec![])))?;
+    /// engine.add_component("clock", Box::new(Clock))?;
     /// engine.run(RunLimits::until("1min".parse()?), &mut NoTrace)?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -393,7 +404,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// struct Me;
     /// impl Component<M> for Me {
@@ -401,7 +412,7 @@ impl<M: Message> Context<'_, M> {
     ///         assert_eq!(ctx.me(), ctx.lookup("me")?);
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// engine.add_component("me", Box::new(Me))?;
@@ -421,7 +432,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// struct Lookup;
     /// impl Component<M> for Lookup {
@@ -429,7 +440,7 @@ impl<M: Message> Context<'_, M> {
     ///         assert!(ctx.lookup("nowhere").is_err());
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// engine.add_component("a", Box::new(Lookup))?;
@@ -456,22 +467,21 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct Tick;
+    /// # #[derive(Debug)] struct Tick;
     /// # impl Message for Tick {}
-    /// struct Ticker(u32);
+    /// struct Ticker;
     /// impl Component<Tick> for Ticker {
     ///     fn start(&mut self, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
     ///         ctx.schedule("1s".parse()?, Tick)?;
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
-    ///         self.0 += 1;
+    ///     fn handle(&mut self, _: Delivery<'_, Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
     ///         ctx.schedule("1s".parse()?, Tick)?;
     ///         Ok(())
     ///     }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
-    /// engine.add_component("ticker", Box::new(Ticker(0)))?;
+    /// engine.add_component("ticker", Box::new(Ticker))?;
     /// let summary = engine.run(RunLimits::until("10s".parse()?), &mut NoTrace)?;
     /// assert_eq!(summary.events, 10);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -499,7 +509,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct Tick;
+    /// # #[derive(Debug)] struct Tick;
     /// # impl Message for Tick {}
     /// struct Changes;
     /// impl Component<Tick> for Changes {
@@ -509,7 +519,7 @@ impl<M: Message> Context<'_, M> {
     ///         assert!(ctx.cancel(first).is_err());
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<Tick>, _: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
+    ///     fn handle(&mut self, _: Delivery<'_, Tick>, _: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
     ///         unreachable!("the only timer was cancelled")
     ///     }
     /// }
@@ -544,7 +554,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct Ping;
+    /// # #[derive(Debug)] struct Ping;
     /// # impl Message for Ping {}
     /// struct Sender;
     /// impl Component<Ping> for Sender {
@@ -553,18 +563,15 @@ impl<M: Message> Context<'_, M> {
     ///         ctx.send(to, Ping)?;
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<Ping>, _: &mut Context<'_, Ping>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, Ping>, _: &mut Context<'_, Ping>) -> Result<(), ComponentError> { Ok(()) }
     /// }
-    /// struct Receiver(u32);
+    /// struct Receiver;
     /// impl Component<Ping> for Receiver {
-    ///     fn handle(&mut self, _: Delivery<Ping>, _: &mut Context<'_, Ping>) -> Result<(), ComponentError> {
-    ///         self.0 += 1;
-    ///         Ok(())
-    ///     }
+    ///     fn handle(&mut self, _: Delivery<'_, Ping>, _: &mut Context<'_, Ping>) -> Result<(), ComponentError> { Ok(()) }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// engine.add_component("sender", Box::new(Sender))?;
-    /// engine.add_component("receiver", Box::new(Receiver(0)))?;
+    /// engine.add_component("receiver", Box::new(Receiver))?;
     /// assert_eq!(engine.run(RunLimits::until("1s".parse()?), &mut NoTrace)?.events, 1);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -576,7 +583,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// struct Maker(Vec<ItemId>);
     /// impl Component<M> for Maker {
@@ -584,7 +591,7 @@ impl<M: Message> Context<'_, M> {
     ///         self.0.push(ctx.create_item());
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
     ///     fn held_items(&self, visit: &mut dyn FnMut(ItemId)) {
     ///         self.0.iter().copied().for_each(visit);
     ///     }
@@ -592,9 +599,10 @@ impl<M: Message> Context<'_, M> {
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// engine.add_component("maker", Box::new(Maker(vec![])))?;
     /// engine.run(RunLimits::until("1s".parse()?), &mut NoTrace)?;
-    /// assert_eq!(engine.item_counts().held, 1);
+    /// assert_eq!(engine.item_counts().held.get(), 1);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
+    #[must_use = "an item nobody keeps can never be moved or disposed of"]
     pub fn create_item(&mut self) -> ItemId {
         let items = &mut self.state.items;
         let item = ItemId(items.counts.created);
@@ -622,7 +630,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct Arrive;
+    /// # #[derive(Debug)] struct Arrive;
     /// # impl Message for Arrive {}
     /// struct Source;
     /// impl Component<Arrive> for Source {
@@ -632,11 +640,11 @@ impl<M: Message> Context<'_, M> {
     ///         ctx.transfer(item, sink, Arrive)?;
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<Arrive>, _: &mut Context<'_, Arrive>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, Arrive>, _: &mut Context<'_, Arrive>) -> Result<(), ComponentError> { Ok(()) }
     /// }
     /// struct Sink;
     /// impl Component<Arrive> for Sink {
-    ///     fn handle(&mut self, d: Delivery<Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
+    ///     fn handle(&mut self, d: Delivery<'_, Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
     ///         if let Some(item) = d.item {
     ///             ctx.receive(item)?;
     ///             ctx.dispose(item, Disposal::Delivered)?;
@@ -648,7 +656,7 @@ impl<M: Message> Context<'_, M> {
     /// engine.add_component("source", Box::new(Source))?;
     /// engine.add_component("sink", Box::new(Sink))?;
     /// engine.run(RunLimits::until("1s".parse()?), &mut NoTrace)?;
-    /// assert_eq!(engine.item_counts().delivered, 1);
+    /// assert_eq!(engine.item_counts().delivered.get(), 1);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn transfer(
@@ -660,7 +668,7 @@ impl<M: Message> Context<'_, M> {
         self.check_held(item)?;
         self.push_now(to, message, Some(item))?;
         let items = &mut self.state.items;
-        items.live.insert(item, Location::InTransit { to });
+        items.live.insert(item, Location::InTransit);
         items.held_by[self.me.0] -= 1;
         items.counts.held -= 1;
         items.counts.in_transit += 1;
@@ -677,7 +685,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// struct Picky;
     /// impl Component<M> for Picky {
@@ -686,7 +694,7 @@ impl<M: Message> Context<'_, M> {
     ///         assert!(ctx.receive(ItemId::from_raw(0)).is_err());
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// engine.add_component("p", Box::new(Picky))?;
@@ -717,7 +725,7 @@ impl<M: Message> Context<'_, M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// struct Scrapper;
     /// impl Component<M> for Scrapper {
@@ -727,12 +735,12 @@ impl<M: Message> Context<'_, M> {
     ///         assert!(ctx.dispose(item, Disposal::Scrapped).is_err());
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// engine.add_component("qc", Box::new(Scrapper))?;
     /// engine.run(RunLimits::until("1s".parse()?), &mut NoTrace)?;
-    /// assert_eq!(engine.item_counts().scrapped, 1);
+    /// assert_eq!(engine.item_counts().scrapped.get(), 1);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn dispose(&mut self, item: ItemId, how: Disposal) -> Result<(), EngineError> {
@@ -756,17 +764,19 @@ impl<M: Message> Context<'_, M> {
     }
 
     /// A random stream for `purpose` of this component (ADR-0013), e.g.
-    /// `"cycle_time"`. Each purpose can be taken once per run.
+    /// `"cycle_time"`. Only while starting, so every conflict between
+    /// streams is found before the first event.
     ///
     /// # Errors
     ///
+    /// [`EngineError::StreamAfterStart`] outside [`Component::start`];
     /// [`EngineError::StreamConflict`] if this component already took a
     /// stream for `purpose` (or, very unlikely, another stream has the same
     /// key).
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// struct Random(Option<random::Stream>);
     /// impl Component<M> for Random {
@@ -775,7 +785,7 @@ impl<M: Message> Context<'_, M> {
     ///         assert!(ctx.stream("cycle_time").is_err());
     ///         Ok(())
     ///     }
-    ///     fn handle(&mut self, _: Delivery<M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
+    ///     fn handle(&mut self, _: Delivery<'_, M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
     /// }
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// engine.add_component("cut", Box::new(Random(None)))?;
@@ -784,6 +794,12 @@ impl<M: Message> Context<'_, M> {
     /// ```
     pub fn stream(&mut self, purpose: &str) -> Result<Stream, EngineError> {
         let name = &self.state.names[self.me.0];
+        if !self.starting {
+            return Err(EngineError::StreamAfterStart {
+                component: name.clone(),
+                purpose: purpose.to_owned(),
+            });
+        }
         let key = StreamKey::new(name, purpose);
         if let Some((owner, existing)) = self.state.streams.get(&key) {
             return Err(EngineError::StreamConflict {
@@ -796,7 +812,7 @@ impl<M: Message> Context<'_, M> {
         self.state
             .streams
             .insert(key, (self.me, purpose.to_owned()));
-        Ok(Stream::new(self.state.seed, key))
+        Ok(Stream::new(self.state.config.seed, key))
     }
 
     /// Fails unless this component holds `item`.
@@ -969,7 +985,7 @@ pub enum RunOutcome {
     Horizon,
     /// No events are left; the clock is at the horizon.
     Idle,
-    /// `max_events` events were processed.
+    /// `max_events` events were processed and another one is due.
     EventLimit,
     /// The cancel flag was set.
     Cancelled,
@@ -997,12 +1013,12 @@ pub struct RunSummary {
 ///
 /// Add components, then [`run`](Self::run) (repeatedly, if wanted, to
 /// advance in steps). The same components, seed and engine version give the
-/// same events, byte for byte.
+/// same events, byte for byte. `Send`, so a run can move to another thread.
 ///
 /// ```
 /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message, NoTrace, RunLimits, RunOutcome};
 ///
-/// #[derive(Debug, Clone)]
+/// #[derive(Debug)]
 /// struct Tick;
 /// impl Message for Tick {}
 ///
@@ -1012,7 +1028,7 @@ pub struct RunSummary {
 ///         ctx.schedule("1s".parse()?, Tick)?;
 ///         Ok(())
 ///     }
-///     fn handle(&mut self, _: Delivery<Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
+///     fn handle(&mut self, _: Delivery<'_, Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
 ///         ctx.schedule("1s".parse()?, Tick)?;
 ///         Ok(())
 ///     }
@@ -1027,10 +1043,13 @@ pub struct RunSummary {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct Engine<M: Message> {
-    config: EngineConfig,
     components: Vec<Box<dyn Component<M>>>,
     state: State<M>,
     started: bool,
+    /// Set by the first `RunError` from processing; every later run fails.
+    failed: bool,
+    /// Reused by the conservation check, so it does not allocate per event.
+    reported: Vec<ItemId>,
 }
 
 impl<M: Message> Engine<M> {
@@ -1039,7 +1058,7 @@ impl<M: Message> Engine<M> {
     /// ```
     /// use taktsim_core::{Engine, EngineConfig, Message};
     ///
-    /// #[derive(Debug, Clone)]
+    /// #[derive(Debug)]
     /// struct Tick;
     /// impl Message for Tick {}
     ///
@@ -1049,10 +1068,9 @@ impl<M: Message> Engine<M> {
     #[must_use]
     pub fn new(config: EngineConfig) -> Self {
         Self {
-            config,
             components: Vec::new(),
             state: State {
-                seed: config.seed,
+                config,
                 now: SimTime::START,
                 queue: EventQueue::new(),
                 items: Items::default(),
@@ -1062,6 +1080,8 @@ impl<M: Message> Engine<M> {
                 recent: VecDeque::with_capacity(RECENT_EVENTS),
             },
             started: false,
+            failed: false,
+            reported: Vec::new(),
         }
     }
 
@@ -1074,11 +1094,11 @@ impl<M: Message> Engine<M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// # struct Idle;
     /// # impl Component<M> for Idle {
-    /// #     fn handle(&mut self, _: Delivery<M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
+    /// #     fn handle(&mut self, _: Delivery<'_, M>, _: &mut Context<'_, M>) -> Result<(), ComponentError> { Ok(()) }
     /// # }
     /// let mut engine = Engine::new(EngineConfig::new(1));
     /// let id = engine.add_component("buf1", Box::new(Idle))?;
@@ -1113,7 +1133,7 @@ impl<M: Message> Engine<M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// let engine: Engine<M> = Engine::new(EngineConfig::new(1));
     /// assert_eq!(engine.component_name(ComponentId::from_index(0)), None);
@@ -1127,7 +1147,7 @@ impl<M: Message> Engine<M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// let engine: Engine<M> = Engine::new(EngineConfig::new(1));
     /// assert_eq!(engine.now(), taktsim_units::SimTime::START);
@@ -1141,14 +1161,22 @@ impl<M: Message> Engine<M> {
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// let engine: Engine<M> = Engine::new(EngineConfig::new(1));
     /// assert_eq!(engine.item_counts(), ItemCounts::default());
     /// ```
     #[must_use]
     pub fn item_counts(&self) -> ItemCounts {
-        self.state.items.counts
+        let c = self.state.items.counts;
+        ItemCounts {
+            created: Count::new(c.created),
+            held: Count::new(c.held),
+            in_transit: Count::new(c.in_transit),
+            delivered: Count::new(c.delivered),
+            scrapped: Count::new(c.scrapped),
+            consumed: Count::new(c.consumed),
+        }
     }
 
     /// Processes events until a limit is reached. The first call starts
@@ -1159,11 +1187,12 @@ impl<M: Message> Engine<M> {
     ///
     /// [`RunError`] if a component fails, an invariant or conservation is
     /// violated (with checks on), an item is not received, or `until` is
-    /// before the current time. The run cannot continue after an error.
+    /// before the current time. After any error but the last, the run is
+    /// stopped for good: later calls return [`RunError::AlreadyFailed`].
     ///
     /// ```
     /// # use taktsim_core::*;
-    /// # #[derive(Debug, Clone)] struct M;
+    /// # #[derive(Debug)] struct M;
     /// # impl Message for M {}
     /// let mut engine: Engine<M> = Engine::new(EngineConfig::new(1));
     /// let summary = engine.run(RunLimits::until("8h".parse()?), &mut NoTrace)?;
@@ -1176,12 +1205,25 @@ impl<M: Message> Engine<M> {
         limits: RunLimits<'_>,
         trace: &mut dyn TraceSink<M>,
     ) -> Result<RunSummary, RunError> {
+        if self.failed {
+            return Err(RunError::AlreadyFailed);
+        }
         if limits.until < self.state.now {
             return Err(RunError::HorizonInPast {
                 now: self.state.now,
                 until: limits.until,
             });
         }
+        let result = self.process(limits, trace);
+        self.failed = result.is_err();
+        result
+    }
+
+    fn process(
+        &mut self,
+        limits: RunLimits<'_>,
+        trace: &mut dyn TraceSink<M>,
+    ) -> Result<RunSummary, RunError> {
         if !self.started {
             self.started = true;
             for index in 0..self.components.len() {
@@ -1196,11 +1238,10 @@ impl<M: Message> Engine<M> {
             {
                 break RunOutcome::Cancelled;
             }
-            if limits.max_events == Some(events) {
-                break RunOutcome::EventLimit;
-            }
-            let event = match self.state.queue.pop_until(limits.until) {
+            let take = limits.max_events != Some(events);
+            let event = match self.state.queue.pop_until(limits.until, take) {
                 Next::Due(event) => event,
+                Next::Waiting => break RunOutcome::EventLimit,
                 Next::Later => {
                     self.state.now = limits.until;
                     break RunOutcome::Horizon;
@@ -1227,6 +1268,7 @@ impl<M: Message> Engine<M> {
     ) -> Result<(), RunError> {
         let mut ctx = Context {
             me: id,
+            starting: true,
             arriving: None,
             state: &mut self.state,
             trace,
@@ -1252,31 +1294,26 @@ impl<M: Message> Engine<M> {
             message: &event.message,
             item: event.item,
         });
-        if self.state.recent.len() == RECENT_EVENTS {
-            self.state.recent.pop_front();
-        }
-        self.state.recent.push_back(RecentRaw {
-            seq: event.key.seq,
-            time: event.key.time,
-            target,
-            from: event.from,
-            message: event.message.clone(),
-            item: event.item,
-        });
         let delivery = Delivery {
             id: EventId(event.key.seq),
             from: event.from,
-            message: event.message,
+            message: &event.message,
             item: event.item,
         };
         let mut ctx = Context {
             me: target,
+            starting: false,
             arriving: event.item,
             state: &mut self.state,
             trace,
         };
         let result = self.components[target.0].handle(delivery, &mut ctx);
         let unreceived = ctx.arriving;
+        // Keep the event for error reports; the message moves, no copy.
+        if self.state.recent.len() == RECENT_EVENTS {
+            self.state.recent.pop_front();
+        }
+        self.state.recent.push_back(event);
         result.map_err(|source| self.component_error(target, source))?;
         if let Some(item) = unreceived {
             return Err(RunError::NotReceived {
@@ -1291,9 +1328,10 @@ impl<M: Message> Engine<M> {
 
     /// After `id` started or handled an event: its invariants and
     /// conservation (spec §4, §7 Layer 3). Only `id` can have changed, so
-    /// checking it is checking every component.
-    fn check(&self, id: ComponentId) -> Result<(), RunError> {
-        if !self.config.checks {
+    /// checking it is checking every component (ADR-0018). Costs
+    /// O(k log k) for a component holding k items.
+    fn check(&mut self, id: ComponentId) -> Result<(), RunError> {
+        if !self.state.config.checks {
             return Ok(());
         }
         let component = &self.components[id.0];
@@ -1305,7 +1343,8 @@ impl<M: Message> Engine<M> {
                 recent: self.recent(),
             });
         }
-        let mut reported = Vec::new();
+        let reported = &mut self.reported;
+        reported.clear();
         component.held_items(&mut |item| reported.push(item));
         reported.sort_unstable();
         let items = &self.state.items;
@@ -1313,34 +1352,31 @@ impl<M: Message> Engine<M> {
             .windows(2)
             .find(|pair| pair.first() == pair.last())
             .and_then(<[ItemId]>::first);
-        let problem = if let Some(item) = duplicate {
-            Some(format!("it reports {item} twice"))
-        } else if let Some(item) = reported
+        let problem = if let Some(&item) = duplicate {
+            Some(ConservationProblem::ReportedTwice { item })
+        } else if let Some(&item) = reported
             .iter()
             .find(|item| items.live.get(item) != Some(&Location::Held(id)))
         {
-            Some(format!("it reports {item}, which it does not hold"))
+            Some(ConservationProblem::NotHeld { item })
         } else if reported.len() as u64 != items.held_by[id.0] {
-            Some(format!(
-                "it reports {} items, the engine records {}",
-                reported.len(),
-                items.held_by[id.0]
-            ))
+            Some(ConservationProblem::CountMismatch {
+                reported: Count::new(reported.len() as u64),
+                recorded: Count::new(items.held_by[id.0]),
+            })
         } else {
             let c = items.counts;
             let accounted = c.held + c.in_transit + c.delivered + c.scrapped + c.consumed;
-            (c.created != accounted).then(|| {
-                format!(
-                    "{} items created, {accounted} held, in transit or disposed of",
-                    c.created
-                )
+            (c.created != accounted).then(|| ConservationProblem::Unbalanced {
+                created: Count::new(c.created),
+                accounted: Count::new(accounted),
             })
         };
         match problem {
-            Some(detail) => Err(RunError::Conservation {
+            Some(problem) => Err(RunError::Conservation {
                 component: self.state.names[id.0].clone(),
                 time: self.state.now,
-                detail,
+                problem,
                 recent: self.recent(),
             }),
             None => Ok(()),
@@ -1363,8 +1399,8 @@ impl<M: Message> Engine<M> {
             .recent
             .iter()
             .map(|e| RecentEvent {
-                seq: e.seq,
-                time: e.time,
+                seq: e.key.seq,
+                time: e.key.time,
                 target: names[e.target.0].clone(),
                 from: names[e.from.0].clone(),
                 message: format!("{:?}", e.message),
@@ -1385,7 +1421,7 @@ mod tests {
     impl Component<u8> for Idle {
         fn handle(
             &mut self,
-            _: Delivery<u8>,
+            _: Delivery<'_, u8>,
             _: &mut Context<'_, u8>,
         ) -> Result<(), ComponentError> {
             Ok(())
@@ -1402,7 +1438,13 @@ mod tests {
         let err = engine.check(ComponentId(0)).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "at 0s, `idle`: conservation violated: 5 items created, 0 held, in transit or disposed of"
+            "at 0s, `idle`: conservation violated: 5 parts created, 0 parts held, in transit or disposed of"
         );
+    }
+
+    #[test]
+    fn engines_can_move_between_threads() {
+        fn assert_send<T: Send>() {}
+        assert_send::<Engine<u8>>();
     }
 }

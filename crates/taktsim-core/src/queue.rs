@@ -31,6 +31,8 @@ pub(crate) struct Scheduled<M> {
     pub(crate) message: M,
     /// The item this event carries to `target`, if any.
     pub(crate) item: Option<ItemId>,
+    /// Whether this is a cancellable timer (tracked in `timers`).
+    pub(crate) timer: bool,
 }
 
 // `BinaryHeap` is a max-heap; reversing the key makes it pop the smallest.
@@ -103,6 +105,7 @@ impl<M> EventQueue<M> {
             from: event.from,
             message: event.message,
             item: event.item,
+            timer: event.timer,
         });
         EventId(seq)
     }
@@ -124,8 +127,9 @@ impl<M> EventQueue<M> {
         Ok(())
     }
 
-    /// Removes and returns the next live event if it is due by `until`.
-    pub(crate) fn pop_until(&mut self, until: SimTime) -> Next<M> {
+    /// Removes and returns the next live event if it is due by `until`
+    /// and `take` is true; otherwise says why not.
+    pub(crate) fn pop_until(&mut self, until: SimTime, take: bool) -> Next<M> {
         self.drop_cancelled();
         let Some(top) = self.heap.peek_mut() else {
             return Next::Empty;
@@ -133,8 +137,13 @@ impl<M> EventQueue<M> {
         if top.key.time > until {
             return Next::Later;
         }
+        if !take {
+            return Next::Waiting;
+        }
         let event = PeekMut::pop(top);
-        self.timers.remove(&event.key.seq);
+        if event.timer {
+            self.timers.remove(&event.key.seq);
+        }
         Next::Due(event)
     }
 
@@ -159,6 +168,8 @@ impl<M> EventQueue<M> {
 pub(crate) enum Next<M> {
     /// The next event, due by the limit.
     Due(Scheduled<M>),
+    /// An event is due, but the caller did not want to take it.
+    Waiting,
     /// The next event is after the limit; it stays in the queue.
     Later,
     /// No events are left.
@@ -197,9 +208,9 @@ mod tests {
 
     fn drain(queue: &mut EventQueue<u64>) -> Vec<(u64, u8, u64)> {
         let end = SimTime::from_nanos(u64::MAX);
-        std::iter::from_fn(|| match queue.pop_until(end) {
+        std::iter::from_fn(|| match queue.pop_until(end, true) {
             Next::Due(e) => Some((e.key.time.as_nanos(), e.key.priority, e.key.seq)),
-            Next::Later | Next::Empty => None,
+            Next::Waiting | Next::Later | Next::Empty => None,
         })
         .collect()
     }
@@ -211,9 +222,19 @@ mod tests {
         q.push(at(3, 1, false));
         q.push(at(3, 0, false));
         q.push(at(3, 1, false));
-        assert!(matches!(q.pop_until(SimTime::from_nanos(2)), Next::Later));
+        assert!(matches!(
+            q.pop_until(SimTime::from_nanos(2), true),
+            Next::Later
+        ));
+        assert!(matches!(
+            q.pop_until(SimTime::from_nanos(3), false),
+            Next::Waiting
+        ));
         assert_eq!(drain(&mut q), [(3, 0, 2), (3, 1, 1), (3, 1, 3), (5, 0, 0)]);
-        assert!(matches!(q.pop_until(SimTime::from_nanos(9)), Next::Empty));
+        assert!(matches!(
+            q.pop_until(SimTime::from_nanos(9), true),
+            Next::Empty
+        ));
     }
 
     #[test]
@@ -232,13 +253,36 @@ mod tests {
     fn many_cancellations_compact_the_heap() {
         let mut q = EventQueue::new();
         let ids: Vec<EventId> = (0..10).map(|t| q.push(at(t, 0, true))).collect();
-        for id in &ids[..6] {
+        for id in &ids[..5] {
             q.cancel(*id, A).unwrap();
         }
+        // Up to half of the heap may be stale: no compaction yet.
+        assert_eq!((q.cancelled.len(), q.heap.len()), (5, 10));
+        q.cancel(ids[5], A).unwrap();
         // The sixth cancellation crossed the half-way mark and compacted.
         assert!(q.cancelled.is_empty());
         assert_eq!(q.heap.len(), 4);
         assert_eq!(drain(&mut q), [(6, 0, 6), (7, 0, 7), (8, 0, 8), (9, 0, 9)]);
+    }
+
+    #[test]
+    fn events_are_equal_exactly_when_their_keys_are() {
+        let event = |seq, message| Scheduled {
+            key: Key {
+                time: SimTime::from_nanos(1),
+                priority: 0,
+                seq,
+            },
+            target: A,
+            from: A,
+            message,
+            item: None,
+            timer: false,
+        };
+        // Equal keys, different messages: equal. Different keys: not.
+        assert_eq!(event(0, 1_u64), event(0, 99));
+        assert_ne!(event(0, 1), event(1, 1));
+        assert_eq!(event(0, 1).cmp(&event(0, 99)), Ordering::Equal);
     }
 
     #[test]
