@@ -154,6 +154,20 @@ cp "$template" "$case_dir/head/r/summary.json"
 check real_summary_reads 0 \
   '| `test_lib_bench_intro::fibonacci::bench_fibonacci_with_config` | 687 | 687 | 0.00 % | ok |'
 
+# A summary written by gungraun-runner 0.20.0 for taktsim-bench in CI
+# (pull request #6, unchanged), with a benchmark id; then the same summary
+# with 10 % plus one instruction more: 513,491 × 1.1 = 564,840.1.
+own=ci/fixtures/bench/taktsim-bench-weibull.summary.json
+start own_summary_reads
+mkdir -p "$case_dir/base/r" "$case_dir/head/r"
+cp "$own" "$case_dir/base/r/summary.json"
+jq '.profiles[0].data.total.metrics.Ir.values.new = 564841' "$own" >"$case_dir/head/r/summary.json"
+check own_summary_reads 1 \
+  '| `instructions_random::distributions::sample::weibull` | 513,491 | 564,841 | +10.00 % | **regression** |'
+jq '.profiles[0].data.total.metrics.Ir.values.new = 564840' "$own" >"$case_dir/head/r/summary.json"
+check own_summary_reads 0 \
+  '| `instructions_random::distributions::sample::weibull` | 513,491 | 564,840 | +10.00 % | ok |'
+
 start rows_are_sorted
 put base f::g::b 1
 put base f::g::a 1
