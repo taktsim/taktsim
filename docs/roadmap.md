@@ -28,7 +28,7 @@ start while an ADR it depends on is proposed.
 
 ### M0 — Workspace skeleton and CI gates
 
-Status: in review (pull request). Toolchain and tooling: ADR-0011.
+Status: done (PR #1, 2026-10-25). Toolchain and tooling: ADR-0011.
 
 No domain code. The gates exist before there is anything to gate, so no
 later milestone can lower them.
@@ -63,16 +63,21 @@ uncovered branch in core) fails the matching gate.
 
 ### M1 — Units (`taktsim-units`)
 
-- Quantity newtypes per dimension: time, count (`parts`), rate, length,
-  dimensionless ratio (`%`). Further dimensions (`kg`, `l`, `m`) only as
-  types, used from v0.2.
-- Parser for `42s`, `12min`, `6h`, `8h`, `20 parts`, `2%`; `Display` that
-  round-trips.
-- Simulation time representation per ADR-0001.
+Status: in review (pull request). Implementation: ADR-0012.
+
+- Own newtypes (ADR-0012): `SimDuration` and `SimTime` (integer
+  nanoseconds, ADR-0001), `Count` (`parts`), `Rate` (`parts/s`, `/min`,
+  `/h`), `Ratio` (`%`). Material dimensions (`kg`, `l`, `m`) and conveyor
+  speeds arrive with their first use in v0.2, where their representation
+  is decided.
+- Exact parser for `42s`, `12min`, `0.5h`, `8h`, `20 parts`, `2%`;
+  `Display` that round-trips. Checked arithmetic only, typed errors that
+  name what was found, what is allowed and an example.
 
 **Proves:** spec §7 "units are types". **Tests:** proptest parse ↔ display
-round-trip; compile-fail tests (`trybuild`) showing `Duration + Rate` does
-not compile; error messages for unknown units name the allowed ones.
+round-trip and checked arithmetic against integers; `compile_fail` doc
+tests (error codes checked on nightly) showing a duration and a rate, or
+two instants, cannot be combined; error messages name the allowed units.
 **Depends on:** ADR-0001 (time representation).
 
 ### M2 — Engine core (`taktsim-core`)
@@ -276,7 +281,7 @@ written at the start of the milestone that uses them:
   and `f64::ln`/`exp` call the platform math library, which can differ
   between OSes, so sampling must use a pure-Rust implementation (e.g. the
   `libm` crate) to meet A4 on both x86-64 and ARM64.
-- Units implementation: `uom` vs own newtypes (M1).
+- Units implementation: `uom` vs own newtypes (M1, ADR-0012).
 - YAML parser crate (M4, inside ADR-0002).
 - Component registry (`inventory`) and schema generator (`schemars`)
   (M4/M5).

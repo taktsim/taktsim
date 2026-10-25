@@ -1,6 +1,6 @@
 # ADR-0011: Toolchain, MSRV and CI tooling
 
-- Status: proposed (accepted when the M0 pull request is merged)
+- Status: accepted (2026-10-25, M0 pull request #1 merged)
 - Date: 2026-10-25
 - Blocks: M0
 - Spec: §7 Layer 1 and Tooling baseline, §10 Tooling; ADR-0007, ADR-0010

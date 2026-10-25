@@ -195,5 +195,6 @@ schemas/  committed JSON Schemas, one per format version
 
 ## Status
 
-M0 (workspace skeleton and CI gates) in review. ADR-0001 to ADR-0010
-accepted; ADR-0011 proposed in the M0 PR.
+M0 done. M1 (units) in review; ADR-0012 proposed in the M1 PR. ADR-0001 to
+ADR-0011 accepted. `main` is protected: PRs only, rebase merge, all CI jobs
+except mutants required.
