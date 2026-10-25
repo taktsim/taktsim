@@ -1,0 +1,5 @@
+# Pinned Python dev tools (spec §7: ruff, pyright strict, pytest).
+maturin==1.15.0
+pytest==9.1.1
+ruff==0.17.2
+pyright==1.1.414

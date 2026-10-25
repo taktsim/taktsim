@@ -1,0 +1,47 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "taktsim"
+description = "Simulation as code for production systems"
+readme = "../README.md"
+license = "MIT OR Apache-2.0"
+requires-python = ">=3.13"
+dynamic = ["version"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/taktsim/taktsim"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203", "D213",  # conflicting docstring styles; D211 and D212 apply
+    "COM812",        # conflicts with the formatter
+    "CPY",           # no per-file copyright headers; licenses are at the repo root
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",    # pytest uses assert
+    "INP001",  # tests are not a package
+]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.13"
+# Resolve the compiled module from the venv it is installed into; CI passes
+# --pythonpath and --warnings, so warnings fail too.
