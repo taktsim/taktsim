@@ -1,0 +1,17 @@
+# cargo-mutants configuration: mutation testing of taktsim-core, advisory
+# until v1.0 (ADR-0007).
+#
+# Known equivalent mutants: they change the code but not its behaviour, so
+# no test can kill them. Each entry says why. Adding an entry weakens the
+# mutation gate, so it is a gate change (its own PR, `gate-change` label).
+exclude_re = [
+    # Triangular inverse CDF: `u < split` vs `u <= split`. A uniform draw
+    # equals the split exactly with probability zero.
+    'replace < with <= in DurationDistribution::sample',
+    # Marsaglia–Tsang acceptance test: `<` vs `<=`. Equality has
+    # probability zero.
+    'replace < with <= in GammaSampler::sample',
+    # The exponent bits and the shifted mantissa share no bits, so `|` and
+    # `^` give the same result.
+    'replace \| with \^ in open01_from_bits',
+]

@@ -176,7 +176,19 @@ jobs:
         with:
           tool: cargo-mutants@27.1.0,cargo-nextest@0.9.149
       - run: git diff "origin/${{ github.base_ref }}...HEAD" -- crates/taktsim-core > core.diff
-      - run: cargo mutants --in-diff core.diff --package taktsim-core --test-tool nextest --no-shuffle
+      # Exit 0: every mutant caught. Exit 3: some timed out and none were
+      # missed; a timeout means the mutant made a test hang (e.g. a rejection
+      # loop that never accepts), which counts as caught. Exit 2 (missed) or
+      # anything else fails this advisory job. Known equivalent mutants are
+      # listed in .cargo/mutants.toml.
+      - name: mutate changed core code
+        run: |
+          set +e
+          cargo mutants --in-diff core.diff --package taktsim-core --test-tool nextest --no-shuffle
+          code=$?
+          set -e
+          ci/mutants-summary.sh mutants.out >> "$GITHUB_STEP_SUMMARY"
+          case "$code" in 0|3) exit 0 ;; *) exit "$code" ;; esac
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
