@@ -200,10 +200,29 @@ For `CONTRIBUTING.md`.
   removed and one new benchmark, so it is not compared in that pull
   request: rename in a pull request of its own, without code changes.
 
+## Verification
+
+The full job on GitHub's `ubuntu-24.04` runner (x86-64), with Valgrind
+3.22.0 and gungraun-runner 0.20.0, on 2026-10-25:
+
+| Run | Base → head | Result |
+| --- | --- | --- |
+| [40239198298](https://github.com/taktsim/taktsim/actions/runs/40239198298) | `main` (no benchmarks) → this pull request (#6) | 21 benchmarks, all new; passed in 1 min 20 s |
+| [40239440977](https://github.com/taktsim/taktsim/actions/runs/40239440977) | #6 → #6 plus a changed comment in `taktsim-units` (scratch #7) | all 21 counts identical on base and head, and identical to the run above, which ran on another runner instance; passed in 1 min 39 s |
+| [40239650506](https://github.com/taktsim/taktsim/actions/runs/40239650506) | #6 → #6 plus `SimDuration::from_str` splitting its input twice (scratch #7) | `parse_duration` 3,080 → 4,784 instructions (+55.32 %), reported as a regression, job failed; the other 20 identical |
+
+Pull request #7 was a scratch pull request and was closed without merging.
+The comparison script's own tests (`ci/bench-compare-test.sh`, 30 cases,
+one on a summary from the first run) fail for every non-equivalent mutant
+of the rule tried by hand: thresholds 9 and 11, `>=` for `>`, a ratio
+instead of the integer comparison, the old instead of the new count, and
+each dropped input check.
+
 ## Consequences
 
 - Every pull request builds the benchmarks twice in release mode (thin
-  LTO, one codegen unit, as shipped) and runs them under Callgrind.
+  LTO, one codegen unit, as shipped) and runs them under Callgrind; about
+  1.5 minutes today.
 - The gate covers the random streams, the distributions and unit parsing
   today. Spec §7 asks for "no regression > 10 % on reference models"; the
   event-queue benchmark and the reference line model join with M2b by
