@@ -1,0 +1,49 @@
+[package]
+name = "taktsim-bench"
+description = "Benchmarks for taktsim: wall-clock times locally, instruction counts in CI (ADR-0016)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+# Never published, also after v0.1: a harness, not a library for users.
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+# No implicit libtest bench target: it would reject gungraun's arguments in
+# `cargo bench -- …` (gungraun guide, "Unrecognized Option").
+bench = false
+
+[dependencies]
+taktsim-core.workspace = true
+taktsim-units.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+gungraun.workspace = true
+libm.workspace = true
+proptest.workspace = true
+
+# Benchmark targets (ADR-0016). `instructions_*` run under gungraun
+# (Callgrind) and are gated in CI; `wall_*` run under criterion, locally.
+# ci/bench-run.sh fails if a target here follows neither naming rule.
+
+[[bench]]
+name = "instructions_random"
+harness = false
+
+[[bench]]
+name = "instructions_units"
+harness = false
+
+[[bench]]
+name = "wall_random"
+harness = false
+
+[[bench]]
+name = "wall_units"
+harness = false
