@@ -4,3 +4,5 @@
 *.profraw
 __pycache__/
 .DS_Store
+# Worktrees of parallel agent sessions (Claude Code).
+/.claude/worktrees/
