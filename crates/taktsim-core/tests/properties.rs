@@ -2,12 +2,21 @@
 
 use proptest::prelude::*;
 use taktsim_core::random::{DurationDistribution, Stream, StreamKey};
-use taktsim_units::SimDuration;
+use taktsim_units::{SimDuration, UnitError};
 
-/// Durations from 1 ms to 100 days, where f64 seconds are exact to the
-/// nanosecond.
+/// Durations from 1 ms to 100 days.
 fn duration() -> impl Strategy<Value = SimDuration> {
     (1_000_000_u64..8_640_000_000_000_000).prop_map(SimDuration::from_nanos)
+}
+
+/// Any duration simulation time can hold, from 1 ns to ~584 years.
+fn any_duration() -> impl Strategy<Value = SimDuration> {
+    (1_u64..=u64::MAX).prop_map(SimDuration::from_nanos)
+}
+
+/// Positive finite numbers across every magnitude, 1e-300 to 1e300.
+fn any_positive() -> impl Strategy<Value = f64> {
+    (-300.0_f64..300.0).prop_map(|e| libm::pow(10.0, e))
 }
 
 proptest! {
@@ -34,7 +43,7 @@ proptest! {
 
     #[test]
     fn uniform_and_triangular_samples_stay_in_their_support(
-        a in duration(), b in duration(), c in duration(), seed: u64
+        a in any_duration(), b in any_duration(), c in any_duration(), seed: u64
     ) {
         let mut sorted = [a, b, c];
         sorted.sort();
@@ -70,6 +79,32 @@ proptest! {
         for dist in &dists {
             for _ in 0..8 {
                 prop_assert!(dist.sample(&mut s).is_ok(), "{dist}");
+            }
+        }
+    }
+
+    // Every constructible distribution samples or reports an overflow; it
+    // never panics or hangs, whatever its parameters. (This catches the
+    // gamma loop that never ended for cv = 1e-160.)
+    #[test]
+    fn extreme_parameters_sample_or_report_overflow(
+        mean in any_duration(), x in any_positive(), k in 1_u32..=1000, seed: u64
+    ) {
+        let mut s = Stream::new(seed, StreamKey::new("p", "extreme"));
+        let dists = [
+            DurationDistribution::exponential(mean).ok(),
+            DurationDistribution::normal(mean, mean).ok(),
+            DurationDistribution::lognormal(mean, x).ok(),
+            DurationDistribution::gamma(mean, x).ok(),
+            DurationDistribution::erlang(mean, k).ok(),
+            DurationDistribution::weibull(mean, x).ok(),
+        ];
+        for dist in dists.iter().flatten() {
+            for _ in 0..4 {
+                match dist.sample(&mut s) {
+                    Ok(_) | Err(UnitError::Overflow { .. } | UnitError::NotFinite { .. }) => {}
+                    Err(other) => prop_assert!(false, "{dist}: {other}"),
+                }
             }
         }
     }

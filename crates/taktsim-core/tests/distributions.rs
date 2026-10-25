@@ -7,10 +7,16 @@
 //! the CDF has a closed form, a Kolmogorov–Smirnov test at the 1 % level is
 //! applied as well.
 
-use taktsim_core::random::{DurationDistribution, MAX_ERLANG_PHASES, Stream, StreamKey};
+use taktsim_core::random::{DistributionError, DurationDistribution, Stream, StreamKey};
 use taktsim_units::{SimDuration, UnitError};
 
 const N: usize = 200_000;
+
+/// `n` as f64; exact, since every count here is far below 2^32.
+#[allow(clippy::unwrap_used)] // test helper
+fn count(n: usize) -> f64 {
+    f64::from(u32::try_from(n).unwrap())
+}
 
 #[allow(clippy::unwrap_used)] // test helper
 fn d(text: &str) -> SimDuration {
@@ -27,8 +33,7 @@ fn samples(dist: &DurationDistribution, purpose: &str) -> Vec<f64> {
 
 /// Checks the sample mean and variance against theory.
 fn assert_moments(xs: &[f64], mean: f64, var: f64) {
-    #[allow(clippy::cast_precision_loss)]
-    let n = xs.len() as f64;
+    let n = count(xs.len());
     let m = xs.iter().sum::<f64>() / n;
     let s2 = xs.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / n;
     let m4 = xs
@@ -54,12 +59,10 @@ fn assert_moments(xs: &[f64], mean: f64, var: f64) {
 /// theoretical CDF stays below the 1 % critical value 1.628 / √n.
 fn assert_ks(xs: &mut [f64], cdf: impl Fn(f64) -> f64) {
     xs.sort_by(f64::total_cmp);
-    #[allow(clippy::cast_precision_loss)]
-    let n = xs.len() as f64;
+    let n = count(xs.len());
     let mut gap: f64 = 0.0;
     for (i, &x) in xs.iter().enumerate() {
-        #[allow(clippy::cast_precision_loss)]
-        let i = i as f64;
+        let i = count(i);
         let f = cdf(x);
         gap = gap.max((f - i / n).abs()).max(((i + 1.0) / n - f).abs());
     }
@@ -154,8 +157,7 @@ fn triangular_follows_its_distribution() {
     let dist = DurationDistribution::triangular(d("40s"), d("42s"), d("50s")).unwrap();
     let mut xs = samples(&dist, "triangular");
     assert!(xs.iter().all(|&x| (a..=b).contains(&x)));
-    let var = (a * a + b * b + c * c - a * b - a * c - b * c) / 18.0;
-    assert_moments(&xs, (a + b + c) / 3.0, var);
+    assert_moments(&xs, (a + b + c) / 3.0, triangular_var(a, c, b));
     assert_ks(&mut xs, |x| triangular_cdf(x, a, c, b));
 }
 
@@ -279,12 +281,7 @@ fn invalid_parameters_are_rejected_with_a_fix() {
         ),
         (
             DurationDistribution::erlang(one, 0).unwrap_err(),
-            "erlang: `k` must be a whole number from 1 to 1000, found 0; \
-             example: {dist: erlang, mean: 12min, k: 3}",
-        ),
-        (
-            DurationDistribution::erlang(one, MAX_ERLANG_PHASES + 1).unwrap_err(),
-            "erlang: `k` must be a whole number from 1 to 1000, found 1001; \
+            "erlang: `k` must be a whole number ≥ 1, found 0; \
              example: {dist: erlang, mean: 12min, k: 3}",
         ),
         (
@@ -301,7 +298,6 @@ fn invalid_parameters_are_rejected_with_a_fix() {
     for (err, message) in checks {
         assert_eq!(err.to_string(), message);
     }
-    assert!(DurationDistribution::erlang(one, MAX_ERLANG_PHASES).is_ok());
 }
 
 #[test]
@@ -350,8 +346,7 @@ fn display_uses_the_model_file_form() {
 fn samples_beyond_simulation_time_are_errors() {
     let mut s = Stream::new(1, StreamKey::new("a", "huge"));
     // (-ln u)^(1/shape) overflows to infinity for about 13 % of draws with
-    // shape 0.001. (A lognormal cannot: its mean is at most ~584 years, and
-    // a large sigma pushes most draws towards zero, not infinity.)
+    // shape 0.001.
     let steep = DurationDistribution::weibull(d("1s"), 0.001).unwrap();
     let not_finite = (0..1000)
         .filter(|_| matches!(steep.sample(&mut s), Err(UnitError::NotFinite { .. })))
@@ -364,4 +359,83 @@ fn samples_beyond_simulation_time_are_errors() {
         .filter(|_| matches!(long.sample(&mut s), Err(UnitError::Overflow { .. })))
         .count();
     assert!(overflows > 0);
+}
+
+#[test]
+fn a_long_lognormal_overflows_simulation_time() {
+    // Mean 500 years, sigma 0.5: μ = ln(1.5768e10) − 0.125 ≈ 23.356 and the
+    // limit is ln(1.8447e10) ≈ 23.638, so a draw overflows when z > 0.564,
+    // with probability 0.286: 286 of 1000 expected, ± 72 at 5 sigma.
+    let mut s = Stream::new(1, StreamKey::new("a", "long_lognormal"));
+    let dist = DurationDistribution::lognormal(d("182500d"), 0.5).unwrap();
+    let overflows = (0..1000)
+        .filter(|_| matches!(dist.sample(&mut s), Err(UnitError::Overflow { .. })))
+        .count();
+    assert!((214..=358).contains(&overflows), "{overflows}");
+}
+
+#[test]
+fn parameters_too_extreme_to_sample_are_rejected() {
+    // Before this check, gamma with cv 1e-160 looped forever in sample():
+    // the shape overflowed to infinity and inf - inf is NaN.
+    let mean = d("42s");
+    let extreme = [
+        (DurationDistribution::gamma(mean, 1e-160).unwrap_err(), "cv"),
+        (DurationDistribution::gamma(mean, 1e200).unwrap_err(), "cv"),
+        (
+            DurationDistribution::lognormal(mean, 1e200).unwrap_err(),
+            "sigma",
+        ),
+        (
+            DurationDistribution::weibull(mean, 1e-310).unwrap_err(),
+            "shape",
+        ),
+    ];
+    for (err, parameter) in extreme {
+        assert!(
+            matches!(err, DistributionError::TooExtreme { parameter: p, .. } if p == parameter),
+            "{err}"
+        );
+    }
+    assert_eq!(
+        DurationDistribution::gamma(mean, 1e-160)
+            .unwrap_err()
+            .to_string(),
+        "gamma: `cv` = 1e-160 is too extreme to sample (derived values overflow or vanish); \
+         example: {dist: gamma, mean: 12min, cv: 0.5}"
+    );
+    // Large but representable parameters still sample.
+    let mut s = Stream::new(1, StreamKey::new("a", "extreme"));
+    let tight = DurationDistribution::gamma(mean, 1e-150).unwrap();
+    assert_eq!(tight.sample(&mut s).unwrap(), mean);
+}
+
+#[test]
+fn uniform_and_triangular_stay_in_range_beyond_97_days() {
+    // Beyond about 2^23 s, f64 seconds are coarser than 1 ns; samples are
+    // clamped to the support. Before the fix about a fifth fell outside.
+    let min = SimDuration::from_nanos(8_500_000_000_000_000);
+    let max = SimDuration::from_nanos(8_500_000_000_000_002);
+    let mode = SimDuration::from_nanos(8_500_000_000_000_001);
+    let mut s = Stream::new(1, StreamKey::new("a", "long_uniform"));
+    let uniform = DurationDistribution::uniform(min, max).unwrap();
+    let triangular = DurationDistribution::triangular(min, mode, max).unwrap();
+    for _ in 0..8000 {
+        let x = uniform.sample(&mut s).unwrap();
+        assert!(min <= x && x <= max, "{x}");
+        let y = triangular.sample(&mut s).unwrap();
+        assert!(min <= y && y <= max, "{y}");
+    }
+}
+
+#[test]
+fn erlang_has_no_phase_limit() {
+    // Sampled as gamma with integer shape k, so a million phases cost the
+    // same as three. Coefficient of variation 1/√k = 0.001.
+    let k = 1_000_000;
+    let xs = samples(
+        &DurationDistribution::erlang(d("12min"), k).unwrap(),
+        "erlang_1e6",
+    );
+    assert_moments(&xs, 720.0, 720.0 * 720.0 / f64::from(k));
 }

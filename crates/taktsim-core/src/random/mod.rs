@@ -21,5 +21,5 @@ mod distribution;
 mod philox;
 mod stream;
 
-pub use distribution::{DistributionError, DurationDistribution, MAX_ERLANG_PHASES};
+pub use distribution::{DistributionError, DurationDistribution};
 pub use stream::{Stream, StreamKey};

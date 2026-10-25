@@ -41,7 +41,6 @@ fn raw_stream_values_are_identical_everywhere() {
 }
 
 #[test]
-#[allow(clippy::unwrap_used)]
 fn samples_are_identical_everywhere() {
     let cases = [
         (
@@ -79,6 +78,12 @@ fn samples_are_identical_everywhere() {
             "gamma_boost",
             GAMMA_BOOST,
         ),
+        // cv 1 is shape 1, the boundary between the two gamma methods.
+        (
+            DurationDistribution::gamma(d("12min"), 1.0).unwrap(),
+            "gamma_shape1",
+            GAMMA_SHAPE1,
+        ),
         (
             DurationDistribution::erlang(d("12min"), 3).unwrap(),
             "erlang",
@@ -104,11 +109,12 @@ fn samples_are_identical_everywhere() {
 const RAW: u64 = 0x6bae_57eb_1ab6_c756;
 const OPEN01: u64 = 0x64ad_9744_a2f7_5803;
 const EXPONENTIAL: u64 = 0x929e_142a_d743_137f;
-const NORMAL: u64 = 0x9f4c_427e_bcc4_9be6;
-const LOGNORMAL: u64 = 0xf49b_7606_5191_413f;
+const NORMAL: u64 = 0x3cc8_3721_2b20_cd87;
+const LOGNORMAL: u64 = 0x65ca_35e0_77eb_e45a;
 const UNIFORM: u64 = 0x0182_5d5a_8332_7e68;
 const TRIANGULAR: u64 = 0xfe02_29f7_b506_1a36;
-const GAMMA: u64 = 0x0832_8f8e_c911_4ffc;
-const GAMMA_BOOST: u64 = 0xb1d9_14b8_3657_305c;
-const ERLANG: u64 = 0x8573_70bb_eb35_3b2c;
-const WEIBULL: u64 = 0x680f_a84c_4e88_0f58;
+const GAMMA: u64 = 0x81ca_ebf1_0d49_0776;
+const GAMMA_SHAPE1: u64 = 0xbe6c_6933_db08_204d;
+const GAMMA_BOOST: u64 = 0x1578_7e00_e2c4_7d99;
+const ERLANG: u64 = 0xcd81_0733_ac7e_3d9b;
+const WEIBULL: u64 = 0xce30_556d_3549_9fc3;
