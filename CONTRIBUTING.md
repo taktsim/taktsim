@@ -37,7 +37,7 @@ CI runs these gates; all must be green:
 | docs | rustdoc without warnings; a code example on every public item; `compile_fail` examples fail with the stated error code |
 | commits | Conventional Commits, DCO, core changes come with tests |
 | gates | changes to lints, CI, toolchain or `deny.toml` carry the `gate-change` label and a reason in the description |
-| mutants | mutation testing of changed core code; advisory until v1.0 |
+| mutants | mutation testing of changed core code; advisory until v1.0. Timeouts count as caught; known equivalent mutants are listed with reasons in `.cargo/mutants.toml` (adding one is a gate change) |
 
 Run the same checks locally before pushing:
 
