@@ -1,0 +1,11 @@
+# Quality gates: changes need the owner's review (and the gate-change label).
+/Cargo.toml           @ossScharom
+/rust-toolchain.toml  @ossScharom
+/clippy.toml          @ossScharom
+/deny.toml            @ossScharom
+/.gitattributes       @ossScharom
+/.github/             @ossScharom
+/ci/                  @ossScharom
+# Decisions: only the owner accepts an ADR.
+/docs/adr/            @ossScharom
+/docs/spec.md         @ossScharom

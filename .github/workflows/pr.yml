@@ -1,0 +1,36 @@
+# PR rules that need the PR's commits and labels (CLAUDE.md, Commits and PRs).
+# Separate from ci.yml so adding a label re-runs only these checks.
+# Changing this file needs the `gate-change` label (ci/check-gates.sh).
+name: pr
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    name: commits (Conventional Commits, DCO, core changes tested)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: ci/check-commits.sh "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+
+  gates:
+    name: gates (changes need the gate-change label)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: ci/check-gates.sh "${{ github.event.pull_request.base.sha }}"
+        env:
+          GATE_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'gate-change') }}
