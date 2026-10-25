@@ -1,9 +1,16 @@
-//! The engine: event queue, clock, random-number streams, component trait,
-//! invariants and trace records. No I/O; depends only on `taktsim-units`.
-//! Roadmap M2.
+//! The taktsim engine core: deterministic randomness now; the event queue,
+//! clock, component trait, invariants and trace records arrive with the
+//! rest of roadmap M2. No I/O; depends only on `taktsim-units` and pure-Rust
+//! math.
 //!
-//! Part of [taktsim](https://github.com/taktsim/taktsim). Empty until its
-//! roadmap milestone (`docs/roadmap.md`).
+//! ```
+//! use taktsim_core::random::{Stream, StreamKey};
+//!
+//! let mut stream = Stream::new(42, StreamKey::new("source", "arrivals"));
+//! assert!(stream.next_open01() < 1.0);
+//! ```
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+
+pub mod random;
