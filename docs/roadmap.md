@@ -88,9 +88,12 @@ Delivered in two pull requests:
   ADR-0003 duration distributions, `libm` for all transcendental math
   (enforced by clippy), statistical tests per distribution, and
   cross-platform golden digests.
-- **M2b, the engine**: event queue, clock, run loop, units and
-  conservation, the component trait, invariants, trace records, the
-  queue benchmark and the instruction-count regression gate.
+- **M2b, the engine** (in review; ADR-0018): event queue, clock, run
+  loop with horizon, event and cancellation limits, items and
+  conservation, the component trait and context, invariant checks, error
+  reports with the last 32 events, trace records. The queue benchmark that
+  finalises ADR-0001 follows once track C's benchmark infrastructure is
+  merged; the regression gate itself is track C.
 
 - Event queue per ADR-0001, with deterministic tie-breaking and
   cancellation (needed for failures that interrupt a cycle).
