@@ -1,0 +1,4 @@
+timestamp,entity,signal,value,unit
+2026-03-02 06:00:00,M1,good_count,0,parts
+2026-03-02 07:00:00,M1,good_count,58,parts
+2026-03-02 08:00:00.500,M1,good_count,117,parts
