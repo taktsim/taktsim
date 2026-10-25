@@ -1,0 +1,191 @@
+# Quality gates (spec §7, §10; ADR-0007, ADR-0010, ADR-0011).
+# Order follows spec §10: rustfmt → clippy → cargo-deny → tests → coverage →
+# Python → docs. Steps for crates that do not exist yet (WebAssembly, viewer,
+# benchmarks) are added with the milestone that creates them.
+# Changing this file needs the `gate-change` label (ci/check-gates.sh).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+  # Pinned nightly for branch coverage and the doc-example check only (ADR-0011).
+  NIGHTLY: nightly-2026-10-24
+  MSRV: "1.97"
+
+jobs:
+  lint:
+    name: lint (rustfmt, clippy, cargo-deny, crate rules)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-deny@0.20.2
+      - run: cargo deny --locked check
+      - run: ci/check-crates.sh
+
+  test:
+    name: test (${{ matrix.target }})
+    needs: lint
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Tier 1 (ADR-0010): must pass.
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04 }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm }
+          - { target: x86_64-pc-windows-msvc, os: windows-2025 }
+          - { target: aarch64-apple-darwin, os: macos-15 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-nextest@0.9.149
+      # The Python binding crate is tested by pytest (job python).
+      - run: cargo nextest run --workspace --exclude taktsim-python --all-features --locked
+      - run: cargo test --workspace --exclude taktsim-python --all-features --doc --locked
+
+  test-tier2:
+    name: test tier 2 (${{ matrix.target }})
+    needs: lint
+    timeout-minutes: 30
+    # Tier 2 (ADR-0010): reported, never blocks.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-apple-darwin, os: macos-15-intel }
+          - { target: aarch64-pc-windows-msvc, os: windows-11-arm }
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-24.04 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: ${{ matrix.target }}
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo test --workspace --exclude taktsim-python --all-features --locked --target ${{ matrix.target }}
+
+  msrv:
+    name: msrv
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install "$MSRV" --profile minimal
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo +"$MSRV" check --workspace --all-targets --all-features --locked
+
+  coverage:
+    name: coverage (≥ 90 % lines, 100 % branches in core)
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install "$NIGHTLY" --profile minimal --component llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-llvm-cov@0.9.1,cargo-nextest@0.9.149
+      - run: >-
+          cargo +"$NIGHTLY" llvm-cov nextest --workspace --exclude taktsim-python --all-features --locked
+          --branch --json --summary-only --output-path coverage.json
+      - run: ci/coverage-gate.sh coverage.json
+
+  python:
+    name: python (${{ matrix.python }}; pytest, ruff, pyright strict)
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The three latest Python versions (spec §7, ADR-0005).
+        python: ["3.13", "3.14", "3.15"]
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: python -m venv .venv && .venv/bin/pip install -q -r requirements-dev.txt
+      - run: .venv/bin/maturin develop --locked
+        env:
+          VIRTUAL_ENV: ${{ github.workspace }}/python/.venv
+      - run: .venv/bin/ruff check .
+      - run: .venv/bin/ruff format --check .
+      - run: .venv/bin/pyright --warnings --pythonpath .venv/bin/python
+      - run: .venv/bin/pytest -q
+
+  docs:
+    name: docs (every public item documented, with an example)
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install "$NIGHTLY" --profile minimal
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: rustdoc, warnings denied
+        run: cargo doc --workspace --all-features --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+      # "A doc test for every public item" (spec §7): the lint is nightly-only.
+      - name: doc example on every public item
+        run: cargo +"$NIGHTLY" doc --workspace --all-features --no-deps --locked
+        env:
+          RUSTDOCFLAGS: >-
+            -D warnings -Z unstable-options
+            -Zcrate-attr=feature(rustdoc_missing_doc_code_examples)
+            -D rustdoc::missing-doc-code-examples
+
+  mutants:
+    name: mutants (core, changed code, advisory)
+    # ADR-0007: reported on every PR, required from v1.0.
+    if: github.event_name == 'pull_request'
+    needs: lint
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-mutants@27.1.0,cargo-nextest@0.9.149
+      - run: git diff "origin/${{ github.base_ref }}...HEAD" -- crates/taktsim-core > core.diff
+      - run: cargo mutants --in-diff core.diff --package taktsim-core --test-tool nextest --no-shuffle
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutants.out
+          path: mutants.out
+          if-no-files-found: ignore
