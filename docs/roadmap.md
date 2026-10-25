@@ -84,8 +84,7 @@ two instants, cannot be combined; error messages name the allowed units.
 
 Delivered in two pull requests:
 
-- **M2a, randomness** (in review; ADR-0013 needs the owner's explicit
-  acceptance): Philox4x64-10 streams keyed by component and purpose, the
+- **M2a, randomness** (in review; ADR-0013 accepted): Philox4x64-10 streams keyed by component and purpose, the
   ADR-0003 duration distributions, `libm` for all transcendental math
   (enforced by clippy), statistical tests per distribution, and
   cross-platform golden digests.
