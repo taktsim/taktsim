@@ -4,21 +4,21 @@
 # <out-dir>, for ci/bench-compare.sh (ADR-0016). Needs Linux, Valgrind and
 # gungraun-runner with the version of ci/bench-runner-version.sh.
 #
-# Benchmarks live in crates/taktsim-bench. Its bench targets named
-# `instructions_*` run here; `wall_*` (criterion) are for local use. With
-# --strict, used for the pull request's head, any other bench target, in
-# taktsim-bench or elsewhere, is an error, so a benchmark cannot drop out
-# of the gate because of its name or place.
+# Which targets run is decided by ci/bench-targets.sh: the taktsim-bench
+# targets named `instructions_*`. With --strict, used for the pull
+# request's head, a bench target with another name or in another package,
+# or none at all, is an error. A commit without such benchmarks (a base
+# from before ADR-0016) writes nothing.
 #
-# A commit without instruction-count benchmarks (a base from before
-# ADR-0016) writes nothing; with --strict that is an error.
-#
+# The bench workflow runs this script from the base commit when the base
+# has it (see ci/bench-compare.sh): keep its arguments stable.
 # Usage: ci/bench-run.sh [--strict] <out-dir>
 set -euo pipefail
 
-strict=false
+here=$(dirname "$0")
+strict=()
 if [ "${1:-}" = --strict ]; then
-  strict=true
+  strict=(--strict)
   shift
 fi
 if [ $# -ne 1 ]; then
@@ -29,31 +29,13 @@ rm -rf "$1"
 mkdir -p "$1"
 out=$(cd "$1" && pwd)
 
-# "<package> <target>" for every bench target in the workspace.
-targets=$(cargo metadata --no-deps --format-version 1 --locked |
-  jq -r '.packages[] | .name as $p | .targets[] | select(any(.kind[]; . == "bench")) | "\($p) \(.name)"')
-
-if [ "$strict" = true ]; then
-  bad=$(awk '$1 != "taktsim-bench" || $2 !~ /^(instructions|wall)_/' <<<"$targets" | sed '/^$/d')
-  if [ -n "$bad" ]; then
-    echo "error: bench targets must be crates/taktsim-bench/benches/instructions_*.rs (gungraun, gated)" >&2
-    echo "       or wall_*.rs (criterion, local) (ADR-0016); found:" >&2
-    sed 's/^/         /' <<<"$bad" >&2
-    exit 1
-  fi
-fi
-
-gated=$(awk '$1 == "taktsim-bench" && $2 ~ /^instructions_/ { print $2 }' <<<"$targets")
+gated=$(cargo metadata --no-deps --format-version 1 --locked | "$here/bench-targets.sh" "${strict[@]+"${strict[@]}"}")
 if [ -z "$gated" ]; then
-  if [ "$strict" = true ]; then
-    echo "error: no instruction-count benchmarks (crates/taktsim-bench/benches/instructions_*.rs)" >&2
-    exit 1
-  fi
   echo "no instruction-count benchmarks in this commit; nothing measured"
   exit 0
 fi
 
-want=$("$(dirname "$0")/bench-runner-version.sh")
+want=$("$here/bench-runner-version.sh")
 if ! command -v gungraun-runner >/dev/null; then
   echo "error: gungraun-runner not found; install it with" >&2
   echo "       cargo install --locked gungraun-runner --version $want" >&2

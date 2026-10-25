@@ -1,0 +1,9 @@
+# Instruction-count benchmarks removed on purpose (ADR-0016).
+#
+# A benchmark that the base measures and the head does not fails the bench
+# gate unless its name is listed here, as the gate's table shows it, e.g.
+#   instructions_units::parse::parse_duration::duration
+# The pull request that removes or renames a benchmark adds its old name;
+# this file is a gate file, so that needs the gate-change label and the
+# owner's review. Entries stay as a record. A listed name that the head
+# measures again fails the gate until its entry is deleted.
