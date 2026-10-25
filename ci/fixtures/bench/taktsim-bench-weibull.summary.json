@@ -1,0 +1,269 @@
+{
+  "baselines": [
+    null,
+    null
+  ],
+  "benchmark_exe": "target/release/deps/instructions_random-28da5fa826d8f887",
+  "benchmark_file": "crates/taktsim-bench/benches/instructions_random.rs",
+  "description": "(sampler(DistributionCase :: Weibull))",
+  "duration_ns": 301436046,
+  "function_name": "sample",
+  "group": "distributions",
+  "id": "weibull",
+  "kind": "LibraryBenchmark",
+  "module_path": "instructions_random::distributions::sample",
+  "output_dir": "/home/runner/work/_temp/gungraun/head/taktsim-bench/instructions_random/distributions/sample.weibull",
+  "package_dir": "crates/taktsim-bench",
+  "profiles": [
+    {
+      "data": {
+        "parts": [
+          {
+            "metrics": {
+              "D1MissRate": {
+                "values": {
+                  "new": 0.026723677177979688
+                }
+              },
+              "D1mr": {
+                "values": {
+                  "new": 20
+                }
+              },
+              "D1mw": {
+                "values": {
+                  "new": 6
+                }
+              },
+              "DLmr": {
+                "values": {
+                  "new": 20
+                }
+              },
+              "DLmw": {
+                "values": {
+                  "new": 2
+                }
+              },
+              "Dr": {
+                "values": {
+                  "new": 71771
+                }
+              },
+              "Dw": {
+                "values": {
+                  "new": 25521
+                }
+              },
+              "EstimatedCycles": {
+                "values": {
+                  "new": 613587
+                }
+              },
+              "I1MissRate": {
+                "values": {
+                  "new": 0.01168472280916316
+                }
+              },
+              "I1mr": {
+                "values": {
+                  "new": 60
+                }
+              },
+              "ILmr": {
+                "values": {
+                  "new": 60
+                }
+              },
+              "Ir": {
+                "values": {
+                  "new": 513491
+                }
+              },
+              "L1HitRate": {
+                "values": {
+                  "new": 99.98591971289312
+                }
+              },
+              "L1hits": {
+                "values": {
+                  "new": 610697
+                }
+              },
+              "LLHitRate": {
+                "values": {
+                  "new": 0.0006548970747384914
+                }
+              },
+              "LLMissRate": {
+                "values": {
+                  "new": 0.013425390032139073
+                }
+              },
+              "LLdMissRate": {
+                "values": {
+                  "new": 0.022612342227521277
+                }
+              },
+              "LLhits": {
+                "values": {
+                  "new": 4
+                }
+              },
+              "LLiMissRate": {
+                "values": {
+                  "new": 0.01168472280916316
+                }
+              },
+              "RamHitRate": {
+                "values": {
+                  "new": 0.013425390032139073
+                }
+              },
+              "RamHits": {
+                "values": {
+                  "new": 82
+                }
+              },
+              "TotalRW": {
+                "values": {
+                  "new": 610783
+                }
+              }
+            },
+            "tool_run": {
+              "new": {
+                "command": "/home/runner/work/taktsim/taktsim/target/release/deps/instructions_random-28da5fa826d8f887 --gungraun-run d:d:000000 00001 00000 00009",
+                "part": 1,
+                "pid": 5183,
+                "thread": 1
+              }
+            }
+          }
+        ],
+        "total": {
+          "metrics": {
+            "D1MissRate": {
+              "values": {
+                "new": 0.026723677177979688
+              }
+            },
+            "D1mr": {
+              "values": {
+                "new": 20
+              }
+            },
+            "D1mw": {
+              "values": {
+                "new": 6
+              }
+            },
+            "DLmr": {
+              "values": {
+                "new": 20
+              }
+            },
+            "DLmw": {
+              "values": {
+                "new": 2
+              }
+            },
+            "Dr": {
+              "values": {
+                "new": 71771
+              }
+            },
+            "Dw": {
+              "values": {
+                "new": 25521
+              }
+            },
+            "EstimatedCycles": {
+              "values": {
+                "new": 613587
+              }
+            },
+            "I1MissRate": {
+              "values": {
+                "new": 0.01168472280916316
+              }
+            },
+            "I1mr": {
+              "values": {
+                "new": 60
+              }
+            },
+            "ILmr": {
+              "values": {
+                "new": 60
+              }
+            },
+            "Ir": {
+              "values": {
+                "new": 513491
+              }
+            },
+            "L1HitRate": {
+              "values": {
+                "new": 99.98591971289312
+              }
+            },
+            "L1hits": {
+              "values": {
+                "new": 610697
+              }
+            },
+            "LLHitRate": {
+              "values": {
+                "new": 0.0006548970747384914
+              }
+            },
+            "LLMissRate": {
+              "values": {
+                "new": 0.013425390032139073
+              }
+            },
+            "LLdMissRate": {
+              "values": {
+                "new": 0.022612342227521277
+              }
+            },
+            "LLhits": {
+              "values": {
+                "new": 4
+              }
+            },
+            "LLiMissRate": {
+              "values": {
+                "new": 0.01168472280916316
+              }
+            },
+            "RamHitRate": {
+              "values": {
+                "new": 0.013425390032139073
+              }
+            },
+            "RamHits": {
+              "values": {
+                "new": 82
+              }
+            },
+            "TotalRW": {
+              "values": {
+                "new": 610783
+              }
+            }
+          },
+          "regressions": []
+        }
+      },
+      "duration_ns": 301428932,
+      "process_ns": 301280044,
+      "started_at": "2026-10-25T22:14:57.337041705Z",
+      "tool": "Callgrind"
+    }
+  ],
+  "project_root": "/home/runner/work/taktsim/taktsim",
+  "started_at": "2026-10-25T22:14:57.337039721Z",
+  "version": "7"
+}
