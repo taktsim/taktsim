@@ -207,12 +207,13 @@ const MAX_NEWTON_STEPS: u32 = 200;
 /// linear in the heavy tails; otherwise P(|T| < t) = 1 − 2q in t, whose
 /// right-hand side is exact.
 fn newton(df: u32, q: f64, start: f64) -> f64 {
+    let t_dist = Density::new(df);
     let ln_q = log(q);
     let central_target = 1.0 - 2.0 * q;
     let (mut lo, mut hi) = (0.0_f64, f64::INFINITY);
     let mut t = start;
     for _ in 0..MAX_NEWTON_STEPS {
-        let e = evaluate(t, df);
+        let e = t_dist.evaluate(t);
         // Decide the side with the same quantity Newton solves for: near
         // the median, P(T > t) ≈ 1/2 has lost the digits that P(|T| < t)
         // still has.
@@ -262,49 +263,67 @@ struct Evaluation {
     upper_over_t_density: f64,
 }
 
-/// P(T > t) for t > 0 through the incomplete beta function:
-/// P(T > t) = `I_x(ν/2, 1/2)/2` with x = ν/(ν + t²), and
-/// P(|T| < t) = `I_y(1/2, ν/2)` with y = t²/(ν + t²). The continued fraction
-/// converges fast for x below (a + 1)/(a + b + 2), so the tail is computed
-/// directly there and through the central probability otherwise.
-///
-/// Both prefactors x^a (1 − x)^b / (a B(a, b)) reduce to the density f(t):
-/// 2 t f(t)/ν for `I_x(ν/2, 1/2)`, so P(T > t) = t f(t)/ν · fraction, and
-/// 2 t f(t) for `I_y(1/2, ν/2)`, so P(|T| < t) = 2 t f(t) · fraction.
-fn evaluate(t: f64, df: u32) -> Evaluation {
-    let nu = f64::from(df);
-    let t2 = t * t;
-    let x = nu / (nu + t2);
-    let y = t2 / (nu + t2);
-    let ln_density = ln_density(t, df);
-    if t2 * (nu + 2.0) >= 3.0 * nu {
-        let fraction = beta_continued_fraction(nu / 2.0, 0.5, x, y);
-        let ln_upper = ln_density + log(t / nu) + log(fraction);
-        let upper = exp(ln_upper);
-        Evaluation {
-            upper,
-            ln_upper,
-            central: 1.0 - 2.0 * upper,
-            upper_over_t_density: fraction / nu,
-        }
-    } else {
-        let fraction = beta_continued_fraction(0.5, nu / 2.0, y, x);
-        let t_density = t * exp(ln_density);
-        let central = 2.0 * t_density * fraction;
-        let upper = (1.0 - central) / 2.0;
-        Evaluation {
-            upper,
-            ln_upper: log(upper),
-            central,
-            upper_over_t_density: upper / t_density,
-        }
-    }
+/// The t density's parameters, computed once per quantile rather than in
+/// every Newton step.
+struct Density {
+    nu: f64,
+    /// ln Γ((ν+1)/2) − ln Γ(ν/2) − ln √(νπ), the log of the normalizing
+    /// constant.
+    ln_normalizer: f64,
 }
 
-/// ln f(t) = ln Γ((ν+1)/2) − ln Γ(ν/2) − ln √(νπ) − (ν+1)/2 · ln(1 + t²/ν).
-fn ln_density(t: f64, df: u32) -> f64 {
-    let nu = f64::from(df);
-    log(gamma_half_ratio(df)) - 0.5 * log(nu * PI) - f64::midpoint(nu, 1.0) * log1p(t * t / nu)
+impl Density {
+    fn new(df: u32) -> Self {
+        let nu = f64::from(df);
+        Self {
+            nu,
+            ln_normalizer: log(gamma_half_ratio(df)) - 0.5 * log(nu * PI),
+        }
+    }
+
+    /// ln f(t) = ln-normalizer − (ν+1)/2 · ln(1 + t²/ν).
+    fn ln_density(&self, t: f64) -> f64 {
+        self.ln_normalizer - f64::midpoint(self.nu, 1.0) * log1p(t * t / self.nu)
+    }
+
+    /// P(T > t) for t > 0 through the incomplete beta function:
+    /// P(T > t) = `I_x(ν/2, 1/2)/2` with x = ν/(ν + t²), and
+    /// P(|T| < t) = `I_y(1/2, ν/2)` with y = t²/(ν + t²). The continued fraction
+    /// converges fast for x below (a + 1)/(a + b + 2), so the tail is computed
+    /// directly there and through the central probability otherwise.
+    ///
+    /// Both prefactors x^a (1 − x)^b / (a B(a, b)) reduce to the density f(t):
+    /// 2 t f(t)/ν for `I_x(ν/2, 1/2)`, so P(T > t) = t f(t)/ν · fraction, and
+    /// 2 t f(t) for `I_y(1/2, ν/2)`, so P(|T| < t) = 2 t f(t) · fraction.
+    fn evaluate(&self, t: f64) -> Evaluation {
+        let nu = self.nu;
+        let t2 = t * t;
+        let x = nu / (nu + t2);
+        let y = t2 / (nu + t2);
+        let ln_density = self.ln_density(t);
+        if t2 * (nu + 2.0) >= 3.0 * nu {
+            let fraction = beta_continued_fraction(nu / 2.0, 0.5, x, y);
+            let ln_upper = ln_density + log(t / nu) + log(fraction);
+            let upper = exp(ln_upper);
+            Evaluation {
+                upper,
+                ln_upper,
+                central: 1.0 - 2.0 * upper,
+                upper_over_t_density: fraction / nu,
+            }
+        } else {
+            let fraction = beta_continued_fraction(0.5, nu / 2.0, y, x);
+            let t_density = t * exp(ln_density);
+            let central = 2.0 * t_density * fraction;
+            let upper = (1.0 - central) / 2.0;
+            Evaluation {
+                upper,
+                ln_upper: log(upper),
+                central,
+                upper_over_t_density: upper / t_density,
+            }
+        }
+    }
 }
 
 /// Γ((ν+1)/2) / Γ(ν/2).
@@ -536,8 +555,8 @@ mod tests {
         for df in [3, 10, 100, 2999] {
             let nu = f64::from(df);
             let t = (3.0 * nu / (nu + 2.0)).sqrt();
-            let below = evaluate(t * (1.0 - 1e-12), df);
-            let at = evaluate(t, df);
+            let below = Density::new(df).evaluate(t * (1.0 - 1e-12));
+            let at = Density::new(df).evaluate(t);
             assert!(relative_error(below.upper, at.upper) < 1e-11, "ν {nu}");
             assert!(
                 relative_error(below.ln_upper, at.ln_upper) < 1e-11,
