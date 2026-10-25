@@ -31,8 +31,11 @@ source):
   version, or the run stops with an error ("When updating the gungraun
   library, you'll also need to update gungraun-runner and vice-versa",
   guide, Installation). `taiki-e/install-action` at the SHA pinned in
-  `ci.yml` has `gungraun-runner` 0.20.0 in its manifest, with a SHA-256
-  checksum per target.
+  `ci.yml` has `gungraun-runner` up to 0.20.0 in its manifest, with a
+  SHA-256 checksum per target. A version released after that SHA is not in
+  it; the action then stops (`fallback: none`) or builds it with `cargo
+  install --locked` (`fallback: cargo-install`; read in its `main.sh` at
+  that SHA).
 - gungraun can compare against a saved baseline (`--save-baseline`,
   `--baseline`) and fail on a limit (`--callgrind-limits='ir=10%'`, exit
   code 3). It writes a `summary.json` per benchmark (schema v7 from 0.20)
@@ -87,14 +90,20 @@ GitHub builds for the pull request (what `ci.yml` tests).
 **Tools.** `gungraun` 0.20.0 for instruction counts in CI, `criterion`
 0.8.2 (`default-features = false`, `cargo_bench_support` only) for
 wall-clock times on a developer's machine. Both are dev-dependencies of
-`taktsim-bench` only. `gungraun-runner` is installed with exactly the
-version `Cargo.lock` resolves for `gungraun` (`ci/bench-runner-version.sh`),
-by `taiki-e/install-action` with checksums and `fallback: none`: the
-version is pinned by the lockfile, so a Dependabot bump of the library also
-bumps the runner, without editing the workflow, and a version missing from
-the action's manifest fails instead of being built from an unchecked
-source. Valgrind is installed from apt at `1:3.22.0-0ubuntu3` and its
-version is printed in the job summary.
+`taktsim-bench` only (criterion behind a feature would be a normal
+dependency, and its `syn` 2 next to the workspace's `syn` 3 fails
+`cargo deny`'s duplicate check, which exempts only dev-dependencies).
+`gungraun-runner` is installed with exactly the version `Cargo.lock`
+resolves for `gungraun` (`ci/bench-runner-version.sh`), by
+`taiki-e/install-action`: a version in the action's manifest comes as a
+checksummed release binary; a newer one is built from crates.io with
+`cargo install --locked` (`fallback: cargo-install`), whose sources cargo
+checks against the registry's checksums. The version is pinned by the
+lockfile, so a Dependabot bump of the library also bumps the runner
+without editing the workflow, and base and head each get their own
+version. Valgrind is installed from apt at `1:3.22.0-0ubuntu3` and its
+version is printed in the job summary. The scripts need bash and jq 1.6 or
+later (`ci/bench-compare.sh` checks the version).
 
 **Where.** `crates/taktsim-bench`, `publish = false`, under the workspace
 lints and `ci/check-crates.sh`:
@@ -112,23 +121,48 @@ lints and `ci/check-crates.sh`:
   samples each; parsing and formatting of durations, counts, rates and
   percentages as written in models.
 
-`ci/bench-run.sh --strict` fails on the head if a bench target is in
+`ci/bench-targets.sh --strict` fails on the head if a bench target is in
 another package or is named neither `instructions_*` nor `wall_*`, so a
-benchmark cannot drop out of the gate by its name or place.
+benchmark cannot drop out of the gate by its name or place. The crate is a
+gate path (`ci/check-gates.sh`, `CODEOWNERS`): what the gate measures
+changes only with the `gate-change` label and the owner's review, like the
+gate itself.
+
+The gungraun benchmarks sit in a private module of each bench file: the
+macros generate public items without doc comments, which `missing_docs`
+rejects at the crate root, and gungraun refuses any other attribute on a
+benchmark function (tried: a lint `expect` and a doc comment both fail
+with "Invalid attribute"; on the group macro the attribute is ignored). In
+a private module the items are not exported, so no lint exception is
+needed, and the benchmark names do not change (gungraun builds them from
+the file, the group and the function). Each benchmark returns its inputs
+to its teardown, so freeing them is not counted.
 
 **Base against head, same runner.** The `bench` workflow
 (`.github/workflows/bench.yml`, job `benchmarks (instruction counts, > 10 %
 regression fails)`) runs on every pull request on `ubuntu-24.04`, the CI
 proxy runner of ADR-0010:
 
-1. Runs the gate's own tests (`ci/bench-compare-test.sh`) first.
-2. Checks out the merge commit with its parents; the base is `HEAD^1`.
-3. Measures the base, then the head, one after the other in the same job,
+1. Checks out the merge commit with its parents; the base is `HEAD^1`.
+2. Takes the gate (`ci/bench-*.sh`, its threshold and fixtures) from the
+   base when the base has `ci/bench-compare.sh`, and from the head only
+   when it does not (the pull request that introduces the gate). A pull
+   request that changes the gate is judged by the gate it changes; the
+   change applies from the next pull request on. This makes CLAUDE.md's
+   "never loosen a gate in the same PR as the code that would fail the old
+   one" mechanical. The workflow file itself comes from the head, as for
+   every `pull_request` workflow; it is a gate file under the same label
+   and review. Because a later head's workflow calls the base's scripts,
+   their arguments and exit codes stay stable.
+3. Runs the tests of the gate in use, and of the head's scripts if they
+   differ (`ci/bench-test.sh`).
+4. Measures the base, then the head, one after the other in the same job,
    each with its own `gungraun-runner` version and output directory
-   (`ci/bench-run.sh`). Both are measured by the head's scripts.
-4. Compares them (`ci/bench-compare.sh`), writes a table (benchmark, base,
-   head, change, result) to the job summary, and uploads the summaries as
-   the `instruction-counts` artifact.
+   (`ci/bench-run.sh`).
+5. Compares them (`ci/bench-compare.sh`, with the head's
+   `ci/bench-removed.txt`), writes a table (benchmark, base, head, change,
+   result) to the job summary, and uploads the summaries as the
+   `instruction-counts` artifact.
 
 **The rule** (ADR-0007): a benchmark fails if its head count is more than
 10 % above its base count, `head × 100 > base × 110`, computed exactly
@@ -137,13 +171,23 @@ proxy runner of ADR-0010:
 that could hide one regression behind improvements. Only `Ir` is gated;
 cache and cycle estimates are simulated and are not part of ADR-0007.
 
-- A benchmark only in the head is reported as **new** and passes; only in
-  the base, **removed**, and passes. A base from before this ADR has no
-  benchmarks, so everything is new.
+- A benchmark is identified by gungraun's name for it, `file::group::function`
+  and its id, not by the package directory, so moving the crate still
+  compares every benchmark.
+- A benchmark only in the head is reported as **new** and passes. A base
+  from before this ADR has no benchmarks, so everything is new.
+- A benchmark only in the base fails as **removed, not listed**, unless
+  the head's `ci/bench-removed.txt` names it: the pull request that removes
+  or renames a benchmark adds its old name there, and since `ci/` is a gate
+  path that needs the label and the owner's review. Entries stay as a
+  record; a listed name that the head measures again is an error until its
+  entry is deleted, so a later removal of it has to be listed afresh.
 - Input the gate cannot trust fails (exit 2): an unreadable summary, an
-  unsupported schema version, a missing or non-integer count, a benchmark
-  measured twice, or a head without benchmarks. A gate that cannot read its
-  input never reports success.
+  unsupported schema version, a missing or wrongly typed field, a missing
+  or non-integer count, a benchmark measured twice, a head without
+  benchmarks, or a base with benchmarks of which none is in the head
+  (nothing was compared). A gate that cannot read its input never reports
+  success.
 
 **Why it does not flake.** Callgrind counts the instructions the program
 executes, not time, so runner speed, load and frequency scaling do not
@@ -179,26 +223,34 @@ For `CONTRIBUTING.md`.
   `cargo install --locked gungraun-runner --version "$(ci/bench-runner-version.sh)"`,
   then on each of two commits run `ci/bench-run.sh target/ic-before` and
   `ci/bench-run.sh target/ic-after`, and compare with
-  `ci/bench-compare.sh target/ic-before target/ic-after`. On macOS and
-  Windows, rely on the CI job.
+  `ci/bench-compare.sh --removed ci/bench-removed.txt target/ic-before target/ic-after`.
+  On macOS and Windows, rely on the CI job. The gate's own tests run
+  anywhere with bash and jq: `ci/bench-test.sh`.
 - **In CI:** the `bench` workflow runs on every pull request. Its job
-  summary has the table; a regression above 10 % fails the check. The
-  `instruction-counts` artifact has every `summary.json`.
-- **Adding a benchmark** (no workflow change):
+  summary has the table; a regression above 10 % or an unlisted removal
+  fails the check. The `instruction-counts` artifact has every
+  `summary.json`.
+- **Adding a benchmark** (no workflow change; `crates/taktsim-bench` is a
+  gate path, so the pull request needs the `gate-change` label):
   1. Add the workload to `crates/taktsim-bench/src/` (fixed inputs and
      seed, results folded into one value, a doc example) and test it in
      `tests/workloads.rs`, with expected values from theory or by hand.
   2. Add a `#[library_benchmark]` to `benches/instructions_<area>.rs`, or a
-     new file of that name; put setup in a `setup` function so it is not
-     counted, and use `support::built` / `support::check` so a failing
-     input stops the run instead of measuring less work.
+     new file of that name, inside its private `benchmarks` module; put
+     setup in a `setup` function so it is not counted, return the inputs
+     with the result to `teardown = support::check`, and use
+     `support::built` in setup, so a failing input stops the run instead
+     of measuring less work.
   3. Add the same workload to `benches/wall_<area>.rs`.
   4. Register a new file in `crates/taktsim-bench/Cargo.toml` as
      `[[bench]] name = "…" harness = false`.
 
   A renamed benchmark (file, group, function or id) shows up as one
-  removed and one new benchmark, so it is not compared in that pull
-  request: rename in a pull request of its own, without code changes.
+  removed and one new benchmark: add the old name to
+  `ci/bench-removed.txt`, and rename in a pull request of its own,
+  without code changes, since the renamed one is not compared there.
+  Renaming every benchmark at once fails (nothing compared); do it in two
+  steps.
 
 ## Verification
 
@@ -212,11 +264,19 @@ The full job on GitHub's `ubuntu-24.04` runner (x86-64), with Valgrind
 | [40239650506](https://github.com/taktsim/taktsim/actions/runs/40239650506) | #6 → #6 plus `SimDuration::from_str` splitting its input twice (scratch #7) | `parse_duration` 3,080 → 4,784 instructions (+55.32 %), reported as a regression, job failed; the other 20 identical |
 
 Pull request #7 was a scratch pull request and was closed without merging.
-The comparison script's own tests (`ci/bench-compare-test.sh`, 30 cases,
-one on a summary from the first run) fail for every non-equivalent mutant
-of the rule tried by hand: thresholds 9 and 11, `>=` for `>`, a ratio
-instead of the integer comparison, the old instead of the new count, and
-each dropped input check.
+These runs predate the review changes (removal list, base's gate, name
+without package directory); the run of the final version is recorded
+below.
+
+The gate's tests (`ci/bench-test.sh`) pass with jq 1.7.1 and with the
+official jq 1.6 binary. Every non-equivalent mutant of
+`ci/bench-compare.sh` tried by hand fails at least one of them, among
+them: thresholds 9 and 11, `>=` for `>`, a ratio instead of the integer
+comparison, the old instead of the new count, the package directory in
+the name, `($s.id // null)`, each dropped input check, an ignored removal
+list, an unlisted removal that passes, no "nothing compared" check, and
+accepting jq 1.5. The one surviving mutant is equivalent: multiplying the
+base by `1.1` gives the same verdict on every whole count in range.
 
 ## Consequences
 
@@ -237,11 +297,11 @@ each dropped input check.
 - A new gungraun summary schema fails the gate until
   `ci/bench-compare.sh` is checked against it and its version added: the
   gate fails closed.
-- Two local `expect`s of lints in the benchmark binaries, each with its
-  reason: `missing_docs` (gungraun's macros generate undocumented public
-  items) and `clippy::expect_used` in `benches/support/mod.rs` (a constant
+- One local lint `expect` in the benchmark binaries, with its reason:
+  `clippy::expect_used` on `benches/support/mod.rs::built` (a constant
   input that fails must stop the run; setup functions cannot return an
-  error).
+  error). The criterion benchmarks count failed iterations and fail the
+  run afterwards, for the same reason.
 
 ## Questions for the owner
 
