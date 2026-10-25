@@ -149,7 +149,7 @@ golden tests → schema and stub freshness → coverage gate → Python binding
 tests → WebAssembly build → viewer type check and tests → mutation (core) →
 benchmarks → docs build.
 
-CI runs on every tier-1 target (tier 2 non-blocking); prebuilt wheels for
+CI runs on every tier-1 target (ADR-0010); prebuilt wheels for
 the three latest Python versions, so `pip install` never needs a compiler.
 Nightly: fuzzing, full calibration benchmark, `cargo audit`.
 

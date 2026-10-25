@@ -30,7 +30,7 @@ CI runs these gates; all must be green:
 | Gate | What it checks |
 | --- | --- |
 | lint | `rustfmt`, `clippy` (pedantic, `-D warnings`, no `unwrap`/`expect`/`panic!` in library code, no wildcard arms on enums), `cargo-deny` (licenses, advisories, duplicates), crate rules (`forbid(unsafe_code)`, `deny(missing_docs)`) |
-| test | unit, property and doc tests on Windows x86-64, Linux x86-64 and ARM64, macOS ARM64; tier 2 (Intel macOS, Windows ARM, musl) is reported but does not block |
+| test | unit, property and doc tests on Windows x86-64, Linux x86-64 and ARM64, macOS ARM64 |
 | msrv | the workspace builds with the minimum supported Rust version |
 | coverage | ≥ 90 % lines overall, 100 % branches in `taktsim-core` |
 | python | pytest, ruff, pyright strict (warnings fail) on Python 3.13, 3.14, 3.15 |
