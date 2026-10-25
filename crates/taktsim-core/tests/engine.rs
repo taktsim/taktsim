@@ -54,8 +54,9 @@ impl TraceSink<Msg> for Recorder {
 }
 
 /// Runs a closure on every event; the closure decides what to do.
-type Handler = Box<dyn FnMut(&Delivery<Msg>, &mut Context<'_, Msg>) -> Result<(), ComponentError>>;
-type Starter = Box<dyn FnMut(&mut Context<'_, Msg>) -> Result<(), ComponentError>>;
+type Handler =
+    Box<dyn FnMut(&Delivery<'_, Msg>, &mut Context<'_, Msg>) -> Result<(), ComponentError> + Send>;
+type Starter = Box<dyn FnMut(&mut Context<'_, Msg>) -> Result<(), ComponentError> + Send>;
 
 struct Scripted {
     start: Starter,
@@ -69,7 +70,7 @@ impl Component<Msg> for Scripted {
 
     fn handle(
         &mut self,
-        d: Delivery<Msg>,
+        d: Delivery<'_, Msg>,
         ctx: &mut Context<'_, Msg>,
     ) -> Result<(), ComponentError> {
         (self.handle)(&d, ctx)
@@ -77,8 +78,10 @@ impl Component<Msg> for Scripted {
 }
 
 fn scripted(
-    start: impl FnMut(&mut Context<'_, Msg>) -> Result<(), ComponentError> + 'static,
-    handle: impl FnMut(&Delivery<Msg>, &mut Context<'_, Msg>) -> Result<(), ComponentError> + 'static,
+    start: impl FnMut(&mut Context<'_, Msg>) -> Result<(), ComponentError> + Send + 'static,
+    handle: impl FnMut(&Delivery<'_, Msg>, &mut Context<'_, Msg>) -> Result<(), ComponentError>
+    + Send
+    + 'static,
 ) -> Box<dyn Component<Msg>> {
     Box::new(Scripted {
         start: Box::new(start),
@@ -104,7 +107,7 @@ impl Component<Msg> for Source {
 
     fn handle(
         &mut self,
-        _: Delivery<Msg>,
+        _: Delivery<'_, Msg>,
         ctx: &mut Context<'_, Msg>,
     ) -> Result<(), ComponentError> {
         let item = ctx.create_item();
@@ -132,10 +135,10 @@ enum Lie {
 impl Component<Msg> for Delay {
     fn handle(
         &mut self,
-        d: Delivery<Msg>,
+        d: Delivery<'_, Msg>,
         ctx: &mut Context<'_, Msg>,
     ) -> Result<(), ComponentError> {
-        match (&d.message, d.item) {
+        match (d.message, d.item) {
             (Msg::Arrive, Some(item)) => {
                 ctx.receive(item)?;
                 self.queue.push(item);
@@ -204,7 +207,12 @@ fn items_flow_and_are_conserved() {
     // c + 25 s, so those created up to 3570 s are delivered: 357. The ones
     // from 3580, 3590 and 3600 s are still held.
     assert_eq!(
-        (c.created, c.delivered, c.held, c.in_transit),
+        (
+            c.created.get(),
+            c.delivered.get(),
+            c.held.get(),
+            c.in_transit.get()
+        ),
         (360, 357, 3, 0)
     );
 }
@@ -359,7 +367,7 @@ fn components_cannot_be_added_twice_or_late() {
 /// Runs one component whose start does `start`; returns the run error.
 #[allow(clippy::unwrap_used)] // test helper
 fn start_error(
-    start: impl FnMut(&mut Context<'_, Msg>) -> Result<(), ComponentError> + 'static,
+    start: impl FnMut(&mut Context<'_, Msg>) -> Result<(), ComponentError> + Send + 'static,
 ) -> RunError {
     let mut engine = Engine::new(EngineConfig::new(1));
     engine
@@ -490,7 +498,7 @@ fn only_the_owner_cancels_a_timer() {
             "thief",
             scripted(
                 |_| Ok(()),
-                |d, ctx| match d.message {
+                |d, ctx| match *d.message {
                     Msg::CancelThis(timer) => Ok(ctx.cancel(timer)?),
                     Msg::Tick(_) | Msg::Urgent(_) | Msg::Arrive => Ok(()),
                 },
@@ -616,10 +624,10 @@ impl Component<Msg> for Fragile {
 
     fn handle(
         &mut self,
-        d: Delivery<Msg>,
+        d: Delivery<'_, Msg>,
         ctx: &mut Context<'_, Msg>,
     ) -> Result<(), ComponentError> {
-        let Msg::Tick(n) = d.message else {
+        let Msg::Tick(n) = *d.message else {
             return Ok(());
         };
         self.0 = n + 1;
@@ -674,7 +682,7 @@ fn conservation_catches_components_that_misreport_their_items() {
         (
             Lie::Forget,
             "10s",
-            "it reports 0 items, the engine records 1",
+            "it reports 0 parts, the engine records 1 parts",
         ),
         (Lie::Twice, "10s", "it reports item 0 twice"),
         (
@@ -720,7 +728,13 @@ fn disposals_are_counted_by_kind_and_traced() {
     engine.run(RunLimits::until(t("1s")), &mut trace).unwrap();
     let c = engine.item_counts();
     assert_eq!(
-        (c.created, c.delivered, c.scrapped, c.consumed, c.held),
+        (
+            c.created.get(),
+            c.delivered.get(),
+            c.scrapped.get(),
+            c.consumed.get(),
+            c.held.get()
+        ),
         (3, 1, 1, 1, 0)
     );
     assert_eq!(trace.0.len(), 6);
@@ -766,7 +780,7 @@ impl Component<Msg> for Jitter {
 
     fn handle(
         &mut self,
-        _: Delivery<Msg>,
+        _: Delivery<'_, Msg>,
         ctx: &mut Context<'_, Msg>,
     ) -> Result<(), ComponentError> {
         let wait = self.wait()?;
@@ -822,4 +836,92 @@ fn ids_round_trip_through_their_numbers() {
     assert_eq!(EventId::from_raw(5).as_u64(), 5);
     assert_eq!(ItemId::from_raw(8).as_u64(), 8);
     assert_eq!(EventId::from_raw(5).to_string(), "event #5");
+}
+
+#[test]
+fn a_failed_run_cannot_continue() {
+    // The first component fails at start; the second is never started, and
+    // later calls refuse to run instead of continuing from a broken state.
+    let mut engine = Engine::new(EngineConfig::new(1));
+    engine
+        .add_component(
+            "broken",
+            scripted(
+                |_| {
+                    Err(ComponentError::Unexpected {
+                        state: "start",
+                        event: "none".into(),
+                    })
+                },
+                |_, _| Ok(()),
+            ),
+        )
+        .unwrap();
+    engine.add_component("next", idle()).unwrap();
+    assert!(engine.run(RunLimits::until(t("1h")), &mut NoTrace).is_err());
+    for _ in 0..2 {
+        assert_eq!(
+            engine.run(RunLimits::until(t("2h")), &mut NoTrace),
+            Err(RunError::AlreadyFailed)
+        );
+    }
+    assert_eq!(
+        RunError::AlreadyFailed.to_string(),
+        "the run stopped with an error earlier and cannot continue"
+    );
+}
+
+#[test]
+fn an_event_limit_that_ends_with_the_last_event_reports_the_real_outcome() {
+    // Exactly three events are due: with max_events(3) the queue is empty
+    // afterwards, so the outcome is Idle and the clock reaches the horizon.
+    let mut engine = Engine::new(EngineConfig::new(1));
+    engine
+        .add_component(
+            "three",
+            scripted(
+                |ctx| {
+                    for n in 1..=3 {
+                        ctx.schedule(d("1s").checked_mul(n)?, Msg::Tick(0))?;
+                    }
+                    Ok(())
+                },
+                |_, _| Ok(()),
+            ),
+        )
+        .unwrap();
+    let s = engine
+        .run(RunLimits::until(t("1h")).max_events(3), &mut NoTrace)
+        .unwrap();
+    assert_eq!((s.outcome, s.events, s.now), (RunOutcome::Idle, 3, t("1h")));
+}
+
+#[test]
+fn streams_are_taken_at_start_only() {
+    let mut engine = Engine::new(EngineConfig::new(1));
+    engine
+        .add_component(
+            "lazy",
+            scripted(
+                |ctx| {
+                    ctx.schedule(d("1s"), Msg::Tick(0))?;
+                    Ok(())
+                },
+                |_, ctx| Ok(ctx.stream("failures").map(|_| ())?),
+            ),
+        )
+        .unwrap();
+    let err = engine
+        .run(RunLimits::until(t("1h")), &mut NoTrace)
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "at 1s, `lazy`: `lazy` asked for stream `failures` after starting; take streams in `start`"
+    );
+}
+
+#[test]
+fn an_engine_is_send() {
+    fn assert_send<T: Send>(_: &T) {}
+    assert_send(&line(None, true));
 }

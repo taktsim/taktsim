@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use taktsim_units::{SimTime, UnitError};
+use taktsim_units::{Count, SimTime, UnitError};
 
 use crate::engine::{EventId, ItemId};
 
@@ -79,6 +79,16 @@ pub enum EngineError {
         item: ItemId,
         /// The component that tried.
         by: String,
+    },
+    /// A random stream was asked for outside `start`. Streams are taken at
+    /// start, so every key conflict is found before the first event
+    /// (ADR-0013).
+    #[error("`{component}` asked for stream `{purpose}` after starting; take streams in `start`")]
+    StreamAfterStart {
+        /// The component.
+        component: String,
+        /// The purpose asked for.
+        purpose: String,
     },
     /// Two random streams of a run would have the same key: the same
     /// component and purpose twice, or (very unlikely) a hash collision.
@@ -235,16 +245,15 @@ pub enum RunError {
         /// The last events before the failure, oldest first.
         recent: Vec<RecentEvent>,
     },
-    /// Conservation failed: the items a component reports holding differ
-    /// from the items the engine has recorded for it.
-    #[error("at {time}, `{component}`: conservation violated: {detail}")]
+    /// Conservation failed (spec §4).
+    #[error("at {time}, `{component}`: conservation violated: {problem}")]
     Conservation {
         /// The component.
         component: String,
         /// The simulation time.
         time: SimTime,
         /// What differs.
-        detail: String,
+        problem: ConservationProblem,
         /// The last events before the failure, oldest first.
         recent: Vec<RecentEvent>,
     },
@@ -260,6 +269,10 @@ pub enum RunError {
         /// The last events before the failure, oldest first.
         recent: Vec<RecentEvent>,
     },
+    /// The run already stopped with an error; its state is no longer
+    /// trustworthy, so it cannot continue.
+    #[error("the run stopped with an error earlier and cannot continue")]
+    AlreadyFailed,
     /// A run was asked to end before the current simulation time.
     #[error("cannot run until {until}: the simulation is already at {now}")]
     HorizonInPast {
@@ -267,5 +280,48 @@ pub enum RunError {
         now: SimTime,
         /// The requested end.
         until: SimTime,
+    },
+}
+
+/// How conservation failed: the items a component reports holding differ
+/// from the engine's records, or the engine's own totals do not balance.
+///
+/// ```
+/// use taktsim_core::{ConservationProblem, ItemId};
+///
+/// let p = ConservationProblem::ReportedTwice { item: ItemId::from_raw(7) };
+/// assert_eq!(p.to_string(), "it reports item 7 twice");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum ConservationProblem {
+    /// The component reports the same item twice.
+    #[error("it reports {item} twice")]
+    ReportedTwice {
+        /// The item.
+        item: ItemId,
+    },
+    /// The component reports an item it does not hold.
+    #[error("it reports {item}, which it does not hold")]
+    NotHeld {
+        /// The item.
+        item: ItemId,
+    },
+    /// The component reports fewer items than it holds.
+    #[error("it reports {reported}, the engine records {recorded}")]
+    CountMismatch {
+        /// How many items the component reports.
+        reported: Count,
+        /// How many the engine has recorded for it.
+        recorded: Count,
+    },
+    /// Created items do not equal held + in transit + disposed of; only an
+    /// engine bug can cause this.
+    #[error("{created} created, {accounted} held, in transit or disposed of")]
+    Unbalanced {
+        /// Items created.
+        created: Count,
+        /// Items held, in transit, delivered, scrapped or consumed.
+        accounted: Count,
     },
 }

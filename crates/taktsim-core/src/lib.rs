@@ -14,7 +14,7 @@
 //!     NoTrace, RunLimits,
 //! };
 //!
-//! #[derive(Debug, Clone)]
+//! #[derive(Debug)]
 //! struct Arrive;
 //! impl Message for Arrive {}
 //!
@@ -25,7 +25,7 @@
 //!         ctx.schedule("10s".parse()?, Arrive)?;
 //!         Ok(())
 //!     }
-//!     fn handle(&mut self, _: Delivery<Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
+//!     fn handle(&mut self, _: Delivery<'_, Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
 //!         let item = ctx.create_item();
 //!         ctx.transfer(item, ctx.lookup("sink")?, Arrive)?;
 //!         ctx.schedule("10s".parse()?, Arrive)?;
@@ -36,7 +36,7 @@
 //! /// Delivers every item it receives.
 //! struct Sink;
 //! impl Component<Arrive> for Sink {
-//!     fn handle(&mut self, d: Delivery<Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
+//!     fn handle(&mut self, d: Delivery<'_, Arrive>, ctx: &mut Context<'_, Arrive>) -> Result<(), ComponentError> {
 //!         if let Some(item) = d.item {
 //!             ctx.receive(item)?;
 //!             ctx.dispose(item, Disposal::Delivered)?;
@@ -49,7 +49,7 @@
 //! engine.add_component("source", Box::new(Source))?;
 //! engine.add_component("sink", Box::new(Sink))?;
 //! engine.run(RunLimits::until("1h".parse()?), &mut NoTrace)?;
-//! assert_eq!(engine.item_counts().delivered, 360);
+//! assert_eq!(engine.item_counts().delivered.get(), 360);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
@@ -66,5 +66,7 @@ pub use engine::{
     Component, ComponentId, Context, Delivery, Disposal, Engine, EngineConfig, EventId, ItemCounts,
     ItemId, Message, RunLimits, RunOutcome, RunSummary,
 };
-pub use error::{ComponentError, EngineError, RecentEvent, RunError, Violation};
+pub use error::{
+    ComponentError, ConservationProblem, EngineError, RecentEvent, RunError, Violation,
+};
 pub use trace::{NoTrace, TraceRecord, TraceSink};
