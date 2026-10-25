@@ -8,13 +8,25 @@ use crate::decimal::{self, Scaled, Spec};
 
 const NANOS_PER_SEC: u64 = 1_000_000_000;
 
-/// Duration units, largest first, with their length in nanoseconds.
+/// The longest duration and the latest instant, for error messages.
+const DURATION_LIMIT: &str = "18446744073.709551615s (about 584 years)";
+
+/// Duration units accepted by the parser, with their length in nanoseconds.
 const UNITS: [(&str, u64); 5] = [
     ("d", 86_400 * NANOS_PER_SEC),
     ("h", 3_600 * NANOS_PER_SEC),
     ("min", 60 * NANOS_PER_SEC),
     ("s", NANOS_PER_SEC),
     ("ms", 1_000_000),
+];
+
+/// Units used for display, largest first. Milliseconds are parsed but not
+/// displayed: `0.25s`, not `250ms`.
+const DISPLAY_UNITS: [(&str, u64); 4] = [
+    ("d", 86_400 * NANOS_PER_SEC),
+    ("h", 3_600 * NANOS_PER_SEC),
+    ("min", 60 * NANOS_PER_SEC),
+    ("s", NANOS_PER_SEC),
 ];
 
 const SPEC: Spec = Spec {
@@ -96,16 +108,18 @@ impl SimDuration {
             .map(Self)
             .ok_or_else(|| UnitError::Overflow {
                 what: format!("duration of {secs} s"),
+                limit: DURATION_LIMIT,
             })
     }
 
     /// The duration nearest to `secs` seconds, for sampled values.
     ///
-    /// `secs` is multiplied by 10⁹ and rounded half to even to whole
-    /// nanoseconds. Negative values become zero, so a sample from a
-    /// distribution that can go below zero (e.g. a normal) is truncated at
-    /// zero (ADR-0001, ADR-0003). Both steps are exact IEEE 754 operations,
-    /// so the result is the same on every platform.
+    /// The exact value of `secs` (an `f64` is a binary fraction) times 10⁹
+    /// is rounded once, half to even, to whole nanoseconds, using integer
+    /// arithmetic only, so the result is the same on every platform.
+    /// Negative values become zero, so a sample from a distribution that can
+    /// go below zero (e.g. a normal) is truncated at zero (ADR-0001,
+    /// ADR-0003).
     ///
     /// # Errors
     ///
@@ -116,28 +130,60 @@ impl SimDuration {
     /// use taktsim_units::SimDuration;
     ///
     /// assert_eq!(SimDuration::from_secs_f64(42.0)?.to_string(), "42s");
-    /// assert_eq!(SimDuration::from_secs_f64(2.5e-9)?.as_nanos(), 2);
+    /// // 1/1024 s is exactly 976562.5 ns: a tie, rounded to the even tick.
+    /// assert_eq!(SimDuration::from_secs_f64(1.0 / 1024.0)?.as_nanos(), 976_562);
     /// assert_eq!(SimDuration::from_secs_f64(-1.0)?, SimDuration::ZERO);
     /// assert!(SimDuration::from_secs_f64(f64::NAN).is_err());
     /// # Ok::<(), taktsim_units::UnitError>(())
     /// ```
     pub fn from_secs_f64(secs: f64) -> Result<Self, UnitError> {
-        // 2^64 as f64, exactly.
-        const LIMIT: f64 = 18_446_744_073_709_551_616.0;
         if !secs.is_finite() {
             return Err(UnitError::NotFinite {
                 what: format!("duration of {secs} s"),
             });
         }
-        let nanos = (secs * 1e9).round_ties_even().max(0.0);
-        if nanos >= LIMIT {
-            return Err(UnitError::Overflow {
-                what: format!("duration of {secs} s"),
-            });
+        if secs <= 0.0 {
+            return Ok(Self::ZERO);
         }
-        // Checked above: 0 <= nanos < 2^64 and nanos is a whole number.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Ok(Self(nanos as u64))
+        // secs = mantissa × 2^(exponent - 1075), exactly (IEEE 754 binary64).
+        let bits = secs.to_bits();
+        let exponent = (bits >> 52) & 0x7ff;
+        let fraction = bits & ((1 << 52) - 1);
+        let (mantissa, exponent) = if exponent == 0 {
+            (fraction, 1) // subnormal
+        } else {
+            (fraction | (1 << 52), exponent)
+        };
+        // Below 2^53 × 10^9 < 2^83.
+        let product = u128::from(mantissa) * u128::from(NANOS_PER_SEC);
+        let nanos = if exponent >= 1075 {
+            // A whole number of nanoseconds; beyond 2^44 it overflows anyway.
+            let shift = exponent - 1075;
+            if shift > 44 {
+                None
+            } else {
+                Some(product << shift)
+            }
+        } else {
+            let shift = 1075 - exponent;
+            if shift > 84 {
+                // Below 2^83 / 2^85: less than half a nanosecond.
+                Some(0)
+            } else {
+                let quotient = product >> shift;
+                let remainder = product & ((1 << shift) - 1);
+                let half = 1 << (shift - 1);
+                let round_up = remainder > half || (remainder == half && quotient % 2 == 1);
+                Some(quotient + u128::from(round_up))
+            }
+        };
+        nanos
+            .and_then(|n| u64::try_from(n).ok())
+            .map(Self)
+            .ok_or_else(|| UnitError::Overflow {
+                what: format!("duration of {secs} s"),
+                limit: DURATION_LIMIT,
+            })
     }
 
     /// The duration in nanoseconds.
@@ -190,6 +236,7 @@ impl SimDuration {
             .map(Self)
             .ok_or_else(|| UnitError::Overflow {
                 what: format!("duration {self} + {other}"),
+                limit: DURATION_LIMIT,
             })
     }
 
@@ -236,6 +283,7 @@ impl SimDuration {
             .map(Self)
             .ok_or_else(|| UnitError::Overflow {
                 what: format!("duration {self} × {n}"),
+                limit: DURATION_LIMIT,
             })
     }
 }
@@ -257,6 +305,7 @@ impl FromStr for SimDuration {
             }),
             Scaled::Overflow => Err(UnitError::Overflow {
                 what: format!("duration `{input}`"),
+                limit: DURATION_LIMIT,
             }),
         }
     }
@@ -271,16 +320,22 @@ impl fmt::Display for SimDuration {
         if self.0 == 0 {
             return f.write_str("0s");
         }
-        // Milliseconds are parsed but not displayed: `0.25s`, not `250ms`.
-        if let Some((unit, factor)) = UNITS[..4]
+        if let Some((unit, factor)) = DISPLAY_UNITS
             .iter()
             .find(|(_, factor)| self.0.is_multiple_of(*factor))
         {
             return write!(f, "{}{unit}", self.0 / factor);
         }
+        // Not whole seconds, so the fraction is non-zero; drop its trailing
+        // zeros without allocating.
         let secs = self.0 / NANOS_PER_SEC;
-        let frac = format!("{:09}", self.0 % NANOS_PER_SEC);
-        write!(f, "{secs}.{}s", frac.trim_end_matches('0'))
+        let mut frac = self.0 % NANOS_PER_SEC;
+        let mut width = 9;
+        while frac.is_multiple_of(10) {
+            frac /= 10;
+            width -= 1;
+        }
+        write!(f, "{secs}.{frac:0width$}s")
     }
 }
 
@@ -296,6 +351,7 @@ impl fmt::Display for SimDuration {
 /// let end = start.checked_add("8h".parse()?)?;
 /// assert_eq!(end.checked_duration_since(start)?.to_string(), "8h");
 /// assert_eq!(end.to_string(), "8h");
+/// assert_eq!("8h".parse::<SimTime>()?, end);
 /// # Ok::<(), taktsim_units::UnitError>(())
 /// ```
 ///
@@ -372,6 +428,7 @@ impl SimTime {
             .map(Self)
             .ok_or_else(|| UnitError::Overflow {
                 what: format!("time {self} + {d}"),
+                limit: DURATION_LIMIT,
             })
     }
 
@@ -396,6 +453,16 @@ impl SimTime {
             .ok_or_else(|| UnitError::Underflow {
                 what: format!("time {self} - {earlier}"),
             })
+    }
+}
+
+impl FromStr for SimTime {
+    type Err = UnitError;
+
+    /// Parses the time since the start, written like a [`SimDuration`]
+    /// (`8h`, `90min`, `1.5s`).
+    fn from_str(input: &str) -> Result<Self, UnitError> {
+        input.parse::<SimDuration>().map(|d| Self(d.0))
     }
 }
 
@@ -434,6 +501,11 @@ mod tests {
         assert!(matches!(err("42S"), UnitError::UnknownUnit { .. }));
         assert!(matches!(err("-42s"), UnitError::Negative { .. }));
         assert!(matches!(err("0.0000000001s"), UnitError::TooPrecise { .. }));
+        assert_eq!(
+            err("0.0000000001s").to_string(),
+            "`0.0000000001s` is finer than the 1 ns resolution of simulation time; \
+             use at most 9 decimal places of seconds, e.g. 0.000000001s"
+        );
         assert!(matches!(err("600000000d"), UnitError::Overflow { .. }));
         assert_eq!(
             err("42").to_string(),
@@ -457,20 +529,47 @@ mod tests {
     }
 
     #[test]
-    fn sampled_durations_round_half_to_even() {
+    fn sampled_durations_round_once_to_the_nearest_tick() {
+        // Expected values computed exactly from each f64's binary value.
         let ns = |s: f64| SimDuration::from_secs_f64(s).unwrap().as_nanos();
-        assert_eq!(ns(1.5e-9), 2);
-        assert_eq!(ns(2.5e-9), 2);
+        assert_eq!(ns(1.5e-9), 1); // the f64 is just below 1.5 ns
+        assert_eq!(ns(2.5e-9), 3); // the f64 is just above 2.5 ns
         assert_eq!(ns(2.6e-9), 3);
+        assert_eq!(ns(12.345_678_901_5), 12_345_678_901);
+        assert_eq!(ns(0.1 + 0.2), 300_000_000);
+        assert_eq!(ns(1e10), 10_000_000_000_000_000_000);
+        // Exact ties go to the even tick: 976562.5 ns and 2929687.5 ns.
+        assert_eq!(ns(1.0 / 1024.0), 976_562);
+        assert_eq!(ns(3.0 / 1024.0), 2_929_688);
+        // Subnormal and tiny values round to zero; negatives are truncated.
+        assert_eq!(ns(5e-324), 0);
+        assert_eq!(ns(2.225_073_858_507_201_4e-308), 0);
         assert_eq!(ns(-0.0), 0);
+        assert_eq!(ns(-1.0), 0);
+    }
+
+    #[test]
+    fn sampled_durations_reject_non_finite_and_huge_values() {
         assert!(matches!(
             SimDuration::from_secs_f64(f64::INFINITY),
             Err(UnitError::NotFinite { .. })
         ));
-        assert!(matches!(
-            SimDuration::from_secs_f64(1e11),
-            Err(UnitError::Overflow { .. })
-        ));
+        // Just above 2^64 ns; then values whose binary exponent is >= 52
+        // (whole seconds), small and huge.
+        for secs in [18_446_744_073.709_553, 1e16, 1e300] {
+            assert!(
+                matches!(
+                    SimDuration::from_secs_f64(secs),
+                    Err(UnitError::Overflow { .. })
+                ),
+                "{secs}"
+            );
+        }
+        assert_eq!(
+            SimDuration::from_secs_f64(1e16).unwrap_err().to_string(),
+            "duration of 10000000000000000 s overflows; \
+             the largest value is 18446744073.709551615s (about 584 years)"
+        );
     }
 
     #[test]
@@ -478,7 +577,7 @@ mod tests {
         let e = SimDuration::MAX.checked_mul(2).unwrap_err();
         assert_eq!(
             e.to_string(),
-            "duration 18446744073.709551615s × 2 overflows"
+            "duration 18446744073.709551615s × 2 overflows; the largest value is 18446744073.709551615s (about 584 years)"
         );
         let e = SimTime::START
             .checked_duration_since(SimTime::from_nanos(1))
@@ -505,7 +604,7 @@ mod tests {
         assert_eq!(t.checked_duration_since(SimTime::START).unwrap(), d("8h"));
         assert_eq!(
             t.checked_add(SimDuration::MAX).unwrap_err().to_string(),
-            "time 8h + 18446744073.709551615s overflows"
+            "time 8h + 18446744073.709551615s overflows; the largest value is 18446744073.709551615s (about 584 years)"
         );
         assert_eq!(
             d("1h").checked_sub(d("2h")).unwrap_err().to_string(),
@@ -516,7 +615,7 @@ mod tests {
                 .checked_add(d("1s"))
                 .unwrap_err()
                 .to_string(),
-            "duration 18446744073.709551615s + 1s overflows"
+            "duration 18446744073.709551615s + 1s overflows; the largest value is 18446744073.709551615s (about 584 years)"
         );
     }
 }
