@@ -451,6 +451,11 @@ dependencies = [
 [[package]]
 name = "taktsim-model"
 version = "0.0.0"
+dependencies = [
+ "proptest",
+ "taktsim-units",
+ "thiserror",
+]
 
 [[package]]
 name = "taktsim-python"
