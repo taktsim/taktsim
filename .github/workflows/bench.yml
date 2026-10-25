@@ -1,0 +1,131 @@
+# Instruction-count regression gate (spec §7, §10; ADR-0007, ADR-0010,
+# ADR-0016): measures the gungraun benchmarks of the pull request's base and
+# of the pull request merged into it, one after the other on the same runner,
+# and fails if a benchmark's instruction count rose by more than 10 %.
+# Separate from ci.yml so it can be changed without touching the other gates.
+# Changing this file needs the `gate-change` label (ci/check-gates.sh).
+#
+# Adding a benchmark needs no change here: ci/bench-run.sh runs every
+# crates/taktsim-bench/benches/instructions_*.rs target.
+name: bench
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+  # Valgrind from the Ubuntu 24.04 release pocket, which never changes
+  # (ADR-0016). Base and head run under the same Valgrind in one job, so a
+  # Valgrind change alone cannot fail a pull request; the version is printed
+  # in the summary.
+  VALGRIND: "1:3.22.0-0ubuntu3"
+
+jobs:
+  instructions:
+    name: benchmarks (instruction counts, > 10 % regression fails)
+    # The CI proxy runner of ADR-0010 (x86-64 Linux); Callgrind needs Linux.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # The merge commit of the pull request and its two parents: HEAD^1 is
+      # the base, HEAD the base with the pull request applied.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      # The gate's own tests first: a broken comparison must not pass.
+      - name: test the comparison (ci/bench-compare-test.sh)
+        run: ci/bench-compare-test.sh
+
+      - name: install Valgrind
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends "valgrind=$VALGRIND"
+          valgrind --version
+
+      - name: commits and scripts
+        id: commits
+        run: |
+          echo "base=$(git rev-parse HEAD^1)" >>"$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+          echo "pr=$(git rev-parse HEAD^2)" >>"$GITHUB_OUTPUT"
+          # Both commits are measured by the head's scripts.
+          cp -R ci "$RUNNER_TEMP/ci"
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: base, gungraun version
+        id: base
+        run: |
+          git checkout -q --detach "${{ steps.commits.outputs.base }}"
+          echo "runner=$("$RUNNER_TEMP/ci/bench-runner-version.sh")" >>"$GITHUB_OUTPUT"
+      - if: steps.base.outputs.runner != ''
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          # Must equal the base's gungraun library version (gungraun guide).
+          tool: gungraun-runner@${{ steps.base.outputs.runner }}
+          fallback: none
+      - name: base, measure
+        run: '"$RUNNER_TEMP/ci/bench-run.sh" "$RUNNER_TEMP/gungraun/base"'
+
+      - name: head, gungraun version
+        id: head
+        run: |
+          git checkout -q --detach "${{ steps.commits.outputs.head }}"
+          runner=$("$RUNNER_TEMP/ci/bench-runner-version.sh")
+          if [ -z "$runner" ]; then
+            echo "error: the head's Cargo.lock has no gungraun" >&2
+            exit 1
+          fi
+          echo "runner=$runner" >>"$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: gungraun-runner@${{ steps.head.outputs.runner }}
+          fallback: none
+      - name: head, measure
+        run: '"$RUNNER_TEMP/ci/bench-run.sh" --strict "$RUNNER_TEMP/gungraun/head"'
+
+      - name: compare (fails above +10 %)
+        env:
+          BASE: ${{ steps.commits.outputs.base }}
+          HEAD: ${{ steps.commits.outputs.head }}
+          PR: ${{ steps.commits.outputs.pr }}
+          BASE_RUNNER: ${{ steps.base.outputs.runner }}
+          HEAD_RUNNER: ${{ steps.head.outputs.runner }}
+        run: |
+          status=0
+          "$RUNNER_TEMP/ci/bench-compare.sh" "$RUNNER_TEMP/gungraun/base" "$RUNNER_TEMP/gungraun/head" \
+            >"$RUNNER_TEMP/bench.md" 2>"$RUNNER_TEMP/bench.err" || status=$?
+          {
+            cat "$RUNNER_TEMP/bench.md"
+            if [ -s "$RUNNER_TEMP/bench.err" ]; then
+              echo '```text'
+              cat "$RUNNER_TEMP/bench.err"
+              echo '```'
+            fi
+            echo
+            echo "Base \`$BASE\`; head \`$HEAD\`, the pull request (\`$PR\`) merged into the base."
+            echo "Measured on $ImageOS ($(uname -m)), $(valgrind --version)," \
+              "gungraun-runner ${BASE_RUNNER:-none} (base) and $HEAD_RUNNER (head)."
+            echo "Instruction counts gate regressions only; they are not a speed claim (ADR-0010)."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: instruction-counts
+          path: |
+            ${{ runner.temp }}/gungraun/*/**/summary.json
+            ${{ runner.temp }}/bench.md
+          if-no-files-found: ignore
