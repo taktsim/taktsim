@@ -6,6 +6,7 @@
 /.gitattributes       @ossScharom
 /.github/             @ossScharom
 /ci/                  @ossScharom
+/.cargo/              @ossScharom
 # Decisions: only the owner accepts an ADR.
 /docs/adr/            @ossScharom
 /docs/spec.md         @ossScharom
