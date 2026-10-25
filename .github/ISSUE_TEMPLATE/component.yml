@@ -1,0 +1,41 @@
+name: Component proposal
+description: Propose a new component type (spec §4).
+labels: [component-proposal]
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What does it model, and why can't existing components do it?
+    validations:
+      required: true
+  - type: textarea
+    id: parameters
+    attributes:
+      label: Parameters
+      description: Each parameter with its type and unit, and whether it can be a distribution.
+    validations:
+      required: true
+  - type: textarea
+    id: states
+    attributes:
+      label: States and transitions
+      description: The state machine over engine events.
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants checked at runtime
+      description: Required. What must always hold, e.g. "units inspected = passed + scrapped + reworked".
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference case
+      description: A case with a known result (analytical or hand-computed) the tests can check against.
+  - type: textarea
+    id: symbol
+    attributes:
+      label: Viewer symbol
+      description: A sketch or description of its symbol (spec §14; required before the viewer release).
