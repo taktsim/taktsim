@@ -63,8 +63,9 @@ VIRTUAL_ENV=$PWD/.venv .venv/bin/maturin develop
 .venv/bin/pytest -q
 ```
 
-Never weaken a test, snapshot or gate to make CI pass. If a gate is wrong,
-change it in its own PR with the `gate-change` label and say why.
+Never weaken a test, snapshot or gate to make CI pass. Every gate change
+carries the `gate-change` label and a reason. Loosening a gate is its own PR;
+tightening one (a new or stricter check) may come with the code it checks.
 
 If your PR breaks one of the design principles, say so in its description and
 explain why; the PR template asks.
@@ -72,7 +73,9 @@ explain why; the PR template asks.
 ## Decisions
 
 Larger choices are recorded as [ADRs](docs/adr/). Propose one in a PR with
-status `proposed`; the project owner accepts it.
+status `proposed`; the project owner accepts it, either explicitly or, for an
+ADR that settles a detail of the milestone in the same PR, by merging that
+PR.
 
 ## License
 

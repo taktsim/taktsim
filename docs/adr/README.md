@@ -2,9 +2,11 @@
 
 One file per decision, numbered in order of creation. Status is one of
 `proposed`, `accepted`, `superseded by ADR-NNNN`, `rejected`. Only the
-project owner moves an ADR from `proposed` to `accepted`. An ADR that settles
-a *default* inside a milestone is proposed in that milestone's pull request
-and accepted when the owner merges it.
+project owner accepts an ADR: explicitly, or, for an ADR that settles a spec
+*default* or a detail inside a milestone, by merging the milestone's pull
+request that proposes it. An ADR that changes the spec or an accepted ADR
+always needs the owner's explicit answer. The status line is updated in a
+later commit, never before the owner has decided.
 
 A spec item marked *default* is used as-is only once an ADR accepts it.
 Every number marked *initial target* is confirmed or revised in an ADR with

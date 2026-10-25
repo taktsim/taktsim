@@ -14,8 +14,17 @@ as `format: "1.0"` (ADR-0008).
   working on a feature.
 - `docs/roadmap.md`: milestones and the acceptance criteria each proves.
   Work on the current milestone only.
-- `docs/adr/`: decisions. A milestone that depends on a `proposed` ADR does
-  not start. Never set an ADR to `accepted` yourself; the owner does.
+- `docs/adr/`: decisions. Only the owner accepts an ADR, in one of two ways:
+  - **Explicitly**, by saying so. Required for an ADR that changes the spec
+    or an accepted ADR.
+  - **By merging** the milestone PR that proposes it. Allowed only for an ADR
+    that settles a spec *default* or a detail the milestone needs (e.g.
+    ADR-0012, units). The ADR says `proposed (accepted when the Mn pull
+    request is merged)`.
+
+  Never mark an ADR `accepted` before the owner has done one of these; after
+  a merge, record the status in a later commit. A milestone does not start
+  while an ADR from an earlier milestone that it depends on is `proposed`.
 - A tool or library the spec marks *default* is used only once an ADR
   accepts it. A number marked *initial target* is confirmed in an ADR with
   measurements.
@@ -167,9 +176,16 @@ cargo test --workspace --exclude taktsim-python --all-features --doc
 Coverage, docs and Python commands are in `CONTRIBUTING.md`;
 `.github/workflows/ci.yml` is the authority on exact commands.
 
-Changing a gate (lints, toolchain, MSRV, `deny.toml`, workflows, `ci/`) is
-its own PR with the `gate-change` label and a reason. Never change a gate in
-the same PR as the code that would otherwise fail it.
+Every gate change (lints, toolchain, MSRV, `deny.toml`, workflows, `ci/`)
+carries the `gate-change` label and a reason in the PR description.
+
+- **Loosening** a gate (removing or weakening a check, allowing a lint,
+  lowering a threshold, a laxer `deny.toml`) is its own PR. Never loosen a
+  gate in the same PR as the code that would fail the old one.
+- **Tightening** a gate (a new check, a stricter setting) may go in the PR
+  with the code it checks.
+
+If unsure whether a change loosens or tightens, treat it as loosening.
 
 ## Commits and PRs
 

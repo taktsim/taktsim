@@ -75,6 +75,7 @@ warnings as errors. Versions are pinned in the workflow and in
 ## Process note
 
 ADRs for defaults that a milestone has to settle are proposed in that
-milestone's pull request; merging the pull request accepts them. A decision
-that changes the spec or an accepted ADR still needs a separate answer from
-the owner.
+milestone's pull request; the owner merging the pull request accepts them. A
+decision that changes the spec or an accepted ADR still needs a separate
+answer from the owner. The full rule is in `docs/adr/README.md` and
+`CLAUDE.md` (amended 2026-10-25, PR #2).
