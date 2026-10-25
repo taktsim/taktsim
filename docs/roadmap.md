@@ -28,11 +28,13 @@ start while an ADR it depends on is proposed.
 
 ### M0 — Workspace skeleton and CI gates
 
+Status: in review (pull request). Toolchain and tooling: ADR-0011.
+
 No domain code. The gates exist before there is anything to gate, so no
 later milestone can lower them.
 
 - Cargo workspace with the v0.1 crates only: `taktsim-units`, `taktsim-core`,
-  `taktsim-model`, `taktsim-components`, `taktsim-stats`, `taktsim-adapters`
+  `taktsim-trace`, `taktsim-model`, `taktsim-components`, `taktsim-stats`, `taktsim-adapters`
   (feature `csv`), `taktsim-cli`; `python/` package. Later crates are added
   in the tier that needs them.
 - Workspace-level lints: `forbid(unsafe_code)`, `deny(missing_docs)`,
@@ -40,13 +42,17 @@ later milestone can lower them.
   (exception path: see CLAUDE.md), `-D warnings`.
 - Pinned MSRV in `rust-toolchain.toml` / `rust-version`, MSRV job in CI.
 - CI in spec §10 order, minus steps for crates that do not exist yet (WASM,
-  viewer): rustfmt → clippy → cargo-deny → nextest → schema/stub freshness
-  (no-op until M4/M12) → coverage gate → Python tests → docs build.
+  viewer, benchmarks from M2): rustfmt → clippy → cargo-deny → nextest →
+  coverage gate → Python (pytest, ruff, pyright strict on 3.13–3.15) → docs
+  build with a doc example on every public item. Schema and stub freshness
+  checks arrive with M4 and M12; mutation testing of changed core code runs
+  on every PR as advisory.
 - Matrix: tier-1 targets from ADR-0010; tier-2 targets as non-blocking
   jobs. No `target-cpu=native` anywhere in committed config.
 - DCO sign-off check on every commit (ADR-0006).
 - Conventional Commits check; `git-cliff` config; "core commit references a
-  test" check.
+  test" check; `gate-change` label check and CODEOWNERS for gate files;
+  actions pinned by SHA with Dependabot.
 - `LICENSE-MIT`/`LICENSE-APACHE` (ADR-0006, already added), `README`, `CONTRIBUTING` (CI contract),
   `CODE_OF_CONDUCT`, `SECURITY`, issue templates (bug, component proposal
   with invariants, adapter proposal), `docs/adr/`.

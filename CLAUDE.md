@@ -159,11 +159,17 @@ Before calling work done, run locally what CI runs:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo deny check
-cargo nextest run --workspace --all-features
-cargo test --workspace --doc
+ci/check-crates.sh
+cargo nextest run --workspace --exclude taktsim-python --all-features
+cargo test --workspace --exclude taktsim-python --all-features --doc
 ```
 
-Once `.github/workflows/` exists, it is the authority on exact commands.
+Coverage, docs and Python commands are in `CONTRIBUTING.md`;
+`.github/workflows/ci.yml` is the authority on exact commands.
+
+Changing a gate (lints, toolchain, MSRV, `deny.toml`, workflows, `ci/`) is
+its own PR with the `gate-change` label and a reason. Never change a gate in
+the same PR as the code that would otherwise fail it.
 
 ## Commits and PRs
 
@@ -189,4 +195,5 @@ schemas/  committed JSON Schemas, one per format version
 
 ## Status
 
-Pre-code. ADR-0001 to ADR-0010 accepted on 2026-10-25. Next milestone: M0.
+M0 (workspace skeleton and CI gates) in review. ADR-0001 to ADR-0010
+accepted; ADR-0011 proposed in the M0 PR.
