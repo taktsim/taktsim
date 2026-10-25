@@ -1,9 +1,7 @@
 # ADR-0013: Random streams and platform-independent math
 
-- Status: proposed. Needs the owner's **explicit** acceptance: it settles
-  how ADR-0001 and ADR-0003 are read on truncation, and how spec §3's
-  dependency rule for `taktsim-core` is read (see "Questions for the
-  owner").
+- Status: accepted (2026-10-25, explicitly by the owner, including both
+  readings below: truncation, and core's dependencies)
 - Date: 2026-10-25
 - Blocks: M2
 - Spec: §3 ("`simcode-core` has no I/O and depends only on the units
@@ -125,13 +123,16 @@ which no run budget could interrupt.
   that do pure computation: `libm` (required by spec §9's determinism
   rule) and `thiserror` (the spec's default for typed errors, §7).
 
-## Questions for the owner
+## Owner's decisions (2026-10-25)
 
-1. **Truncation:** accept the reading above (ADR-0003's "truncated" is
-   statistical truncation; ADR-0001's clamp is the conversion's safety
-   net)?
-2. **Core dependencies:** spec §3 says core "depends only on the units
-   crate". Read it as "the only *taktsim* crate core depends on is units,
-   and core does no I/O", so pure-computation crates such as `libm` and
-   `thiserror` are allowed? The alternative is to vendor `libm` (about
-   15,000 lines) and hand-write the error impls.
+Both questions this ADR raised were answered explicitly by the owner:
+
+1. **Truncation.** Accepted: ADR-0003's "truncated at 0" is statistical
+   truncation (reject and redraw); ADR-0001's "clamped at ≥ 0" is the
+   safety net of `SimDuration::from_secs_f64`.
+2. **Core dependencies.** Accepted: spec §3's "depends only on the units
+   crate" means that the only *taktsim* crate `taktsim-core` depends on is
+   `taktsim-units`, and that core does no I/O. External crates that do
+   pure computation, such as `libm` and `thiserror`, are allowed. Each new
+   external dependency of core is still named in the PR that adds it, and
+   cargo-deny checks its license.

@@ -65,8 +65,10 @@ exception explicitly in its description.
 
 ## Architecture rules
 
-- `taktsim-core` has no I/O and depends only on `taktsim-units`. Every other
-  crate depends on core, never the reverse.
+- `taktsim-core` has no I/O, and the only taktsim crate it depends on is
+  `taktsim-units`. External crates that do pure computation (`libm`,
+  `thiserror`) are allowed; name each new one in the PR that adds it
+  (ADR-0013). Every other crate depends on core, never the reverse.
 - The Python bindings, CLI and MCP server are thin layers over the same
   public Rust API. No logic lives only in one client.
 - No network code in engine crates. Adapters are opt-in Cargo features and
