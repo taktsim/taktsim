@@ -1,6 +1,6 @@
 # ADR-0010: Supported platforms and reference hardware
 
-- Status: accepted (2026-10-25)
+- Status: accepted (2026-10-25); amended 2026-10-25: tier 2 dropped
 - Date: 2026-10-25
 - Blocks: M0 (CI and wheel matrix), M2 (benchmark numbers), M13 (release
   performance report)
@@ -38,7 +38,7 @@ tested.
 | Tier | Targets | What CI does |
 | --- | --- | --- |
 | 1 | `x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin` | full test suite, cross-platform golden-trace hash comparison, release binaries and Python wheels |
-| 2 | `x86_64-apple-darwin` (Intel Macs), `aarch64-pc-windows-msvc` (Windows on ARM), musl Linux x86-64 | build, unit tests and trace hash check where hosted runners exist; wheels; failures do not block a release but are reported |
+| — | `x86_64-apple-darwin` (Intel Macs), `aarch64-pc-windows-msvc` (Windows on ARM), musl Linux x86-64 | not supported and not built (amended 2026-10-25); added back as tier 1 when a user needs one |
 
 Minimum OS versions: Windows 10, macOS 11, Linux with glibc ≥ 2.28
 (`manylinux_2_28`: RHEL 8, Debian 10, Ubuntu 20.04 and later). 32-bit
@@ -60,7 +60,7 @@ targets, which covers both CPU architectures.
   traces simple to reason about. Rust never fuses multiply and add on its
   own, so ordinary arithmetic is the same on x86-64 and ARM64.
 - Install without compilers: `pip install taktsim` uses a prebuilt wheel
-  on every tier-1 and tier-2 target; the CLI ships as a single static
+  on every tier-1 target; the CLI ships as a single static
   binary per target.
 
 ### Reference hardware
@@ -115,3 +115,12 @@ they were asked:
 2. Is the reference machine class right (2021 mid-range x86-64 laptop,
    8 GB, Windows 11), or do your users have older or weaker machines?
 3. Do you have, or can you get, such a laptop by v0.2?
+
+## Amendment (2026-10-25)
+
+The owner dropped tier 2. Intel Macs are no longer sold, Windows on ARM is
+rare in companies, and musl only matters for very small containers; none of
+the expected users needs them yet. The three CI jobs are removed. A target
+comes back as tier 1, with a must-pass CI job and wheels, as soon as a user
+needs it. Cross-architecture determinism stays covered: x86-64 (Linux,
+Windows) against ARM64 (Linux, macOS).

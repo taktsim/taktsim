@@ -53,7 +53,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Tier 1 (ADR-0010): must pass.
+          # Supported targets (ADR-0010): all must pass.
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm }
           - { target: x86_64-pc-windows-msvc, os: windows-2025 }
@@ -68,28 +68,6 @@ jobs:
       # The Python binding crate is tested by pytest (job python).
       - run: cargo nextest run --workspace --exclude taktsim-python --all-features --locked
       - run: cargo test --workspace --exclude taktsim-python --all-features --doc --locked
-
-  test-tier2:
-    name: test tier 2 (${{ matrix.target }})
-    needs: lint
-    timeout-minutes: 30
-    # Tier 2 (ADR-0010): reported, never blocks.
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { target: x86_64-apple-darwin, os: macos-15-intel }
-          - { target: aarch64-pc-windows-msvc, os: windows-11-arm }
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-24.04 }
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          key: ${{ matrix.target }}
-      - run: rustup target add ${{ matrix.target }}
-      - run: cargo test --workspace --exclude taktsim-python --all-features --locked --target ${{ matrix.target }}
 
   msrv:
     name: msrv

@@ -47,8 +47,7 @@ later milestone can lower them.
   build with a doc example on every public item. Schema and stub freshness
   checks arrive with M4 and M12; mutation testing of changed core code runs
   on every PR as advisory.
-- Matrix: tier-1 targets from ADR-0010; tier-2 targets as non-blocking
-  jobs. No `target-cpu=native` anywhere in committed config.
+- Matrix: the tier-1 targets from ADR-0010, all must pass. No `target-cpu=native` anywhere in committed config.
 - DCO sign-off check on every commit (ADR-0006).
 - Conventional Commits check; `git-cliff` config; "core commit references a
   test" check; `gate-change` label check and CODEOWNERS for gate files;
@@ -238,7 +237,7 @@ rows rejected with row and column.
 
 ### M12 — Python bindings for `validate` and `run`
 
-- PyO3 + maturin, abi3 wheels for every tier-1 and tier-2 target, so
+- PyO3 + maturin, abi3 wheels for every tier-1 target, so
   `pip install` never needs a compiler, API shape per ADR-0005.
 - `.pyi` stubs generated and committed; freshness check in CI; `pyright`
   strict and `ruff` in CI.
