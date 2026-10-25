@@ -1,0 +1,4 @@
+# LF everywhere, so golden files and hashes are identical on Windows (ADR-0010).
+* text=auto eol=lf
+*.png binary
+*.parquet binary

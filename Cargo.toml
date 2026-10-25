@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/taktsim-units",
+    "crates/taktsim-core",
+    "crates/taktsim-trace",
+    "crates/taktsim-model",
+    "crates/taktsim-components",
+    "crates/taktsim-stats",
+    "crates/taktsim-adapters",
+    "crates/taktsim-cli",
+    "python",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+# MSRV: ADR-0011. Raised only in a commit that says so.
+rust-version = "1.97"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/taktsim/taktsim"
+homepage = "https://github.com/taktsim/taktsim"
+authors = ["The taktsim contributors"]
+# Nothing is published before the v0.1 release (M13).
+publish = false
+
+[workspace.dependencies]
+# Internal crates are added here as soon as one depends on another (from M1).
+
+# Shared lints (spec §7 Layer 1). Every crate opts in with `[lints] workspace = true`;
+# ci/check-crates.sh fails if one does not. Changing this section needs the
+# `gate-change` label on the PR (ci/check-gates.sh).
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+wildcard_enum_match_arm = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
