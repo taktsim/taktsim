@@ -82,7 +82,7 @@ data across a daylight-saving change correctly, where the local text
 own RFC 3339 parser and formatter. The crate depends only on
 `taktsim-units` and `thiserror`, both optional and enabled by the `csv`
 feature; without features it is empty. `cargo deny check` passes
-unchanged. Library code reads and writes only the `Read` and `Write`
+unchanged. Library code reads and writes only the `BufRead` and `Write`
 values it is given: no files, no network.
 
 **Observation table** (`taktsim_adapters::observation`):
@@ -92,7 +92,10 @@ values it is given: no files, no network.
 - Rows sorted by timestamp, then entity, then signal (byte order, which is
   Unicode code-point order); rows equal in all three keep their input
   order (stable sort). Built with `FromIterator`, so every source,
-  CSV or not, gets the same order.
+  CSV or not, gets the same order. Sorting reorders one column at a time
+  and frees each original before copying the next, so the peak while
+  building is about 53 bytes per row on a 64-bit target (37 for the
+  finished table).
 - `timestamp`: `Timestamp`, `i64` nanoseconds since the Unix epoch in UTC,
   without leap seconds (Unix time). Range 1677-09-21T00:12:43.145224192Z to
   2262-04-11T23:47:16.854775807Z. A separate type from `SimTime`, which
@@ -111,21 +114,39 @@ values it is given: no files, no network.
   `parts/min`, `parts/h`, `%`; `part…` accepted on input) plus `1` for
   dimensionless values such as state codes and 0/1 flags (the unit one of
   the SI and UCUM). An unknown unit is an error listing the allowed ones.
+  `taktsim-units` keeps its unit tables private, so tests check both
+  directions: every adapter unit parses in `taktsim-units`, and every unit
+  a `taktsim-units` parser lists in its error is known here and converts
+  to the same quantity.
   `Measurement::to_quantity` converts to the `taktsim-units` type of the
   unit (`SimDuration` rounded once, half to even, from the exact binary
   value; `Count`, `Rate`, `Ratio`), so no consumer converts by hand (and,
   e.g., truncates a negative duration to zero).
+- **Implausible** (`Measurement::implausibility`) means exactly that
+  `to_quantity` fails, decided in one place: a negative duration, count,
+  rate or percentage, a count that is not whole, or a duration beyond
+  about 584 years or a count beyond `u64::MAX` (too large for
+  `taktsim-units`). Values are shown with the shortest text that reads
+  back, with an exponent outside 10⁻⁵ to 10¹⁶, never with hundreds of
+  digits.
 
-**CSV import** (`csv::read_observations`):
+**CSV import** (`csv::read_observations`, any `BufRead`):
 
 - RFC 4180, strict: `,` between fields, `\n` or `\r\n` between rows,
   quoting with `"` and doubled inner quotes; a stray quote, text after a
-  closing quote and an unclosed quote are errors. UTF-8 only; a leading
-  byte-order mark is removed. Blank lines are skipped.
-- A header is required and names exactly the five columns, each once, in
-  any order. Unknown, duplicate and missing columns are errors; a header
-  that is one field containing `;`, tab or `|` gets a dedicated message.
-  Header errors stop reading.
+  closing quote and an unclosed quote are errors, in every field,
+  including fields beyond the header's columns. UTF-8 only; a leading
+  byte-order mark is removed. Blank lines are skipped everywhere,
+  including before the header, and still counted in row numbers.
+- A row longer than `max_row_bytes` (default 64 KiB, line breaks
+  included) stops reading with an error, so an input without line breaks,
+  or with a quote that is never closed, is not read into memory whole. An
+  unclosed quote within the limit makes the rest of the input one field;
+  it is reported and reading stops.
+- The first line that is not blank is the header. It names exactly the
+  five columns, each once, in any order. Unknown, duplicate and missing
+  columns are errors; a header that is one field containing `;`, tab or
+  `|` gets a dedicated message. Header errors stop reading.
 - Fields never start or end with whitespace.
 - `timestamp`: RFC 3339 §5.6 date-time, `T`, `t` or space between date
   and time, `Z`/`z` or `±hh:mm`, converted exactly to UTC. Fractions of up
@@ -144,31 +165,42 @@ values it is given: no files, no network.
   decimal-comma message. An **empty** value is a *missing value*: flagged,
   and the row is not in the table (a row needs a value).
 - **Errors** carry the row, the field (column name, or position for a
-  header field or an extra field), the text found (cut at 100
-  characters), what is wrong, what is allowed and one valid example
-  (spec §5). Row = the 1-based line on which the record starts, the header
-  being row 1. That equals the record number, because no valid field can
-  contain a line break, and it stays the line an editor shows when blank
-  lines are skipped. All errors are collected up to `max_errors` (default
-  100), then reading stops and says so.
-- **Flags** (`QualityFlag`, not errors): missing values, and values
-  implausible from their unit alone: negative durations, counts, rates and
-  percentages, and counts that are not whole. The row stays in the table.
-  Deferred to the data-quality report (v0.3), because they need the
-  meaning of a signal: decreasing cumulative counters (resets,
-  wrap-around), gaps against an expected sampling interval, duplicates
-  (same timestamp, entity and signal), stuck values, implausible
-  timestamps (e.g. 1970 from an unset clock).
+  header field or an extra field), the text found, what is wrong, what is
+  allowed and one valid example (spec §5). The text found is cut at 100
+  characters and made visible: `\`, control characters, format characters
+  (byte-order mark, zero-width and bidirectional marks) and line
+  separators are escaped (`\n`, `\u{1b}`), from a fixed list rather than
+  the toolchain's Unicode tables, so a message is one line, cannot carry
+  terminal escape sequences, and is the same with every toolchain. Header
+  problems show the header as written, quotes included. Row = the 1-based
+  line on which the record starts. That equals the record number, because
+  no valid field can contain a line break, and it stays the line an editor
+  shows when blank lines are skipped. All errors are collected up to
+  `max_errors` (default 100). When reading stops early, the error says why
+  (`Stopped`: invalid header, error limit, unclosed quote, row too long),
+  so a caller knows the rest was not checked; whether input is left after
+  the error limit is checked without reading it.
+- **Flags** (`QualityFlag`, not errors): missing values, and implausible
+  values as defined above. A flag carries the row, timestamp, source
+  offset, entity and signal, and the row's index in the table: for an
+  implausible value the row stays in the table; a missing value's row is
+  not in it, and the flag is its record. Deferred to the data-quality
+  report (v0.3), because they need the meaning of a signal: decreasing
+  cumulative counters (resets, wrap-around), gaps against an expected
+  sampling interval, duplicates (same timestamp, entity and signal), stuck
+  values, implausible timestamps (e.g. 1970 from an unset clock).
 
 **CSV export** (`csv::write_observations`, `csv::CsvWriter`):
 
 - A general, typed `CsvWriter`: fixed header, one `Cell` per column (text,
   integer, float, timestamp at an offset, empty), `\n` after every row,
-  quoting only when needed, output identical on every platform. Floats are
-  the shortest text that reads back to the same bits, with an exponent
-  below 10⁻⁵ and from 10¹⁶; NaN and infinity are refused. Result and
-  trace exports (M3, M8) use this writer; their formats are not decided
-  here.
+  quoting only when needed (`,`, `"`, a line break, or a leading
+  byte-order mark, which the reader would otherwise remove from the
+  header), output identical on every platform. Floats are the shortest
+  text that reads back to the same bits, with an exponent below 10⁻⁵ and
+  from 10¹⁶; NaN and infinity are refused. Its errors give row, column,
+  what was found, what is allowed and an example. Result and trace exports
+  (M3, M8) use this writer; their formats are not decided here.
 - The observation table is written in table order, each timestamp in its
   source offset (fraction with 0, 3, 6 or 9 digits, zero offset as `Z`),
   so export then import gives an equal table, offsets included, and
