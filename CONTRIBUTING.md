@@ -34,7 +34,7 @@ CI runs these gates; all must be green:
 | msrv | the workspace builds with the minimum supported Rust version |
 | coverage | ≥ 90 % lines overall, 100 % branches in `taktsim-core` |
 | python | pytest, ruff, pyright strict (warnings fail) on Python 3.13, 3.14, 3.15 |
-| docs | rustdoc without warnings; a code example on every public item |
+| docs | rustdoc without warnings; a code example on every public item; `compile_fail` examples fail with the stated error code |
 | commits | Conventional Commits, DCO, core changes come with tests |
 | gates | changes to lints, CI, toolchain or `deny.toml` carry the `gate-change` label and a reason in the description |
 | mutants | mutation testing of changed core code; advisory until v1.0 |
@@ -53,6 +53,8 @@ cargo +nightly-2026-10-24 llvm-cov nextest --workspace --exclude taktsim-python 
   --all-features --branch \
   --json --summary-only --output-path target/coverage.json
 ci/coverage-gate.sh target/coverage.json
+# compile_fail doc tests with their error codes checked (nightly only):
+cargo +nightly-2026-10-24 test --workspace --exclude taktsim-python --all-features --doc
 # Python (from python/):
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 VIRTUAL_ENV=$PWD/.venv .venv/bin/maturin develop
