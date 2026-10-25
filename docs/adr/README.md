@@ -2,7 +2,9 @@
 
 One file per decision, numbered in order of creation. Status is one of
 `proposed`, `accepted`, `superseded by ADR-NNNN`, `rejected`. Only the
-project owner moves an ADR from `proposed` to `accepted`.
+project owner moves an ADR from `proposed` to `accepted`. An ADR that settles
+a *default* inside a milestone is proposed in that milestone's pull request
+and accepted when the owner merges it.
 
 A spec item marked *default* is used as-is only once an ADR accepts it.
 Every number marked *initial target* is confirmed or revised in an ADR with
@@ -22,6 +24,7 @@ measurements.
 | [0008](0008-project-name.md) | Project name | accepted | M0 |
 | [0009](0009-expression-language.md) | Expression language | accepted | M6 |
 | [0010](0010-platforms-and-reference-hardware.md) | Supported platforms and reference hardware | accepted | M0, M2, M13 |
+| [0011](0011-toolchain-and-ci-tooling.md) | Toolchain, MSRV and CI tooling | proposed (M0 PR) | M0 |
 
 Open decisions from spec §15 that do **not** block v0.1, to be written
 before the tier that needs them: async boundary (v0.2), viewer rendering
