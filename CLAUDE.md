@@ -13,7 +13,11 @@ as `format: "1.0"` (ADR-0008).
 - `docs/spec.md`: the specification. Read the relevant section before
   working on a feature.
 - `docs/roadmap.md`: milestones and the acceptance criteria each proves.
-  Work on the current milestone only.
+  Work on the current milestone, or on a parallel track that the roadmap
+  marks as independent of it ("Parallel tracks"; owner's decision,
+  2026-10-25). Each track has its own branch, PR and ADR number, and does
+  not edit the roadmap, the ADR index or CLAUDE.md; the lead session
+  integrates.
 - `docs/adr/`: decisions. Only the owner accepts an ADR, in one of two ways:
   - **Explicitly**, by saying so. Required for an ADR that changes the spec
     or an accepted ADR.
