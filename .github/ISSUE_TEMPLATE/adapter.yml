@@ -1,0 +1,32 @@
+name: Adapter proposal
+description: Propose a new data adapter (spec §8).
+labels: [adapter-proposal]
+body:
+  - type: input
+    id: format
+    attributes:
+      label: Format or protocol, and version
+      placeholder: "OPC UA 1.05, read-only client"
+    validations:
+      required: true
+  - type: textarea
+    id: mapping
+    attributes:
+      label: Mapping to the observation table
+      description: How source data maps to timestamp, entity, signal, value, unit.
+    validations:
+      required: true
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Recorded fixture
+      description: Where the test data comes from. Tests must run without hardware.
+    validations:
+      required: true
+  - type: checkboxes
+    id: readonly
+    attributes:
+      label: Read-only
+      options:
+        - label: The adapter never writes to a production system or controller.
+          required: true

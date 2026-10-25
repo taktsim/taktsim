@@ -1,0 +1,30 @@
+name: Bug
+description: Something does not work as specified.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: model
+    attributes:
+      label: Model and command
+      description: The smallest model file and the exact command or API call. Runs are deterministic, so include the seed.
+      render: yaml
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: taktsim version and platform
+      placeholder: "taktsim 0.1.0, Windows 11 x86-64"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or error
+      render: text
