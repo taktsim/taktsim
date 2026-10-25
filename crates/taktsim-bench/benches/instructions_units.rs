@@ -53,15 +53,6 @@ mod benchmarks {
         )
     }
 
-    #[library_benchmark(teardown = support::check)]
-    #[bench::ratio(RATIO_TEXTS)]
-    fn parse_ratio(texts: [&'static str; 4]) -> Parsed<4> {
-        (
-            black_box(units::parse_all::<Ratio>(black_box(&texts))),
-            texts,
-        )
-    }
-
     /// The values and a buffer with room for all of them, so formatting does
     /// not allocate inside the measurement.
     fn to_format<T>(values: Vec<T>) -> (Vec<T>, String) {
@@ -113,7 +104,7 @@ mod benchmarks {
 
     library_benchmark_group!(
         name = parse,
-        benchmarks = [parse_duration, parse_count, parse_rate, parse_ratio]
+        benchmarks = [parse_duration, parse_count, parse_rate]
     );
     library_benchmark_group!(
         name = format,
