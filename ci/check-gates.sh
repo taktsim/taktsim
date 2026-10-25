@@ -7,7 +7,7 @@ base=$1
 
 gate_paths=(
   rust-toolchain.toml clippy.toml deny.toml rustfmt.toml .gitattributes
-  .github/workflows/ .github/CODEOWNERS ci/
+  .github/workflows/ .github/CODEOWNERS ci/ .cargo/
 )
 
 changed=$(git diff --name-only "$base"...HEAD -- "${gate_paths[@]}")
