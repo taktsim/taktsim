@@ -13,6 +13,15 @@
 //! [`ConfidenceInterval`] always holds its half-width, confidence level and
 //! number of replications.
 //!
+//! Observed values (replication results, signal values, observations) are
+//! bare `f64`: the statistics do not depend on the unit. The caller declares
+//! one unit per KPI and passes every value of that KPI in it, e.g. seconds
+//! from [`SimDuration::as_secs_f64`](taktsim_units::SimDuration::as_secs_f64)
+//! for lead times. This is a deliberate exception to the rule that
+//! quantities cross function boundaries as unit types (ADR-0014); the KPI
+//! layer of M8 wraps the results in typed quantities again. Times, windows,
+//! levels and precisions are typed.
+//!
 //! ```
 //! use taktsim_stats::{
 //!     ConfidenceLevel, ReplicationControl, ReplicationPlan, ReplicationStatus,
