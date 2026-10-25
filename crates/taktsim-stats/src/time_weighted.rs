@@ -547,7 +547,10 @@ impl TimeWeightedAccumulator {
         let variance = (self.sum_squares / total).max(0.0);
         if !self.mean.is_finite() || !variance.is_finite() {
             return Err(StatsError::Overflow {
-                what: "time-weighted variance",
+                what: "the time-weighted variance",
+                found: self.min.abs().max(self.max.abs()),
+                allowed: "signal values whose spread is below about 1e154",
+                example: "express the signal in a larger unit",
             });
         }
         Ok(TimeWeighted {

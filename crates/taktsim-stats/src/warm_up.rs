@@ -199,7 +199,10 @@ pub fn mser5(observations: &[f64]) -> Result<MserTruncation, StatsError> {
     }
     if !best.1.is_finite() {
         return Err(StatsError::Overflow {
-            what: "MSER-5 statistic",
+            what: "the MSER-5 statistic",
+            found: observations.iter().fold(0.0, |m: f64, x| m.max(x.abs())),
+            allowed: "observations below about 1e154 in magnitude",
+            example: "express the observations in a larger unit",
         });
     }
     Ok(MserTruncation {

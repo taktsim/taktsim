@@ -82,10 +82,19 @@ pub enum StatsError {
     },
     /// The inputs are finite, but a derived value (a sum of squares, a
     /// half-width) overflows `f64`.
-    #[error("{what} overflows f64; rescale the values, e.g. use hours instead of nanoseconds")]
+    #[error(
+        "{what} overflows f64 at inputs of magnitude {found:e}; allowed: {allowed}; example: {example}"
+    )]
     Overflow {
-        /// What overflowed, e.g. "sum of squared deviations".
+        /// What overflowed, e.g. "the sum of squared deviations".
         what: &'static str,
+        /// The magnitude of the input that made it overflow, e.g. the
+        /// largest value or the standard deviation.
+        found: f64,
+        /// What is allowed.
+        allowed: &'static str,
+        /// How to get there.
+        example: &'static str,
     },
     /// Fewer replications than the statistic needs.
     #[error(
@@ -99,9 +108,14 @@ pub enum StatsError {
         required: u32,
     },
     /// More replications than a [`Summary`](crate::Summary) can count.
-    #[error("at most {max} replications can be summarized")]
+    #[error(
+        "a summary holds at most {max} replications, found {found}; \
+         example: a budget of max_replications = 1000"
+    )]
     TooManyReplications {
-        /// The largest count.
+        /// The number of replications found.
+        found: u64,
+        /// The largest number allowed.
         max: u32,
     },
     /// A series too short for warm-up detection.

@@ -10,7 +10,8 @@ use crate::{ConfidenceLevel, StatsError, StudentT};
 /// Welford's update is numerically stable: it never subtracts two large
 /// sums. The result depends on the order of the values, so push them in a
 /// fixed order, e.g. by replication index, never in the order in which
-/// parallel replications happen to finish.
+/// parallel replications happen to finish. All values are in the one unit
+/// declared for the KPI (see the crate documentation).
 ///
 /// ```
 /// use taktsim_stats::Summary;
@@ -104,13 +105,19 @@ impl Summary {
         let count = self
             .count
             .checked_add(1)
-            .ok_or(StatsError::TooManyReplications { max: u32::MAX })?;
+            .ok_or(StatsError::TooManyReplications {
+                found: u64::from(u32::MAX) + 1,
+                max: u32::MAX,
+            })?;
         let delta = value - self.mean;
         let mean = self.mean + delta / f64::from(count);
         let m2 = self.m2 + delta * (value - mean);
         if !delta.is_finite() || !mean.is_finite() || !m2.is_finite() {
             return Err(StatsError::Overflow {
-                what: "sum of squared deviations",
+                what: "the sum of squared deviations of the replication results",
+                found: value.abs().max(self.mean.abs()),
+                allowed: "results whose spread is below about 1e154",
+                example: "express the KPI in a larger unit, e.g. hours instead of nanoseconds",
             });
         }
         *self = Self { count, mean, m2 };
@@ -203,7 +210,10 @@ impl Summary {
         let half_width = t.critical_value(level) * std_dev / f64::from(self.count).sqrt();
         if !half_width.is_finite() {
             return Err(StatsError::Overflow {
-                what: "confidence interval half-width",
+                what: "the confidence interval half-width",
+                found: std_dev,
+                allowed: "a half-width t(n - 1, 1 - alpha/2) * s / sqrt(n) below 1.8e308",
+                example: "rescale the results, or use a level such as 95%",
             });
         }
         Ok(ConfidenceInterval {
@@ -396,8 +406,9 @@ impl ConfidenceInterval {
 }
 
 impl fmt::Display for ConfidenceInterval {
-    /// `<mean> ± <half-width> (<level> CI, <n> replications)`; a precision
-    /// such as `{:.2}` applies to the mean and the half-width.
+    /// `<mean> ± <half-width> (<level> CI, <n> replications)`. A precision
+    /// such as `{:.2}` applies to the mean and the half-width; width, fill
+    /// and alignment (`{:>60}`, `{:*^60}`) apply to the whole text.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (mean, half_width) = match f.precision() {
             Some(digits) => (
@@ -406,11 +417,20 @@ impl fmt::Display for ConfidenceInterval {
             ),
             None => (self.mean.to_string(), self.half_width.to_string()),
         };
-        write!(
-            f,
+        let text = format!(
             "{mean} ± {half_width} ({} CI, {} replications)",
             self.level, self.replications
-        )
+        );
+        // Not `f.pad`: it would also read the precision, as a maximum width,
+        // and cut the text.
+        let padding = f.width().unwrap_or(0).saturating_sub(text.chars().count());
+        let (before, after) = match f.align() {
+            Some(fmt::Alignment::Right) => (padding, 0),
+            Some(fmt::Alignment::Center) => (padding / 2, padding - padding / 2),
+            Some(fmt::Alignment::Left) | None => (0, padding),
+        };
+        let fill = f.fill().to_string();
+        write!(f, "{}{text}{}", fill.repeat(before), fill.repeat(after))
     }
 }
 
@@ -461,8 +481,30 @@ mod tests {
         };
         assert_eq!(
             s.push(1.0),
-            Err(StatsError::TooManyReplications { max: u32::MAX })
+            Err(StatsError::TooManyReplications {
+                found: 4_294_967_296,
+                max: u32::MAX
+            })
         );
+        assert_eq!(
+            s.push(1.0).unwrap_err().to_string(),
+            "a summary holds at most 4294967295 replications, found 4294967296; \
+             example: a budget of max_replications = 1000"
+        );
+    }
+
+    #[test]
+    fn display_honours_width_fill_and_alignment() {
+        let ci = ConfidenceInterval::from_values(&[9.0, 11.0], ConfidenceLevel::DEFAULT).unwrap();
+        let text = format!("{ci:.1}");
+        assert_eq!(text, "10.0 ± 12.7 (95% CI, 2 replications)");
+        let width = text.chars().count() + 6;
+        assert_eq!(format!("{ci:>width$.1}"), format!("      {text}"));
+        assert_eq!(format!("{ci:<width$.1}"), format!("{text}      "));
+        assert_eq!(format!("{ci:*^width$.1}"), format!("***{text}***"));
+        assert_eq!(format!("{ci:width$.1}"), format!("{text}      "));
+        // A width below the length changes nothing.
+        assert_eq!(format!("{ci:5.1}"), text);
     }
 
     #[test]

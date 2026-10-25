@@ -74,8 +74,20 @@ fn too_few_or_bad_replications() {
     let err = Summary::from_values(&[f64::MAX, -f64::MAX]).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "sum of squared deviations overflows f64; \
-         rescale the values, e.g. use hours instead of nanoseconds"
+        "the sum of squared deviations of the replication results overflows f64 at inputs \
+         of magnitude 1.7976931348623157e308; allowed: results whose spread is below about \
+         1e154; example: express the KPI in a larger unit, e.g. hours instead of nanoseconds"
+    );
+    // The spread fits, but the half-width at an extreme level does not;
+    // the magnitude is s = √(2e300) as f64 (Python: math.sqrt(2e300)).
+    let summary = Summary::from_values(&[1e150, -1e150]).unwrap();
+    let extreme = ConfidenceLevel::from_alpha(1e-300).unwrap();
+    let err = summary.confidence_interval(extreme).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "the confidence interval half-width overflows f64 at inputs of magnitude \
+         1.414213562373095e150; allowed: a half-width t(n - 1, 1 - alpha/2) * s / sqrt(n) \
+         below 1.8e308; example: rescale the results, or use a level such as 95%"
     );
 }
 
