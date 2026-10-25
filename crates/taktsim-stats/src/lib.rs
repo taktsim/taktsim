@@ -1,6 +1,7 @@
 //! Output analysis for taktsim: confidence intervals from independent
-//! replications, sequential replication control and time-weighted
-//! statistics (spec §6 "Output analysis"; ADR-0014). Roadmap M8 and M9.
+//! replications, sequential replication control, time-weighted statistics
+//! and MSER-5 warm-up detection (spec §6 "Output analysis"; ADR-0014).
+//! Roadmap M8 and M9.
 //!
 //! Everything here is a pure function of its input: no randomness, no
 //! clock, no platform math (ADR-0013), so the same replication results give
@@ -43,6 +44,7 @@ mod level;
 mod sequential;
 mod student_t;
 mod time_weighted;
+mod warm_up;
 
 pub use error::StatsError;
 pub use interval::{ConfidenceInterval, Summary};
@@ -50,3 +52,4 @@ pub use level::{ConfidenceLevel, Probability};
 pub use sequential::{PrecisionReport, ReplicationControl, ReplicationPlan, ReplicationStatus};
 pub use student_t::StudentT;
 pub use time_weighted::{TimeWeighted, TimeWeightedAccumulator, Window, time_weighted};
+pub use warm_up::{MSER_BATCH_SIZE, MserTruncation, TimedMserTruncation, mser5, mser5_timed};
