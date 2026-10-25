@@ -37,6 +37,31 @@ pub enum StatsError {
         /// One valid value.
         example: &'static str,
     },
+    /// A probability or miss probability so small that a quantile would
+    /// overflow or a tail probability would vanish: below the smallest
+    /// normal `f64` (for α, α/2 below it).
+    #[error(
+        "`{parameter}` = {found:e} is below the smallest supported value {smallest:e}; \
+         example: {example}"
+    )]
+    TooSmall {
+        /// The parameter, e.g. `alpha`.
+        parameter: &'static str,
+        /// The value found.
+        found: f64,
+        /// The smallest value allowed.
+        smallest: f64,
+        /// One valid value.
+        example: &'static str,
+    },
+    /// A confidence level written as a percentage outside (0 %, 100 %).
+    #[error(
+        "`level` must be a percentage strictly between 0% and 100%, found {found}; example: 95%"
+    )]
+    LevelOutOfRange {
+        /// The percentage found.
+        found: Ratio,
+    },
     /// A whole-number parameter that must be at least 1 is 0.
     #[error("`{parameter}` must be a whole number >= 1, found 0; example: {example}")]
     Zero {

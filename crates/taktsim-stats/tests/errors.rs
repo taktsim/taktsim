@@ -39,6 +39,23 @@ fn probabilities_and_levels() {
     );
     let level = ConfidenceLevel::try_from("99.5%".parse::<Ratio>().unwrap()).unwrap();
     assert_eq!(level.to_string(), "99.5%");
+    let err = ConfidenceLevel::try_from("100%".parse::<Ratio>().unwrap()).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "`level` must be a percentage strictly between 0% and 100%, found 100%; example: 95%"
+    );
+    let err = ConfidenceLevel::from_alpha(1e-310).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "`alpha` = 1e-310 is below the smallest supported value 4.450147717014403e-308; \
+         example: 0.05"
+    );
+    let err = Probability::new(1e-310).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "`p` = 1e-310 is below the smallest supported value 2.2250738585072014e-308; \
+         example: 0.025"
+    );
 }
 
 #[test]

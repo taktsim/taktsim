@@ -984,3 +984,23 @@ fn extreme_tails_stay_finite_and_ordered() {
         previous = q;
     }
 }
+
+/// The smallest supported tail probability, the smallest normal f64, still
+/// gives a finite quantile for every degree of freedom, and so does the
+/// smallest supported α. Below it the constructors refuse (a subnormal α
+/// once halved to 0 and gave NaN after a long Newton loop).
+#[test]
+fn the_smallest_supported_tails_give_finite_quantiles() {
+    let p = Probability::new(f64::MIN_POSITIVE).unwrap();
+    let level = ConfidenceLevel::from_alpha(2.0 * f64::MIN_POSITIVE).unwrap();
+    for df in [1, 2, 3, 10, 2999, 3000, 1_000_000, u32::MAX] {
+        let t = StudentT::new(df).unwrap();
+        let q = t.quantile(p);
+        assert!(q.is_finite() && q < 0.0, "df {df}: {q}");
+        let c = t.critical_value(level);
+        assert!(c.is_finite() && c > 0.0, "df {df}: {c}");
+        assert_eq!(c, -q, "df {df}");
+    }
+    assert!(Probability::new(f64::MIN_POSITIVE / 2.0).is_err());
+    assert!(ConfidenceLevel::from_alpha(f64::MIN_POSITIVE).is_err());
+}
