@@ -1,5 +1,9 @@
 //! Independent random streams, one per component and purpose.
 
+use std::f64::consts::TAU;
+
+use libm::{cos, log, sin};
+
 use super::philox::philox4x64_10;
 
 /// Identifies one random stream within a run: a component and what the
@@ -59,8 +63,9 @@ impl StreamKey {
 /// A deterministic random stream: Philox4x64-10 keyed by the run's seed and
 /// a [`StreamKey`] (ADR-0013).
 ///
-/// The n-th value depends only on the seed, the key and n, never on other
-/// streams or on the order in which streams are used.
+/// The values depend only on the seed, the key and the sequence of calls on
+/// this stream, never on other streams or on the order in which streams are
+/// used.
 ///
 /// ```
 /// use taktsim_core::random::{Stream, StreamKey};
@@ -72,7 +77,7 @@ impl StreamKey {
 /// let u = a.next_open01();
 /// assert!(u > 0.0 && u < 1.0);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Stream {
     key: [u64; 2],
     /// The counter of the next Philox block to generate.
@@ -80,6 +85,8 @@ pub struct Stream {
     buffer: [u64; 4],
     /// How many values of `buffer` have been used.
     used: usize,
+    /// The second value of the last Box–Muller pair, if not yet used.
+    spare_normal: Option<f64>,
 }
 
 impl Stream {
@@ -98,6 +105,7 @@ impl Stream {
             next_block: 0,
             buffer: [0; 4],
             used: 4,
+            spare_normal: None,
         }
     }
 
@@ -132,11 +140,38 @@ impl Stream {
     /// assert!((0..1000).map(|_| s.next_open01()).all(|u| u > 0.0 && u < 1.0));
     /// ```
     pub fn next_open01(&mut self) -> f64 {
-        // 1 + m × 2^-52 lies in [1, 2); subtracting 1 - 2^-53 is exact
-        // (Sterbenz lemma) and leaves (m + 1/2) × 2^-52.
-        let one_plus = f64::from_bits(0x3ff0_0000_0000_0000 | (self.next_u64() >> 12));
-        one_plus - (1.0 - f64::EPSILON / 2.0)
+        open01_from_bits(self.next_u64())
     }
+
+    /// A standard normal value (mean 0, standard deviation 1).
+    ///
+    /// Box–Muller: each pair of uniforms gives two independent normals; the
+    /// second is kept and returned by the next call.
+    ///
+    /// ```
+    /// use taktsim_core::random::{Stream, StreamKey};
+    ///
+    /// let mut s = Stream::new(5, StreamKey::new("cut", "noise"));
+    /// let (a, b) = (s.next_standard_normal(), s.next_standard_normal());
+    /// assert!(a.is_finite() && b.is_finite() && a != b);
+    /// ```
+    pub fn next_standard_normal(&mut self) -> f64 {
+        if let Some(z) = self.spare_normal.take() {
+            return z;
+        }
+        let radius = (-2.0 * log(self.next_open01())).sqrt();
+        let angle = TAU * self.next_open01();
+        self.spare_normal = Some(radius * sin(angle));
+        radius * cos(angle)
+    }
+}
+
+/// `(m + ½) × 2⁻⁵²` for the top 52 bits `m` of `bits`.
+fn open01_from_bits(bits: u64) -> f64 {
+    // 1 + m × 2^-52 lies in [1, 2); subtracting 1 - 2^-53 is exact
+    // (Sterbenz lemma) and leaves (m + 1/2) × 2^-52.
+    let one_plus = f64::from_bits(0x3ff0_0000_0000_0000 | (bits >> 12));
+    one_plus - (1.0 - f64::EPSILON / 2.0)
 }
 
 #[cfg(test)]
@@ -156,10 +191,24 @@ mod tests {
 
     #[test]
     fn open01_covers_its_extremes() {
-        let to_open =
-            |x: u64| f64::from_bits(0x3ff0_0000_0000_0000 | (x >> 12)) - (1.0 - f64::EPSILON / 2.0);
-        assert_eq!(to_open(0), f64::EPSILON / 2.0);
-        assert_eq!(to_open(u64::MAX), 1.0 - f64::EPSILON / 2.0);
+        assert_eq!(open01_from_bits(0), f64::EPSILON / 2.0);
+        assert_eq!(open01_from_bits(u64::MAX), 1.0 - f64::EPSILON / 2.0);
+        // The low 12 bits are dropped.
+        assert_eq!(open01_from_bits(0xfff), f64::EPSILON / 2.0);
+        assert_eq!(open01_from_bits(1 << 12), 1.5 * f64::EPSILON);
+    }
+
+    #[test]
+    fn normals_use_both_values_of_each_pair() {
+        let key = StreamKey::new("a", "normal");
+        let mut s = Stream::new(1, key);
+        let mut uniforms = Stream::new(1, key);
+        let (u1, u2) = (uniforms.next_open01(), uniforms.next_open01());
+        let radius = (-2.0 * log(u1)).sqrt();
+        assert_eq!(s.next_standard_normal(), radius * cos(TAU * u2));
+        assert_eq!(s.next_standard_normal(), radius * sin(TAU * u2));
+        // The pair used exactly two uniforms.
+        assert_eq!(s.next_open01(), uniforms.next_open01());
     }
 
     #[test]
