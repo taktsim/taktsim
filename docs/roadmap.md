@@ -113,6 +113,22 @@ component leaves other streams unchanged; conservation violation is
 detected and reported.
 **Depends on:** ADR-0001.
 
+### Parallel tracks (owner's decision, 2026-10-25)
+
+Built alongside M2b, each in its own PR, because they need nothing from the
+engine's event loop:
+
+| Track | Scope | Milestone part | ADR number |
+| --- | --- | --- | --- |
+| A | `taktsim-stats`: t quantiles, confidence intervals, sequential replication control, time-weighted statistics, MSER-5; coverage (A2) and warm-up (A3) tests on synthetic data | M8, M9 | 0014 |
+| B | `taktsim-model::expr`: parser, type checker, evaluator, printer (ADR-0009) | M6 | 0015 |
+| C | criterion and instruction-count benchmarks; > 10 % regression gate (ADR-0007) | M2 | 0016 |
+| D | `taktsim-adapters` feature `csv`: observation table, CSV import and export, fixtures | M11 | 0017 |
+
+M8, M9, M6 and M11 still finish after M2b and the milestones they depend
+on: the engine-facing parts (KPIs over traces, routing with conditions,
+result and trace export) come with them.
+
 ### M3 — Trace format and replay
 
 - Trace writer and reader per ADR-0004 in a new `taktsim-trace` crate,
