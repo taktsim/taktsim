@@ -291,7 +291,7 @@ impl SimDuration {
 impl FromStr for SimDuration {
     type Err = UnitError;
 
-    /// Parses `<number><unit>` with an optional single space, e.g. `42s`,
+    /// Parses `<number><unit>`, with an optional single space, e.g. `42s`,
     /// `12 min`, `0.5h`. Units: `d`, `h`, `min`, `s`, `ms`.
     fn from_str(input: &str) -> Result<Self, UnitError> {
         let (number, unit) = decimal::split(input, &SPEC)?;
