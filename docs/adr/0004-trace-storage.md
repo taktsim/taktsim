@@ -46,8 +46,9 @@ v0.4). Constraints:
 
 - Core defines the trace record types and a `TraceSink` trait; a writer
   outside core (new small crate `taktsim-trace`, or a module in
-  `taktsim-adapters`; I recommend the crate, so the CLI, MCP server and
-  WASM build share it without pulling in adapters) implements it.
+  `taktsim-adapters`; I recommend the crate, so the CLI, MCP server
+  (dropped by ADR-0019) and WASM build share it without pulling in
+  adapters) implements it.
 - Records in event order, fixed-width little-endian encoding, chunks of
   e.g. 64 KiB with CRC32; the header carries format version, engine
   version, model hash and seed.
