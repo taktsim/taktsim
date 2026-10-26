@@ -1,0 +1,14 @@
+# A misspelt key in an entry.
+format: "1.0"
+model: {name: m}
+include: [{path: parts/ok.yaml, sha: x}]
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: include[0].sha @ 4:33 UnknownField

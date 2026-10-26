@@ -1,0 +1,15 @@
+# Errors inside an included file name that file.
+format: "1.0"
+model: {name: m}
+include: [parts/bad.yaml]
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: parts/bad.yaml: components[0].type @ 2:23 UnknownValue
+# expect: parts/bad.yaml: flows @ 4:1 UnknownField

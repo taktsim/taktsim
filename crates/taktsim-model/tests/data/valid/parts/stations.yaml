@@ -1,0 +1,19 @@
+# Included by with-include.yaml: the source and the stations.
+components:
+  - id: source
+    type: Source
+    interarrival: { dist: exponential, mean: 40s }
+  - id: cut
+    type: Machine
+    cycle_time: { dist: lognormal, mean: 42s, sigma: 0.08 }
+    mtbf: 6h
+    mttr: { dist: exponential, mean: 12min }
+  - id: buf1
+    type: Buffer
+    capacity: 20 parts
+  - id: weld
+    type: Machine
+    cycle_time: 45s
+    setup: { per_variant: 4min }
+flow:
+  - [source, cut, buf1, weld]

@@ -1,0 +1,40 @@
+# The model document of spec §4, as this format version loads it. Three
+# changes from the spec's text, each listed in ADR-0020:
+# - the header is `format: "1.0"` (ADR-0008), not `simcode: "1.0"`;
+# - `source` and `sink` are declared: the spec names them in `flow` and
+#   `observe` without declaring them, and references are checked;
+# - `shifts:` is left out: shift calendars arrive with v0.2.
+# The component types are the tests' stand-ins (tests/support/mod.rs).
+format: "1.0"           # format version
+model:
+  name: line-a
+  time_unit: s
+  seed: 42
+experiment:
+  type: terminating        # steady_state needs a warm-up rule (M9)
+  horizon: 8h
+  precision: { throughput(sink): 2% }   # replications until the CI half-width is within 2 %
+components:
+  - id: source
+    type: Source
+    interarrival: { dist: exponential, mean: 40s }
+  - id: cut
+    type: Machine
+    cycle_time: { dist: lognormal, mean: 42s, sigma: 0.08 }
+    mtbf: 6h
+    mttr: { dist: exponential, mean: 12min }
+  - id: buf1
+    type: Buffer
+    capacity: 20 parts
+  - id: weld
+    type: Machine
+    cycle_time: 45s
+    setup: { per_variant: 4min }
+  - id: sink
+    type: Sink
+flow:
+  - [source, cut, buf1, weld, sink]   # shorthand for a chain of edges
+observe:
+  - throughput(sink)
+  - state_shares(cut, weld)
+  - wip(buf1)

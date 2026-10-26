@@ -1,0 +1,31 @@
+# Branch, merge and loop-back (spec §4, "Routing and control logic"). The
+# spec's routing example without `choose:` and `when:`, which arrive with
+# routing (M6), plus a rework loop back from `qc` to `weld-1`.
+format: "1.0"
+model:
+  name: routing
+experiment:
+  type: terminating
+  horizon: 1d
+components:
+  - {id: source, type: Source, interarrival: {dist: exponential, mean: 1min}, batch: 2 parts}
+  - {id: cut, type: Machine, cycle_time: {dist: triangular, min: 40s, mode: 42s, max: 50s}}
+  - {id: weld-1, type: Machine, cycle_time: {dist: normal, mean: 45s, sd: 3s}}
+  - {id: weld-2, type: Machine, cycle_time: {dist: gamma, mean: 45s, cv: 0.2}}
+  - {id: qc, type: Inspection, inspection_time: 40s, rework_to: weld-1}
+  - {id: paint, type: Machine, cycle_time: {dist: erlang, mean: 2min, k: 3}}
+  - {id: pack, type: Machine, cycle_time: {dist: uniform, min: 20s, max: 30s}, capacity: 2 parts}
+  - {id: sink, type: Sink}
+flow:
+  - { from: source, to: cut }
+  - { from: cut, to: [weld-1, weld-2] }   # branch
+  - { from: [weld-1, weld-2], to: qc }    # merge
+  - { from: qc, to: paint }
+  - { from: qc, to: pack }
+  - { from: qc, to: weld-1 }              # loop back: rework
+  - [paint, sink]
+  - [pack, sink]
+observe:
+  - throughput(sink)
+  - lead_time(sink)
+  - state_shares(weld-1, weld-2, paint)

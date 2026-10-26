@@ -1,0 +1,14 @@
+# A pinned hash that does not match.
+format: "1.0"
+model: {name: m}
+include: [{path: parts/ok.yaml, sha256: abababababababababababababababababababababababababababababababab}]
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: include[0] @ 4:11 IncludeHash
