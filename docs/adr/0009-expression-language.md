@@ -1,7 +1,8 @@
 # ADR-0009: Expression language
 
-- Status: accepted (2026-10-25); call arguments and the `30 parts`
-  example amended by ADR-0015 (2026-10-26)
+- Status: accepted (2026-10-25); call arguments, the `30 parts`
+  example, `==` on counts and list elements amended by ADR-0015
+  (2026-10-26)
 - Date: 2026-10-25
 - Blocks: M6 (routing: edge conditions)
 - Spec: §15 "Expression language", §4 Routing and Observables, §6
@@ -65,9 +66,11 @@ term      = unary { ( "*" | "/" ) unary } ;
 unary     = [ "-" ] atom ;
 atom      = quantity | number | string | bool | call | path
           | "(" expr ")" ;
-call      = ident "(" [ ident { "," ident } ] ")" ;   (* fixed built-ins only *)
+call      = ident "(" [ component-id { "," component-id } ] ")" ;
+                                                     (* fixed built-ins only;
+                                                        ADR-0015 *)
 path      = ident { "." ident } ;
-list      = "[" [ atom { "," atom } ] "]" ;
+list      = "[" [ unary { "," unary } ] "]" ;          (* ADR-0015 *)
 quantity  = number unit ;                            (* 30s, 40 parts *)
 string    = "'" { char } "'" ;
 ```
@@ -81,7 +84,8 @@ Type rules:
   matching dimensions; `2 parts / 1h` gives a rate. `and`/`or`/`not` take
   `bool` only.
 - `==` on `number` or `quantity` is rejected (compare with `<=`/`>=`
-  instead); on integer-tick time it is allowed.
+  instead); on integer-tick time it is allowed, and, by ADR-0015, on
+  counts (exact integers).
 - Calls are a closed set of built-in observables (`throughput`, `wip`,
   `state_shares`, `lead_time`, ...); arguments must be component ids that
   exist.
