@@ -1,0 +1,12 @@
+# No experiment.
+format: "1.0"
+model: {name: m}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: experiment @ 2:1 MissingField

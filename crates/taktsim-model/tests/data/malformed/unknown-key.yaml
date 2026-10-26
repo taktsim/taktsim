@@ -1,0 +1,14 @@
+# A misspelt section.
+format: "1.0"
+modle: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: model @ 2:1 MissingField
+# expect: modle @ 3:1 UnknownField

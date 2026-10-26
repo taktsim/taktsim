@@ -1,0 +1,14 @@
+# A parameter naming a missing component.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+  - {id: qc, type: Inspection, inspection_time: 40s, rework_to: asm}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components[3].rework_to @ 9:65 UnknownComponent

@@ -1,0 +1,13 @@
+# A flow mapping that is never closed.
+format: "1.0"
+model: {name: m
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: model @ 4:11 Yaml

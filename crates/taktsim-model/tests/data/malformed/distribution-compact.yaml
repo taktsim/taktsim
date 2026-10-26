@@ -1,0 +1,15 @@
+# The compact form of ADR-0003 D2.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - id: cut
+    type: Machine
+    cycle_time: lognormal(42s, 0.08)
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components[1].cycle_time @ 9:17 NotAllowed

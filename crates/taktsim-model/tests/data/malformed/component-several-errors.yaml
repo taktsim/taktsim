@@ -1,0 +1,15 @@
+# Errors in several components, reported together in order.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1}
+  - {id: cut, type: Machine, cycle_time: 42s, mtbf: 6hrs, capacity: 1.5 parts}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components[0].interarrival @ 6:46 WrongType
+# expect: components[1].mtbf @ 7:53 Unit
+# expect: components[1].capacity @ 7:69 Unit

@@ -1,0 +1,10 @@
+# Components as a mapping.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components: {source: Source}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components @ 5:13 WrongType

@@ -1,0 +1,3 @@
+include: [ok.yaml]
+components:
+  - {id: extra, type: Buffer, capacity: 5 parts}
