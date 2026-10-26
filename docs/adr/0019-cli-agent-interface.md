@@ -1,7 +1,7 @@
 # ADR-0019: The CLI is the agent interface; no MCP server
 
-- Status: proposed (needs the owner's explicit acceptance: it changes the
-  spec and amends ADR-0003, ADR-0004 and ADR-0005)
+- Status: accepted (2026-10-26, by the owner, explicitly, with every
+  recommendation; amends ADR-0003, ADR-0004 and ADR-0005)
 - Date: 2026-10-26
 - Blocks: M7 (first commands under the contract), v0.2 Agent tier
 - Spec: §1, §3, §5 (rewritten), §7, §9, §10, §11, §12, §13, §14, §15;
@@ -250,3 +250,20 @@ mandatory budgets.
    version with a budget, recording the transcript, and gate each pull
    request on a scripted walk-through instead, which uses only commands
    and flags it found in `describe`'s output.
+
+## Owner's answers (2026-10-26)
+
+The owner accepted ADR-0019 with every recommendation:
+
+1. The command is `taktsim describe`.
+2. No JSON default from terminal detection: the format is chosen only by
+   `--format`; `describe` and `schema` always print JSON.
+3. The exit codes of item 3, as proposed.
+4. The run store is the nearest `.taktsim/` upward from the current
+   directory, else `.taktsim/` in the current directory; `--store`
+   overrides it.
+5. Sharing uses the terminal one-time code of item 8 from v0.3, and the
+   parameter-library ADR requires approval at the service as well.
+6. The agent tutorial runs nightly against a fixed model version with a
+   budget and a recorded transcript; every pull request is gated on a
+   scripted walk-through that uses only what `describe` prints.

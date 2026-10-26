@@ -1,6 +1,7 @@
 # ADR-0003: Distribution syntax
 
-- Status: accepted (2026-10-25)
+- Status: accepted (2026-10-25); MCP mentions amended by ADR-0019
+  (2026-10-26)
 - Date: 2026-10-25
 - Blocks: M4 (model format)
 - Spec: §15 "Distribution syntax", §4 Rules

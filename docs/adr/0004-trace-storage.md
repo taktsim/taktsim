@@ -1,6 +1,7 @@
 # ADR-0004: Trace storage
 
-- Status: accepted (2026-10-25)
+- Status: accepted (2026-10-25); MCP mentions amended by ADR-0019
+  (2026-10-26)
 - Date: 2026-10-25
 - Blocks: M3 (trace and replay)
 - Spec: §15 "Trace storage", §7 golden traces and replay, §8 Out formats,

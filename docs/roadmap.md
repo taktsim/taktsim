@@ -152,9 +152,8 @@ In this order; each is its own pull request:
    generation numbers replace the cancelled set, ADR-0018 deviation 3).
 4. **M3**, trace format and replay.
 
-ADR-0019 (CLI as the agent interface, no MCP server; issue #14) changes
-the spec and waits for the owner's explicit acceptance. M7 depends on it;
-nothing before M7 does.
+ADR-0019 (CLI as the agent interface, no MCP server; issue #14) is
+accepted; M7 builds the first part of its contract.
 
 Waiting for the owner (do not do without a go-ahead): making
 `benchmarks (instruction counts, > 10 % regression fails)` a required

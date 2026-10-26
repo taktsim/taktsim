@@ -1,6 +1,7 @@
 # ADR-0005: Python API shape
 
-- Status: accepted (2026-10-25)
+- Status: accepted (2026-10-25); MCP mentions amended by ADR-0019
+  (2026-10-26)
 - Date: 2026-10-25
 - Blocks: M12 (Python bindings)
 - Spec: §15 "Python API shape", §3, §7 Layer 1 (stubs, pyright strict)
