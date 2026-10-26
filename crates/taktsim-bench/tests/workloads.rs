@@ -312,3 +312,419 @@ fn formatted_rates_and_ratios_parse_back() {
         assert_eq!(buffer.parse::<Ratio>().unwrap(), ratio);
     }
 }
+
+/// The event-queue workloads (`taktsim_bench::queue`). Expected values are
+/// derived by hand from the models, as the comments of each test show.
+mod queue {
+    use taktsim_bench::queue::{
+        self, HOLD_MAX, HOLD_POPULATIONS, MACHINE_COUNTS, MachineParams, Msg, TIED_POPULATIONS,
+        Tally, WAVE_CASES, WAVE_INTERVAL,
+    };
+    use taktsim_core::random::DurationDistribution;
+    use taktsim_core::{Engine, RunLimits, RunOutcome, TraceRecord, TraceSink};
+    use taktsim_units::{SimDuration, SimTime};
+
+    const SECOND: u64 = 1_000_000_000;
+
+    fn secs(n: u64) -> SimDuration {
+        SimDuration::from_nanos(n * SECOND)
+    }
+
+    fn at(n: u64) -> SimTime {
+        SimTime::from_nanos(n * SECOND)
+    }
+
+    /// Keeps every delivered event's time and message, in order.
+    #[derive(Default)]
+    struct Order(Vec<(SimTime, Msg)>);
+
+    impl TraceSink<Msg> for Order {
+        fn record(&mut self, record: &TraceRecord<'_, Msg>) {
+            if let TraceRecord::Event { time, message, .. } = record {
+                self.0.push((*time, **message));
+            }
+        }
+    }
+
+    /// With a constant increment of 1 s and N pending events, the engine
+    /// processes N events at each whole second: the first N at 1 s (their
+    /// sequence numbers 0..N), and the event with sequence number s
+    /// schedules the one with sequence number N + s, so events pop in
+    /// sequence order, and the n-th (from 0) has sequence number n and time
+    /// (n / N + 1) s. After m * N events, the time is m s. The checksum is
+    /// that order folded by hand.
+    #[test]
+    fn tied_hold_pops_in_scheduling_order() {
+        for n in [1_u64, 7, 100] {
+            let rounds = 5;
+            let mut engine = queue::hold_tied(u32::try_from(n).unwrap()).unwrap();
+            let outcome = queue::run_events(&mut engine, rounds * n).unwrap();
+            let mut expected = Tally::new();
+            for i in 0..rounds * n {
+                expected.absorb(i, at(i / n + 1));
+            }
+            assert_eq!(outcome.tally.checksum, expected.checksum, "N = {n}");
+            assert_eq!(outcome.summary.events, rounds * n);
+            assert_eq!(outcome.summary.outcome, RunOutcome::EventLimit);
+            assert_eq!(outcome.summary.now, at(rounds));
+            assert_eq!(outcome.tally.hops, rounds * n);
+            assert_eq!(outcome.tally.events, rounds * n);
+        }
+    }
+
+    /// The tied workload as benchmarked: 10 000 events, N = 100 and
+    /// N = 10 000, so 100 rounds and 1 round, ending at 100 s and 1 s.
+    #[test]
+    fn tied_hold_at_the_benchmarked_sizes() {
+        for n in TIED_POPULATIONS {
+            let mut engine = queue::hold_tied(n).unwrap();
+            let outcome = queue::run_events(&mut engine, queue::EVENTS).unwrap();
+            assert_eq!(outcome.tally.hops, queue::EVENTS);
+            assert_eq!(
+                outcome.summary.now,
+                at(queue::EVENTS / u64::from(n)),
+                "N = {n}"
+            );
+        }
+    }
+
+    /// Runs up to a time instead of an event count: events at exactly the
+    /// horizon are included, so 3 s with 2 pending events is 6 events.
+    #[test]
+    fn run_until_includes_the_horizon() {
+        let mut engine = queue::hold_tied(2).unwrap();
+        let outcome = queue::run_until(&mut engine, at(3)).unwrap();
+        assert_eq!(outcome.summary.events, 6);
+        assert_eq!(outcome.summary.outcome, RunOutcome::Horizon);
+        assert_eq!(outcome.summary.now, at(3));
+    }
+
+    // Time of the K-th event of the hold model with uniform increments,
+    // against renewal theory, with no allowance beyond a few standard
+    // deviations.
+    // In the code: K is `events`, N is `chains`, a is `scale`, x is `frac`.
+    //
+    // The increments are uniform on 1..=S ns, S = `HOLD_MAX` in ns. Take
+    // them as uniform on (0, a] with a = S: each differs from a continuous
+    // uniform by less than 1 ns, which moves the K-th event by less than
+    // K ns in total (at most 1e4 ns, against standard deviations of 8e6 ns
+    // and more below), so it is ignored. Their mean is mu = (S + 1) / 2 ns.
+    // The population stays exactly N, so a run of K events never ends early
+    // (the event count is exactly K), and the K-th event is the one at which
+    // the N chains together have K events. Chain i is an ordinary renewal
+    // process: its k-th event is the partial sum S_k of k increments, and
+    // N_i(t) counts the S_k <= t.
+    //
+    // *Up to t = a* (K / N <= e - 1, so N = 10 000 at K = 10 000): S_k <= t
+    // needs every one of k uniforms below t, and the partial sums of
+    // uniforms on (0, 1] satisfy P(S_k <= x) = x^k / k! for x <= 1
+    // (Irwin-Hall). With x = t / a:
+    //
+    // - m(t) = E N_i(t) = sum over k >= 1 of x^k / k! = e^x - 1;
+    // - E N_i(t)^2 = sum of (2k - 1) P(S_k <= t) = 2 x e^x - (e^x - 1),
+    //   so Var N_i(t) = 2 x e^x + e^x - e^(2x).
+    //
+    // The N chains are independent, so the total count has mean N m(t) and
+    // variance N Var N_i(t). Setting N m(T) = K gives T = a ln(1 + K / N),
+    // and since the count changes at rate N m'(T) = N e^x / a there, T has
+    // standard deviation sqrt(N Var N_i(T)) a / (N e^x).
+    //
+    // *Beyond t = a* the renewal theorem gives the same quantities with an
+    // error that, for the uniform distribution, falls exponentially in t:
+    // m(t) = t / mu - 1/3 and Var N_i(t) = t sigma^2 / mu^3 + c with
+    // sigma^2 = mu^2 / 3 and a constant c. The exact values were computed from
+    // the Irwin-Hall distribution function (rational arithmetic, all terms
+    // up to k = 6 t / a + 80) for N = 1 000, 500 and 100 (K = 10 000): at
+    // N = 1 000, where T is 10.3 mu, the exact T and the asymptotic
+    // T = (K / N + 1/3) mu differ by 1.5e-6 a (5e-5 standard deviations); at
+    // N = 500 and N = 100 by less than 1e-9 a. The variance constant comes
+    // out as c = 2/9 in all three, so Var N_i = (K / N + 1) / 3 and T has
+    // standard deviation sqrt((K + N) / 3) mu / N. (Without c it would be
+    // 5 % smaller at N = 1 000.) N = 1 and N = 10 are further out still.
+    //
+    // The bound is 5 standard deviations; the seed is fixed.
+    #[test]
+    #[allow(clippy::cast_precision_loss)] // counts far below 2^53
+    fn random_hold_runs_at_the_rate_of_theory() {
+        let events = queue::EVENTS as f64;
+        let scale = HOLD_MAX.as_nanos() as f64;
+        let mu = f64::midpoint(scale, 1.0);
+        for population in HOLD_POPULATIONS {
+            let mut engine = queue::hold_random(population).unwrap();
+            let outcome = queue::run_events(&mut engine, queue::EVENTS).unwrap();
+            assert_eq!(outcome.summary.events, queue::EVENTS, "N = {population}");
+            assert_eq!(outcome.tally.hops, queue::EVENTS);
+            let chains = f64::from(population);
+            let per_chain = events / chains;
+            let (expected, sd) = if per_chain <= std::f64::consts::E - 1.0 {
+                let frac = libm::log(1.0 + per_chain);
+                let exp_frac = libm::exp(frac);
+                let var = 2.0 * frac * exp_frac + exp_frac - exp_frac * exp_frac;
+                (
+                    scale * frac,
+                    (chains * var).sqrt() * scale / (chains * exp_frac),
+                )
+            } else {
+                (
+                    (per_chain + 1.0 / 3.0) * mu,
+                    ((events + chains) / 3.0).sqrt() * mu / chains,
+                )
+            };
+            let found = outcome.summary.now.as_nanos() as f64;
+            let z = (found - expected) / sd;
+            assert!(
+                z.abs() <= 5.0,
+                "N = {population}: ended at {found} ns, expected {expected} ns \
+                 with sd {sd} ns (z = {z})"
+            );
+        }
+    }
+
+    /// A run continues where the previous call stopped: two calls of 120
+    /// and 80 events end where one call of 200 events ends.
+    #[test]
+    fn runs_continue_where_they_stopped() {
+        let mut one = queue::hold_random(10).unwrap();
+        let mut two = queue::hold_random(10).unwrap();
+        let whole = queue::run_events(&mut one, 200).unwrap();
+        let first = queue::run_events(&mut two, 120).unwrap();
+        let second = queue::run_events(&mut two, 80).unwrap();
+        assert_eq!(first.tally.events + second.tally.events, 200);
+        assert_eq!(second.summary.now, whole.summary.now);
+    }
+
+    /// Same engine, same seed, same events, byte for byte: every workload
+    /// run twice gives the same outcome, checksum included.
+    #[test]
+    fn every_workload_is_deterministic() {
+        type Build = Box<dyn Fn() -> Engine<Msg>>;
+        let builds: Vec<(&str, u64, Build)> = vec![
+            (
+                "hold",
+                queue::EVENTS,
+                Box::new(|| queue::hold_random(100).unwrap()),
+            ),
+            (
+                "tied",
+                queue::EVENTS,
+                Box::new(|| queue::hold_tied(100).unwrap()),
+            ),
+            (
+                "waves",
+                queue::wave_events(100, 20),
+                Box::new(|| queue::waves(100).unwrap()),
+            ),
+            (
+                "cancel",
+                queue::EVENTS,
+                Box::new(|| queue::cancel_line(20).unwrap()),
+            ),
+        ];
+        for (name, events, build) in builds {
+            let a = queue::run_events(&mut build(), events).unwrap();
+            let b = queue::run_events(&mut build(), events).unwrap();
+            assert_eq!(a, b, "{name}");
+            assert_eq!(a.tally.events, events, "{name}");
+        }
+    }
+
+    /// The ticks and waves of one round: the tick, then the waves by
+    /// priority class (lane % 3), within a class by lane (the order they
+    /// were sent). With 7 lanes: class 0 is lanes 0, 3, 6; class 1 is 1,
+    /// 4; class 2 is 2, 5. Round r (from 0) is at (r + 1) s.
+    #[test]
+    fn waves_pop_by_class_then_by_lane() {
+        let lanes = 7_u32;
+        let rounds = 3_u32;
+        let mut engine = queue::waves(lanes).unwrap();
+        let mut order = Order::default();
+        let events = queue::wave_events(lanes, rounds);
+        assert_eq!(events, 24);
+        let summary = engine
+            .run(RunLimits::until(at(u64::from(rounds))), &mut order)
+            .unwrap();
+        assert_eq!(summary.events, events);
+        assert_eq!(summary.now, at(u64::from(rounds)));
+
+        let by_class = [0_u32, 3, 6, 1, 4, 2, 5];
+        let mut expected = Vec::new();
+        for round in 0..u64::from(rounds) {
+            let time = at(round + 1);
+            expected.push((time, Msg::Tick));
+            for lane in by_class {
+                let class = u8::try_from(lane % 3).unwrap();
+                expected.push((time, Msg::Wave { lane, class }));
+            }
+        }
+        assert_eq!(order.0, expected);
+        assert_eq!(WAVE_INTERVAL, secs(1));
+    }
+
+    /// Checksum and counts of the same waves run, folded by hand from the
+    /// sequence numbers: the tick of round r is r (L + 1) (the tick, then L
+    /// waves, then the next tick), and lane i of round r is
+    /// r (L + 1) + 1 + i.
+    #[test]
+    fn waves_checksum_matches_the_hand_derived_order() {
+        let (lanes, rounds) = (7_u64, 3_u64);
+        let mut engine = queue::waves(7).unwrap();
+        let outcome = queue::run_events(&mut engine, queue::wave_events(7, 3)).unwrap();
+        let mut expected = Tally::new();
+        for round in 0..rounds {
+            let first = round * (lanes + 1);
+            expected.absorb(first, at(round + 1));
+            for lane in [0_u64, 3, 6, 1, 4, 2, 5] {
+                expected.absorb(first + 1 + lane, at(round + 1));
+            }
+        }
+        assert_eq!(outcome.tally.checksum, expected.checksum);
+        assert_eq!((outcome.tally.ticks, outcome.tally.waves), (3, 21));
+    }
+
+    /// The benchmarked sizes have about 10 000 events, and each round
+    /// delivers its tick and waves in full.
+    #[test]
+    fn wave_cases_are_about_ten_thousand_events() {
+        for (lanes, rounds) in WAVE_CASES {
+            let events = queue::wave_events(lanes, rounds);
+            assert!((9_000..=11_000).contains(&events), "{lanes} lanes");
+            let mut engine = queue::waves(lanes).unwrap();
+            let outcome = queue::run_events(&mut engine, events).unwrap();
+            assert_eq!(outcome.tally.ticks, u64::from(rounds));
+            assert_eq!(outcome.tally.waves, u64::from(lanes) * u64::from(rounds));
+        }
+    }
+
+    fn constant_machines(cycle: u64, failure: u64, repair: u64) -> MachineParams {
+        MachineParams {
+            cycle: DurationDistribution::constant(secs(cycle)),
+            time_to_failure: DurationDistribution::constant(secs(failure)),
+            repair: DurationDistribution::constant(secs(repair)),
+        }
+    }
+
+    /// Cycles of 10 s against failures due after 1 h: no failure ever
+    /// fires. Each machine finishes a cycle at 10, 20, ..., 100 s: 10
+    /// events, each cancelling a failure timer that is 1 h away.
+    #[test]
+    fn cycles_that_always_win_cancel_every_failure_timer() {
+        let machines = 5;
+        let mut engine = queue::cancel_heavy(machines, &constant_machines(10, 3_600, 5)).unwrap();
+        let outcome = queue::run_until(&mut engine, at(100)).unwrap();
+        let tally = outcome.tally;
+        assert_eq!(tally.cycles, 10 * u64::from(machines));
+        assert_eq!((tally.failures, tally.repairs), (0, 0));
+        assert_eq!(tally.events, tally.cycles);
+    }
+
+    /// Failures due after 4 s against cycles of 10 s: every race ends in a
+    /// failure that cancels the cycle timer. A machine fails at 4, repairs
+    /// until 10 (6 s), fails again at 14, ...: failures at 4, 14, ..., 94
+    /// (10) and repairs at 10, 20, ..., 100 (10, the last at the horizon).
+    #[test]
+    fn failures_that_always_win_cancel_every_cycle_timer() {
+        let machines = 5;
+        let mut engine = queue::cancel_heavy(machines, &constant_machines(10, 4, 6)).unwrap();
+        let outcome = queue::run_until(&mut engine, at(100)).unwrap();
+        let tally = outcome.tally;
+        assert_eq!(tally.failures, 10 * u64::from(machines));
+        assert_eq!(tally.repairs, 10 * u64::from(machines));
+        assert_eq!(tally.cycles, 0);
+    }
+
+    /// A cycle and a failure due at the same instant: the failure has the
+    /// lower priority number, so it fires first and cancels the cycle; the
+    /// cycle never completes. With 10 s, 10 s and 5 s repairs, a machine
+    /// fails at 10, repairs at 15, fails at 25, ...: failures at 10 + 15 j,
+    /// up to 100 s (j = 0..=6: 7) and repairs at 15 + 15 j up to 90 s (6).
+    #[test]
+    fn a_failure_wins_a_tie_with_a_cycle_end() {
+        let machines = 4;
+        let mut engine = queue::cancel_heavy(machines, &constant_machines(10, 10, 5)).unwrap();
+        let outcome = queue::run_until(&mut engine, at(100)).unwrap();
+        let tally = outcome.tally;
+        assert_eq!(tally.failures, 7 * u64::from(machines));
+        assert_eq!(tally.repairs, 6 * u64::from(machines));
+        assert_eq!(tally.cycles, 0);
+    }
+
+    /// The benchmarked machines (`MachineParams::line`, exponential times):
+    /// a race between a cycle clock with rate 1 per minute and a failure
+    /// clock with rate 1/10 per minute is won by the failure with
+    /// probability (1/10) / (1/10 + 1) = 1/11, independently for each race.
+    /// With R races (cycle ends plus failures) the failures are binomial:
+    /// sd sqrt(R p (1 - p)); the bound is 6 of them, plus the number of
+    /// machines for races cut off by the event limit. A machine has at most
+    /// one repair pending, so repairs <= failures <= repairs + machines.
+    /// Every race end cancels one timer.
+    #[test]
+    #[allow(clippy::cast_precision_loss)] // counts far below 2^53
+    fn the_line_fails_one_race_in_eleven() {
+        for machines in MACHINE_COUNTS {
+            let mut engine = queue::cancel_line(machines).unwrap();
+            let outcome = queue::run_events(&mut engine, 20 * queue::EVENTS).unwrap();
+            let tally = outcome.tally;
+            assert_eq!(tally.events, 20 * queue::EVENTS);
+            assert_eq!(tally.events, tally.cycles + tally.failures + tally.repairs);
+            assert!(tally.repairs <= tally.failures);
+            assert!(tally.failures <= tally.repairs + u64::from(machines));
+            let races = (tally.cycles + tally.failures) as f64;
+            let p = 1.0 / 11.0;
+            let bound = 6.0 * (races * p * (1.0 - p)).sqrt() + f64::from(machines);
+            assert!(
+                (tally.failures as f64 - races * p).abs() <= bound,
+                "{machines} machines: {} failures in {races} races, expected {} ± {bound}",
+                tally.failures,
+                races * p
+            );
+        }
+    }
+
+    /// The cancellation workload leaves stale failure timers in the queue
+    /// and still hands out events in time order: the times of delivered
+    /// events never decrease.
+    #[test]
+    fn cancelled_timers_never_fire() {
+        let mut engine = queue::cancel_line(50).unwrap();
+        let mut order = Order::default();
+        let limits = RunLimits::until(SimTime::from_nanos(u64::MAX)).max_events(5_000);
+        engine.run(limits, &mut order).unwrap();
+        assert_eq!(order.0.len(), 5_000);
+        assert!(order.0.windows(2).all(|w| w[0].0 <= w[1].0));
+    }
+
+    /// A tally counts each kind once: a cancellation workload has no hops,
+    /// ticks or waves.
+    #[test]
+    fn tally_counts_by_kind() {
+        let mut engine = queue::cancel_line(10).unwrap();
+        let tally = queue::run_events(&mut engine, 1_000).unwrap().tally;
+        assert_eq!(tally.hops + tally.ticks + tally.waves, 0);
+        assert_eq!(tally.events, 1_000);
+        assert_ne!(tally.checksum, Tally::new().checksum);
+    }
+
+    /// Every size in the constants is a gated benchmark: the gungraun file
+    /// has an id for it, so a size cannot be added without its instruction
+    /// count being gated.
+    #[test]
+    fn every_size_is_a_gated_benchmark() {
+        let source = include_str!("../benches/instructions_queue.rs");
+        let mut wanted = Vec::new();
+        wanted.extend(HOLD_POPULATIONS.map(|n| format!("#[bench::n{n}({n})]")));
+        wanted.extend(TIED_POPULATIONS.map(|n| format!("#[bench::n{n}({n})]")));
+        wanted.extend(WAVE_CASES.map(|(l, r)| format!("#[bench::n{l}({l}, {r})]")));
+        wanted.extend(MACHINE_COUNTS.map(|m| format!("#[bench::m{m}({m})]")));
+        for line in &wanted {
+            assert!(
+                source.lines().any(|l| l.trim() == line),
+                "no {line} in instructions_queue.rs"
+            );
+        }
+        let ids = source
+            .lines()
+            .filter(|l| l.trim().starts_with("#[bench::"))
+            .count();
+        assert_eq!(ids, wanted.len());
+    }
+}
