@@ -1,8 +1,6 @@
 # ADR-0018: Engine architecture
 
-- Status: proposed. Needs the owner's **explicit** acceptance: it reads
-  spec §4 and §7 and deviates from accepted ADR-0001 in the points listed
-  under "Deviations from ADR-0001".
+- Status: accepted (2026-10-26, by the owner, explicitly, including the deviations from ADR-0001)
 - Date: 2026-10-25
 - Blocks: M2b, and everything built on the engine (M3, M5, M6, M8)
 - Spec: §2.7 (small core), §4 (components, conservation, extensibility),

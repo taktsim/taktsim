@@ -13,6 +13,21 @@ and 10) and the [architecture decisions](docs/adr/).
 - New components and adapters start as an issue from the matching template. A
   component proposal must list its invariants.
 
+## Setting up a machine
+
+`rust-toolchain.toml` pins the toolchain, and rustup installs it on first
+use. Also install the MSRV toolchain (`workspace.package.rust-version` in
+`Cargo.toml`), the pinned nightly with `llvm-tools` (for coverage and
+`compile_fail` doc tests; its date is in `.github/workflows/ci.yml`), and
+the CI tools in the versions `ci.yml` installs:
+
+```sh
+cargo install --locked cargo-nextest@0.9.149 cargo-deny@0.20.2 \
+  cargo-llvm-cov@0.9.1 cargo-mutants@27.1.0
+```
+
+The Python commands below create their own virtual environment.
+
 ## Every commit
 
 - **Conventional Commits** subject: `feat(core): add event queue`,
@@ -37,6 +52,7 @@ CI runs these gates; all must be green:
 | docs | rustdoc without warnings; a code example on every public item; `compile_fail` examples fail with the stated error code |
 | commits | Conventional Commits, DCO, core changes come with tests |
 | gates | changes to lints, CI, toolchain or `deny.toml` carry the `gate-change` label and a reason in the description |
+| benchmarks | instruction counts of `taktsim-bench` against the base branch; a rise above 10 % or an unlisted removed benchmark fails (ADR-0016) |
 | mutants | mutation testing of changed core code; advisory until v1.0. Timeouts count as caught; known equivalent mutants are listed with reasons in `.cargo/mutants.toml` (adding one is a gate change) |
 
 Run the same checks locally before pushing:
@@ -69,6 +85,47 @@ tightening one (a new or stricter check) may come with the code it checks.
 
 If your PR breaks one of the design principles, say so in its description and
 explain why; the PR template asks.
+
+## Benchmarks
+
+- **Wall-clock, locally (any OS):**
+  `cargo bench -p taktsim-bench --bench 'wall_*'`. Compare two states of
+  your code with `-- --save-baseline before` on the first and
+  `-- --baseline before` on the second. Use it to tune; do not cite the
+  numbers as evidence (ADR-0010).
+- **Instruction counts, locally (Linux with Valgrind only):** install the
+  runner once,
+  `cargo install --locked gungraun-runner --version "$(ci/bench-runner-version.sh)"`,
+  then on each of two commits run `ci/bench-run.sh target/ic-before` and
+  `ci/bench-run.sh target/ic-after`, and compare with
+  `ci/bench-compare.sh --removed ci/bench-removed.txt target/ic-before target/ic-after`.
+  On macOS and Windows, rely on the CI job. The gate's own tests run
+  anywhere with bash and jq: `ci/bench-test.sh`.
+- **In CI:** the `bench` workflow runs on every pull request. Its job
+  summary has the table; a regression above 10 % or an unlisted removal
+  fails the check. The `instruction-counts` artifact has every
+  `summary.json`.
+- **Adding a benchmark** (no workflow change; `crates/taktsim-bench` is a
+  gate path, so the pull request needs the `gate-change` label):
+  1. Add the workload to `crates/taktsim-bench/src/` (fixed inputs and
+     seed, results folded into one value, a doc example) and test it in
+     `tests/workloads.rs`, with expected values from theory or by hand.
+  2. Add a `#[library_benchmark]` to `benches/instructions_<area>.rs`, or a
+     new file of that name, inside its private `benchmarks` module; put
+     setup in a `setup` function so it is not counted, return the inputs
+     with the result to `teardown = support::check`, and use
+     `support::built` in setup, so a failing input stops the run instead
+     of measuring less work.
+  3. Add the same workload to `benches/wall_<area>.rs`.
+  4. Register a new file in `crates/taktsim-bench/Cargo.toml` as
+     `[[bench]] name = "…" harness = false`.
+
+  A renamed benchmark (file, group, function or id) shows up as one
+  removed and one new benchmark: add the old name to
+  `ci/bench-removed.txt`, and rename in a pull request of its own,
+  without code changes, since the renamed one is not compared there.
+  Renaming every benchmark at once fails (nothing compared); do it in two
+  steps.
 
 ## Decisions
 

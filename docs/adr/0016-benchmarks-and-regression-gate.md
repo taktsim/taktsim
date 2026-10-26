@@ -1,6 +1,6 @@
 # ADR-0016: Benchmarks and the instruction-count regression gate
 
-- Status: proposed (accepted when the Track C pull request is merged)
+- Status: accepted (2026-10-26, by the owner, by merging the Track C pull request #12)
 - Date: 2026-10-25
 - Blocks: M2 (the benchmark gate of ADR-0007), M2b (engine benchmarks), M13
   (release benchmark report)
@@ -317,3 +317,14 @@ base by `1.1` gives the same verdict on every whole count in range.
    pull request explains the regression and the owner merges it past the
    failing check (a ruleset bypass), rather than a label that anyone with
    triage rights could set. Is that how you want it handled?
+
+## Owner's answers (2026-10-26)
+
+The owner took the recommendations:
+
+1. An intended regression above 10 % is not merged past the failing
+   check (the ruleset has no bypass). Instead, a committed file of
+   accepted regressions (benchmark, new limit, reason) is read by
+   `ci/bench-compare.sh`; adding an entry is a gate change reviewed by the
+   owner. **Follow-up:** not implemented yet; it loosens the gate, so it
+   is its own pull request with the `gate-change` label.

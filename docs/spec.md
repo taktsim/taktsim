@@ -249,7 +249,7 @@ The system closes two loops on its own: one that fits a model to reality, one th
 **Optimization loop (find better designs)**
 
 - Decision variables are declared in the model (`decide: buf1.capacity in [5, 50]`); nothing outside that set is changed.
-- Objectives and constraints are typed expressions over observables (`maximize throughput(sink) subject to wip(buf1) <= 30`).
+- Objectives and constraints are typed expressions over observables (`maximize throughput(sink) subject to wip(buf1) <= 30 parts`).
 - Multi-objective by default; the output is a Pareto set with the runs that back each point.
 - Every candidate is evaluated with common random numbers across designs, so differences are not noise.
 

@@ -1,8 +1,6 @@
 # ADR-0014: Output analysis: t quantiles, replication control, time-weighted statistics, MSER-5
 
-- Status: proposed (needs the owner's explicit acceptance: it reads the
-  spec's stop rule, records an exception to the unit-type rule, and asks
-  three questions; merging the pull request alone does not accept it)
+- Status: accepted (2026-10-26, by the owner, explicitly)
 - Date: 2026-10-25
 - Blocks: M8, M9 (the statistics; KPI extraction from traces comes with the
   engine)
@@ -267,6 +265,21 @@ are bare `f64` instead, deliberately:
    wrapping results in typed quantities? Recommended: yes; the
    alternative is a generic numeric trait over every unit type for no gain
    in safety inside the statistics.
+
+
+## Owner's answers (2026-10-26)
+
+The owner took the recommendations:
+
+1. Stop rule: the literal reading, half-width ≤ γ·|mean|.
+2. A2 is proven on fixed-n intervals; the sequential procedure (M10) is
+   tested against its own simulated coverage.
+3. A3 on a real model is decided with the M9 prototype: first try MSER-5
+   on the mean over several replications, and revise the criterion only
+   with M9 measurements.
+4. Observed values are bare `f64` in one declared unit per KPI; the M8 KPI
+   layer wraps results in typed quantities. This is the recorded
+   exception to the unit-type rule.
 
 ## References
 

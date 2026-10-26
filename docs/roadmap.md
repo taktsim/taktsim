@@ -88,12 +88,12 @@ Delivered in two pull requests:
   ADR-0003 duration distributions, `libm` for all transcendental math
   (enforced by clippy), statistical tests per distribution, and
   cross-platform golden digests.
-- **M2b, the engine** (in review; ADR-0018): event queue, clock, run
+- **M2b, the engine** (done, PR #5; ADR-0018 accepted): event queue, clock, run
   loop with horizon, event and cancellation limits, items and
   conservation, the component trait and context, invariant checks, error
   reports with the last 32 events, trace records. The queue benchmark that
-  finalises ADR-0001 follows once track C's benchmark infrastructure is
-  merged; the regression gate itself is track C.
+  finalises ADR-0001 is still open (see "Next steps"); the regression
+  gate itself is track C.
 
 - Event queue per ADR-0001, with deterministic tie-breaking and
   cancellation (needed for failures that interrupt a cycle).
@@ -107,7 +107,7 @@ Delivered in two pull requests:
   event; violation aborts with the event trace that led to it.
 - Trace events emitted through a sink trait; core does no I/O.
 - Event-queue benchmark on synthetic workloads; ADR-0001 updated with
-  numbers. Follows M2b, once the benchmark infrastructure (track C) is
+  numbers. Still open; the benchmark infrastructure it needs (track C) is
   merged.
 
 **Proves:** A6 reached (100 % branch coverage in core). **Tests:** unit
@@ -129,9 +129,33 @@ engine's event loop:
 | C | criterion and instruction-count benchmarks; > 10 % regression gate (ADR-0007) | M2 | 0016 |
 | D | `taktsim-adapters` feature `csv`: observation table, CSV import and export, fixtures | M11 | 0017 |
 
+All four are merged: A in PR #9, B in #10, C in #12 (replacing #6), D in
+#8; ADR-0014 to ADR-0017 are accepted.
+
 M8, M9, M6 and M11 still finish after M2b and the milestones they depend
 on: the engine-facing parts (KPIs over traces, routing with conditions,
 result and trace export) come with them.
+
+### Next steps (2026-10-26)
+
+In this order; each is its own pull request:
+
+1. **Expression follow-ups (ADR-0015, answers 4 and 6):** allow `==` on
+   counts; make list elements `unary` so `[-1]` parses. Update the tests
+   and ADR-0015's operator table.
+2. **Accepted-regressions file for the benchmark gate (ADR-0016,
+   answer 1):** a committed list (benchmark, new limit, reason) read by
+   `ci/bench-compare.sh`, with tests in `ci/bench-test.sh`. It loosens a
+   gate: its own PR, `gate-change` label.
+3. **Queue benchmark (M2):** synthetic workloads in `taktsim-bench`;
+   update ADR-0001 with numbers from the CI runner (decides whether
+   generation numbers replace the cancelled set, ADR-0018 deviation 3).
+4. **M3**, trace format and replay.
+
+Waiting for the owner (do not do without a go-ahead): making
+`benchmarks (instruction counts, > 10 % regression fails)` a required
+check in the `main` ruleset; reserving the names on crates.io and PyPI;
+trademark search; legal entity; adding `taktsim render` (Mermaid) to M7.
 
 ### M3 — Trace format and replay
 

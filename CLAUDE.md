@@ -210,7 +210,8 @@ If unsure whether a change loosens or tightens, treat it as loosening.
 
 ```text
 crates/   taktsim-units, -core, -trace, -model, -components, -stats,
-          -calibrate, -adapters, -share, -wasm, -mcp, -cli (added per tier)
+          -calibrate, -adapters, -share, -wasm, -mcp, -cli (added per tier),
+          -bench (benchmarks for the regression gate, ADR-0016)
 python/   PyO3 bindings, generated .pyi, pytest
 viewer/   TypeScript app (v0.2)
 benchmarks/  reference models, analytical cases, datasets
@@ -220,6 +221,10 @@ schemas/  committed JSON Schemas, one per format version
 
 ## Status
 
-M0, M1 and M2a done. M2b (engine) in review; tracks A-D running in
-parallel (roadmap, "Parallel tracks"). ADR-0001 to ADR-0013 accepted. `main` is protected: PRs only, rebase merge, all CI jobs
-except mutants required.
+M0, M1 and M2 (engine core, without the queue benchmark) done; the four
+parallel tracks are merged: statistics (M8/M9 part), expressions (M6
+part), benchmarks and the regression gate, CSV adapter (M11 part).
+ADR-0001 to ADR-0018 accepted. `main` is protected: PRs only, rebase
+merge, all CI jobs except mutants and benchmarks required.
+
+What to do next, and what waits for the owner: roadmap, "Next steps".

@@ -1,7 +1,6 @@
 # ADR-0017: CSV adapter and the observation table
 
-- Status: proposed (accepted when the Track D (CSV adapter, M11) pull
-  request is merged)
+- Status: accepted (2026-10-26, by the owner, by merging the Track D pull request #8)
 - Date: 2026-10-25
 - Blocks: M11
 - Spec: §8 (internal observation format, rules), §2 principles 2, 3 and 6,
@@ -236,3 +235,11 @@ the day fixture.
 3. Naive timestamps with a declared fixed offset are accepted on request.
    Do you want IANA time zones (with a time-zone database dependency) in
    v0.2 together with OPC UA and MQTT?
+
+## Owner's answers (2026-10-26)
+
+The owner took the recommendations:
+
+1. A sixth physical column for the source offset is acceptable.
+2. Keep `1` as the dimensionless unit.
+3. Yes: IANA time zones come in v0.2, together with OPC UA and MQTT.
