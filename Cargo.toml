@@ -38,6 +38,11 @@ proptest = "1.12.0"
 # for gungraun; the bench workflow installs it from there.
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 gungraun = "0.20.0"
+# Trace storage (ADR-0004, ADR-0021): SHA-256 of the record stream, CRC32 per
+# chunk; golden-trace snapshots without colors or extra formats.
+sha2 = { version = "0.11.1", default-features = false }
+crc32fast = { version = "1.5.3", default-features = false }
+insta = { version = "1.49.0", default-features = false }
 
 # Shared lints (spec §7 Layer 1). Every crate opts in with `[lints] workspace = true`;
 # ci/check-crates.sh fails if one does not. Changing this section needs the
