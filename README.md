@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  Simulation as code for production systems.
+  Simulate a production line from a text file, before you change the real one.
 </p>
 
 <p align="center">
@@ -12,54 +12,40 @@
   <a href="Cargo.toml"><img alt="MSRV: Rust 1.97" src="https://img.shields.io/badge/MSRV-1.97-0A0A0A"></a>
 </p>
 
-taktsim is a typed, deterministic discrete-event simulation engine for
-production systems: lines, cells, warehouses and logistics loops. It is a
-Rust library with Python bindings and a self-describing CLI that people
-and AI agents use alike.
+> [!IMPORTANT]
+> **Early days.** taktsim is pre-release. The engine core works and is
+> tested, but it cannot run a factory model yet. See [where it
+> stands](#where-it-stands) and the [roadmap](docs/roadmap.md).
 
-- **Models are code.** A model is a YAML or JSON text file under version
-  control, validated against a JSON Schema generated from the Rust types.
-- **Typed end to end.** Every quantity carries a unit. Invalid input is
-  rejected at load time with the field path and the fix, never during a
-  run.
-- **Deterministic.** Same model, seed and engine version: the same trace,
-  byte for byte, on every supported platform.
-- **Verifiable.** Reference models with analytical solutions, runtime
-  invariants, and confidence intervals on every reported number.
-- **One interface for people and agents.** Agents use the same `taktsim`
-  CLI as people. It describes its own commands, inputs, results and exit
-  codes as JSON; there is no separate agent server
-  ([ADR-0019](docs/adr/0019-cli-agent-interface.md)).
+## What it does
 
-## Status
+taktsim plays out a factory in software. You describe a production line
+in a text file: its machines, how long each step takes, how much can wait
+between them. taktsim simulates a shift, a week or a year in seconds and
+reports what comes out and where work piles up.
 
-Pre-release. Nothing is published on crates.io or PyPI yet, and the CLI
-cannot run a model yet. The [roadmap](docs/roadmap.md) tracks progress
-toward v0.1.
+Take two machines with a shelf between them. Cutting takes about 42 s
+per part, but the time varies; welding takes 45 s. Arithmetic says
+welding sets the pace: 80 parts an hour, 640 per shift. In practice
+cutting sometimes runs slow, the shelf runs empty and welding waits.
+taktsim plays the shift event by event, many times over, and reports the
+throughput you would really get, with an error bar.
 
-What exists today:
+Use it to:
 
-- Unit newtypes and parsing (`42s`, `6h`, `20 parts`).
-- The engine core: event queue with deterministic tie-breaking and
-  cancellation, simulation clock and run loop, counter-based random
-  streams (one per component and purpose), duration distributions,
-  runtime invariant and conservation checks, trace records.
-- Output statistics: confidence intervals, sequential replication
-  control, time-weighted statistics, MSER-5 warm-up detection.
-- The expression language: parser, type checker, evaluator and printer.
-- A CSV adapter for observed data.
-- Benchmarks with a regression gate in CI.
+- **ask what-if questions:** a second welder, or a bigger shelf?
+- **find the bottleneck** that holds the whole line back;
+- **fit the model to real data** from your line, so its answers match
+  what you see on the shop floor;
+- **search for better settings** such as buffer sizes or staffing.
 
-Not there yet: trace storage and replay (M3), the model loader (M4),
-components such as Machine and Buffer (M5), the CLI commands `describe`,
-`validate` and `run` (M7), and Python `validate` and `run` (M12).
-
-## Planned usage
+## What a model looks like
 
 > [!NOTE]
-> Planned for v0.1 ([spec §4, §5](docs/spec.md)). None of this works yet.
+> Planned for v0.1. The format is specified in [spec §4](docs/spec.md);
+> the loader and the `run` command are not built yet.
 
-A model (spec §4, shortened):
+The line above, as a model file:
 
 ```yaml
 format: "1.0"
@@ -87,23 +73,107 @@ observe:
   - wip(buf1)
 ```
 
-The same commands serve people and agents:
+Check it, then run it:
 
 ```sh
-taktsim describe                           # every command, as JSON
-taktsim validate line-a.yaml               # errors with path and fix
-taktsim run line-a.yaml --format json      # results with confidence intervals
+taktsim validate line-a.yaml          # mistakes reported with the field and the fix
+taktsim run line-a.yaml               # throughput and WIP, each with a confidence interval
 ```
 
-## Design principles
+Python and Rust get the same two calls, `validate` and `run`.
 
-Every change is checked against the seven principles of
-[spec §2](docs/spec.md#2-design-principles): models are code; typed end to
-end; deterministic by default; verifiable; self-improving within limits;
-open standards first; a small, composable core. The engine knows nothing
-about machines: machines are components built on engine primitives.
+## Why taktsim
 
-## Crates
+Most simulation tools for manufacturing are graphical desktop
+applications: models live in binary project files, results are hard to
+reproduce, and automation is an afterthought. taktsim takes the opposite
+approach.
+
+- **Your model lives in git.** It is a plain YAML file you can diff,
+  review in a pull request and check in CI.
+- **Mistakes are caught before the run.** Every quantity has a unit
+  (`42s`, `20 parts`). A wrong field is reported with its path and a
+  valid example, never halfway through a simulation.
+- **Same input, same answer.** The same model and seed give the same
+  result, byte for byte, on Windows, Linux and macOS.
+- **Numbers come with error bars.** Every result has a confidence
+  interval, and the engine is tested against queueing problems whose
+  exact answers are known.
+- **AI agents can use it too.** The `taktsim` command describes its own
+  commands and results as JSON, so an agent can build, run and refine
+  models the same way a person does.
+- **Safe near real machines.** Data adapters only read from production
+  systems; no code path writes to a controller.
+- **Free and open.** MIT or Apache-2.0, no paid tiers, no telemetry, runs
+  on an ordinary PC.
+
+## Who it is for
+
+- **Production and industrial engineers** who want answers about a line
+  without buying and learning a large graphical tool.
+- **Developers** who want to embed a simulation engine in their own
+  software, through the Rust crates or the Python bindings.
+- **AI agents** that build and test models on a person's behalf.
+
+## Where it stands
+
+**Works today**
+
+- Units and their parsing (`42s`, `6h`, `20 parts`).
+- The engine core: event queue, simulation clock, reproducible random
+  numbers, duration distributions, runtime correctness checks.
+- Output statistics: confidence intervals, deciding how many runs are
+  enough, warm-up detection.
+- A small expression language and a CSV reader for observed data.
+
+**Planned releases** ([spec §11](docs/spec.md#11-release-tiers-and-acceptance-criteria))
+
+| Release | What you get |
+| --- | --- |
+| v0.1 Engine | Machines, buffers, sources and sinks; `validate` and `run` from the CLI and Python |
+| v0.2 Agent | The full CLI for agents, more components (assembly, inspection, shifts), live machine data, a browser viewer |
+| v0.3 Calibrate | Fit a model to observed data, with an accuracy report |
+| v0.4 Optimize | Optimization, what-if experiments, bottleneck explanation |
+| v0.5 Plant | Transport, maintenance, energy and cost, whole-plant models |
+
+## Try it today
+
+You need Rust 1.97 or newer ([rustup](https://rustup.rs) installs the
+pinned toolchain automatically). Nothing is published on crates.io or
+PyPI yet, so build from source:
+
+```sh
+git clone https://github.com/taktsim/taktsim.git
+cd taktsim
+cargo build
+cargo test --workspace --exclude taktsim-python   # the engine's test suite
+cargo run -p taktsim-cli -- --version
+```
+
+## Get involved
+
+taktsim is early enough that a contribution shapes it. Help is welcome
+with:
+
+- **components** (new kinds of stations) and **data adapters**, each
+  proposed through an issue template;
+- **reference models** with known analytical answers, which the engine is
+  tested against;
+- **feedback from practice:** which questions do you ask about your
+  lines, and which tools fall short?
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) first. In short: open an issue or
+pick something from the current milestone, add tests with every change,
+use [Conventional Commits](https://www.conventionalcommits.org/), and
+sign off every commit (`git commit -s`). See also the [code of
+conduct](CODE_OF_CONDUCT.md) and the [security policy](SECURITY.md).
+
+## Under the hood
+
+taktsim is a Rust library with Python bindings and a CLI, all thin layers
+over one public API. The engine knows nothing about machines: machines
+are components built on engine primitives. Every change is checked
+against seven [design principles](docs/spec.md#2-design-principles).
 
 | Crate | Purpose |
 | --- | --- |
@@ -117,12 +187,9 @@ about machines: machines are components built on engine primitives.
 | [`taktsim-cli`](crates/taktsim-cli) | The `taktsim` command (M7; `--version` and `--help` only) |
 | [`taktsim-bench`](crates/taktsim-bench) | Benchmarks for the regression gate |
 
-The Python bindings live in [`python/`](python) and are a thin layer over
-the same Rust API (M12). `taktsim-core` depends on no taktsim crate but
-`taktsim-units`; every other crate depends on the core.
-
-Tier-1 platforms are Windows x86-64, Linux x86-64 and ARM64, and macOS
-ARM64 ([ADR-0010](docs/adr/0010-platforms-and-reference-hardware.md)).
+The Python bindings live in [`python/`](python) (M12). Supported
+platforms are Windows x86-64, Linux x86-64 and ARM64, and macOS ARM64
+([ADR-0010](docs/adr/0010-platforms-and-reference-hardware.md)).
 
 ## Documentation
 
@@ -133,15 +200,6 @@ ARM64 ([ADR-0010](docs/adr/0010-platforms-and-reference-hardware.md)).
 - [Architecture decisions](docs/adr/): every choice the spec leaves open.
 - [Contributing](CONTRIBUTING.md): setup, the checks CI runs, and the
   rules for commits and pull requests.
-
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) first. In short: work on the
-current milestone or open an issue, add tests with every change, use
-[Conventional Commits](https://www.conventionalcommits.org/), and sign off
-every commit (`git commit -s`). See also the
-[code of conduct](CODE_OF_CONDUCT.md) and the
-[security policy](SECURITY.md).
 
 ## License
 
