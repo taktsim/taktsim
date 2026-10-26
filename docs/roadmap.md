@@ -152,6 +152,10 @@ In this order; each is its own pull request:
    generation numbers replace the cancelled set, ADR-0018 deviation 3).
 4. **M3**, trace format and replay.
 
+ADR-0019 (CLI as the agent interface, no MCP server; issue #14) changes
+the spec and waits for the owner's explicit acceptance. M7 depends on it;
+nothing before M7 does.
+
 Waiting for the owner (do not do without a go-ahead): making
 `benchmarks (instruction counts, > 10 % regression fails)` a required
 check in the `main` ruleset; reserving the names on crates.io and PyPI;
@@ -234,17 +238,26 @@ one, then FIFO. Order lists replace this in v0.2 without breaking it.
 
 ### M7 — CLI `validate` and `run` (`taktsim-cli`), first end-to-end runs
 
+- The agent contract of ADR-0019 starts here, so v0.1 is already usable
+  by an agent: `taktsim describe` (generated from the argument parser and
+  the result types, committed as `schemas/cli/describe.json`, fresh in
+  CI), `taktsim schema`, `--format json` on every command, typed JSON
+  errors on stderr, and the exit codes of ADR-0019.
 - `taktsim validate <model>`: machine-readable errors (JSON) with
   `--format json`, human-readable rendering by default; both from the same
   typed error.
 - `taktsim run <model> --seed … --horizon …`: results and trace reference
-  with provenance (model hash, engine version, seed list, platform).
+  with provenance (model hash, engine version, seed list, platform); runs
+  kept in the run store (`.taktsim/`, ADR-0019).
 - Reference models in `benchmarks/` (chain, branch/merge, rework loop,
   pool).
 
 **Proves:** A4 on real models. **Tests:** CLI snapshot tests; golden
 traces for every reference model on every tier-1 target; replay of every
-reference model.
+reference model; every documented example of `validate` and `run`
+accepted and every malformed one rejected with a path-level JSON error
+and the documented exit code; `describe` fresh.
+**Depends on:** ADR-0019.
 
 ### M8 — Statistics: KPIs and terminating experiments (`taktsim-stats`)
 
@@ -343,8 +356,10 @@ written at the start of the milestone that uses them:
 
 ## Later tiers (outline)
 
-- **v0.2 Agent.** MCP server (`schema.get`, `model.validate`,
-  `model.render`, `run`, `trace.query`, `compare`); remaining v1 components;
+- **v0.2 Agent.** The rest of the CLI agent contract (ADR-0019):
+  `render`, `trace query`, `compare`, listing and removing runs, progress
+  and interruption; the agent tutorial from the CLI alone; remaining v1
+  components;
   materials, BOMs and lineage; order lists; release control; OEE and other
   KPIs; Parquet, OPC UA, MQTT adapters; WASM engine; first viewer (line and
   station levels, state glow, live reload). Needs ADRs: async boundary,

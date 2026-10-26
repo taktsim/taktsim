@@ -1,8 +1,9 @@
 # CLAUDE.md
 
-Simulation-as-code: a Rust library (with Python bindings, CLI and MCP
-server) for discrete-event simulation of production systems. Licensed
-MIT OR Apache-2.0 (ADR-0006).
+Simulation-as-code: a Rust library (with Python bindings and a
+self-describing CLI that people and agents share, ADR-0019) for
+discrete-event simulation of production systems. Licensed MIT OR
+Apache-2.0 (ADR-0006).
 
 The spec still uses the placeholder `simcode`; read it as `taktsim`
 (crates `taktsim-*`, CLI `taktsim`), and its model header `simcode: "1.0"`
@@ -73,8 +74,9 @@ exception explicitly in its description.
   `taktsim-units`. External crates that do pure computation (`libm`,
   `thiserror`) are allowed; name each new one in the PR that adds it
   (ADR-0013). Every other crate depends on core, never the reverse.
-- The Python bindings, CLI and MCP server are thin layers over the same
-  public Rust API. No logic lives only in one client.
+- The Python bindings and the CLI are thin layers over the same public
+  Rust API. No logic lives only in one client. The CLI is also the agent
+  interface (ADR-0019): there is no MCP server.
 - No network code in engine crates. Adapters are opt-in Cargo features and
   read-only toward production systems: no code path writes to a controller.
 - Models are data, never executed. Components are compiled in, never loaded
@@ -210,7 +212,7 @@ If unsure whether a change loosens or tightens, treat it as loosening.
 
 ```text
 crates/   taktsim-units, -core, -trace, -model, -components, -stats,
-          -calibrate, -adapters, -share, -wasm, -mcp, -cli (added per tier),
+          -calibrate, -adapters, -share, -wasm, -cli (added per tier),
           -bench (benchmarks for the regression gate, ADR-0016)
 python/   PyO3 bindings, generated .pyi, pytest
 viewer/   TypeScript app (v0.2)

@@ -1,8 +1,8 @@
 # taktsim
 
 Simulation as code for production systems: a typed, deterministic
-discrete-event simulation engine in Rust, with Python bindings, a CLI and an
-MCP server for AI agents.
+discrete-event simulation engine in Rust, with Python bindings and a
+self-describing CLI that people and AI agents use alike.
 
 **Status:** pre-release, no code yet. See [docs/spec.md](docs/spec.md),
 [docs/roadmap.md](docs/roadmap.md) and [docs/adr/](docs/adr/).

@@ -8,11 +8,11 @@ This document specifies an open-source library, built on a Rust core with Python
 
 ## 1. Purpose and scope
 
-The software is a typed, code-first toolkit for discrete-event simulation of production systems: lines, cells, warehouses, logistics loops. A model is a versioned text file; the engine runs it; the calibrator fits it to observed data; the optimizer searches its parameter space; an MCP server exposes all of this to AI agents.
+The software is a typed, code-first toolkit for discrete-event simulation of production systems: lines, cells, warehouses, logistics loops. A model is a versioned text file; the engine runs it; the calibrator fits it to observed data; the optimizer searches its parameter space; a self-describing CLI exposes all of this to people and AI agents alike.
 
 **Users**
 
-- AI agents that build, run and refine models on behalf of a person, through the MCP interface.
+- AI agents that build, run and refine models on behalf of a person, through the same CLI that people use (section 5).
 - Engineers who write or review models in an editor, run them from a CLI and inspect results in CI.
 - Developers who embed the engine in their own tools through the Rust crates or the Python bindings.
 
@@ -49,7 +49,7 @@ The crates share one data flow: a model file is validated and typed, the engine 
 
 &#91;embedded content: crate architecture · one calibration loop\]
 
-`simcode-core` has no I/O and depends only on the units crate; every other crate depends on the core, never the other way round. The Python bindings and the MCP server are thin layers over the same public Rust API, so all three clients see identical behaviour.
+`simcode-core` has no I/O and depends only on the units crate; every other crate depends on the core, never the other way round. The Python bindings and the CLI are thin layers over the same public Rust API, so every client sees identical behaviour.
 
 ## 4. Model format and component library
 
@@ -206,32 +206,36 @@ These features complete the model of a whole plant. They are specified now so th
 - **Hierarchical models and scenarios.** A model can be used as a component in another model through a declared interface (input and output ports, exposed parameters), so a line becomes a building block of a plant. A named scenario is a set of overrides on a base model; scenarios are compared without copying model files, and `compare` reports only the declared differences.
 - **Result charts.** Generated from traces, never drawn by hand: a state Gantt chart per resource, WIP and stock over time, lead-time distributions, Pareto fronts. Output as SVG and as chart specifications (default: Vega-Lite) so agents and other tools can render them.
 
-## 5. Agent interface
+## 5. Agent interface: the CLI
 
-Agents use the system through an MCP server whose tools mirror the public Rust API one to one. The server is a Rust binary (default: the official rmcp SDK). Every tool takes and returns a typed, schema-published structure; no tool returns free text.
+Agents use the same `simcode` CLI that people use; there is no separate agent server (ADR-0019). The CLI is a thin layer over the public Rust API and describes itself: an agent that knows only the binary's name can find every command, its inputs and outputs, and its errors.
 
-| Tool | Input | Output | Notes |
+- `simcode describe` prints one JSON document listing every command with its purpose, arguments and flags (types, defaults, allowed values), the JSON Schemas of its inputs and result, its exit codes, whether it writes anything, whether it needs a budget or a person, and one example. It is generated from the CLI's own types, committed under `schemas/` and checked for freshness in CI. `--help` stays, for people.
+- Every command takes `--format json`: stdout then carries exactly one schema-published result document, never free text; the human-readable rendering comes from the same typed value.
+
+| Command | Input | Output | Notes |
 | --- | --- | --- | --- |
-| `schema.get` | component type or `all` | JSON Schema | lets an agent discover parameters without reading docs |
-| `model.validate` | model document | list of errors with path, message, fix hint | always run before `run` |
-| `model.render` | model document | Mermaid or SVG of the flow | agents show the model to people |
+| `describe` | none | the CLI's self-description | the starting point for an agent |
+| `schema` | component type or `all` | JSON Schema | lets an agent discover parameters without reading docs |
+| `validate` | model document | list of errors with path, message, fix hint | always run before `run` |
+| `render` | model document | Mermaid or SVG of the flow | agents show the model to people |
 | `run` | model, seed(s), horizon, observables | run id, metrics with confidence intervals, event trace reference | multiple seeds run in parallel |
-| `trace.query` | run id, filter | events | paginated; never the whole trace at once |
+| `trace query` | run id, filter, limit, cursor | one page of events and the next cursor | never the whole trace at once |
 | `compare` | run id, observed data reference, metrics | per-metric error, pass/fail against thresholds | the accuracy report |
 | `calibrate` | model, observed data, free parameters, budget | fitted model, accuracy report, change log | see section 6 |
 | `optimize` | model, decision variables, objective, constraints, budget | Pareto set or best design, run ids for evidence | see section 6 |
-| `experiment` | model, factor grid | results table | design of experiments for what-if questions |
+| `experiment` | model, factor grid, budget | results table | design of experiments for what-if questions |
 | `explain` | run id, metric | ranked contributing factors with evidence | bottleneck and root-cause analysis |
-| `view.focus` | component id, simulation time, zoom level | acknowledgement that the viewer moved | points a person to what the agent found; see section 14 |
-| `share.preview` | calibrated model | the exact sharing payload | preview only; sending needs a human in the CLI; see section 12 |
+| `view focus` | component id, simulation time, zoom level | acknowledgement that the viewer moved | points a person to what the agent found; see section 14 |
+| `share --preview` | calibrated model | the exact sharing payload | sending needs a person at an interactive terminal; see section 12 |
 
 **Contracts**
 
-- Idempotent reads, explicit writes: only `calibrate` and `optimize` produce new model versions, and they return them rather than overwriting the input.
+- Idempotent reads, explicit writes: only `calibrate` and `optimize` produce new model versions, and they write them as new files rather than overwriting the input.
 - Every output that contains a number contains its uncertainty: confidence interval, number of replications, seed list.
-- Every error message is actionable: field path, what was found, what is allowed, one example of a valid value.
-- Budgets are mandatory on long-running tools (wall-clock seconds and maximum simulated runs) so an agent cannot start an unbounded loop.
-- The MCP server is stateless across calls except for a content-addressed cache of runs; a run id is the hash of model, seed, horizon and engine version.
+- Every error message is actionable: field path, what was found, what is allowed, one example of a valid value. With `--format json`, errors go to stderr as JSON; exit codes are documented in `describe` and stable.
+- Non-interactive: no prompts, except the confirmation that sharing needs. Budgets are mandatory on long-running commands (wall-clock seconds and maximum simulated runs) so an agent cannot start an unbounded loop; they report progress on stderr and, when interrupted, stop with a partial result and a stop reason.
+- Runs are kept in a local content-addressed run store; a run id is the hash of model, seed, horizon and engine version, and later commands take the id.
 
 ## 6. Calibration and self-optimization
 
@@ -281,7 +285,7 @@ Correctness is enforced in four layers, from the type checker to the physical wo
 - `clippy` with `pedantic` lints and `-D warnings`. `unwrap`, `expect` and `panic!` are denied in library code; panics are reserved for violated internal invariants.
 - Units are types (default: newtypes over `uom`), so `Duration + Rate` does not compile.
 - Component states are enums handled with exhaustive `match` and no wildcard arms: adding a state forces every handler to be updated.
-- Errors are typed enums (default: `thiserror`), never strings; each variant maps to a field-path error in the MCP layer.
+- Errors are typed enums (default: `thiserror`), never strings; each variant maps to a field-path error in the CLI's JSON output and in the Python bindings.
 - The Rust model types are the single source of truth. JSON Schema and Python type stubs (`.pyi`) are generated from them and committed; CI fails if either is stale.
 - The Python bindings (default: PyO3 with maturin) are checked with `pyright` in strict mode against the generated stubs.
 
@@ -293,7 +297,7 @@ Correctness is enforced in four layers, from the type checker to the physical wo
 | Property-based | `proptest` | invariants hold for generated models: conservation, bounds, ordering, determinism under replay | required |
 | Analytical reference | `cargo test` with `rstest` | M/M/1, M/M/c, tandem queues and serial lines with closed-form throughput and WIP; simulation within the confidence interval of theory | required |
 | Golden traces | `insta` snapshots | reference models reproduce stored event traces byte for byte for a given engine version | required |
-| Schema contract | `cargo test`, `pytest` on the bindings | every MCP tool and Python function rejects malformed input with a path-level error and accepts every documented example | required |
+| Schema contract | `cargo test`, `pytest` on the bindings | every CLI command and Python function rejects malformed input with a path-level error and accepts every documented example | required |
 | Mutation | `cargo-mutants` | the suite kills ≥ 80 % of mutants in `simcode-core` (initial target) | required for core, advisory elsewhere |
 | Performance | `criterion` locally, instruction counts in CI (`iai-callgrind`) | no regression > 10 % on reference models; instruction counts avoid noisy CI runners | required |
 | Fuzz | `cargo-fuzz` | random model files never crash the loader or engine; they are rejected at load or abort with an invariant report | nightly |
@@ -352,10 +356,10 @@ Adapters convert outside data into one internal observation format, so calibrati
 | Model size | 1,000 components and 10 million events in a run within 2 GB of memory (initial target). Traces stream to disk, never fully in memory. |
 | Observability | Structured logs and spans (default: `tracing` with an OpenTelemetry exporter) for runs and tool calls; a progress stream for long calibrations. |
 | Security | No network access from the engine crates. Adapters are opt-in Cargo features. Models are data, never executed as code; components are compiled in, never loaded from model files. |
-| Documentation | Every public item documented; a tutorial that builds, calibrates and optimizes one line end to end in Rust and in Python; the MCP tool reference generated from the schemas. |
+| Documentation | Every public item documented; a tutorial that builds, calibrates and optimizes one line end to end in Rust and in Python; the CLI reference generated from `simcode describe` and the schemas. |
 | Licensing | Apache-2.0 for the open core (default; see section 13); CC-BY-4.0 for documentation and benchmark data. `cargo-deny` rejects incompatible dependency licenses in CI. |
 | Compatibility | Semantic versioning for crates and the Python package. The model format version is independent of the package version; the engine reads every format version back to 1.0 and migrates on request. |
-| Accessibility for agents | Every error, report and result is machine-readable first and human-readable second. An agent must be able to complete the end-to-end tutorial from the MCP tools alone, with no access to the docs. |
+| Accessibility for agents | Every error, report and result is machine-readable first and human-readable second. An agent must be able to complete the end-to-end tutorial from the CLI alone, starting from `simcode describe`, with no access to the docs. |
 | Viewer smoothness | Frame time p95 ≤ 16.7 ms and p99 ≤ 25 ms on the reference load, no main-thread task over 50 ms, scrubbing within 200 ms (initial targets; details in section 14). |
 
 ## 10. Repository and delivery
@@ -375,8 +379,7 @@ simcode/
     simcode-adapters/    csv, parquet, opcua, mqtt, automationml (each a Cargo feature)
     simcode-share/       opt-in sharing client: preview, send, withdraw, receipts
     simcode-wasm/        WebAssembly build of the engine for the viewer
-    simcode-mcp/         MCP server binary, tool contracts, run cache
-    simcode-cli/         `simcode validate | run | compare | calibrate | optimize | render | view | share`
+    simcode-cli/         `simcode describe | schema | validate | run | trace | compare | calibrate | optimize | experiment | explain | render | view | share`, run store
   python/                PyO3 bindings, generated .pyi stubs, pytest suite
   viewer/                TypeScript web app, component symbols, visual regression tests
   benchmarks/            reference models, analytical cases, anonymized datasets
@@ -405,7 +408,7 @@ Each tier is shippable on its own and is accepted only when every criterion in i
 | Tier | Scope | Acceptance criteria |
 | --- | --- | --- |
 | v0.1 Engine | units, core, model format, Source / Machine / Buffer / Sink, CLI `validate` and `run`, flow graph with conditions and resource pools, dispatching rules, terminating and steady-state experiments with warm-up and replication control, throughput, state shares, WIP and lead time, CSV adapter, Python bindings for `validate` and `run` | analytical reference suite passes (M/M/1, M/M/c, 3-station serial line); 95 % confidence intervals contain the true value in 93 to 97 % of 1,000 seeded experiments; warm-up detection recovers a known transient; deterministic replay test passes on all three platforms; schema and stubs committed and fresh; 100 % branch coverage in core; clippy pedantic clean, no `unsafe`; README example runs in under 1 s from Rust and from Python |
-| v0.2 Agent | MCP server with `schema.get`, `model.validate`, `model.render`, `run`, `trace.query`, `compare`; Conveyor, Store, ShiftCalendar, Assembly, Split, BatchProcess, Inspection, materials and BOMs, order lists, release control (push, Kanban, CONWIP), OEE, on-time delivery, setup share, scrap and rework KPIs; Parquet, OPC UA, MQTT adapters; WebAssembly engine build; viewer with line and station levels, state glow and live reload | an agent completes the tutorial from MCP tools alone in an automated test; every tool rejects every malformed example with a path-level error; adapters pass fixture tests; every KPI matches hand-computed reference cases; WIP never exceeds a CONWIP cap; per-material conservation and lineage hold on a reference model with a three-level BOM, scrap and rework; the viewer renders every reference model with a symbol for every component type and passes visual regression tests; performance targets met or revised in an ADR with measurements |
+| v0.2 Agent | CLI agent contract (section 5) with `describe`, `schema`, `validate`, `render`, `run`, `trace query`, `compare` and the run store; Conveyor, Store, ShiftCalendar, Assembly, Split, BatchProcess, Inspection, materials and BOMs, order lists, release control (push, Kanban, CONWIP), OEE, on-time delivery, setup share, scrap and rework KPIs; Parquet, OPC UA, MQTT adapters; WebAssembly engine build; viewer with line and station levels, state glow and live reload | an agent completes the tutorial from the CLI alone, starting from `describe`, in an automated test; every command rejects every malformed example with a path-level JSON error; `describe` is committed and fresh; adapters pass fixture tests; every KPI matches hand-computed reference cases; WIP never exceeds a CONWIP cap; per-material conservation and lineage hold on a reference model with a three-level BOM, scrap and rework; the viewer renders every reference model with a symbol for every component type and passes visual regression tests; performance targets met or revised in an ADR with measurements |
 | v0.3 Calibrate | observation format, metrics, `calibrate`, calibration certificate, data-quality report, sharing client with preview and withdrawal, parameter library priors | on the public benchmark set, ≥ 80 % of datasets reach `calibrated` within the published budget (initial target); held-out overfitting check implemented; the full test suite passes with network access blocked; the previewed sharing payload equals the sent payload byte for byte; library priors measurably reduce calibration runs on the benchmark set; certificate validated on every `run` |
 | v0.4 Optimize | `optimize`, `experiment`, `explain`, Operator component, common random numbers, viewer playback with scrubbing, scenario and calibration comparison views, parameter editing with write-back | optimizer recovers the known optimum on three synthetic benchmarks; `explain` names the true bottleneck on every reference model; Pareto output verified against brute force on a small grid; the viewer shows the same state as the engine at any replayed event; parameter edits round-trip to the model file without other changes |
 | v0.5 Plant | transport resources (AGV, forklift, crane), planned maintenance, tool wear and usage-based failures, energy and cost per resource state, hierarchical models and named scenarios, result charts, semantic zoom from plant to station through the model hierarchy, GOVERNANCE document | energy and cost totals reconcile with per-state sums on reference models; a line reused as a component in a plant model gives the same KPIs as when run alone, within confidence intervals; scenarios differ from their base only in declared overrides; charts are generated from traces in CI; zooming from plant to station keeps playback in sync and meets the frame-rate target |
@@ -430,7 +433,7 @@ The project collects data only through explicit, informed and revocable opt-in. 
 3. A person confirms; the payload is sent and a receipt (id, hash, date) is stored next to the model.
 4. Any contribution can be withdrawn with its receipt; withdrawn data is excluded from all later library releases.
 
-Agents can call `share.preview` through MCP, but sending requires a human confirmation in the CLI. An agent can never share data on its own.
+Agents can run `simcode share --preview`, but sending requires a person: `simcode share --send` works only on an interactive terminal and sends after the person types a one-time code shown there, with no flag or setting to skip it (ADR-0019). An agent can never share data on its own.
 
 **Parameter library: give to get**
 
@@ -449,7 +452,7 @@ Agents can call `share.preview` through MCP, but sending requires a human confir
 
 Everything is free for every user. The project charges for nothing; what it gains is the parameter library, which grows with every contribution.
 
-- All code (engine, components, CLI, MCP server, Python bindings, adapters, viewer) is open source (default: Apache-2.0). Documentation and the public subset of the parameter library are CC-BY-4.0.
+- All code (engine, components, CLI, Python bindings, adapters, viewer) is open source (default: Apache-2.0). Documentation and the public subset of the parameter library are CC-BY-4.0.
 - The full parameter library is free for contributors (give to get); the public subset is free for everyone.
 - There are no paid tiers, no paid adapters and no features held back. Everything needed to build, run, calibrate, optimize and view a model stays in the open project.
 - Running costs (the library service, CI, the legal review of the contribution terms) are covered by open-source grants or donations. The core never depends on a commercial partner or a hosted service to work.
@@ -487,7 +490,7 @@ Play, pause, speed, scrub and jump to any event, the same at every zoom level; z
 **Working with agents**
 
 - `simcode view model.yaml` opens the viewer locally and watches the file: when an agent changes the model, the view updates within a second, so a person sees what the agent builds and can step in.
-- An MCP tool `view.focus` lets the agent point the person to a component at a given time, for example the station it just identified as the bottleneck.
+- `simcode view focus <component> --at <time>` lets the agent point the person to a component at a given time, for example the station it just identified as the bottleneck.
 - Parameter edits in the viewer are written back to the model file as a reviewable diff that the person confirms; no other part of the file changes.
 
 **Architecture**
@@ -534,7 +537,7 @@ These choices are left open on purpose. Decide each one in an ADR before the tie
 - [ ] **Distribution syntax.** Inline objects (`{dist: lognormal, mean: 42s, sigma: 0.08}`) versus a compact string form (`lognormal(42s, 0.08)`). Pick one; both must round-trip through the schema.
 - [ ] **Trace storage.** Arrow and Parquet via `arrow-rs`, or an append-only binary format with an Arrow reader. Decide on the 10-million-event memory target.
 - [ ] **Optimizers.** Implement Bayesian optimization and CMA-ES in Rust for determinism and a self-contained build, or call Python optimizers (for example Optuna) through the bindings in v0.3 for speed of delivery. State the effect on reproducibility.
-- [ ] **Async boundary.** The engine stays synchronous; the MCP server and network adapters need an async runtime (default: `tokio`). Define where the boundary sits and how cancellation and budgets cross it.
+- [ ] **Async boundary.** The engine and the CLI stay synchronous; the network adapters and the viewer's local server need an async runtime (default: `tokio`). Define where the boundary sits and how cancellation and budgets cross it.
 - [ ] **Python API shape.** A thin one-to-one binding, or an idiomatic Python layer on top. Default recommendation: thin binding, generated where possible, so the three clients cannot drift.
 - [ ] **License.** Apache-2.0 alone or MIT/Apache-2.0 dual licensing for the open core; whether to require a CLA at all, and if so, its text and signing bot in place before the first external pull request.
 - [ ] **Initial targets.** Validate every number marked as an initial target with a prototype, and record the confirmed or revised value in an ADR.

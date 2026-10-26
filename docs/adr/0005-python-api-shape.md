@@ -8,7 +8,9 @@
 ## Context
 
 The Python bindings, the CLI and the MCP server are thin layers over one
-public Rust API, so all three behave identically (§3). v0.1 exposes
+public Rust API, so all three behave identically (§3). (ADR-0019 drops the
+MCP server; the CLI is the agent interface. The decision here is
+unchanged.) v0.1 exposes
 `validate` and `run`. Stubs (`.pyi`) are generated from the Rust types,
 committed, and checked for freshness; the package passes `pyright` strict.
 Spec default recommendation: thin binding, generated where possible.

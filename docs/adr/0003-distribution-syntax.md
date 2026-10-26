@@ -67,7 +67,8 @@ v0.3. Load-time checks: positivity, `min ≤ mode ≤ max`, finite values.
 
 - Shorthand stays available only for constants.
 - The parameterization of every distribution is defined in the schema
-  descriptions, which also feed the MCP tool reference.
+  descriptions, which also feed the MCP tool reference (the CLI reference
+  since ADR-0019).
 - Sampling must be platform-independent (pure-Rust math), handled in the
   M2 RNG ADR.
 
