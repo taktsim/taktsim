@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/lockup-dark.svg">
-    <img alt="taktsim" src="docs/assets/lockup-light.svg" width="446">
-  </picture>
+  <img alt="taktsim" src="docs/assets/logo-banner.svg" width="471">
 </p>
 
 <p align="center">
