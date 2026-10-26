@@ -1129,6 +1129,21 @@ impl<M: Message> Engine<M> {
         Ok(id)
     }
 
+    /// How the run is set up: its seed, and whether checks are on. Trace
+    /// headers record the seed (ADR-0021).
+    ///
+    /// ```
+    /// # use taktsim_core::*;
+    /// # #[derive(Debug)] struct M;
+    /// # impl Message for M {}
+    /// let engine: Engine<M> = Engine::new(EngineConfig::new(42));
+    /// assert_eq!(engine.config(), EngineConfig::new(42));
+    /// ```
+    #[must_use]
+    pub fn config(&self) -> EngineConfig {
+        self.state.config
+    }
+
     /// The model id of component `id`.
     ///
     /// ```
