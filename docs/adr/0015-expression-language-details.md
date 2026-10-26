@@ -1,8 +1,6 @@
 # ADR-0015: Expression language details
 
-- Status: proposed (needs the owner's explicit acceptance: it changes one
-  rule of ADR-0009's grammar, see "Change to ADR-0009", and it asks
-  questions)
+- Status: accepted (2026-10-26, by the owner, explicitly, including the change to ADR-0009)
 - Date: 2026-10-25, revised 2026-10-26 after the review of PR #10
 - Blocks: M6 (edge conditions); used by M4 (observable references) and
   M8 (KPIs)
@@ -266,3 +264,18 @@ fuzzing infrastructure (CLAUDE.md, "Fuzz").
    built-in observables need a decision there.
 6. ADR-0009's grammar makes list elements atoms, so a negative element
    needs parentheses: `[(-1)]`. Should list elements be `unary` instead?
+
+## Owner's answers (2026-10-26)
+
+The owner took the recommendations:
+
+1. The change to ADR-0009's call grammar is accepted.
+2. Yes: the examples read `30 parts` (spec §6 is updated with this ADR's
+   acceptance).
+3. The interval syntax for decision variables (for example `in 5..50`)
+   is decided before v0.4.
+4. `==` on counts is allowed: a count is an exact integer. **Follow-up:**
+   the type checker still rejects it and must be changed.
+5. The types of the built-in observables are decided in M8.
+6. Yes: list elements are `unary`, so `[-1]` is valid. **Follow-up:** the
+   parser still requires `[(-1)]` and must be changed.

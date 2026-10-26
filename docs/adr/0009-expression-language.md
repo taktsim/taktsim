@@ -1,6 +1,7 @@
 # ADR-0009: Expression language
 
-- Status: accepted (2026-10-25)
+- Status: accepted (2026-10-25); call arguments and the `30 parts`
+  example amended by ADR-0015 (2026-10-26)
 - Date: 2026-10-25
 - Blocks: M6 (routing: edge conditions)
 - Spec: §15 "Expression language", §4 Routing and Observables, §6
