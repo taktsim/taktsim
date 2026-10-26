@@ -70,7 +70,10 @@ proptest! {
         let t = |df: usize| StudentT::new(u32::try_from(df).unwrap()).unwrap().critical_value(level);
         let ratio = t(k * n - 1) / t(n - 1) * (count(n - 1) / count(k * n - 1)).sqrt();
         prop_assert!(relative_error(many.half_width(), ratio * one.half_width()) < 1e-10);
-        prop_assert!(relative_error(many.mean(), one.mean()) < 1e-12);
+        // Rounding scales with the results, not with their mean, which can
+        // be near zero when they cancel.
+        let magnitude = xs.iter().fold(0.0_f64, |m, x| m.max(x.abs()));
+        prop_assert!((many.mean() - one.mean()).abs() <= 1e-12 * magnitude);
         // Never wider, and at least as narrow as 1/√k for k ≥ 2.
         prop_assert!(many.half_width() <= one.half_width() * (1.0 + 1e-12));
         prop_assert!(many.half_width() <= one.half_width() / count(k).sqrt() * (1.0 + 1e-12));
