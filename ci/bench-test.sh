@@ -30,7 +30,8 @@ fail() {
 }
 
 # expect <name> <exit code> <output> <got> [line]...: checks an exit code
-# and that each line appears in the output.
+# and that each line appears in the output; a line written `!text` must
+# not appear.
 expect() {
   local name=$1 want=$2 out=$3 got=$4 line
   shift 4
@@ -40,7 +41,13 @@ expect() {
     return
   fi
   for line in "$@"; do
-    if ! grep -Fq -- "$line" <<<"$out"; then
+    if [ "${line#!}" != "$line" ]; then
+      if grep -Fq -- "${line#!}" <<<"$out"; then
+        fail "$name: unexpected line '${line#!}' in"
+        sed 's/^/    /' <<<"$out"
+        return
+      fi
+    elif ! grep -Fq -- "$line" <<<"$out"; then
       fail "$name: no line '$line' in"
       sed 's/^/    /' <<<"$out"
       return
@@ -73,12 +80,21 @@ put() {
     "$template" >"$dir/summary.json"
 }
 
+# accept <line>... / accept_base <line>...: lines of the case's accepted
+# list, and of the base's copy of it; a case without them passes neither.
+accept() { printf '%s\n' "$@" >>"$case_dir/accepted.txt"; }
+accept_base() { printf '%s\n' "$@" >>"$case_dir/accepted-base.txt"; }
+
 # check <case> <exit code> [line]...: runs the gate on the case (with its
-# removed list) and checks its exit code and output (stdout and stderr).
+# removed list, and its accepted lists if it has them) and checks its exit
+# code and output (stdout and stderr).
 check() {
-  local name=$1 want=$2 got=0 out
+  local name=$1 want=$2 got=0 out dir=$work/$1
   shift 2
-  out=$("$gate" --removed "$work/$name/removed.txt" "$work/$name/base" "$work/$name/head" 2>&1) || got=$?
+  local args=(--removed "$dir/removed.txt")
+  if [ -f "$dir/accepted.txt" ]; then args+=(--accepted "$dir/accepted.txt"); fi
+  if [ -f "$dir/accepted-base.txt" ]; then args+=(--accepted-base "$dir/accepted-base.txt"); fi
+  out=$("$gate" "${args[@]}" "$dir/base" "$dir/head" 2>&1) || got=$?
   expect "$name" "$want" "$out" "$got" "$@"
 }
 
@@ -358,6 +374,337 @@ chmod +x "$work/old-jq/jq"
 got=0
 out=$(PATH="$work/old-jq:$PATH" "$gate" "$work/unchanged/base" "$work/unchanged/head" 2>&1) || got=$?
 expect old_jq_refused 2 "$out" "$got" "needs jq 1.6 or later, found 'jq-1.5'"
+
+# ---- ci/bench-compare.sh, accepted regressions ------------------------
+# An entry `<benchmark> +<N>% <reason>` lets that one benchmark rise by up
+# to N % in the run whose list adds it (ADR-0016, owner's answer 1).
+
+start accepted_within_limit
+put base f::g::x 1000
+put head f::g::x 1500
+accept 'f::g::x +60% every event now checks the invariants'
+check accepted_within_limit 0 '| `f::g::x` | 1,000 | 1,500 | +50.00 % | accepted (limit +60 %) |' \
+  '**Accepted:** 1 benchmark(s) rose by more than 10 %, within the limit of a new entry in' \
+  '- `f::g::x`: +50.00 %, limit +60 % (line 1). Reason: every event now checks the invariants' \
+  '**Passed:** no benchmark rose by more than 10 % (ADR-0007), except the accepted ones above.' \
+  '1 benchmark(s): 1 compared, 0 new, 0 removed.' '!**Stale:**'
+
+# 1000 × 1.6 = 1600 exactly passes; one instruction more fails.
+start accepted_exactly_at_limit
+put base f::g::x 1000
+put head f::g::x 1600
+accept 'f::g::x +60% reason'
+check accepted_exactly_at_limit 0 '| `f::g::x` | 1,000 | 1,600 | +60.00 % | accepted (limit +60 %) |'
+
+start accepted_above_limit_fails
+put base f::g::x 1000
+put head f::g::x 1601
+accept 'f::g::x +60% reason'
+check accepted_above_limit_fails 1 '| `f::g::x` | 1,000 | 1,601 | +60.10 % | **regression above the accepted +60 %** |' \
+  '**Failed:** 1 benchmark(s) rose by more than the limit of their entry in' \
+  '`f::g::x` (+60.10 %, limit +60 %).' '!**Passed:**' '!**Accepted:**'
+
+# 6e13 × 1.2 = 7.2e13 exactly; one more fails. The product 7.2e15 is below
+# 2^53, so the comparison is exact.
+start accepted_large_counts_exact
+put base f::g::ok 60000000000000
+put head f::g::ok 72000000000000
+put base f::g::bad 60000000000000
+put head f::g::bad 72000000000001
+accept 'f::g::ok +20% reason' 'f::g::bad +20% reason'
+check accepted_large_counts_exact 1 \
+  '| `f::g::ok` | 60,000,000,000,000 | 72,000,000,000,000 | +20.00 % | accepted (limit +20 %) |' \
+  '| `f::g::bad` | 60,000,000,000,000 | 72,000,000,000,001 | +20.00 % | **regression above the accepted +20 %** |'
+
+# 8e13 × 150 = 1.2e16 > 2^53: not compared inexactly.
+start accepted_product_too_large
+put base f::g::x 80000000000000
+put head f::g::x 80000000000000
+accept 'f::g::x +50% reason'
+check accepted_product_too_large 2 '`f::g::x` (line 1): the base count times the limit is too large to compare exactly'
+
+# An entry covers its one benchmark: not another, not an id under it.
+start accepted_covers_one_benchmark
+put base f::g::a 1000
+put base f::g::b 1000
+put head f::g::a 1500
+put head f::g::b 1500
+accept 'f::g::a +60% reason'
+check accepted_covers_one_benchmark 1 '| `f::g::a` | 1,000 | 1,500 | +50.00 % | accepted (limit +60 %) |' \
+  '| `f::g::b` | 1,000 | 1,500 | +50.00 % | **regression** |' \
+  '**Failed:** 1 benchmark(s) rose by more than 10 % (ADR-0007): `f::g::b`.' '!**Passed:**'
+
+start accepted_name_is_not_a_prefix
+put base f::g::x::a 1000
+put head f::g::x::a 1500
+accept 'f::g::x +60% reason'
+check accepted_name_is_not_a_prefix 2 '`f::g::x` (line 1): not measured in both the base and the head'
+
+start accepted_id_is_exact
+put base f::g::x::a 1000
+put base f::g::x::b 1000
+put head f::g::x::a 1500
+put head f::g::x::b 1500
+accept 'f::g::x::a +60% reason'
+check accepted_id_is_exact 1 '| `f::g::x::a` | 1,000 | 1,500 | +50.00 % | accepted (limit +60 %) |' \
+  '| `f::g::x::b` | 1,000 | 1,500 | +50.00 % | **regression** |'
+
+# Comments and blank lines are skipped and counted for line numbers; white
+# space is free; a `#` after the first word is part of the reason.
+start accepted_comments_and_spacing
+put base f::g::x 1000
+put head f::g::x 1500
+accept '# a comment' '' '   # an indented comment' $'  f::g::x \t +60%   see   pull request #42  '
+check accepted_comments_and_spacing 0 \
+  '- `f::g::x`: +50.00 %, limit +60 % (line 4). Reason: see pull request #42'
+
+start accepted_crlf
+put base f::g::x 1000
+put head f::g::x 1500
+printf 'f::g::x +60%% reason\r\n' >"$case_dir/accepted.txt"
+check accepted_crlf 0 'Reason: reason' '| `f::g::x` | 1,000 | 1,500 | +50.00 % | accepted (limit +60 %) |'
+
+# A new entry whose benchmark did not rise by more than 10 % fails: it
+# would otherwise be merged unused and stay as an open allowance.
+start accepted_not_needed_fails
+put base f::g::x 1000
+put head f::g::x 1100
+accept 'f::g::x +60% reason'
+check accepted_not_needed_fails 1 '| `f::g::x` | 1,000 | 1,100 | +10.00 % | **accepted entry not needed** |' \
+  '**Failed:** 1 entr(ies) in' 'not needed, the benchmark rose by 10 % or less; delete them: `f::g::x` (+10.00 %).' \
+  '!**Passed:**'
+
+start accepted_not_needed_on_improvement
+put base f::g::x 1000
+put head f::g::x 500
+accept 'f::g::x +60% reason'
+check accepted_not_needed_on_improvement 1 '| `f::g::x` | 1,000 | 500 | -50.00 % | **accepted entry not needed** |'
+
+start accepted_zero_base_fails
+put base f::g::x 0
+put head f::g::x 1
+accept 'f::g::x +1000% reason'
+check accepted_zero_base_fails 1 '| `f::g::x` | 0 | 1 | n/a (base 0) | **regression above the accepted +1000 %** |'
+
+start accepted_highest_limit
+put base f::g::x 1000
+put head f::g::x 11000
+accept 'f::g::x +1000% reason'
+check accepted_highest_limit 0 '| `f::g::x` | 1,000 | 11,000 | +1000.00 % | accepted (limit +1000 %) |'
+
+# An empty list (comments only, like the committed one) changes nothing.
+start accepted_empty_list
+put base f::g::x 1000
+put head f::g::x 1000
+accept '# nothing accepted'
+check accepted_empty_list 0 '| `f::g::x` | 1,000 | 1,000 | 0.00 % | ok |' \
+  '**Passed:** no benchmark rose by more than 10 % (ADR-0007).' '!**Accepted:**' '!**Stale:**'
+
+# Malformed entries fail with exit 2, every bad line named, and an example.
+# accepted_bad <case> <entry> <message>
+accepted_bad() {
+  start "$1"
+  put base f::g::x 1000
+  put head f::g::x 1500
+  accept "$2"
+  check "$1" 2 "accepted.txt:1: $3" 'expected one entry per line, `<benchmark> +<N>% <reason>`, e.g.'
+}
+accepted_bad accepted_pattern_refused 'f::g::* +60% reason' '`f::g::*` is not a benchmark name'
+accepted_bad accepted_short_name_refused 'x +60% reason' '`x` is not a benchmark name'
+accepted_bad accepted_two_part_name_refused 'f::g +60% reason' '`f::g` is not a benchmark name'
+accepted_bad accepted_no_limit_refused 'f::g::x' 'no limit and no reason'
+accepted_bad accepted_no_reason_refused 'f::g::x +60%' 'no reason; say why the regression is intended'
+accepted_bad accepted_blank_reason_refused $'f::g::x +60% \t ' 'no reason'
+accepted_bad accepted_limit_without_plus_refused 'f::g::x 60% reason' 'the limit `60%` is not written +N%'
+accepted_bad accepted_limit_without_percent_refused 'f::g::x +60 reason' 'the limit `+60` is not written +N%'
+accepted_bad accepted_limit_spaced_refused 'f::g::x +60 % reason' 'the limit `+60` is not written +N%'
+accepted_bad accepted_limit_fraction_refused 'f::g::x +60.5% reason' 'the limit `+60.5%` is not written +N%'
+accepted_bad accepted_limit_leading_zero_refused 'f::g::x +060% reason' 'the limit `+060%` is not written +N%'
+accepted_bad accepted_limit_word_refused 'f::g::x any reason' 'the limit `any` is not written +N%'
+accepted_bad accepted_limit_negative_refused 'f::g::x -60% reason' 'the limit `-60%` is not written +N%'
+accepted_bad accepted_limit_ten_refused 'f::g::x +10% reason' 'the limit +10% is not between +11% and +1000% (up to +10% needs no entry)'
+accepted_bad accepted_limit_above_most_refused 'f::g::x +1001% reason' 'the limit +1001% is not between +11% and +1000%'
+accepted_bad accepted_limit_huge_refused 'f::g::x +99999999999999999999% reason' 'the limit +99999999999999999999% is not between +11% and +1000%'
+
+start accepted_every_bad_line_named
+put base f::g::x 1000
+put head f::g::x 1500
+accept '# header' 'f::g::x +60%' 'f::g::* +60% reason'
+check accepted_every_bad_line_named 2 'accepted.txt:2: no reason' 'accepted.txt:3: `f::g::*` is not a benchmark name' \
+  'found `f::g::* +60% reason`'
+
+start accepted_duplicate_refused
+put base f::g::x 1000
+put head f::g::x 1500
+accept 'f::g::x +60% reason' 'f::g::x +20% another reason'
+check accepted_duplicate_refused 2 '`f::g::x` has 2 entries (lines 1, 2); keep one'
+
+start accepted_unknown_refused
+put base f::g::x 1000
+put head f::g::x 1500
+accept 'f::g::y +60% reason'
+check accepted_unknown_refused 2 '`f::g::y` (line 1): not measured in both the base and the head'
+
+start accepted_new_benchmark_refused
+put base f::g::x 1000
+put head f::g::x 1000
+put head f::g::y 1000
+accept 'f::g::y +60% reason'
+check accepted_new_benchmark_refused 2 '`f::g::y` (line 1): not measured in both the base and the head'
+
+start accepted_removed_benchmark_refused
+put base f::g::x 1000
+put base f::g::y 1000
+put head f::g::x 1000
+echo 'f::g::y' >"$case_dir/removed.txt"
+accept 'f::g::y +60% reason'
+check accepted_removed_benchmark_refused 2 '`f::g::y` (line 1): not measured in both the base and the head'
+
+# After the merge the entry is in the base's list too: stale. Its
+# regression is in the base count, and it never applies again.
+start stale_entry_warns
+put base f::g::x 1500
+put head f::g::x 1500
+accept 'f::g::x +60% reason'
+accept_base 'f::g::x +60% reason'
+check stale_entry_warns 0 '| `f::g::x` | 1,500 | 1,500 | 0.00 % | ok |' \
+  '**Stale:** 1 entr(ies) in' "also in the base's list, so already merged and not applied: \`f::g::x\` (line 1)" \
+  '**Passed:** no benchmark rose by more than 10 % (ADR-0007).' '!**Accepted:**'
+
+start stale_entry_never_applies
+put base f::g::x 1000
+put head f::g::x 1500
+accept 'f::g::x +60% reason'
+accept_base 'f::g::x +60% reason'
+check stale_entry_never_applies 1 '| `f::g::x` | 1,000 | 1,500 | +50.00 % | **regression** |' \
+  '**Failed:** 1 benchmark(s) rose by more than 10 % (ADR-0007): `f::g::x`.' '**Stale:**'
+
+# A stale entry is not checked against the runs: a later pull request may
+# remove its benchmark without touching the list.
+start stale_entry_of_removed_benchmark
+put base f::g::x 1000
+put base f::g::y 1000
+put head f::g::x 1000
+echo 'f::g::y' >"$case_dir/removed.txt"
+accept 'f::g::y +60% reason'
+accept_base 'f::g::y +60% reason'
+check stale_entry_of_removed_benchmark 0 '**Stale:**' '| `f::g::y` | 1,000 | - | - | removed (listed) |'
+
+# A pull request that changes the list deletes the stale entries, so the
+# list holds at most the entries of the last one that changed it.
+start stale_left_beside_new_entry_fails
+put base f::g::x 1500
+put base f::g::y 1000
+put head f::g::x 1500
+put head f::g::y 1500
+accept 'f::g::x +60% reason' 'f::g::y +60% reason'
+accept_base 'f::g::x +60% reason'
+check stale_left_beside_new_entry_fails 2 \
+  "\`f::g::x\` (line 1): also in the base's list, so already merged and never applied again (stale); a pull request that changes the list deletes them"
+
+start stale_deleted_beside_new_entry_passes
+put base f::g::x 1500
+put base f::g::y 1000
+put head f::g::x 1500
+put head f::g::y 1500
+accept '# header' 'f::g::y +60% reason'
+accept_base '# header' 'f::g::x +60% reason'
+check stale_deleted_beside_new_entry_passes 0 '| `f::g::y` | 1,000 | 1,500 | +50.00 % | accepted (limit +60 %) |' \
+  '- `f::g::y`: +50.00 %, limit +60 % (line 2).' '!**Stale:**'
+
+start stale_deleted_alone_passes
+put base f::g::x 1500
+put head f::g::x 1500
+accept '# header'
+accept_base '# header' 'f::g::x +60% reason'
+check stale_deleted_alone_passes 0 '**Passed:** no benchmark rose by more than 10 % (ADR-0007).' '!**Stale:**'
+
+# Only a comment changed: the list changed, so the stale entry must go.
+start stale_left_when_comment_changes_fails
+put base f::g::x 1500
+put head f::g::x 1500
+accept '# new header' 'f::g::x +60% reason'
+accept_base '# header' 'f::g::x +60% reason'
+check stale_left_when_comment_changes_fails 2 'already merged and never applied again (stale)'
+
+# Re-spacing an entry does not make it new: it stays stale and does not
+# accept the head's regression.
+start stale_respaced_is_still_stale
+put base f::g::x 1000
+put head f::g::x 1500
+accept 'f::g::x   +60%   reason'
+accept_base 'f::g::x +60% reason'
+check stale_respaced_is_still_stale 2 '`f::g::x` (line 1): also in the base'"'"'s list'
+
+# Changing an entry's limit or reason makes it a new entry, which applies
+# (and must be needed) like any other the owner reviews.
+start edited_entry_is_new
+put base f::g::x 1000
+put head f::g::x 1500
+accept 'f::g::x +60% the new reason'
+accept_base 'f::g::x +60% the old reason'
+check edited_entry_is_new 0 '| `f::g::x` | 1,000 | 1,500 | +50.00 % | accepted (limit +60 %) |' '!**Stale:**'
+
+start edited_entry_not_needed_fails
+put base f::g::x 1500
+put head f::g::x 1500
+accept 'f::g::x +70% reason'
+accept_base 'f::g::x +60% reason'
+check edited_entry_not_needed_fails 1 '**accepted entry not needed**'
+
+# The base's copy is read leniently (only to find stale entries): a bad line
+# there does not block the pull request that fixes it.
+start bad_base_list_can_be_fixed
+put base f::g::x 1000
+put head f::g::x 1000
+accept '# fixed'
+accept_base 'f::g::x +60%'
+check bad_base_list_can_be_fixed 0 '**Passed:**'
+
+# The committed list parses (read as its own base, so its entries, if any,
+# are stale and not checked against these runs).
+got=0
+out=$("$gate" --accepted ci/bench-accepted.txt --accepted-base ci/bench-accepted.txt \
+  "$work/unchanged/base" "$work/unchanged/head" 2>&1) || got=$?
+expect committed_accepted_list_parses 0 "$out" "$got" '**Passed:**'
+
+got=0
+out=$("$gate" --accepted "$work/no-such-list" "$work/unchanged/base" "$work/unchanged/head" 2>&1) || got=$?
+expect missing_accepted_list 2 "$out" "$got" "accepted list $work/no-such-list does not exist or cannot be read"
+
+got=0
+out=$("$gate" --accepted ci/bench-accepted.txt --accepted-base "$work/no-such-list" \
+  "$work/unchanged/base" "$work/unchanged/head" 2>&1) || got=$?
+expect missing_accepted_base_list 2 "$out" "$got" "accepted list $work/no-such-list does not exist or cannot be read"
+
+got=0
+out=$("$gate" --accepted "$work" "$work/unchanged/base" "$work/unchanged/head" 2>&1) || got=$?
+expect accepted_list_is_a_directory 2 "$out" "$got" 'does not exist or cannot be read'
+
+got=0
+out=$("$gate" --accepted-base ci/bench-accepted.txt "$work/unchanged/base" "$work/unchanged/head" 2>&1) || got=$?
+expect accepted_base_alone_refused 2 "$out" "$got" 'usage: ci/bench-compare.sh'
+
+got=0
+out=$("$gate" --accepted ci/bench-accepted.txt --accepted "$work/accepted_within_limit/accepted.txt" \
+  "$work/accepted_within_limit/base" "$work/accepted_within_limit/head" 2>&1) || got=$?
+expect accepted_twice_refused 2 "$out" "$got" 'usage: ci/bench-compare.sh'
+
+got=0
+out=$("$gate" --accepted "" "$work/unchanged/base" "$work/unchanged/head" 2>&1) || got=$?
+expect accepted_empty_path_refused 2 "$out" "$got" 'usage: ci/bench-compare.sh'
+
+# The lists may come from a pipe, e.g. `--accepted-base <(git show main:…)`.
+got=0
+out=$("$gate" --accepted "$work/accepted_within_limit/accepted.txt" --accepted-base <(printf '# empty\n') \
+  "$work/accepted_within_limit/base" "$work/accepted_within_limit/head" 2>&1) || got=$?
+expect accepted_base_from_pipe 0 "$out" "$got" 'accepted (limit +60 %)'
+
+# Options in any order.
+got=0
+out=$("$gate" --accepted "$work/accepted_within_limit/accepted.txt" --removed "$work/accepted_within_limit/removed.txt" \
+  "$work/accepted_within_limit/base" "$work/accepted_within_limit/head" 2>&1) || got=$?
+expect options_in_any_order 0 "$out" "$got" 'accepted (limit +60 %)'
 
 # ---- ci/bench-targets.sh ----------------------------------------------
 

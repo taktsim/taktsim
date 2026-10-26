@@ -98,13 +98,13 @@ explain why; the PR template asks.
   `cargo install --locked gungraun-runner --version "$(ci/bench-runner-version.sh)"`,
   then on each of two commits run `ci/bench-run.sh target/ic-before` and
   `ci/bench-run.sh target/ic-after`, and compare with
-  `ci/bench-compare.sh --removed ci/bench-removed.txt target/ic-before target/ic-after`.
+  `ci/bench-compare.sh --removed ci/bench-removed.txt --accepted ci/bench-accepted.txt --accepted-base <(git show origin/main:ci/bench-accepted.txt) target/ic-before target/ic-after`.
   On macOS and Windows, rely on the CI job. The gate's own tests run
   anywhere with bash and jq: `ci/bench-test.sh`.
 - **In CI:** the `bench` workflow runs on every pull request. Its job
-  summary has the table; a regression above 10 % or an unlisted removal
-  fails the check. The `instruction-counts` artifact has every
-  `summary.json`.
+  summary has the table; a regression above 10 % (or above the limit of
+  an accepted entry the pull request adds) or an unlisted removal fails
+  the check. The `instruction-counts` artifact has every `summary.json`.
 - **Adding a benchmark** (no workflow change; `crates/taktsim-bench` is a
   gate path, so the pull request needs the `gate-change` label):
   1. Add the workload to `crates/taktsim-bench/src/` (fixed inputs and
@@ -126,6 +126,36 @@ explain why; the PR template asks.
   without code changes, since the renamed one is not compared there.
   Renaming every benchmark at once fails (nothing compared); do it in two
   steps.
+- **Accepting an intended regression** (ADR-0016, owner's answer 1): a
+  change that is meant to cost instructions, such as a new invariant
+  check, is never merged past a failing check. Instead the pull request
+  that makes the change adds one line per affected benchmark to
+  `ci/bench-accepted.txt`:
+
+  ```text
+  instructions_random::stream::next_u64::draws +25% every draw now checks the stream's position (ADR-0007)
+  ```
+
+  1. Open the pull request without an entry and read the failing
+     benchmarks and their change in the job summary.
+  2. Add an entry per failing benchmark: its name exactly as the table
+     shows it (no patterns), the most it may rise as `+N%` (a whole number
+     from 11 to 1000; the measured change rounded up, plus a little), and
+     the reason. Delete any entry already in the file: it is stale, from
+     an earlier pull request, and a pull request that changes the file
+     must not keep one.
+  3. Add the `gate-change` label and say in the description why the cost
+     is intended; the owner reviews the entry like any gate change.
+
+  The table then shows the benchmark as `accepted (limit +N %)`, with the
+  reason below it. An entry applies only in the pull request that adds it
+  (the gate compares the file with the base's copy), so once merged it
+  never covers a later regression. The check fails if an entry is
+  malformed, repeats a benchmark, names one that the base and the head do
+  not both measure, is not needed (the benchmark rose by 10 % or less), or
+  is exceeded. A pull request that changes the gate's scripts is judged by
+  the base's, so the first one able to accept a regression is the one
+  after the pull request that introduced the file.
 
 ## Decisions
 
