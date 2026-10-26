@@ -167,7 +167,7 @@ impl fmt::Display for Expectation {
         f.write_str(match self {
             Self::Expression => "an expression such as `unit.age > 30s`",
             Self::ListElement => {
-                "a list element (a literal, name, call or parenthesized expression) such as `'premium'`"
+                "a list element (a literal, name, call or parenthesized expression, optionally negated) such as `'premium'` or `-1`"
             }
             Self::OperatorOrEnd => "an operator such as `and` or `==`, or the end of the expression",
             Self::CloseParen => "`)` closing the `(`",
@@ -249,7 +249,7 @@ impl fmt::Display for Hint {
             ),
             Self::TrailingComma => f.write_str("remove the trailing comma"),
             Self::ParenthesizeElement => f.write_str(
-                "list elements are single values; put an expression in parentheses, e.g. `[(-1), 2]`",
+                "list elements are single values, optionally negated; put an expression in parentheses, e.g. `[(1 + 2), 3]`",
             ),
             Self::ArgsAreIds => {
                 f.write_str("call arguments are component ids such as `buf1` or `weld-1`")
@@ -656,8 +656,8 @@ pub enum ErrorKind {
     },
     /// `==`, `!=` or `in` on a type that is not compared exactly.
     #[error(
-        "`{op}` cannot compare {ty} values: only int, duration, bool, string and enum values \
-         compare exactly; compare with `<=` and `>=` instead"
+        "`{op}` cannot compare {ty} values: only int, duration, count, bool, string and \
+         enum values compare exactly; compare with `<=` and `>=` instead"
     )]
     EqualityNotAllowed {
         /// The operator.

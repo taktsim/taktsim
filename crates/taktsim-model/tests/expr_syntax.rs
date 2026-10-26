@@ -565,6 +565,117 @@ fn membership_lists() {
 }
 
 #[test]
+fn list_elements_are_unary() {
+    // ADR-0015, answer 6: a list element is `[ "-" ] atom`.
+    for (src, expected) in [
+        ("x in [-1]", "(in x [(neg 1)])"),
+        ("x in [-1, -2, 3]", "(in x [(neg 1) (neg 2) 3])"),
+        ("x in [- 1]", "(in x [(neg 1)])"),
+        ("x in [-1.5]", "(in x [(neg 1.5)])"),
+        ("x in [-30s]", "(in x [(neg 30000000000ns)])"),
+        ("x in [-a.b]", "(in x [(neg a.b)])"),
+        ("x in [-f(c)]", "(in x [(neg f(c))])"),
+        ("x in [-'a']", "(in x [(neg 'a')])"),
+        ("x in [-true]", "(in x [(neg true)])"),
+        ("x in [-(a + b)]", "(in x [(neg (+ a b))])"),
+        ("x in [-(-1)]", "(in x [(neg (neg 1))])"),
+        ("x in [a, -b, (c)]", "(in x [a (neg b) c])"),
+    ] {
+        assert_eq!(tree(src), expected, "{src}");
+    }
+    // Outside a list the grammar is as before: the sign binds tighter than
+    // `*`, and a binary minus is still a minus.
+    assert_eq!(tree("x - -1 in [-1]"), "(in (- x (neg 1)) [(neg 1)])");
+    assert_eq!(tree("-x * 2 in [-1]"), "(in (* (neg x) 2) [(neg 1)])");
+}
+
+#[test]
+fn a_negated_list_element_has_the_span_of_the_sign_and_its_operand() {
+    let source = "x in [1, -23, - (4)]";
+    let expr = parse(source).unwrap();
+    let ExprKind::In { list, .. } = expr.kind() else {
+        unreachable!()
+    };
+    let texts: Vec<&str> = list
+        .items
+        .iter()
+        .map(|item| &source[item.span().range()])
+        .collect();
+    assert_eq!(texts, ["1", "-23", "- (4)"]);
+}
+
+#[test]
+fn malformed_signed_list_elements() {
+    // List elements are unary (ADR-0015): one sign at most, and only on
+    // an atom.
+    let (kind, at) = err_at("x in [--1]");
+    assert_eq!(kind, ErrorKind::DoubleMinus);
+    assert_eq!(at, "-");
+    assert_eq!(err("x in [--1]").span().start, 7, "the second sign");
+    let (kind, at) = err_at("x in [1, - -1]");
+    assert_eq!(kind, ErrorKind::DoubleMinus);
+    assert_eq!(at, "-");
+    assert_eq!(err("x in [1, - -1]").span().start, 11);
+    for (src, found) in [("x in [-]", "]"), ("x in [1, -]", "]")] {
+        let (kind, at) = err_at(src);
+        assert_eq!(
+            kind,
+            expected(Expectation::ListElement, Some(found), None),
+            "{src}"
+        );
+        assert_eq!(at, found, "{src}");
+    }
+    let (kind, at) = err_at("x in [-,]");
+    assert_eq!(kind, expected(Expectation::ListElement, Some(","), None));
+    assert_eq!(at, ",");
+    let (kind, at) = err_at("x in [-not a]");
+    assert_eq!(
+        kind,
+        expected(
+            Expectation::ListElement,
+            Some("not"),
+            Some(Hint::ParenthesizeNot)
+        )
+    );
+    assert_eq!(at, "not");
+    let (kind, at) = err_at("x in [-[1]]");
+    assert_eq!(
+        kind,
+        expected(
+            Expectation::ListElement,
+            Some("["),
+            Some(Hint::ListOnlyAfterIn)
+        )
+    );
+    assert_eq!(at, "[");
+    let (kind, at) = err_at("x in [-1,]");
+    assert_eq!(
+        kind,
+        expected(
+            Expectation::ListElement,
+            Some("]"),
+            Some(Hint::TrailingComma)
+        )
+    );
+    assert_eq!(at, "]");
+    // A sign does not make the element an expression: `-` after an
+    // element is not a subtraction, and the fix says to parenthesize.
+    for (src, found) in [("x in [1 -2]", "-"), ("x in [-1 + 2]", "+")] {
+        let (kind, at) = err_at(src);
+        assert_eq!(
+            kind,
+            expected(
+                Expectation::CommaOrBracket,
+                Some(found),
+                Some(Hint::ParenthesizeElement)
+            ),
+            "{src}"
+        );
+        assert_eq!(at, found, "{src}");
+    }
+}
+
+#[test]
 fn malformed_lists() {
     let (kind, at) = err_at("x in 1");
     assert_eq!(kind, expected(Expectation::List, Some("1"), None));
@@ -588,17 +699,6 @@ fn malformed_lists() {
             Some(Hint::ParenthesizeElement)
         )
     );
-    // List elements are atoms (ADR-0009), so a sign needs parentheses.
-    let (kind, at) = err_at("x in [-1]");
-    assert_eq!(
-        kind,
-        expected(
-            Expectation::ListElement,
-            Some("-"),
-            Some(Hint::ParenthesizeElement)
-        )
-    );
-    assert_eq!(at, "-");
     let (kind, at) = err_at("x in [a + b]");
     assert_eq!(
         kind,
@@ -945,10 +1045,14 @@ fn messages_name_the_fix() {
          whole comparison; put it in parentheses, e.g. `a == (not b)`"
     );
     assert_eq!(
-        err("x in [-1]").to_string(),
-        "expected a list element (a literal, name, call or parenthesized expression) such as \
-         `'premium'`, found `-`; list elements are single values; put an expression in \
-         parentheses, e.g. `[(-1), 2]`"
+        err("x in [-1 + 2]").to_string(),
+        "expected `,` or `]`, as in `[1, 2]`, found `+`; list elements are single values, \
+         optionally negated; put an expression in parentheses, e.g. `[(1 + 2), 3]`"
+    );
+    assert_eq!(
+        err("x in [-]").to_string(),
+        "expected a list element (a literal, name, call or parenthesized expression, \
+         optionally negated) such as `'premium'` or `-1`, found `]`"
     );
     assert_eq!(
         err("f(a,)").to_string(),
