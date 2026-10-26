@@ -45,7 +45,8 @@ CI runs these gates; all must be green:
 | Gate | What it checks |
 | --- | --- |
 | lint | `rustfmt`, `clippy` (pedantic, `-D warnings`, no `unwrap`/`expect`/`panic!` in library code, no wildcard arms on enums), `cargo-deny` (licenses, advisories, duplicates), crate rules (`forbid(unsafe_code)`, `deny(missing_docs)`) |
-| test | unit, property and doc tests on Windows x86-64, Linux x86-64 and ARM64, macOS ARM64 |
+| test | unit, property, golden-trace and doc tests on Windows x86-64, Linux x86-64 and ARM64, macOS ARM64 |
+| trace hashes | every golden-trace case has the same stream and file SHA-256 on all four targets (ADR-0021) |
 | msrv | the workspace builds with the minimum supported Rust version |
 | coverage | ≥ 90 % lines overall, 100 % branches in `taktsim-core` |
 | python | pytest, ruff, pyright strict (warnings fail) on Python 3.13, 3.14, 3.15 |
@@ -85,6 +86,19 @@ tightening one (a new or stricter check) may come with the code it checks.
 
 If your PR breaks one of the design principles, say so in its description and
 explain why; the PR template asks.
+
+## Golden traces
+
+Golden-trace tests (ADR-0021) run a model, check that its trace replays,
+and compare a text snapshot, with the SHA-256 of every record, against
+`tests/snapshots/*.snap`. A snapshot changes only with an intended engine
+or model change, and the commit says why. To add a case, call
+`taktsim_trace::golden::record` (feature `golden`) in a test and pass the
+result to `insta::assert_snapshot!`; write a new or changed snapshot with
+`INSTA_UPDATE=always cargo nextest run -p <crate> --all-features`, then
+read the diff before committing it. CI also collects every case's hashes
+from every target (`TAKTSIM_TRACE_HASHES`) and fails if one differs;
+`ci/trace-memory.sh` measures the memory of a 10 M event trace (Linux).
 
 ## Benchmarks
 
