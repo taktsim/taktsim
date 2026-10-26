@@ -30,6 +30,11 @@ argument is never an expression, so the hyphen cannot be read as a minus.
 With plain identifiers, no component whose id contains a hyphen could be
 named in an expression.
 
+The owner's answers 4 and 6 (see "Owner's answers") change two more
+rules of ADR-0009, both implemented with this ADR: `==`, `!=` and `in`
+also take counts, and a list element is `unary` instead of `atom`
+(`list = "[" [ unary { "," unary } ] "]"`).
+
 One rule guided every other choice: when in doubt, reject. Allowing
 something later is compatible with existing models; forbidding it later is
 not.
@@ -95,8 +100,12 @@ Only a few details had real alternatives:
 - `not` and unary `-` appear once, as ADR-0009 writes them (`[ "not" ]`,
   `[ "-" ]`): `not not a` and `--a` are rejected with the fix
   `not (not a)`.
-- List elements are atoms, as ADR-0009 writes them: `[-1]` must be
-  written `[(-1)]`, and the error says so.
+- List elements are `unary`: an atom with at most one `-`, so `[-1]`,
+  `[-x]` and `[-(a + b)]` are valid (owner's answer 6; ADR-0009 wrote
+  `atom`). A list element is still not an expression: `[1 + 2]`, `[not a]`
+  and `[--1]` are rejected, with the fix to parenthesize (`[(1 + 2)]`,
+  `[(not a)]`, `[-(-1)]`). The printer writes a negated element as `-1`,
+  `-(1 + 2)`, and parenthesizes any other operator (`[(-1 + 2)]`).
 - Rejected with a fix: empty input, trailing commas, `in` without a list,
   a list outside `in`, a call on a dotted path (`a.b(x)`), `&&`, `||`,
   `!`, `=`, `<>`, `=<`, `=>`, double quotes, `%` as an operator.
@@ -130,7 +139,7 @@ Only a few details had real alternatives:
   | `/` | count / a duration literal | rate |
   | unary `-` | int, number | the same |
   | `<` `<=` `>` `>=` | T and T, T one of int, number, duration, count, rate, ratio | bool |
-  | `==` `!=` | T and T, T one of int, duration, bool, string, one enum | bool |
+  | `==` `!=` | T and T, T one of int, duration, count, bool, string, one enum | bool |
   | `x in [a, …]` | as `x == a` for each element | bool |
 
   An exact quantity (duration, count) is scaled by an int, so it stays
@@ -139,14 +148,20 @@ Only a few details had real alternatives:
   dividing a duration or a count by a number, `int / int` (it would
   truncate), unary minus on quantities (they are never negative),
   ordering of bools, strings and enums.
-- `!=` and `in` follow the rule ADR-0009 states for `==`.
+- `!=` and `in` follow the rule ADR-0009 states for `==`, as the owner
+  changed it (answer 4): `==` applies to every exact type, and a count
+  is an exact integer. It is still rejected on number, rate and ratio
+  (floating point), with the fix to compare with `<=` and `>=`. Counts
+  compare only with counts: `unit.batch == 2` is a type error whose fix
+  is `2 parts`, and `unit.batch == unit.age` is a mismatch.
 - "Division by literals only": the divisor is a literal atom (parentheses
   allowed, a sign not), and a zero divisor is a load error.
 - A bare number next to a quantity is a type error whose fix names the
   unit (`wip(buf1) <= 30`: "write `30 parts`"), but only where the fixed
   expression then type-checks. For `==`, `!=` and `in` that is a
-  duration; next to a count, rate, ratio or number the error says that
-  `==` does not apply (`wip(buf1) == 30`), and offers no unit.
+  duration or a count (`wip(buf1) == 30`: "write `30 parts`"); next to a
+  rate, ratio or number the error says that `==` does not apply
+  (`throughput(sink) == 120`), and offers no unit.
 - `x in []` is rejected: it is always false.
 - Paths are the full dotted names the environment declares; a prefix
   (`unit`) is not a value.
@@ -274,8 +289,9 @@ The owner took the recommendations:
    acceptance).
 3. The interval syntax for decision variables (for example `in 5..50`)
    is decided before v0.4.
-4. `==` on counts is allowed: a count is an exact integer. **Follow-up:**
-   the type checker still rejects it and must be changed.
+4. `==` on counts is allowed: a count is an exact integer. **Done:** the
+   type checker accepts `==`, `!=` and `in` on counts (see "3. Types").
 5. The types of the built-in observables are decided in M8.
-6. Yes: list elements are `unary`, so `[-1]` is valid. **Follow-up:** the
-   parser still requires `[(-1)]` and must be changed.
+6. Yes: list elements are `unary`, so `[-1]` is valid. **Done:** the
+   parser, the printer and the tests follow the new grammar (see "2.
+   Grammar details").
