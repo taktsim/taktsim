@@ -20,7 +20,8 @@
 //!
 //! With the `serde` feature, every quantity implements `Serialize` as its
 //! canonical text (`0.5h` serializes as `"30min"`), for the model's
-//! normalized form (ADR-0020).
+//! normalized form; with the `schemars` feature, `JsonSchema` as a string
+//! with the pattern the parser accepts (ADR-0020).
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -29,6 +30,8 @@ mod count;
 mod decimal;
 mod error;
 mod ratio;
+#[cfg(feature = "schemars")]
+mod schema;
 #[cfg(feature = "serde")]
 mod ser;
 mod time;
