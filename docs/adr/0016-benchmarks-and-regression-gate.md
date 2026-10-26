@@ -328,3 +328,166 @@ The owner took the recommendations:
    `ci/bench-compare.sh`; adding an entry is a gate change reviewed by the
    owner. **Follow-up:** not implemented yet; it loosens the gate, so it
    is its own pull request with the `gate-change` label.
+
+## Implementation note: accepted regressions (2026-10-26)
+
+Implements answer 1. It loosens the gate (a benchmark may rise by more
+than 10 %), so it came in a pull request of its own with the
+`gate-change` label. The rule of ADR-0007 is unchanged for every benchmark
+without an entry.
+
+**The file.** `ci/bench-accepted.txt`, one entry per line:
+
+```text
+<benchmark> +<N>% <reason>
+instructions_random::stream::next_u64::draws +25% every draw now checks the stream's position (ADR-0007)
+```
+
+A line whose first word starts with `#` is a comment; white space between
+the words is free, and a `#` later in a line belongs to the reason. The
+file is committed with comments only.
+
+**Rules, and how `ci/bench-compare.sh --accepted <head's list>
+--accepted-base <base's list>` enforces each:**
+
+| Rule | On violation |
+| --- | --- |
+| The benchmark is one name, `file::group::function[::id]` of letters, digits and `_`; no pattern | exit 2, line number, what was found, an example |
+| It is measured by both the base and the head (an unknown, new or removed benchmark has nothing to accept); an entry for `f::g::x` does not cover `f::g::x::a` | exit 2 |
+| A benchmark has at most one entry | exit 2, both line numbers |
+| The limit is `+N%`, N a whole number from 11 to 1000; up to +10 % needs no entry | exit 2 |
+| A reason (the rest of the line) is present | exit 2 |
+| The head may rise to `base × (100 + N) / 100`, exactly: `head × 100 > base × (100 + N)` fails, as for the 10 % rule | exit 1, `regression above the accepted +N %` |
+| A new entry must be needed: a benchmark that rose by 10 % or less (or fell) fails with its entry | exit 1, `accepted entry not needed` |
+| Only entries the pull request adds apply; an entry also in the base's list is stale and never applies | the benchmark is judged by +10 % alone |
+| A pull request that changes the list deletes every stale entry | exit 2 |
+| A product `base × (100 + N)` of 2^53 or more cannot be compared exactly | exit 2 |
+
+Every malformed line is reported in one run, with the fix and a valid
+example. Exit codes keep their meaning: 1 a verdict, 2 input the gate
+cannot trust. Without `--accepted` the script behaves exactly as before,
+so a later head's workflow can still call an older gate.
+
+**Why at most +1000 %.** An entry must never mean "anything". A percentage
+of the base is bounded by construction; the cap makes the bound a fixed
+number the gate checks, not only the reviewer. A change that makes a
+benchmark more than eleven times as expensive measures a different
+workload: it becomes a new benchmark, with the old name in
+`ci/bench-removed.txt`.
+
+**Which copy is read, and why the owner still reviews every entry.** The
+workflow keeps judging a pull request by the base's scripts (step 2 of the
+Decision). The list itself is read from the **head**, like
+`ci/bench-removed.txt`: the pull request that makes a change declares the
+regression it asks to accept, beside the code that causes it. Reading the
+base's list instead would need the entry merged before the change, where
+it could not be checked against a measurement. The head's list cannot
+slip through unreviewed:
+
+- `ci/bench-accepted.txt` is under `ci/`, a gate path (`ci/check-gates.sh`
+  now also names it, so narrowing `ci/` cannot drop it) and owned by the
+  owner in `CODEOWNERS`; adding an entry fails the `gates` check without
+  the `gate-change` label.
+- The script that interprets the list is the base's, so a pull request
+  cannot relax the rules and use the relaxed rules at once.
+- The base's copy (`git show <base>:ci/bench-accepted.txt`, empty if
+  absent) decides which entries are new. Only those apply, so an entry
+  merged with an earlier pull request never covers a later regression,
+  and every acceptance is a line added in the pull request it applies to,
+  visible in its diff. Changing an entry's limit or reason makes it a new
+  entry, which again needs the label and the review, and must be needed.
+
+**After the merge: stale entries.** Once the regression is on `main`, the
+base's count includes it and the entry is in the base's list: it is
+stale. Stale entries are identified by their words (benchmark, limit,
+reason; white space ignored), never applied, and listed under
+**Stale:** in the job summary. They fail the check (exit 2) in any pull
+request that changes the list, which must delete them; in a pull request
+that does not touch the list they are reported but do not fail.
+
+Failing every pull request while a stale entry is on `main` was
+considered and rejected. The pull request that adds an entry cannot also
+delete it, so after every accepted regression all open pull requests
+would fail until a separate clean-up pull request is merged, and each
+author would have to edit a gate file and carry the `gate-change` label
+for a change that is not theirs; that would wear down the meaning of
+both the label and a red check. Failing gives nothing more for safety:
+a stale entry already cannot accept anything. What failing would add,
+keeping the file short, is reached by the rule above: the file never
+holds more than the entries of the last pull request that changed it,
+and the next acceptance removes them under the owner's review.
+
+**The first pull request.** The base of the pull request that adds the
+feature has a gate that does not know `--accepted`. The workflow passes
+the lists only when the gate in use has `ci/bench-accepted.txt` (the file
+and the option arrive together), and writes "Accepted regressions: not
+read" in the summary otherwise. That pull request is therefore judged by
++10 % alone, as every pull request that changes the gate is judged by the
+gate it changes, and its own tests run as the head's tests. The first
+pull request that can accept a regression is the one after it.
+
+**Job summary.** An applied entry shows in the table as
+`accepted (limit +N %)`, and below it under **Accepted:** with its change,
+limit, line and reason; the closing line reads "no benchmark rose by more
+than 10 % (ADR-0007), except the accepted ones above". Failures show as
+`regression above the accepted +N %` and `accepted entry not needed`.
+The summary also says whether the gate in use read the list.
+
+**Tests.** `ci/bench-test.sh` has 56 new cases (115 in all): within,
+exactly at and one above the limit (also near 2^53, and a product too
+large to compare exactly); an entry covering only its own benchmark and
+not an id under it; comments, spacing, `#` in the reason and CRLF line
+ends; not needed (+10 % exactly, and an improvement); a zero base; the
+highest limit; the committed (empty) list changing nothing; each
+malformed form (pattern, short name, no limit, no reason, blank reason,
+missing `+` or `%`, a space before `%`, fraction, leading zero, word,
+negative, +10 %, +1001 %, a 20-digit limit), every bad line named in one
+run, duplicates, an unknown, a new and a removed benchmark; stale entries
+warning, never applying, of a removed benchmark, left beside a new entry,
+deleted beside a new entry, deleted alone, left while only a comment
+changes, re-spaced; an edited entry being new and having to be needed; a
+malformed base list that can still be fixed; the committed list parsing;
+missing, directory and empty-path lists, `--accepted-base` alone, a
+repeated option, the base's list from a pipe, options in any order. Each
+expected value is worked out by hand from the rule. The test helper also
+checks that a line is absent (`!text`). The tests pass with jq 1.8.2; the
+jq programs use nothing newer than 1.6 (every `if` has an `else`), but
+the official 1.6 binary was not run again for this change.
+
+Each of 28 hand mutants of the new code fails at least one test: stale
+entries applied, `>=` for `>` and one more percent at the limit, no
+"not needed" verdict or one that passes, an exceeded entry that passes,
+each half of the "measured on both sides" check and the whole check
+dropped, no stale check, stale entries failing every pull request, the
+list never counted as changed, no exactness or duplicate check, a minimum
+limit of +10 %, a maximum of +1001 % or ten times higher, any name or a
+two-part name accepted, the `+` optional, leading zeros allowed, no
+reason required, `#` anywhere making a comment, comments not skipped,
+entries keyed by benchmark only, the base's list read strictly,
+`--accepted-base` alone allowed, and a missing list accepted.
+
+**Checked locally** (Linux x86-64, Valgrind 3.25.1, gungraun-runner
+0.20.0; these runs show what the gate decides, not speed, ADR-0010):
+`ci/bench-run.sh` on `main` (6834c25) and on this branch measured the same
+21 counts; `main`'s `ci/bench-compare.sh` and the new one, given the
+committed list, printed byte-identical tables ("21 compared", passed).
+With a scratch change that parses each duration twice,
+`parse_duration` rose from 3,113 to 4,721 instructions (+51.65 %): no
+entry failed it as a regression; a new `+60%` entry passed it as
+`accepted (limit +60 %)` with its reason; a `+30%` entry failed it as
+`regression above the accepted +30 %`; the `+60%` entry in both lists,
+with the regressed counts as base and head, passed with it listed as
+stale. The scratch change was not committed.
+
+**Open questions for the owner.**
+
+1. The `bench` check is not yet a required check on `main` (CLAUDE.md,
+   Status), and the owner's review of gate files relies on `CODEOWNERS`
+   being enforced by the ruleset ("require review from code owners"). Both
+   are ruleset settings; until they are on, an accepted entry is held back
+   by the `gates` check and the label only.
+2. Stale entries fail only a pull request that changes the list (above).
+   If you prefer every pull request to fail until they are deleted, it is
+   one condition in `ci/bench-compare.sh` and its tests.
+3. The cap of +1000 % is a judgement; a lower cap (say +100 %) would make
+   larger acceptances a deliberate rename instead.

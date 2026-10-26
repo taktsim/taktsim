@@ -10,6 +10,9 @@ gate_paths=(
   .github/workflows/ .github/CODEOWNERS ci/ .cargo/
   # The benchmarks the instruction-count gate measures (ADR-0016).
   crates/taktsim-bench/
+  # Its accepted regressions and removed benchmarks (ADR-0016). Inside ci/
+  # already; named so that narrowing ci/ cannot drop them.
+  ci/bench-accepted.txt ci/bench-removed.txt
 )
 
 changed=$(git diff --name-only "$base"...HEAD -- "${gate_paths[@]}")

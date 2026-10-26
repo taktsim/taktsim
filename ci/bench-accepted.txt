@@ -1,0 +1,27 @@
+# Accepted instruction-count regressions (ADR-0016, owner's answer 1).
+#
+# The bench gate fails a benchmark whose count rose by more than 10 %. A
+# pull request whose change is meant to cost more (an invariant check, say)
+# adds one line per such benchmark, then asks the owner to review it:
+#
+#   <benchmark> +<N>% <reason>
+#
+# e.g.
+#
+#   instructions_random::stream::next_u64::draws +25% every draw now checks the stream's position (ADR-0007)
+#
+# - <benchmark>: exactly one benchmark, named as the gate's table shows it,
+#   that both the base and the head measure. No patterns.
+# - +<N>%: the most its count may rise above the base's, a whole number
+#   from 11 to 1000. Pick the measured change rounded up, plus a little.
+# - <reason>: the rest of the line; why the cost is intended. Required.
+#
+# An entry applies only in the pull request that adds it: the gate compares
+# this file with the base's copy, and an entry that is already in the base
+# (same words) is stale, because its regression is already in the base
+# count. A stale entry never applies again; the gate's summary lists it,
+# and a pull request that changes this file must delete every stale entry.
+# The gate also fails a new entry that is not needed (the benchmark rose by
+# 10 % or less), names a benchmark that is not measured on both sides, or
+# repeats a benchmark. This file is a gate file: changing it needs the
+# gate-change label and the owner's review.
