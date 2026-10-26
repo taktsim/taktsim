@@ -37,7 +37,15 @@ name = "instructions_random"
 harness = false
 
 [[bench]]
+name = "instructions_queue"
+harness = false
+
+[[bench]]
 name = "instructions_units"
+harness = false
+
+[[bench]]
+name = "wall_queue"
 harness = false
 
 [[bench]]
