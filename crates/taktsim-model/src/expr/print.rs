@@ -92,7 +92,7 @@ impl fmt::Display for Expr {
                     if i > 0 {
                         f.write_str(", ")?;
                     }
-                    operand(f, item, ATOM)?;
+                    operand(f, item, UNARY)?;
                 }
                 f.write_str("]")
             }

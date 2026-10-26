@@ -300,18 +300,26 @@ impl Lowered {
             Err(self)
         }
     }
+
+    fn into_count(self) -> Result<ExactIr<CountD>, Self> {
+        if let Self::Count(x) = self {
+            Ok(x.ir)
+        } else {
+            Err(self)
+        }
+    }
 }
 
 /// Whether `==` applies to values of type `ty`: only exact ones
-/// (ADR-0009).
+/// (ADR-0009; counts are exact integers, ADR-0015).
 const fn compares_exactly(ty: &Type) -> bool {
     match ty {
-        Type::Bool | Type::Int | Type::Quantity(Dimension::Time) | Type::String | Type::Enum(_) => {
-            true
-        }
-        Type::Number | Type::Quantity(Dimension::Count | Dimension::Rate | Dimension::Ratio) => {
-            false
-        }
+        Type::Bool
+        | Type::Int
+        | Type::Quantity(Dimension::Time | Dimension::Count)
+        | Type::String
+        | Type::Enum(_) => true,
+        Type::Number | Type::Quantity(Dimension::Rate | Dimension::Ratio) => false,
     }
 }
 
@@ -372,19 +380,16 @@ fn mismatch(op: Operator, l: &Side<'_>, r: &Side<'_>, span: Span, unit_hint: boo
 }
 
 /// Operands of different types for `==`, `!=` or `in`. A unit is suggested
-/// for a bare number only where `==` then applies (durations); next to a
-/// value that never compares exactly, the error says so instead.
+/// for a bare number only where `==` then applies (durations and counts);
+/// next to a value that never compares exactly, the error says so instead.
 fn equality_mismatch(op: Operator, l: &Side<'_>, r: &Side<'_>, span: Span) -> ExprError {
     for (value, other) in [(l, r), (r, l)] {
         let Some(literal) = bare_number(other.expr) else {
             continue;
         };
-        if value.dimension == Some(Dimension::Time) {
+        if let Some(dimension @ (Dimension::Time | Dimension::Count)) = value.dimension {
             return ExprError::new(
-                ErrorKind::MissingUnit {
-                    literal,
-                    dimension: Dimension::Time,
-                },
+                ErrorKind::MissingUnit { literal, dimension },
                 other.expr.span(),
             );
         }
@@ -754,6 +759,9 @@ impl Checker<'_> {
             (Lowered::Time(a), Lowered::Time(b)) => {
                 BoolIr::EqTime(op, Box::new(a.ir), Box::new(b.ir))
             }
+            (Lowered::Count(a), Lowered::Count(b)) => {
+                BoolIr::EqCount(op, Box::new(a.ir), Box::new(b.ir))
+            }
             (Lowered::Text(a), Lowered::Text(b)) => {
                 let b = Self::text_element(operator, (&a, le), (b, re), span)?;
                 BoolIr::EqText(op, Box::new(a.into_ir()), Box::new(b))
@@ -782,6 +790,10 @@ impl Checker<'_> {
                 Box::new(a.ir),
                 self.elements(&left, list, Lowered::into_time)?,
             ),
+            Lowered::Count(a) => BoolIr::InCount(
+                Box::new(a.ir),
+                self.elements(&left, list, Lowered::into_count)?,
+            ),
             Lowered::Text(a) => {
                 non_empty(list)?;
                 let mut texts = Vec::with_capacity(list.items.len());
@@ -805,7 +817,7 @@ impl Checker<'_> {
                 }
                 BoolIr::InText(Box::new(a.into_ir()), texts)
             }
-            Lowered::Count(_) | Lowered::Number(_) | Lowered::Rate(_) | Lowered::Ratio(_) => {
+            Lowered::Number(_) | Lowered::Rate(_) | Lowered::Ratio(_) => {
                 return Err(ExprError::new(
                     ErrorKind::EqualityNotAllowed {
                         op: Operator::In,

@@ -531,6 +531,13 @@ fn equality_is_allowed_on_exact_types() {
         "unit.priority == 1",
         "unit.age == 30s",
         "unit.age != lead_time(sink)",
+        // A count is an exact integer (ADR-0015, answer 4).
+        "unit.batch == 3 parts",
+        "unit.batch != wip(buf1)",
+        "wip(buf1) == 3 parts",
+        "3 parts == wip(buf1)",
+        "unit.batch == 2 * 1 parts",
+        "unit.batch + 1 parts == 4 parts",
         "unit.reworked == true",
         "unit.reworked != (1 < 2)",
         "unit.label == 'x'",
@@ -548,7 +555,6 @@ fn equality_is_allowed_on_exact_types() {
 fn equality_is_rejected_on_inexact_types() {
     for (src, op, found) in [
         ("unit.weight == 1.0", Operator::Eq, Type::Number),
-        ("wip(buf1) == 3 parts", Operator::Eq, COUNT),
         ("throughput(sink) != 1 parts/h", Operator::Ne, RATE),
         ("2% == unit.share", Operator::Eq, RATIO),
     ] {
@@ -562,9 +568,54 @@ fn equality_is_rejected_on_inexact_types() {
     }
     assert_eq!(
         err("unit.weight == 1.0").to_string(),
-        "`==` cannot compare number values: only int, duration, bool, string and enum values \
-         compare exactly; compare with `<=` and `>=` instead"
+        "`==` cannot compare number values: only int, duration, count, bool, string and \
+         enum values compare exactly; compare with `<=` and `>=` instead"
     );
+}
+
+#[test]
+fn equality_on_counts_follows_the_other_exact_types() {
+    // Same dimension only; a count is not an int, a duration or a rate.
+    for (src, left, right) in [
+        ("unit.batch == unit.age", COUNT, DURATION),
+        ("unit.batch != throughput(sink)", COUNT, RATE),
+        ("unit.batch == unit.priority", COUNT, Type::Int),
+        ("unit.batch == true", COUNT, Type::Bool),
+        ("unit.batch == 'a'", COUNT, Type::String),
+        ("unit.batch == variant", COUNT, enumeration("variant")),
+        ("unit.reworked == unit.batch", Type::Bool, COUNT),
+        ("unit.priority == wip(buf1)", Type::Int, COUNT),
+    ] {
+        let (kind, at) = err_at(src);
+        assert_eq!(
+            kind,
+            mismatch(
+                if src.contains("!=") {
+                    Operator::Ne
+                } else {
+                    Operator::Eq
+                },
+                left,
+                right
+            ),
+            "{src}"
+        );
+        assert_eq!(at, src);
+    }
+    // A bare number next to a count: the fix is the unit.
+    for (src, literal) in [("unit.batch == 2", "2"), ("1 != unit.batch", "1")] {
+        let (kind, at) = err_at(src);
+        assert!(matches!(
+            kind,
+            ErrorKind::MissingUnit {
+                dimension: Dimension::Count,
+                ..
+            }
+        ));
+        assert_eq!(at, literal);
+    }
+    // The count's own arithmetic stays exact and keeps its type.
+    assert_eq!(ty("unit.batch * 2 == wip(buf1) + 1 parts"), Type::Bool);
 }
 
 #[test]
@@ -634,6 +685,8 @@ fn membership_follows_the_equality_rules() {
     for src in [
         "unit.priority in [1, 2, unit.rank]",
         "unit.age in [30s, 1min]",
+        "unit.batch in [1 parts, 2 parts, wip(buf1)]",
+        "wip(buf1) in [3 parts]",
         "unit.reworked in [true]",
         "variant in ['basic', 'premium']",
         "'frame' in [product]",
@@ -643,7 +696,6 @@ fn membership_follows_the_equality_rules() {
     }
     for (src, found) in [
         ("unit.weight in [1.0]", Type::Number),
-        ("wip(buf1) in [1 parts]", COUNT),
         ("unit.rate in [1 parts/h]", RATE),
         ("unit.share in [1%]", RATIO),
     ] {
@@ -691,6 +743,43 @@ fn list_elements_must_match_the_left_side() {
         matches!(&kind, ErrorKind::UnknownEnumValue { enumeration, .. } if enumeration == "product")
     );
     assert_eq!(at, "'basic'");
+}
+
+#[test]
+fn signed_list_elements_follow_the_rules_of_negation() {
+    // ADR-0015, answer 6: `[-1]` parses, and is typed as `-1` is anywhere.
+    for src in [
+        "unit.rank in [-1]",
+        "unit.priority in [-1, -unit.rank, 3]",
+        "unit.priority in [-(unit.rank + 1)]",
+        "-unit.priority in [-1, -2]",
+    ] {
+        assert_eq!(ty(src), Type::Bool, "{src}");
+    }
+    // A negated number is a number, not an int.
+    let (kind, at) = err_at("unit.priority in [-1.0]");
+    assert_eq!(kind, mismatch(Operator::In, Type::Int, Type::Number));
+    assert_eq!(at, "-1.0");
+    // Quantities, bools and strings have no unary minus, in a list too.
+    for (src, operand, found) in [
+        ("unit.age in [-30s]", "30s", DURATION),
+        ("unit.batch in [-5 parts]", "5 parts", COUNT),
+        ("unit.reworked in [-true]", "true", Type::Bool),
+        ("unit.label in [-'a']", "'a'", Type::String),
+    ] {
+        let (kind, at) = err_at(src);
+        assert_eq!(kind, not_defined(Operator::Neg, found), "{src}");
+        assert_eq!(at, operand, "{src}");
+    }
+    // Numbers and the other inexact types still have no `in`.
+    let (kind, _) = err_at("unit.weight in [-1.0]");
+    assert_eq!(
+        kind,
+        ErrorKind::EqualityNotAllowed {
+            op: Operator::In,
+            ty: Type::Number
+        }
+    );
 }
 
 #[test]
@@ -756,17 +845,16 @@ fn context_messages() {
 
 #[test]
 fn equality_never_suggests_a_unit_it_would_then_reject() {
-    // `==` does not apply to counts, rates, ratios or numbers, so adding a
-    // unit would not help: say so instead.
+    // `==` does not apply to rates, ratios or numbers, so adding a unit
+    // would not help: say so instead.
     for (src, found) in [
-        ("wip(buf1) == 30", COUNT),
-        ("30 == wip(buf1)", COUNT),
         ("throughput(sink) != 120", RATE),
+        ("120 == throughput(sink)", RATE),
         // The literal is the inexact side here.
         ("2.5 == unit.share", Type::Number),
         ("unit.weight == 1", Type::Number),
         ("1 == unit.weight", Type::Number),
-        ("30 in [wip(buf1)]", COUNT),
+        ("120 in [throughput(sink)]", RATE),
     ] {
         let e = err(src);
         assert!(
@@ -775,8 +863,17 @@ fn equality_never_suggests_a_unit_it_would_then_reject() {
         );
         assert_eq!(e.replacement(), None, "{src}");
     }
-    // Durations compare exactly, so there the unit is the fix.
+    // Durations and counts compare exactly, so there the unit is the fix.
     for (src, literal, fixed) in [
+        ("wip(buf1) == 30", "30", "wip(buf1) == 30 parts"),
+        ("30 == wip(buf1)", "30", "30 parts == wip(buf1)"),
+        ("unit.batch != 2.5", "2.5", "unit.batch != 20 parts"),
+        ("30 in [wip(buf1)]", "30", "30 parts in [wip(buf1)]"),
+        (
+            "unit.batch in [1 parts, 2]",
+            "2",
+            "unit.batch in [1 parts, 2 parts]",
+        ),
         ("unit.age == 30", "30", "unit.age == 30s"),
         ("30 != unit.age", "30", "30s != unit.age"),
         ("unit.age in [30s, 60]", "60", "unit.age in [30s, 60s]"),
@@ -815,6 +912,8 @@ fn every_offered_fix_type_checks() {
         "unit.batch < 2.5",
         "unit.age == 30",
         "unit.age in [30s, 60]",
+        "unit.batch == 30",
+        "wip(buf1) in [1 parts, 2]",
         // Suggested names, functions, components and enum values
         "varient == 'premium'",
         "unit.priorty > 1",
@@ -892,9 +991,15 @@ fn errors_are_reported_in_reading_order() {
         ("'a' + (unit.priority + 2.0)", "'a'", "NotDefinedFor"),
         ("true * (unit.priority + 2.0)", "true", "NotDefinedFor"),
         (
-            "wip(buf1) == (unit.priority + 2.0)",
-            "wip(buf1) == (unit.priority + 2.0)",
+            "throughput(sink) == (unit.priority + 2.0)",
+            "throughput(sink) == (unit.priority + 2.0)",
             "EqualityNotAllowed",
+        ),
+        // A count compares exactly, so its right operand is read next.
+        (
+            "wip(buf1) == (unit.priority + 2.0)",
+            "(unit.priority + 2.0)",
+            "Mismatch",
         ),
         (
             "unit.weight in [(unit.priority + 2.0)]",

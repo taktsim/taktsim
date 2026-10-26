@@ -541,6 +541,7 @@ impl<'v, V: Values + ?Sized> Eval<'v, V> {
             BoolIr::EqText(op, a, b) => eq(*op, self.text(a)?, self.text(b)?),
             BoolIr::EqInt(op, a, b) => eq(*op, &self.exact(a)?.0, &self.exact(b)?.0),
             BoolIr::EqTime(op, a, b) => eq(*op, &self.exact(a)?.0, &self.exact(b)?.0),
+            BoolIr::EqCount(op, a, b) => eq(*op, &self.exact(a)?.0, &self.exact(b)?.0),
             BoolIr::OrdInt(op, a, b) => ord(*op, &self.exact(a)?.0, &self.exact(b)?.0),
             BoolIr::OrdTime(op, a, b) => ord(*op, &self.exact(a)?.0, &self.exact(b)?.0),
             BoolIr::OrdCount(op, a, b) => ord(*op, &self.exact(a)?.0, &self.exact(b)?.0),
@@ -565,6 +566,7 @@ impl<'v, V: Values + ?Sized> Eval<'v, V> {
             }
             BoolIr::InInt(a, items) => self.exact_in(a, items)?,
             BoolIr::InTime(a, items) => self.exact_in(a, items)?,
+            BoolIr::InCount(a, items) => self.exact_in(a, items)?,
         })
     }
 
