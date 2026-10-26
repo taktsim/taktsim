@@ -149,6 +149,34 @@ impl Node {
         self.end
     }
 
+    /// The value as JSON, without locations.
+    ///
+    /// ```
+    /// use taktsim_model::{Format, parse};
+    ///
+    /// let node = parse("[1, 2.5, x, true, null]", Format::Yaml)?;
+    /// assert_eq!(node.to_json(), serde_json::json!([1, 2.5, "x", true, null]));
+    /// # Ok::<(), taktsim_model::LoadErrors>(())
+    /// ```
+    #[must_use]
+    pub fn to_json(&self) -> serde_json::Value {
+        match &self.value {
+            Value::Null => serde_json::Value::Null,
+            Value::Bool(b) => (*b).into(),
+            Value::Int(n) => (*n).into(),
+            Value::Float(x) => {
+                serde_json::Number::from_f64(*x).map_or(serde_json::Value::Null, Into::into)
+            }
+            Value::Str(s) => s.clone().into(),
+            Value::List(items) => items.iter().map(Self::to_json).collect(),
+            Value::Map(entries) => entries
+                .iter()
+                .map(|e| (e.key().to_owned(), e.value().to_json()))
+                .collect::<serde_json::Map<_, _>>()
+                .into(),
+        }
+    }
+
     /// What the value is, for error messages.
     ///
     /// ```

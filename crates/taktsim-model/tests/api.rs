@@ -7,6 +7,7 @@ mod support;
 
 use std::io;
 
+use schemars::JsonSchema;
 use serde::Serialize;
 use serde::ser::{Error as _, Serializer};
 use support::summary;
@@ -42,7 +43,7 @@ fn summary_one(e: &taktsim_model::LoadError) -> String {
     )
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 struct NotAMap(u32);
 
@@ -54,7 +55,7 @@ impl ComponentParams for NotAMap {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 struct Reserved {
     id: u32,
 }
@@ -67,7 +68,7 @@ impl ComponentParams for Reserved {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, JsonSchema)]
 struct Failing;
 
 impl Serialize for Failing {
@@ -84,7 +85,7 @@ impl ComponentParams for Failing {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 struct Huge {
     n: u64,
 }
@@ -97,7 +98,7 @@ impl ComponentParams for Huge {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 struct Silent;
 
 impl ComponentParams for Silent {

@@ -21,7 +21,7 @@ use crate::document::{
 use crate::error::{
     FieldPath, LoadError, LoadErrorKind, LoadErrors, Location, Place, Segment, suggest,
 };
-use crate::expr::{Expected, ExprKind, TypeEnv, check, parse};
+use crate::expr::{Expected, ExprKind, TypeEnv, check, parse as parse_expr};
 use crate::hash::ModelHash;
 use crate::include::{DirResolver, Included, Resolver};
 use crate::jcs::canonicalize;
@@ -32,7 +32,7 @@ use crate::syntax::{self, Format, Node};
 /// ```
 /// use taktsim_model::{Catalog, ComponentParams, Fields, Format, Loader};
 ///
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
 /// struct Station {}
 ///
 /// impl ComponentParams for Station {
@@ -702,7 +702,7 @@ impl Run<'_> {
         let mut ok = true;
         for r in raw {
             let place = r.place.clone();
-            let checked = parse(&r.text).and_then(|expr| {
+            let checked = parse_expr(&r.text).and_then(|expr| {
                 check(&expr, env, expected)?;
                 Ok(expr)
             });
@@ -807,6 +807,32 @@ fn read_fragment(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<Par
     Some(parts)
 }
 
+/// Parses `text` into a tree with locations, without decoding it: for
+/// tools that work on the document as written, such as checking it against
+/// the schema ([`model_schema`](crate::model_schema)).
+///
+/// # Errors
+///
+/// The syntax errors of `text` (YAML subset or JSON).
+///
+/// ```
+/// use taktsim_model::{Format, parse};
+///
+/// let node = parse("model: {name: m}", Format::Yaml)?;
+/// assert_eq!(node.to_json()["model"]["name"], "m");
+/// assert!(parse("a: 1\na: 2\n", Format::Yaml).is_err());
+/// # Ok::<(), taktsim_model::LoadErrors>(())
+/// ```
+pub fn parse(text: &str, format: Format) -> Result<Node, LoadErrors> {
+    syntax::parse(text, format).map_err(|errors| {
+        let errors = errors
+            .into_iter()
+            .map(|e| LoadError::new(None, e.location, e.path, e.kind))
+            .collect();
+        LoadErrors::from_vec(errors).unwrap_or_else(|| LoadErrors::single(empty()))
+    })
+}
+
 /// Decodes a value of type `T` from `text`: for testing a component type's
 /// parameters, or reading one value.
 ///
@@ -822,13 +848,7 @@ fn read_fragment(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<Par
 /// # Ok::<(), taktsim_model::LoadErrors>(())
 /// ```
 pub fn decode_str<T: Decode>(text: &str, format: Format) -> Result<T, LoadErrors> {
-    let node = syntax::parse(text, format).map_err(|errors| {
-        let errors = errors
-            .into_iter()
-            .map(|e| LoadError::new(None, e.location, e.path, e.kind))
-            .collect();
-        LoadErrors::from_vec(errors).unwrap_or_else(|| LoadErrors::single(empty()))
-    })?;
+    let node = parse(text, format)?;
     let mut cx = Decoder::new(None);
     let value = T::decode(&node, &mut cx);
     match (value, LoadErrors::from_vec(cx.into_errors())) {

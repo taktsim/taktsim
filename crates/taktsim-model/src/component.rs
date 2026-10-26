@@ -129,13 +129,16 @@ impl Decode for ComponentRef {
 /// must be a mapping that leaves out absent optional parameters (so adding
 /// an optional parameter later does not change the hash of any existing
 /// model) and writes quantities and distributions in their canonical forms
-/// (they serialize that way).
+/// (they serialize that way). Its `JsonSchema` (derived) describes the
+/// parameters in the model's schema ([`model_schema`](crate::model_schema));
+/// a nested parameter struct needs `#[schemars(deny_unknown_fields)]`, as
+/// its decoder rejects unknown keys.
 ///
 /// ```
 /// use serde::Serialize;
 /// use taktsim_model::{Catalog, ComponentParams, Distribution, Fields};
 ///
-/// #[derive(Debug, Serialize)]
+/// #[derive(Debug, Serialize, schemars::JsonSchema)]
 /// struct Delay {
 ///     time: Distribution,
 /// }
@@ -153,7 +156,9 @@ impl Decode for ComponentRef {
 /// assert_eq!(catalog.types().collect::<Vec<_>>(), ["Delay"]);
 /// # Ok::<(), taktsim_model::CatalogError>(())
 /// ```
-pub trait ComponentParams: Serialize + fmt::Debug + Send + Sync + Sized + 'static {
+pub trait ComponentParams:
+    Serialize + schemars::JsonSchema + fmt::Debug + Send + Sync + Sized + 'static
+{
     /// The `type` value that selects this component type, e.g. `Machine`.
     const TYPE: &'static str;
     /// One valid entry in YAML flow style, for error messages.
@@ -170,7 +175,7 @@ pub trait ComponentParams: Serialize + fmt::Debug + Send + Sync + Sized + 'stati
     /// use serde::Serialize;
     /// use taktsim_model::{ComponentParams, ComponentRef, Fields};
     ///
-    /// #[derive(Debug, Serialize)]
+    /// #[derive(Debug, Serialize, schemars::JsonSchema)]
     /// struct Inspection {
     ///     rework_to: ComponentRef,
     /// }
@@ -197,6 +202,7 @@ pub trait ComponentParams: Serialize + fmt::Debug + Send + Sync + Sized + 'stati
 trait Kind: Send + Sync {
     fn example(&self) -> &'static str;
     fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Box<dyn Params>>;
+    fn schema(&self, generator: &mut schemars::SchemaGenerator) -> serde_json::Value;
 }
 
 struct KindOf<P>(PhantomData<fn() -> P>);
@@ -208,6 +214,11 @@ impl<P: ComponentParams> Kind for KindOf<P> {
 
     fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Box<dyn Params>> {
         P::decode(fields).map(|p| Box::new(p) as Box<dyn Params>)
+    }
+
+    fn schema(&self, generator: &mut schemars::SchemaGenerator) -> serde_json::Value {
+        let params = P::json_schema(generator);
+        crate::schema::entry_schema(P::TYPE, params, generator)
     }
 }
 
@@ -237,7 +248,7 @@ impl<P: ComponentParams> Params for P {
 /// ```
 /// use taktsim_model::{Catalog, CatalogError, ComponentParams, Fields};
 ///
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
 /// struct Sink {}
 ///
 /// impl ComponentParams for Sink {
@@ -334,7 +345,7 @@ impl Catalog {
     /// ```
     /// use taktsim_model::{Catalog, ComponentParams, Fields};
     ///
-    /// #[derive(Debug, serde::Serialize)]
+    /// #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
     /// struct Sink {}
     ///
     /// impl ComponentParams for Sink {
@@ -424,6 +435,17 @@ impl Catalog {
         self.observables.keys().map(String::as_str)
     }
 
+    /// The schema of an entry of each component type, in sorted order.
+    pub(crate) fn entry_schemas(
+        &self,
+        generator: &mut schemars::SchemaGenerator,
+    ) -> Vec<serde_json::Value> {
+        self.kinds
+            .values()
+            .map(|kind| kind.schema(generator))
+            .collect()
+    }
+
     /// The observables as an expression environment.
     pub(crate) const fn environment(&self) -> &TypeEnv {
         &self.env
@@ -443,7 +465,7 @@ impl Catalog {
 /// use taktsim_model::{Catalog, ComponentParams, Fields, Format, Loader};
 /// use taktsim_units::Count;
 ///
-/// #[derive(Debug, Serialize)]
+/// #[derive(Debug, Serialize, schemars::JsonSchema)]
 /// struct Buffer {
 ///     capacity: Count,
 /// }

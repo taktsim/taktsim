@@ -260,8 +260,20 @@ include:
   given. In M4 the catalog is empty, so the committed schema admits no
   component type, exactly as the loader does; M5 generates it with its
   catalog.
-- A contract test checks the valid corpus against the schema with a
-  validator (dev-dependency, named in that pull request).
+- A contract test checks the corpus against the schema: every valid model
+  and included file is accepted, and every malformed model whose error a
+  schema can state is rejected (51 of the 86 that parse; the rest need
+  the whole document, such as unknown references). The JSON Schema
+  validator crates (`jsonschema`, `boon`) depend on `borrow-or-share`,
+  licensed MIT-0, which `deny.toml` does not allow (dev-dependencies are
+  not license-checked, but the allow-list is the policy). So the test has
+  its own checker for exactly the keywords the generator emits, and a
+  test fails if the schema uses any other keyword. The patterns use
+  `regex` (already in the lockfile) and are property-tested against the
+  units parser.
+- `null` is never valid: derived schemas let optional fields be null, so
+  the generator removes `null` from every type (an optional parameter is
+  left out, not written as null).
 - No `$id` until the owner chooses one (question 9).
 
 ## Consequences
@@ -279,7 +291,10 @@ include:
   `hybrid-array`, `typenum`), all MIT OR Apache-2.0 (`typenum`: MIT OR
   Apache-2.0); `serde` and `serde_json` were already in the lockfile.
   `taktsim-model` now depends on `taktsim-core` for the distribution
-  constructors (allowed: every crate depends on core).
+  constructors (allowed: every crate depends on core). The schema adds
+  `schemars` and `schemars_derive` (MIT) with `dyn-clone`, `ref-cast`,
+  `ref-cast-impl` and `serde_derive_internals` (MIT OR Apache-2.0), and
+  `regex` (already in the lockfile) for tests.
 
 ## What the spec's examples need (found while testing them)
 
@@ -321,3 +336,6 @@ exactly why each does not load as written:
 10. Shares such as `scrap_rate`: a ratio with a unit (`2%`) or a bare
     number (spec §4's example)? Needed by v0.2's Inspection; recorded here
     because the rule is a model-format rule.
+11. MIT-0 (`borrow-or-share`, used by the JSON Schema validator crates):
+    add it to the license allow-list (a gate change, its own pull
+    request), so a standard validator can replace the test's own checker?

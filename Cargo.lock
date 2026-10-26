@@ -990,7 +990,9 @@ name = "taktsim-model"
 version = "0.0.0"
 dependencies = [
  "proptest",
+ "regex",
  "saphyr-parser",
+ "schemars",
  "serde",
  "serde_json",
  "sha2",

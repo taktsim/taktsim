@@ -25,7 +25,7 @@
 //! use serde::Serialize;
 //! use taktsim_model::{Catalog, ComponentParams, Distribution, Fields, Format, Loader};
 //!
-//! #[derive(Debug, Serialize)]
+//! #[derive(Debug, Serialize, schemars::JsonSchema)]
 //! struct Machine {
 //!     cycle_time: Distribution,
 //! }
@@ -75,6 +75,7 @@ mod hash;
 mod include;
 pub mod jcs;
 mod load;
+mod schema;
 mod syntax;
 
 pub use component::{Catalog, CatalogError, Component, ComponentParams, ComponentRef};
@@ -90,5 +91,6 @@ pub use error::{
 };
 pub use hash::{ModelHash, ParseHashError};
 pub use include::{DirResolver, Included, Resolver};
-pub use load::{Loader, Model, decode_str};
+pub use load::{Loader, Model, decode_str, parse};
+pub use schema::model_schema;
 pub use syntax::{Entry, Format, MAX_NESTING, Node, Value};

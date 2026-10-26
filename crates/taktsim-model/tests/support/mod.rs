@@ -10,6 +10,7 @@
 
 use std::path::{Path, PathBuf};
 
+use schemars::JsonSchema;
 use serde::Serialize;
 use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
@@ -17,7 +18,7 @@ use taktsim_model::{
 };
 use taktsim_units::{Count, SimDuration};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Source {
     pub interarrival: Distribution,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -39,7 +40,8 @@ impl ComponentParams for Source {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
 pub struct Setup {
     pub per_variant: SimDuration,
 }
@@ -58,7 +60,7 @@ impl Decode for Setup {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Machine {
     pub cycle_time: Distribution,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,7 +93,7 @@ impl ComponentParams for Machine {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Buffer {
     pub capacity: Count,
 }
@@ -107,7 +109,7 @@ impl ComponentParams for Buffer {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Sink {}
 
 impl ComponentParams for Sink {
@@ -121,7 +123,7 @@ impl ComponentParams for Sink {
 
 /// A component type that refers to another component (spec §4's
 /// Inspection, reduced to its reference).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Inspection {
     pub inspection_time: Distribution,
     pub rework_to: ComponentRef,

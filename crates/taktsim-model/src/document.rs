@@ -22,7 +22,7 @@ pub const FORMAT_VERSION: &str = "1.0";
 /// use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 /// use taktsim_model::{Catalog, ComponentParams, Distribution, Fields, Format, Loader};
 ///
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
 /// struct Source {
 ///     interarrival: Distribution,
 /// }
@@ -33,7 +33,7 @@ pub const FORMAT_VERSION: &str = "1.0";
 ///         Some(Self { interarrival: fields.required("interarrival")? })
 ///     }
 /// }
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
 /// struct Sink {}
 /// impl ComponentParams for Sink {
 ///     const TYPE: &'static str = "Sink";
