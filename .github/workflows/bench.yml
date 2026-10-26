@@ -1,8 +1,10 @@
 # Instruction-count regression gate (spec §7, §10; ADR-0007, ADR-0010,
 # ADR-0016): measures the gungraun benchmarks of the pull request's base and
 # of the pull request merged into it, one after the other on the same runner,
-# and fails if a benchmark's instruction count rose by more than 10 % or a
-# benchmark disappeared without being listed in ci/bench-removed.txt.
+# and fails if a benchmark's instruction count rose by more than 10 % (or by
+# more than the limit of an entry the pull request adds to
+# ci/bench-accepted.txt) or a benchmark disappeared without being listed in
+# ci/bench-removed.txt.
 # Separate from ci.yml so it can be changed without touching the other gates.
 # Changing this file needs the `gate-change` label (ci/check-gates.sh).
 #
@@ -65,6 +67,14 @@ jobs:
             cp -R ci Cargo.lock "$RUNNER_TEMP/gate/"
             echo "from=head" >>"$GITHUB_OUTPUT"
             echo "gate=this pull request's ci/ (the base has no gate yet)" >>"$GITHUB_OUTPUT"
+          fi
+          # The base's accepted regressions (empty if it has none): an entry
+          # that is already there is stale and never applies again, so only
+          # the entries this pull request adds can accept a regression.
+          if git cat-file -e "$base:ci/bench-accepted.txt" 2>/dev/null; then
+            git show "$base:ci/bench-accepted.txt" >"$RUNNER_TEMP/accepted-base.txt"
+          else
+            : >"$RUNNER_TEMP/accepted-base.txt"
           fi
 
       # The tests first: of the gate in use, and of the head's scripts if
@@ -131,8 +141,19 @@ jobs:
           HEAD_RUNNER: ${{ steps.head.outputs.runner }}
         run: |
           status=0
-          # The removed list is the head's: the pull request declares what it removes.
-          "$RUNNER_TEMP/gate/ci/bench-compare.sh" --removed ci/bench-removed.txt \
+          # The removed and accepted lists are the head's: the pull request
+          # declares what it removes and which regressions it asks the owner
+          # to accept (both are gate files: gate-change label, owner's
+          # review). A gate from before ci/bench-accepted.txt does not read
+          # it, so it judges such a pull request by +10 % alone.
+          accepted=()
+          if [ -e "$RUNNER_TEMP/gate/ci/bench-accepted.txt" ]; then
+            accepted=(--accepted ci/bench-accepted.txt --accepted-base "$RUNNER_TEMP/accepted-base.txt")
+            accepted_note="Accepted regressions: the entries this pull request adds to ci/bench-accepted.txt."
+          else
+            accepted_note="Accepted regressions: not read (the gate in use predates ci/bench-accepted.txt)."
+          fi
+          "$RUNNER_TEMP/gate/ci/bench-compare.sh" --removed ci/bench-removed.txt "${accepted[@]}" \
             "$RUNNER_TEMP/gungraun/base" "$RUNNER_TEMP/gungraun/head" \
             >"$RUNNER_TEMP/bench.md" 2>"$RUNNER_TEMP/bench.err" || status=$?
           {
@@ -146,6 +167,7 @@ jobs:
             echo "Base \`$BASE\`; head \`$HEAD\`, the pull request (\`$PR\`) merged into the base."
             echo "Judged by $GATE. Measured on $ImageOS ($(uname -m)), $(valgrind --version)," \
               "gungraun-runner ${BASE_RUNNER:-none} (base) and $HEAD_RUNNER (head)."
+            echo "$accepted_note"
             echo "Instruction counts gate regressions only; they are not a speed claim (ADR-0010)."
           } | tee -a "$GITHUB_STEP_SUMMARY"
           exit "$status"
