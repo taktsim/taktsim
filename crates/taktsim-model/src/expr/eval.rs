@@ -10,7 +10,7 @@
 //! false. The only errors are values that do not match their declared
 //! types.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -20,21 +20,39 @@ use super::ast::{ComponentId, Expr, Ident, Path};
 use super::ir::{
     BoolIr, CountD, EqOp, ExactIr, FloatIr, IntD, NumberD, OrdOp, RateD, RatioD, TextIr, TimeD,
 };
+use super::print::write_call;
 use super::types::{Dimension, Type};
 
 /// Something an expression reads from its environment: a path or a call.
 ///
-/// Its [`Display`](fmt::Display) text is its canonical source text, e.g.
-/// `unit.priority` or `throughput(sink)`.
+/// It carries its canonical source text (`unit.priority`,
+/// `throughput(sink)`), computed once, which is also its
+/// [`Display`](fmt::Display) text and the key a map of values uses.
 ///
 /// ```
-/// use taktsim_model::expr::{Input, Path};
+/// use taktsim_model::expr::{Input, InputKind, Path};
 ///
-/// let input = Input::Path(Path::parse("unit.priority").unwrap());
-/// assert_eq!(input.to_string(), "unit.priority");
+/// let input = Input::path(Path::parse("unit.priority").unwrap());
+/// assert_eq!(input.as_str(), "unit.priority");
+/// assert!(matches!(input.kind(), InputKind::Path(_)));
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Input {
+pub struct Input {
+    text: String,
+    kind: InputKind,
+}
+
+/// What an [`Input`] reads.
+///
+/// ```
+/// use taktsim_model::expr::{ComponentId, Ident, Input, InputKind};
+///
+/// let wip = Input::call(Ident::new("wip").unwrap(), vec![ComponentId::new("buf1").unwrap()]);
+/// let InputKind::Call { function, args } = wip.kind() else { unreachable!() };
+/// assert_eq!((function.as_str(), args.len()), ("wip", 1));
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum InputKind {
     /// A path, e.g. `variant`.
     Path(Path),
     /// A built-in call, e.g. `throughput(sink)`.
@@ -46,21 +64,71 @@ pub enum Input {
     },
 }
 
+impl Input {
+    /// The path `path`.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{Input, Path};
+    ///
+    /// assert_eq!(Input::path(Path::parse("variant").unwrap()).to_string(), "variant");
+    /// ```
+    #[must_use]
+    pub fn path(path: Path) -> Self {
+        Self {
+            text: path.to_string(),
+            kind: InputKind::Path(path),
+        }
+    }
+
+    /// The call of `function` on `args`.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{ComponentId, Ident, Input};
+    ///
+    /// let args = vec![ComponentId::new("cut").unwrap(), ComponentId::new("weld-1").unwrap()];
+    /// let input = Input::call(Ident::new("state_shares").unwrap(), args);
+    /// assert_eq!(input.as_str(), "state_shares(cut, weld-1)");
+    /// ```
+    #[must_use]
+    pub fn call(function: Ident, args: Vec<ComponentId>) -> Self {
+        let mut text = String::new();
+        // Writing to a String cannot fail.
+        let _ = write_call(&mut text, &function, &args);
+        Self {
+            text,
+            kind: InputKind::Call { function, args },
+        }
+    }
+
+    /// The canonical source text.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{Input, Path};
+    ///
+    /// assert_eq!(Input::path(Path::parse("unit.age").unwrap()).as_str(), "unit.age");
+    /// ```
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.text
+    }
+
+    /// What the input reads.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{Input, InputKind, Path};
+    ///
+    /// let input = Input::path(Path::parse("unit.age").unwrap());
+    /// assert!(matches!(input.kind(), InputKind::Path(p) if p.segments().len() == 2));
+    /// ```
+    #[must_use]
+    pub const fn kind(&self) -> &InputKind {
+        &self.kind
+    }
+}
+
 impl fmt::Display for Input {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Path(p) => p.fmt(f),
-            Self::Call { function, args } => {
-                write!(f, "{function}(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        f.write_str(", ")?;
-                    }
-                    arg.fmt(f)?;
-                }
-                f.write_str(")")
-            }
-        }
+        f.write_str(&self.text)
     }
 }
 
@@ -119,14 +187,15 @@ impl Value<'_> {
 /// Supplies the values of inputs during evaluation.
 ///
 /// A map from each input's canonical text (`variant`, `wip(buf1)`) to its
-/// value implements it.
+/// value implements it; a lookup borrows the input's text, so it does not
+/// allocate.
 ///
 /// ```
 /// use std::collections::BTreeMap;
 /// use taktsim_model::expr::{Input, Path, Value, Values};
 ///
 /// let values = BTreeMap::from([("variant".to_owned(), Value::Text("premium"))]);
-/// let input = Input::Path(Path::parse("variant").unwrap());
+/// let input = Input::path(Path::parse("variant").unwrap());
 /// assert_eq!(values.value(&input), Some(Value::Text("premium")));
 /// ```
 pub trait Values {
@@ -137,14 +206,14 @@ pub trait Values {
     /// use taktsim_model::expr::{Input, Path, Value, Values};
     ///
     /// let empty: BTreeMap<String, Value<'_>> = BTreeMap::new();
-    /// assert_eq!(empty.value(&Input::Path(Path::parse("x").unwrap())), None);
+    /// assert_eq!(empty.value(&Input::path(Path::parse("x").unwrap())), None);
     /// ```
     fn value(&self, input: &Input) -> Option<Value<'_>>;
 }
 
 impl Values for BTreeMap<String, Value<'_>> {
     fn value(&self, input: &Input) -> Option<Value<'_>> {
-        self.get(&input.to_string()).copied()
+        self.get(input.as_str()).copied()
     }
 }
 
@@ -188,7 +257,7 @@ pub enum EvalError {
         found: &'static str,
     },
     /// A `number` that is NaN or infinite.
-    #[error("`{input}` is {value}, which is not a finite number")]
+    #[error("`{input}` is {value}, which is not a finite number; supply a finite one, e.g. 2.5")]
     NotFinite {
         /// The input.
         input: Input,
@@ -586,7 +655,11 @@ impl<'v, V: Values + ?Sized> Eval<'v, V> {
     }
 }
 
-fn not_allowed(input: &Input, text: &str, allowed: &BTreeSet<String>) -> EvalError {
+fn not_allowed(
+    input: &Input,
+    text: &str,
+    allowed: &std::collections::BTreeSet<String>,
+) -> EvalError {
     EvalError::NotAllowed {
         input: input.clone(),
         value: text.to_owned(),

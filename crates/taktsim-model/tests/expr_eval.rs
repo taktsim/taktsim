@@ -9,7 +9,7 @@ mod common;
 use std::collections::BTreeMap;
 
 use common::env;
-use taktsim_model::expr::{EvalError, Input, Path, Type, Value, condition};
+use taktsim_model::expr::{EvalError, ExprKind, Input, InputKind, Path, Type, Value, condition};
 use taktsim_units::{Count, Rate, Ratio, SimDuration};
 
 #[allow(clippy::unwrap_used)] // test helper
@@ -361,7 +361,7 @@ fn every_input_is_read() {
     assert_eq!(
         cond.eval(&v),
         Err(EvalError::Missing {
-            input: Input::Path(Path::parse("unit.reworked").unwrap()),
+            input: Input::path(Path::parse("unit.reworked").unwrap()),
             expected: Type::Bool,
         })
     );
@@ -431,7 +431,7 @@ fn numbers_must_be_finite() {
             .eval(&v)
             .unwrap_err()
             .to_string(),
-        "`unit.weight` is inf, which is not a finite number"
+        "`unit.weight` is inf, which is not a finite number; supply a finite one, e.g. 2.5"
     );
 }
 
@@ -446,7 +446,7 @@ fn enum_values_must_be_allowed() {
     assert_eq!(
         err,
         EvalError::NotAllowed {
-            input: Input::Path(Path::parse("quality").unwrap()),
+            input: Input::path(Path::parse("quality").unwrap()),
             value: "gold".into(),
             allowed: vec!["ok".into(), "rework".into(), "scrap".into()],
         }
@@ -500,6 +500,23 @@ fn conditions_expose_their_tree_and_inputs() {
     );
     let inputs: Vec<String> = cond.inputs().keys().map(ToString::to_string).collect();
     assert_eq!(inputs, ["variant", "wip(buf1)"]);
+}
+
+#[test]
+fn an_input_is_keyed_by_the_text_its_call_prints_as() {
+    // One printer for calls and inputs: the key a value map uses is the
+    // call's canonical text.
+    let src = "state_shares(cut, weld-1) > 50%";
+    let cond = condition(src, &env()).unwrap();
+    let ExprKind::Compare { lhs, .. } = cond.expr().kind() else {
+        panic!("{src}")
+    };
+    let (input, _) = cond.inputs().iter().next().unwrap();
+    assert_eq!(input.as_str(), lhs.to_string());
+    assert_eq!(input.to_string(), "state_shares(cut, weld-1)");
+    assert!(matches!(input.kind(), InputKind::Call { args, .. } if args.len() == 2));
+    let values = BTreeMap::from([(input.to_string(), Value::Ratio("80%".parse().unwrap()))]);
+    assert!(cond.eval(&values).unwrap());
 }
 
 #[test]

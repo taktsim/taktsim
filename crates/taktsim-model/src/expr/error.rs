@@ -6,26 +6,9 @@ use std::fmt;
 use taktsim_units::UnitError;
 
 use super::ast::{BinOp, CmpOp};
+use super::lexer::units;
 use super::span::Span;
 use super::types::{Arity, Dimension, Expected, Type};
-
-/// The units a quantity literal may carry, for error messages.
-pub(crate) const UNITS: [&str; 14] = [
-    "d",
-    "h",
-    "min",
-    "s",
-    "ms",
-    "parts",
-    "part",
-    "parts/s",
-    "parts/min",
-    "parts/h",
-    "part/s",
-    "part/min",
-    "part/h",
-    "%",
-];
 
 /// An operator, as named in error messages.
 ///
@@ -182,16 +165,16 @@ pub enum Expectation {
 impl fmt::Display for Expectation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::Expression => "an expression",
+            Self::Expression => "an expression such as `unit.age > 30s`",
             Self::ListElement => {
-                "a list element (a literal, name, call or parenthesized expression)"
+                "a list element (a literal, name, call or parenthesized expression) such as `'premium'`"
             }
-            Self::OperatorOrEnd => "an operator or the end of the expression",
-            Self::CloseParen => "`)`",
-            Self::CommaOrBracket => "`,` or `]`",
-            Self::CommaOrParen => "`,` or `)`",
-            Self::ComponentId => "a component id",
-            Self::Name => "a name after `.`",
+            Self::OperatorOrEnd => "an operator such as `and` or `==`, or the end of the expression",
+            Self::CloseParen => "`)` closing the `(`",
+            Self::CommaOrBracket => "`,` or `]`, as in `[1, 2]`",
+            Self::CommaOrParen => "`,` or `)`, as in `state_shares(cut, weld-1)`",
+            Self::ComponentId => "a component id such as `buf1`",
+            Self::Name => "a name after `.`, as in `unit.priority`",
             Self::List => "a list such as `['a', 'b']` after `in`",
         })
     }
@@ -227,8 +210,6 @@ pub enum Hint {
     NoModulo,
     /// A number such as `.5`.
     LeadingDot,
-    /// A keyword in the wrong case, e.g. `AND`.
-    Lowercase(&'static str),
     /// A unit separated from its number by more than one space.
     UnitSpacing,
     /// `not` where an operand is expected.
@@ -260,7 +241,6 @@ impl fmt::Display for Hint {
                 f.write_str("`%` is only the percent unit, as in `2%`; there is no remainder operator")
             }
             Self::LeadingDot => f.write_str("write a digit before the decimal point, e.g. `0.5`"),
-            Self::Lowercase(keyword) => write!(f, "keywords are lowercase: `{keyword}`"),
             Self::UnitSpacing => f.write_str(
                 "write the unit right after the number, with at most one space: `30s`, `40 parts`",
             ),
@@ -278,6 +258,48 @@ impl fmt::Display for Hint {
             Self::ListOnlyAfterIn => {
                 f.write_str("a list can only follow `in`, as in `variant in ['a', 'b']`")
             }
+        }
+    }
+}
+
+impl Hint {
+    /// The text that replaces the error's span to apply the fix, for the
+    /// hints that have one.
+    const fn replacement(self) -> Option<&'static str> {
+        match self {
+            Self::UseAnd => Some("and"),
+            Self::UseOr => Some("or"),
+            Self::UseNot => Some("not "),
+            Self::UseEq => Some("=="),
+            Self::UseNe => Some("!="),
+            Self::UseLe => Some("<="),
+            Self::UseGe => Some(">="),
+            Self::SingleQuotes
+            | Self::NoModulo
+            | Self::LeadingDot
+            | Self::UnitSpacing
+            | Self::ParenthesizeNot
+            | Self::TrailingComma
+            | Self::ParenthesizeElement
+            | Self::ArgsAreIds
+            | Self::UnmatchedParen
+            | Self::ListOnlyAfterIn => None,
+        }
+    }
+}
+
+/// `; <hint>`, or what an expression is made of.
+struct UnexpectedFix<'a>(&'a Option<Hint>);
+
+impl fmt::Display for UnexpectedFix<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(hint) => write!(f, "; {hint}"),
+            None => f.write_str(
+                "; an expression is made of names, literals such as `42`, `0.5`, `30s` and \
+                 'text', the operators `and or not in == != < <= > >= + - * /`, and \
+                 parentheses, e.g. `unit.age > 30s`",
+            ),
         }
     }
 }
@@ -319,6 +341,21 @@ impl fmt::Display for Listing<'_> {
                 f.write_str(", ")?;
             }
             write!(f, "{q}{item}{q}", q = self.1)?;
+        }
+        Ok(())
+    }
+}
+
+/// A comma-separated list of at most ten items, or `none`.
+struct Capped<'a>(&'a [String]);
+
+impl fmt::Display for Capped<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const SHOWN: usize = 10;
+        let shown = self.0.get(..SHOWN).unwrap_or(self.0);
+        Listing(shown, '`').fmt(f)?;
+        if self.0.len() > SHOWN {
+            write!(f, " and {} more", self.0.len() - SHOWN)?;
         }
         Ok(())
     }
@@ -397,7 +434,7 @@ pub enum ErrorKind {
     #[error("the expression is empty; write one, e.g. `variant == 'premium'`")]
     Empty,
     /// A character or sequence that is not part of the language.
-    #[error("unexpected `{found}`{}", HintSuffix(hint))]
+    #[error("unexpected `{found}`{}", UnexpectedFix(hint))]
     UnexpectedText {
         /// The text found.
         found: String,
@@ -430,7 +467,7 @@ pub enum ErrorKind {
     /// A word after a number that is not a unit.
     #[error(
         "unknown unit `{unit}`; allowed: {}{}{}",
-        UNITS.join(", "),
+        units().join(", "),
         DidYouMean(&suggestion.map(str::to_owned), '`'),
         ExponentNote(unit)
     )]
@@ -441,10 +478,12 @@ pub enum ErrorKind {
         suggestion: Option<&'static str>,
     },
     /// A quantity literal that `taktsim-units` rejects, e.g. `2.5 parts`.
-    #[error("invalid quantity: {source}")]
+    /// Its message is part of this one, so it is not also the error's
+    /// [`source`](std::error::Error::source).
+    #[error("invalid quantity: {error}")]
     InvalidQuantity {
         /// Why the units crate rejected it.
-        source: UnitError,
+        error: UnitError,
     },
     /// Something other than what the grammar allows at this point.
     #[error("expected {expected}, found {}{}", Found(found), HintSuffix(hint))]
@@ -456,6 +495,18 @@ pub enum ErrorKind {
         /// The likely fix.
         hint: Option<Hint>,
     },
+    /// A keyword in another case, e.g. `AND`. Keywords are lowercase, and
+    /// such a word is not a name either.
+    #[error(
+        "`{found}` is the keyword `{keyword}` in the wrong case; keywords are lowercase: \
+         write `{keyword}`"
+    )]
+    MiscasedKeyword {
+        /// The word found.
+        found: String,
+        /// The keyword.
+        keyword: &'static str,
+    },
     /// `a < b < c`.
     #[error("comparisons cannot be chained; join them with `and`, e.g. `a < b and b < c`")]
     ComparisonChain,
@@ -466,7 +517,9 @@ pub enum ErrorKind {
     #[error("`-` cannot follow `-`; remove both, or write `-(-a)`")]
     DoubleMinus,
     /// A keyword where a name is expected, e.g. `unit.in`.
-    #[error("`{keyword}` is a keyword and cannot be a name; rename the field")]
+    #[error(
+        "`{keyword}` is a keyword and cannot be a name; names are other words, e.g. `unit.priority`"
+    )]
     KeywordAsName {
         /// The keyword.
         keyword: &'static str,
@@ -517,7 +570,7 @@ pub enum ErrorKind {
         known: Vec<String>,
     },
     /// A call with the wrong number of arguments.
-    #[error("`{function}` takes {arity}, found {found}")]
+    #[error("`{function}` takes {arity}, found {found}; e.g. `{example}`")]
     ArgumentCount {
         /// The function.
         function: String,
@@ -525,10 +578,14 @@ pub enum ErrorKind {
         arity: Arity,
         /// How many were given.
         found: usize,
+        /// A valid call, with component ids of the model where it has
+        /// enough.
+        example: String,
     },
     /// A call argument that is not a component of the model.
     #[error(
-        "`{function}` refers to `{id}`, which is not a component of the model{}",
+        "`{function}` refers to `{id}`, which is not a component of the model; it takes: {}{}",
+        Capped(known),
         DidYouMean(suggestion, '`')
     )]
     UnknownComponent {
@@ -538,6 +595,8 @@ pub enum ErrorKind {
         id: String,
         /// The closest component id, if one is close.
         suggestion: Option<String>,
+        /// The component ids the function takes.
+        known: Vec<String>,
     },
     /// A component of a type the function does not take.
     #[error(
@@ -629,7 +688,7 @@ pub enum ErrorKind {
     )]
     DivisorNotLiteral,
     /// A zero literal divisor.
-    #[error("division by zero; divide by a literal that is not zero")]
+    #[error("division by zero; divide by a literal that is not zero, e.g. `x / 2.0`")]
     DivisionByZero,
     /// A division the language does not define.
     #[error("cannot divide {left} by {right}; it takes {}", Operator::Div.operands())]
@@ -647,7 +706,7 @@ pub enum ErrorKind {
     /// Exact arithmetic whose result could exceed the evaluator's range.
     #[error(
         "this arithmetic could exceed the exact range of ±1.7 × 10^38 for some inputs; \
-         simplify it"
+         use fewer factors, e.g. `a * b` of two int inputs fits, `a * b * c` does not"
     )]
     MayOverflow,
     /// An expression of the wrong type for its context.
@@ -712,16 +771,79 @@ impl ExprError {
         &self.kind
     }
 
+    /// Text that fixes the error when it replaces the text at
+    /// [`span`](Self::span), where there is one: a suggested name, a unit
+    /// for a bare number, a lowercase keyword, `and` for `&&`.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{TypeEnv, condition};
+    ///
+    /// let mut source = "1 < 2 && 30 < 1min".to_owned();
+    /// let err = condition(&source, &TypeEnv::new()).unwrap_err();
+    /// source.replace_range(err.span().range(), &err.replacement().unwrap());
+    /// assert_eq!(source, "1 < 2 and 30 < 1min");
+    ///
+    /// let err = condition(&source, &TypeEnv::new()).unwrap_err();
+    /// source.replace_range(err.span().range(), &err.replacement().unwrap());
+    /// assert_eq!(source, "1 < 2 and 30s < 1min");
+    /// assert!(condition(&source, &TypeEnv::new()).is_ok());
+    /// ```
+    #[must_use]
+    pub fn replacement(&self) -> Option<String> {
+        match self.kind.as_ref() {
+            ErrorKind::MissingUnit { literal, dimension } => {
+                Some(WithUnit(literal, *dimension).to_string())
+            }
+            ErrorKind::UnknownEnumValue { suggestion, .. } => {
+                suggestion.as_ref().map(|s| format!("'{s}'"))
+            }
+            ErrorKind::UnknownName { suggestion, .. }
+            | ErrorKind::UnknownFunction { suggestion, .. }
+            | ErrorKind::UnknownComponent { suggestion, .. } => suggestion.clone(),
+            ErrorKind::UnknownUnit { suggestion, .. } => suggestion.map(str::to_owned),
+            ErrorKind::MiscasedKeyword { keyword, .. } => Some((*keyword).to_owned()),
+            ErrorKind::UnexpectedText { hint, .. } => {
+                hint.and_then(Hint::replacement).map(str::to_owned)
+            }
+            ErrorKind::Empty
+            | ErrorKind::UnterminatedString
+            | ErrorKind::MalformedNumber { .. }
+            | ErrorKind::IntTooLarge { .. }
+            | ErrorKind::NumberTooLarge { .. }
+            | ErrorKind::InvalidQuantity { .. }
+            | ErrorKind::Expected { .. }
+            | ErrorKind::ComparisonChain
+            | ErrorKind::DoubleNot
+            | ErrorKind::DoubleMinus
+            | ErrorKind::KeywordAsName { .. }
+            | ErrorKind::CallOnPath { .. }
+            | ErrorKind::TooDeep { .. }
+            | ErrorKind::ArgumentCount { .. }
+            | ErrorKind::ComponentNotAccepted { .. }
+            | ErrorKind::DuplicateArgument { .. }
+            | ErrorKind::Mismatch { .. }
+            | ErrorKind::NotDefinedFor { .. }
+            | ErrorKind::EqualityNotAllowed { .. }
+            | ErrorKind::DivisorNotLiteral
+            | ErrorKind::DivisionByZero
+            | ErrorKind::DivisionNotAllowed { .. }
+            | ErrorKind::EmptyList
+            | ErrorKind::MayOverflow
+            | ErrorKind::WrongResultType { .. } => None,
+        }
+    }
+
     /// The message followed by the source line and a caret under the span,
-    /// for people. `source` must be the text the error came from; other
-    /// text gives a meaningless caret but never panics.
+    /// for people. A tab is shown as four spaces and a carriage return is
+    /// left out, so the caret lines up. `source` must be the text the error
+    /// came from; other text gives a meaningless caret but never panics.
     ///
     /// ```
     /// use taktsim_model::expr::parse;
     ///
     /// let source = "rate >= 120 parts/hour";
     /// let err = parse(source).unwrap_err();
-    /// assert!(err.render(source).ends_with("\n  rate >= 120 parts/hour\n          ^^^^^^^^^^^^^^"));
+    /// assert!(err.render(source).ends_with("\n  rate >= 120 parts/hour\n              ^^^^^^^^^^"));
     /// ```
     #[must_use]
     pub fn render(&self, source: &str) -> String {
@@ -735,18 +857,35 @@ impl ExprError {
             .get(start..)
             .and_then(|s| s.find('\n'))
             .map_or(source.len(), |i| start + i);
-        let line = source.get(line_start..line_end).unwrap_or_default();
-        let column = source
-            .get(line_start..start)
-            .map_or(0, |s| s.chars().count());
-        let width = source
-            .get(start..end.min(line_end))
-            .map_or(0, |s| s.chars().count())
-            .max(1);
+        let mut line = String::new();
+        let (mut column, mut width) = (0, 0);
+        for (i, c) in source
+            .get(line_start..line_end)
+            .unwrap_or_default()
+            .char_indices()
+        {
+            let columns = match c {
+                '\t' => {
+                    line.push_str("    ");
+                    4
+                }
+                '\r' => 0,
+                _ => {
+                    line.push(c);
+                    1
+                }
+            };
+            let at = line_start + i;
+            if at < start {
+                column += columns;
+            } else if at < end {
+                width += columns;
+            }
+        }
         format!(
             "{self}\n  {line}\n  {}{}",
             " ".repeat(column),
-            "^".repeat(width)
+            "^".repeat(width.max(1))
         )
     }
 }
@@ -822,6 +961,18 @@ mod tests {
         // A one-letter word would match every one-letter candidate.
         assert_eq!(suggest("m", ["d", "h", "min"]), None);
         assert_eq!(suggest("", ["a"]), None);
+    }
+
+    #[test]
+    fn render_lines_up_tabs_and_drops_carriage_returns() {
+        // The span covers `=` and a tab: one column and four.
+        let err = ExprError::new(ErrorKind::Empty, Span::new(3, 5));
+        assert!(
+            err.render("\ta =\tb\r\n")
+                .ends_with("\n      a =    b\n        ^^^^^")
+        );
+        let err = ExprError::new(ErrorKind::Empty, Span::new(1, 2));
+        assert!(err.render("a\r\nb").ends_with("\n  a\n   ^"));
     }
 
     #[test]

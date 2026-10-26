@@ -1,9 +1,11 @@
 //! Splits the source into tokens (ADR-0015, "Lexical rules").
 
-use taktsim_units::{Count, Rate, Ratio, SimDuration};
+use taktsim_units::UnitError;
 
-use super::ast::{CmpOp, KEYWORDS, Quantity, is_ident_char, is_ident_start};
-use super::error::{ErrorKind, ExprError, Hint, UNITS, suggest};
+use super::ast::{
+    CmpOp, KEYWORDS, Quantity, is_ident_char, is_ident_start, is_keyword_in_any_case,
+};
+use super::error::{ErrorKind, ExprError, Hint, suggest};
 use super::span::Span;
 
 /// A reserved word.
@@ -42,12 +44,64 @@ impl Keyword {
     }
 }
 
-/// A keyword written in another case, e.g. `AND`.
-pub(crate) fn miscased_keyword(word: &str) -> Option<&'static str> {
+/// The keyword that `word` is, written in another case (`AND`).
+fn miscased_keyword(word: &str) -> Option<&'static str> {
     KEYWORDS
         .iter()
         .copied()
         .find(|k| k.eq_ignore_ascii_case(word) && *k != word)
+}
+
+/// A parser of quantity literals.
+type QuantityParser = fn(&str) -> Result<Quantity, UnitError>;
+
+/// Each quantity of `taktsim-units`, as a parser of quantity literals.
+const QUANTITIES: [QuantityParser; 4] = [
+    |text| text.parse().map(Quantity::Time),
+    |text| text.parse().map(Quantity::Count),
+    |text| text.parse().map(Quantity::Rate),
+    |text| text.parse().map(Quantity::Ratio),
+];
+
+/// Every unit a quantity literal may carry, in the order of [`QUANTITIES`].
+///
+/// The lists belong to `taktsim-units`; they are read from the
+/// [`UnitError::UnknownUnit`] each of its parsers gives for a unit it does
+/// not know, so they cannot drift from what it accepts.
+pub(crate) fn units() -> Vec<&'static str> {
+    QUANTITIES
+        .iter()
+        .filter_map(|parse| parse("0 ?").err())
+        .flat_map(|error| {
+            if let UnitError::UnknownUnit { allowed, .. } = error {
+                allowed
+            } else {
+                &[]
+            }
+        })
+        .copied()
+        .collect()
+}
+
+/// Why a quantity literal was not accepted.
+enum Rejected {
+    /// No quantity knows the unit.
+    UnknownUnit,
+    /// The quantity that knows the unit rejects the literal.
+    Invalid(UnitError),
+}
+
+/// The literal `text` (`30s`, `40 parts`), parsed by the first quantity of
+/// `taktsim-units` that knows its unit.
+fn parse_quantity(text: &str) -> Result<Quantity, Rejected> {
+    for parse in QUANTITIES {
+        match parse(text) {
+            Ok(q) => return Ok(q),
+            Err(UnitError::UnknownUnit { .. }) => {}
+            Err(other) => return Err(Rejected::Invalid(other)),
+        }
+    }
+    Err(Rejected::UnknownUnit)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,7 +134,9 @@ pub(crate) struct Token {
     pub(crate) span: Span,
 }
 
-/// The tokens of `src`, ending with [`Tok::Eof`].
+/// The tokens of `src`, ending with [`Tok::Eof`]. The end sits right after
+/// the last token, before trailing whitespace, so an error about it points
+/// at the end of the expression's text.
 pub(crate) fn tokenize(src: &str) -> Result<Vec<Token>, ExprError> {
     let mut lexer = Lexer { src, pos: 0 };
     let mut tokens: Vec<Token> = Vec::new();
@@ -89,9 +145,10 @@ pub(crate) fn tokenize(src: &str) -> Result<Vec<Token>, ExprError> {
         lexer.skip_whitespace();
         let start = lexer.pos;
         let Some(b) = lexer.peek() else {
+            let end = tokens.last().map_or(0, |t| t.span.end);
             tokens.push(Token {
                 tok: Tok::Eof,
-                span: Span::new(start, start),
+                span: Span::new(end, end),
             });
             return Ok(tokens);
         };
@@ -151,11 +208,18 @@ impl Lexer<'_> {
     }
 
     fn skip_whitespace(&mut self) {
-        self.eat_while(|b| matches!(b, b' ' | b'\t' | b'\n' | b'\r'));
+        self.eat_while(is_whitespace);
     }
 
     fn text(&self, start: usize) -> &str {
         self.src.get(start..self.pos).unwrap_or_default()
+    }
+
+    /// The identifier characters starting at byte `start`.
+    fn word_at(&self, start: usize) -> &str {
+        let rest = self.src.get(start..).unwrap_or_default();
+        let len = rest.bytes().take_while(|&b| is_ident_char(b)).count();
+        rest.get(..len).unwrap_or_default()
     }
 
     fn error(&self, kind: ErrorKind, start: usize) -> ExprError {
@@ -185,7 +249,7 @@ impl Lexer<'_> {
         let next = self.peek_at(1);
         match b {
             b'0'..=b'9' => self.number(),
-            b'a'..=b'z' | b'A'..=b'Z' | b'_' => Ok(self.word()),
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.word(),
             b'\'' => self.string(),
             b'(' => Ok(self.take(1, Tok::LParen)),
             b')' => Ok(self.take(1, Tok::RParen)),
@@ -231,11 +295,25 @@ impl Lexer<'_> {
         }
     }
 
-    fn word(&mut self) -> Tok {
+    /// A name or a keyword. A keyword in another case (`AND`, `True`) is an
+    /// error with the fix, never a name.
+    fn word(&mut self) -> Result<Tok, ExprError> {
         let start = self.pos;
         self.eat_while(is_ident_char);
         let word = self.text(start);
-        Keyword::from_word(word).map_or_else(|| Tok::Ident(word.to_owned()), Tok::Keyword)
+        if let Some(keyword) = Keyword::from_word(word) {
+            return Ok(Tok::Keyword(keyword));
+        }
+        if let Some(keyword) = miscased_keyword(word) {
+            return Err(self.error(
+                ErrorKind::MiscasedKeyword {
+                    found: word.to_owned(),
+                    keyword,
+                },
+                start,
+            ));
+        }
+        Ok(Tok::Ident(word.to_owned()))
     }
 
     fn component_id(&mut self) -> Tok {
@@ -315,26 +393,15 @@ impl Lexer<'_> {
     }
 
     /// Where the unit after a number starts: right after it, or after one
-    /// space unless the next word is a keyword (`3 and x`).
+    /// space unless the next word is a keyword in any case (`3 and x`,
+    /// `3 AND x`).
     fn unit_start(&self) -> Option<usize> {
         let is_unit_start = |b: u8| b == b'%' || is_ident_start(b);
         match self.peek() {
             Some(b) if is_unit_start(b) => Some(self.pos),
             Some(b' ') if self.peek_at(1).is_some_and(is_unit_start) => {
                 let word_start = self.pos + 1;
-                let word_len = self
-                    .src
-                    .as_bytes()
-                    .get(word_start..)
-                    .unwrap_or_default()
-                    .iter()
-                    .take_while(|&&b| is_ident_char(b))
-                    .count();
-                let word = self
-                    .src
-                    .get(word_start..word_start + word_len)
-                    .unwrap_or_default();
-                Keyword::from_word(word).is_none().then_some(word_start)
+                (!is_keyword_in_any_case(self.word_at(word_start))).then_some(word_start)
             }
             Some(_) | None => None,
         }
@@ -345,12 +412,21 @@ impl Lexer<'_> {
         self.pos = unit_start;
         if self.peek() == Some(b'%') {
             self.pos += 1;
+            // `10 % 3`: a remainder, which the language does not have.
+            if self.operand_follows() {
+                self.pos = unit_start;
+                return self.reject(1, Some(Hint::NoModulo));
+            }
         } else {
             self.eat_while(is_ident_char);
+            // `parts/h`: a unit with a slash, if taktsim-units has one that
+            // starts with this word and a slash.
             let base = self.text(unit_start);
-            if (base == "parts" || base == "part")
-                && self.peek() == Some(b'/')
+            if self.peek() == Some(b'/')
                 && self.peek_at(1).is_some_and(|b| b.is_ascii_alphabetic())
+                && units()
+                    .iter()
+                    .any(|u| u.strip_prefix(base).is_some_and(|r| r.starts_with('/')))
             {
                 self.pos += 1;
                 self.eat_while(is_ident_char);
@@ -358,27 +434,48 @@ impl Lexer<'_> {
         }
         let text = self.text(start);
         let unit = self.text(unit_start);
-        let parsed = match unit {
-            "%" => text.parse::<Ratio>().map(Quantity::Ratio),
-            "d" | "h" | "min" | "s" | "ms" => text.parse::<SimDuration>().map(Quantity::Time),
-            "parts" | "part" => text.parse::<Count>().map(Quantity::Count),
-            u if u.starts_with("parts/") || u.starts_with("part/") => {
-                text.parse::<Rate>().map(Quantity::Rate)
+        match parse_quantity(text) {
+            Ok(q) => Ok(Tok::Quantity(q)),
+            Err(Rejected::Invalid(error)) => {
+                Err(self.error(ErrorKind::InvalidQuantity { error }, start))
             }
-            _ => {
-                return Err(self.error(
+            Err(Rejected::UnknownUnit) => {
+                let known = units();
+                let suggestion = known
+                    .iter()
+                    .copied()
+                    .find(|u| u.eq_ignore_ascii_case(unit))
+                    .or_else(|| suggest(unit, known.iter().copied()));
+                Err(self.error(
                     ErrorKind::UnknownUnit {
                         unit: unit.to_owned(),
-                        suggestion: suggest(unit, UNITS),
+                        suggestion,
                     },
                     unit_start,
-                ));
+                ))
             }
-        };
-        parsed
-            .map(Tok::Quantity)
-            .map_err(|source| self.error(ErrorKind::InvalidQuantity { source }, start))
+        }
     }
+
+    /// Whether an operand (a number, a name that is not a keyword, a string
+    /// or a parenthesis) follows, after whitespace.
+    fn operand_follows(&self) -> bool {
+        let rest = self.src.get(self.pos..).unwrap_or_default();
+        let at = self.pos + (rest.len() - rest.trim_start_matches(is_whitespace_char).len());
+        match self.src.as_bytes().get(at) {
+            Some(b) if is_ident_start(*b) => !is_keyword_in_any_case(self.word_at(at)),
+            Some(b) => b.is_ascii_digit() || matches!(b, b'(' | b'\''),
+            None => false,
+        }
+    }
+}
+
+fn is_whitespace(b: u8) -> bool {
+    matches!(b, b' ' | b'\t' | b'\n' | b'\r')
+}
+
+fn is_whitespace_char(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\n' | '\r')
 }
 
 #[cfg(test)]
@@ -431,8 +528,8 @@ mod tests {
     }
 
     #[test]
-    fn spans_cover_tokens() {
-        let spans: Vec<Span> = tokenize("ab <= 'x'")
+    fn spans_cover_tokens_and_the_end_follows_the_last_token() {
+        let spans: Vec<Span> = tokenize("ab <= 'x'  \n")
             .unwrap()
             .into_iter()
             .map(|t| t.span)
@@ -446,6 +543,7 @@ mod tests {
                 Span::new(9, 9)
             ]
         );
+        assert_eq!(tokenize("  ").unwrap()[0].span, Span::new(0, 0));
     }
 
     #[test]
@@ -459,6 +557,40 @@ mod tests {
     fn keyword_names() {
         for k in KEYWORDS {
             assert_eq!(Keyword::from_word(k).map(Keyword::as_str), Some(k));
+        }
+    }
+
+    #[test]
+    fn units_come_from_taktsim_units() {
+        // Fails if taktsim-units stops listing its units in its errors.
+        assert_eq!(
+            units(),
+            [
+                "d",
+                "h",
+                "min",
+                "s",
+                "ms",
+                "parts",
+                "part",
+                "parts/s",
+                "parts/min",
+                "parts/h",
+                "part/s",
+                "part/min",
+                "part/h",
+                "%"
+            ]
+        );
+        // Every listed unit is accepted, by exactly one quantity.
+        for unit in units() {
+            let text = format!("1 {unit}");
+            let accepting = QUANTITIES.iter().filter(|p| p(&text).is_ok()).count();
+            assert_eq!(accepting, 1, "{unit}");
+            assert!(
+                matches!(toks(&format!("1{unit}"))[0], Tok::Quantity(_)),
+                "{unit}"
+            );
         }
     }
 }

@@ -13,7 +13,7 @@ use std::ops::Range;
 /// use taktsim_model::expr::{Span, parse};
 ///
 /// let expr = parse("variant == 'premium'")?;
-/// assert_eq!(expr.span, Span::new(0, 20));
+/// assert_eq!(expr.span(), Span::new(0, 20));
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -75,7 +75,7 @@ impl fmt::Display for Span {
 /// use taktsim_model::expr::{ExprKind, Span, parse};
 ///
 /// let expr = parse("wip(buf1)")?;
-/// let ExprKind::Call(call) = expr.kind else { unreachable!() };
+/// let ExprKind::Call(call) = expr.into_kind() else { unreachable!() };
 /// assert_eq!(call.args[0].value.as_str(), "buf1");
 /// assert_eq!(call.args[0].span, Span::new(4, 8));
 /// # Ok::<(), taktsim_model::expr::ExprError>(())

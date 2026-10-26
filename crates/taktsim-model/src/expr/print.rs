@@ -48,7 +48,7 @@ const fn level(kind: &ExprKind) -> u8 {
 }
 
 fn operand(f: &mut fmt::Formatter<'_>, e: &Expr, needed: u8) -> fmt::Result {
-    if level(&e.kind) < needed {
+    if level(e.kind()) < needed {
         write!(f, "({e})")
     } else {
         write!(f, "{e}")
@@ -58,7 +58,7 @@ fn operand(f: &mut fmt::Formatter<'_>, e: &Expr, needed: u8) -> fmt::Result {
 impl fmt::Display for Expr {
     /// The canonical text of the expression.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.kind {
+        match self.kind() {
             ExprKind::Bool(b) => write!(f, "{b}"),
             ExprKind::Int(n) => write!(f, "{n}"),
             ExprKind::Number(x) => write!(f, "{x}"),
@@ -185,13 +185,23 @@ impl fmt::Display for Quantity {
 
 impl fmt::Display for Call {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}(", self.name.value)?;
-        for (i, arg) in self.args.iter().enumerate() {
-            if i > 0 {
-                f.write_str(", ")?;
-            }
-            f.write_str(arg.value.as_str())?;
-        }
-        f.write_str(")")
+        write_call(f, &self.name.value, self.args.iter().map(|a| &a.value))
     }
+}
+
+/// `name(a, b)`: the canonical text of a call, shared by [`Call`] and
+/// [`Input`](super::Input).
+pub(crate) fn write_call<'a>(
+    f: &mut impl fmt::Write,
+    name: &Ident,
+    args: impl IntoIterator<Item = &'a ComponentId>,
+) -> fmt::Result {
+    write!(f, "{name}(")?;
+    for (i, arg) in args.into_iter().enumerate() {
+        if i > 0 {
+            f.write_str(", ")?;
+        }
+        f.write_str(arg.as_str())?;
+    }
+    f.write_str(")")
 }

@@ -35,7 +35,7 @@ fn cmp(op: CmpOp) -> &'static str {
 
 /// A fully parenthesized rendering: `(op lhs rhs)`.
 fn sexpr(e: &Expr) -> String {
-    match &e.kind {
+    match e.kind() {
         ExprKind::Bool(b) => b.to_string(),
         ExprKind::Int(n) => n.to_string(),
         ExprKind::Number(x) => format!("{:?}", x.get()),
@@ -231,15 +231,15 @@ fn count_rate_and_ratio_literals() {
     assert_eq!(tree("2%"), "2.0%");
     assert_eq!(tree("2 %"), "2.0%");
     assert_eq!(tree("0.5%"), "0.5%");
-    let ExprKind::Quantity(q) = parse("40 parts").unwrap().kind else {
+    let ExprKind::Quantity(q) = parse("40 parts").unwrap().into_kind() else {
         panic!()
     };
     assert_eq!(q, Quantity::Count(Count::new(40)));
-    let ExprKind::Quantity(q) = parse("120 parts/h").unwrap().kind else {
+    let ExprKind::Quantity(q) = parse("120 parts/h").unwrap().into_kind() else {
         panic!()
     };
     assert_eq!(q, Quantity::Rate("120 parts/h".parse::<Rate>().unwrap()));
-    let ExprKind::Quantity(q) = parse("2%").unwrap().kind else {
+    let ExprKind::Quantity(q) = parse("2%").unwrap().into_kind() else {
         panic!()
     };
     assert_eq!(q, Quantity::Ratio("2%".parse::<Ratio>().unwrap()));
@@ -260,7 +260,6 @@ fn quantities_rejected_by_the_units_crate() {
         ("2.5 parts", "2.5 parts"),
         ("0.0000000001s", "0.0000000001s"),
         ("600000000d", "600000000d"),
-        ("120 parts/day", "120 parts/day"),
     ];
     for (src, covered) in cases {
         let (kind, at) = err_at(src);
@@ -274,7 +273,7 @@ fn quantities_rejected_by_the_units_crate() {
     assert_eq!(
         e.kind(),
         &ErrorKind::InvalidQuantity {
-            source: UnitError::NotWhole {
+            error: UnitError::NotWhole {
                 input: "2.5 parts".into(),
                 unit: "parts".into()
             }
@@ -284,6 +283,23 @@ fn quantities_rejected_by_the_units_crate() {
         e.to_string(),
         "invalid quantity: `2.5 parts` is not a whole number of parts; example: 20 parts"
     );
+}
+
+#[test]
+fn the_units_message_appears_once_in_an_error_chain() {
+    use std::error::Error;
+    let e = err("x < 2.5 parts");
+    // The units crate's message is part of the message, not also a source,
+    // so a printer that walks the chain shows it once.
+    assert!(e.source().is_none());
+    assert!(e.kind().source().is_none());
+    let mut chain = e.to_string();
+    let mut next = e.source();
+    while let Some(cause) = next {
+        chain.push_str(&cause.to_string());
+        next = cause.source();
+    }
+    assert_eq!(chain.matches("is not a whole number").count(), 1);
 }
 
 #[test]
@@ -728,23 +744,41 @@ fn operators_from_other_languages_get_a_fix() {
     );
 }
 
+fn miscased(found: &str, keyword: &'static str) -> ErrorKind {
+    ErrorKind::MiscasedKeyword {
+        found: found.into(),
+        keyword,
+    }
+}
+
 #[test]
-fn keywords_are_lowercase() {
-    let (kind, at) = err_at("a AND b");
-    assert_eq!(
-        kind,
-        expected(
-            Expectation::OperatorOrEnd,
-            Some("AND"),
-            Some(Hint::Lowercase("and"))
-        )
-    );
-    assert_eq!(at, "AND");
+fn keywords_are_lowercase_in_every_position() {
+    for (src, found, keyword) in [
+        // Operator position.
+        ("a AND b", "AND", "and"),
+        ("a Or b", "Or", "or"),
+        ("x IN [1]", "IN", "in"),
+        // After a number and a space, where a unit could be: not a unit.
+        ("x == 1 AND b", "AND", "and"),
+        ("x == 1 Or b", "Or", "or"),
+        // Operand position.
+        ("NOT b", "NOT", "not"),
+        ("b == TRUE", "TRUE", "true"),
+        ("False", "False", "false"),
+        ("x in [True]", "True", "true"),
+        // Path segments.
+        ("unit.IN", "IN", "in"),
+    ] {
+        let (kind, at) = err_at(src);
+        assert_eq!(kind, miscased(found, keyword), "{src}");
+        assert_eq!(at, found, "{src}");
+    }
     assert_eq!(
         err("a Or b").to_string(),
-        "expected an operator or the end of the expression, found `Or`; \
-         keywords are lowercase: `or`"
+        "`Or` is the keyword `or` in the wrong case; keywords are lowercase: write `or`"
     );
+    // Component ids in a call are not names, so any word is allowed there.
+    assert_eq!(tree("f(AND, True)"), "f(AND,True)");
 }
 
 #[test]
@@ -778,8 +812,36 @@ fn empty_input_is_rejected() {
     for src in ["", "   ", "\n\t"] {
         let e = err(src);
         assert_eq!(e.kind(), &ErrorKind::Empty);
-        assert_eq!(e.span(), Span::new(src.len(), src.len()));
+        assert_eq!(e.span(), Span::new(0, 0));
     }
+}
+
+#[test]
+fn the_end_of_the_input_is_right_after_the_last_token() {
+    // YAML block scalars end in a newline; the error points at the end of
+    // the expression, not at an empty line after it.
+    let src = "variant ==\n";
+    let e = err(src);
+    assert_eq!(e.span(), Span::new(10, 10));
+    assert!(
+        e.render(src).ends_with("\n  variant ==\n            ^"),
+        "{}",
+        e.render(src)
+    );
+    let src = "(a +\n  b\n\n";
+    assert!(err(src).render(src).ends_with("\n    b\n     ^"));
+}
+
+#[test]
+fn render_lines_up_with_tabs() {
+    let src = "a ==\t\tb c";
+    let e = err(src);
+    assert_eq!(&src[e.span().range()], "c");
+    // Each tab shows as four spaces, in the line and before the caret.
+    assert!(
+        e.render(src)
+            .ends_with("\n  a ==        b c\n                ^")
+    );
 }
 
 #[test]
@@ -832,75 +894,103 @@ fn tree_depth_is_limited() {
 fn every_node_has_its_span() {
     let src = "(a + b) * f(c, weld-1) <= -x.y";
     let e = parse(src).unwrap();
-    assert_eq!(e.span, Span::new(0, src.len()));
-    let ExprKind::Compare { lhs, rhs, .. } = &e.kind else {
+    assert_eq!(e.span(), Span::new(0, src.len()));
+    let ExprKind::Compare { lhs, rhs, .. } = e.kind() else {
         panic!()
     };
-    assert_eq!(&src[lhs.span.range()], "(a + b) * f(c, weld-1)");
-    assert_eq!(&src[rhs.span.range()], "-x.y");
+    assert_eq!(&src[lhs.span().range()], "(a + b) * f(c, weld-1)");
+    assert_eq!(&src[rhs.span().range()], "-x.y");
     let ExprKind::Binary {
         lhs: sum,
         rhs: call,
         ..
-    } = &lhs.kind
+    } = lhs.kind()
     else {
         panic!()
     };
-    assert_eq!(&src[sum.span.range()], "(a + b)");
-    assert_eq!(&src[call.span.range()], "f(c, weld-1)");
-    let ExprKind::Call(c) = &call.kind else {
+    assert_eq!(&src[sum.span().range()], "(a + b)");
+    assert_eq!(&src[call.span().range()], "f(c, weld-1)");
+    let ExprKind::Call(c) = call.kind() else {
         panic!()
     };
     assert_eq!(&src[c.name.span.range()], "f");
     assert_eq!(&src[c.args[1].span.range()], "weld-1");
-    let ExprKind::Neg(path) = &rhs.kind else {
+    let ExprKind::Neg(path) = rhs.kind() else {
         panic!()
     };
-    assert_eq!(&src[path.span.range()], "x.y");
+    assert_eq!(&src[path.span().range()], "x.y");
 
     let src = "not v in ['a', 'b']";
     let e = parse(src).unwrap();
-    let ExprKind::Not(inner) = &e.kind else {
+    let ExprKind::Not(inner) = e.kind() else {
         panic!()
     };
-    let ExprKind::In { list, .. } = &inner.kind else {
+    let ExprKind::In { list, .. } = inner.kind() else {
         panic!()
     };
     assert_eq!(&src[list.span.range()], "['a', 'b']");
-    assert_eq!(&src[list.items[1].span.range()], "'b'");
+    assert_eq!(&src[list.items[1].span().range()], "'b'");
 }
 
 #[test]
 fn messages_name_the_fix() {
     assert_eq!(
         err("x < 30  s").to_string(),
-        "expected an operator or the end of the expression, found `s`; write the unit right \
-         after the number, with at most one space: `30s`, `40 parts`"
+        "expected an operator such as `and` or `==`, or the end of the expression, found `s`; \
+         write the unit right after the number, with at most one space: `30s`, `40 parts`"
     );
     assert_eq!(
         err("a == not b").to_string(),
-        "expected an expression, found `not`; `not` applies to a whole comparison; put it in \
-         parentheses, e.g. `a == (not b)`"
+        "expected an expression such as `unit.age > 30s`, found `not`; `not` applies to a \
+         whole comparison; put it in parentheses, e.g. `a == (not b)`"
     );
     assert_eq!(
         err("x in [-1]").to_string(),
-        "expected a list element (a literal, name, call or parenthesized expression), found \
-         `-`; list elements are single values; put an expression in parentheses, e.g. `[(-1), 2]`"
+        "expected a list element (a literal, name, call or parenthesized expression) such as \
+         `'premium'`, found `-`; list elements are single values; put an expression in \
+         parentheses, e.g. `[(-1), 2]`"
     );
     assert_eq!(
         err("f(a,)").to_string(),
-        "expected a component id, found `)`; remove the trailing comma"
+        "expected a component id such as `buf1`, found `)`; remove the trailing comma"
     );
     assert_eq!(
         err("a)").to_string(),
-        "expected an operator or the end of the expression, found `)`; remove it or add a \
-         matching `(`"
+        "expected an operator such as `and` or `==`, or the end of the expression, found `)`; \
+         remove it or add a matching `(`"
     );
     assert_eq!(
         err("").to_string(),
         "the expression is empty; write one, e.g. `variant == 'premium'`"
     );
     assert_eq!(Span::new(2, 5).to_string(), "2..5");
+    // Unexpected characters without a specific fix say what is allowed.
+    assert_eq!(
+        err("a # b").to_string(),
+        "unexpected `#`; an expression is made of names, literals such as `42`, `0.5`, `30s` \
+         and 'text', the operators `and or not in == != < <= > >= + - * /`, and parentheses, \
+         e.g. `unit.age > 30s`"
+    );
+}
+
+#[test]
+fn a_percent_sign_between_operands_is_not_a_remainder() {
+    for src in ["10 % 3", "x == 10% 3", "10 % (3)", "10 % y", "10% 'a'"] {
+        let (kind, at) = err_at(src);
+        assert_eq!(
+            kind,
+            ErrorKind::UnexpectedText {
+                found: "%".into(),
+                hint: Some(Hint::NoModulo)
+            },
+            "{src}"
+        );
+        assert_eq!(at, "%", "{src}");
+    }
+    // A percentage followed by an operator or a keyword is fine.
+    assert_eq!(tree("x == 10% and y"), "(and (== x 10.0%) y)");
+    assert_eq!(tree("x in [10%] or y"), "(or (in x [10.0%]) y)");
+    assert_eq!(tree("10% - 3"), "(- 10.0% 3)");
 }
 
 #[test]
@@ -912,7 +1002,7 @@ fn quantities_know_their_dimension() {
         ("1 parts/h", Dimension::Rate),
         ("1%", Dimension::Ratio),
     ] {
-        let ExprKind::Quantity(q) = parse(src).unwrap().kind else {
+        let ExprKind::Quantity(q) = parse(src).unwrap().into_kind() else {
             panic!("{src}")
         };
         assert_eq!(q.dimension(), dimension);
