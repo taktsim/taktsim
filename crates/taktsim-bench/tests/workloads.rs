@@ -399,36 +399,83 @@ mod queue {
         assert_eq!(outcome.summary.now, at(3));
     }
 
-    /// Hold with uniform increments on 1..=S ns, S = `HOLD_MAX` in ns, has
-    /// mean increment mu = (S + 1) / 2 ns and variance (S^2 - 1) / 12, so
-    /// sigma^2 / mu^2 is about 1/3. The population stays exactly N, so a run
-    /// of K events never ends early (the event count is exactly K).
-    ///
-    /// Time of the K-th event: each of the N chains is a renewal process
-    /// with a delayed first event (uniform, mean mu). The expected number
-    /// of events of a chain by time T is T / mu + (sigma^2 / mu^2 - 1) / 2 =
-    /// T / mu - 1/3, so K = N (T / mu - 1/3) and T = (K / N + 1/3) mu. The
-    /// total count has variance about K / 3 (each chain: T sigma^2 / mu^3
-    /// = T / (3 mu), summed over N chains), so T has standard deviation
-    /// sqrt(K / 3) mu / N. The bound is 6 of those, plus one mu for the
-    /// terms of order 1 dropped above. The seed is fixed.
+    // Time of the K-th event of the hold model with uniform increments,
+    // against renewal theory, with no allowance beyond a few standard
+    // deviations.
+    // In the code: K is `events`, N is `chains`, a is `scale`, x is `frac`.
+    //
+    // The increments are uniform on 1..=S ns, S = `HOLD_MAX` in ns. Take
+    // them as uniform on (0, a] with a = S: each differs from a continuous
+    // uniform by less than 1 ns, which moves the K-th event by less than
+    // K ns in total (at most 1e4 ns, against standard deviations of 8e6 ns
+    // and more below), so it is ignored. Their mean is mu = (S + 1) / 2 ns.
+    // The population stays exactly N, so a run of K events never ends early
+    // (the event count is exactly K), and the K-th event is the one at which
+    // the N chains together have K events. Chain i is an ordinary renewal
+    // process: its k-th event is the partial sum S_k of k increments, and
+    // N_i(t) counts the S_k <= t.
+    //
+    // *Up to t = a* (K / N <= e - 1, so N = 10 000 at K = 10 000): S_k <= t
+    // needs every one of k uniforms below t, and the partial sums of
+    // uniforms on (0, 1] satisfy P(S_k <= x) = x^k / k! for x <= 1
+    // (Irwin-Hall). With x = t / a:
+    //
+    // - m(t) = E N_i(t) = sum over k >= 1 of x^k / k! = e^x - 1;
+    // - E N_i(t)^2 = sum of (2k - 1) P(S_k <= t) = 2 x e^x - (e^x - 1),
+    //   so Var N_i(t) = 2 x e^x + e^x - e^(2x).
+    //
+    // The N chains are independent, so the total count has mean N m(t) and
+    // variance N Var N_i(t). Setting N m(T) = K gives T = a ln(1 + K / N),
+    // and since the count changes at rate N m'(T) = N e^x / a there, T has
+    // standard deviation sqrt(N Var N_i(T)) a / (N e^x).
+    //
+    // *Beyond t = a* the renewal theorem gives the same quantities with an
+    // error that, for the uniform distribution, falls exponentially in t:
+    // m(t) = t / mu - 1/3 and Var N_i(t) = t sigma^2 / mu^3 + c with
+    // sigma^2 = mu^2 / 3 and a constant c. The exact values were computed from
+    // the Irwin-Hall distribution function (rational arithmetic, all terms
+    // up to k = 6 t / a + 80) for N = 1 000, 500 and 100 (K = 10 000): at
+    // N = 1 000, where T is 10.3 mu, the exact T and the asymptotic
+    // T = (K / N + 1/3) mu differ by 1.5e-6 a (5e-5 standard deviations); at
+    // N = 500 and N = 100 by less than 1e-9 a. The variance constant comes
+    // out as c = 2/9 in all three, so Var N_i = (K / N + 1) / 3 and T has
+    // standard deviation sqrt((K + N) / 3) mu / N. (Without c it would be
+    // 5 % smaller at N = 1 000.) N = 1 and N = 10 are further out still.
+    //
+    // The bound is 5 standard deviations; the seed is fixed.
     #[test]
     #[allow(clippy::cast_precision_loss)] // counts far below 2^53
     fn random_hold_runs_at_the_rate_of_theory() {
-        let k = queue::EVENTS;
-        let mu = f64::midpoint(HOLD_MAX.as_nanos() as f64, 1.0);
-        for n in HOLD_POPULATIONS {
-            let mut engine = queue::hold_random(n).unwrap();
-            let outcome = queue::run_events(&mut engine, k).unwrap();
-            assert_eq!(outcome.summary.events, k, "N = {n}");
-            assert_eq!(outcome.tally.hops, k);
-            let n = f64::from(n);
-            let expected = (k as f64 / n + 1.0 / 3.0) * mu;
-            let bound = 6.0 * (k as f64 / 3.0).sqrt() * mu / n + mu;
+        let events = queue::EVENTS as f64;
+        let scale = HOLD_MAX.as_nanos() as f64;
+        let mu = f64::midpoint(scale, 1.0);
+        for population in HOLD_POPULATIONS {
+            let mut engine = queue::hold_random(population).unwrap();
+            let outcome = queue::run_events(&mut engine, queue::EVENTS).unwrap();
+            assert_eq!(outcome.summary.events, queue::EVENTS, "N = {population}");
+            assert_eq!(outcome.tally.hops, queue::EVENTS);
+            let chains = f64::from(population);
+            let per_chain = events / chains;
+            let (expected, sd) = if per_chain <= std::f64::consts::E - 1.0 {
+                let frac = libm::log(1.0 + per_chain);
+                let exp_frac = libm::exp(frac);
+                let var = 2.0 * frac * exp_frac + exp_frac - exp_frac * exp_frac;
+                (
+                    scale * frac,
+                    (chains * var).sqrt() * scale / (chains * exp_frac),
+                )
+            } else {
+                (
+                    (per_chain + 1.0 / 3.0) * mu,
+                    ((events + chains) / 3.0).sqrt() * mu / chains,
+                )
+            };
             let found = outcome.summary.now.as_nanos() as f64;
+            let z = (found - expected) / sd;
             assert!(
-                (found - expected).abs() <= bound,
-                "N = {n}: ended at {found} ns, expected {expected} ± {bound}"
+                z.abs() <= 5.0,
+                "N = {population}: ended at {found} ns, expected {expected} ns \
+                 with sd {sd} ns (z = {z})"
             );
         }
     }

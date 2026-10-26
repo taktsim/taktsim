@@ -188,25 +188,22 @@ failure timer pending, and about 1 race in 11 ends in a failure (the other
 whether generation numbers beat the set of cancelled sequence numbers: both
 are lazy deletion, and comparing them needs a second queue implementation in
 `taktsim-core`, which this change leaves out of scope. What the numbers do
-show is that the cost is not mainly in the cancelled set: timer events cost
-1.9 times message events at 100 pending (above), and a timer that fires
-never touches the set, so the part that every timer pays is the map of
-pending timers. A local Callgrind profile of these same benchmarks (not a
-CI-runner measurement, so no number is taken from it) points the same way:
-removing a timer from that map alone costs about as much as popping the
-heap at 100 pending, and several times as much at 1 pending, before its
-insertion is counted. A slab of timer slots with generation numbers would replace that
-map and the set together, and would also make cancellation constant-time.
-**Recommendation:** try it. It is a contained change inside `taktsim-core`'s queue,
-and these benchmarks measure it as they are: the
+show is that timers carry a cost that has nothing to do with cancelling:
+timer events cost 1.9 times message events at 100 pending (above), although
+the timers of the hold model are never cancelled, and a timer that fires
+never touches the set. What every timer pays, and a message does not, is the
+engine's map of pending timers. A slab of timer slots with generation
+numbers would replace that map and the set together, and would also make
+cancellation constant-time. **Recommendation:** try it. It is a contained change inside
+`taktsim-core`'s queue, and these benchmarks measure it as they are: the
 hold, tied-hold and cancellation rows should fall, and the fan-out rows
 (messages) should not move; the gate shows both in the pull request. It
 changes the meaning of `EventId` (today the sequence number, which the trace
 also carries), so it needs the owner's decision, and an ADR amendment if
 `EventId` changes. A second experiment of the same size, a heap of small
 `(key, slot)` entries with the payload in a slab, would test whether moving
-whole events (several tens of bytes each) during sifting matters; it can be compared with the same
-rows.
+whole events (several tens of bytes each) during sifting matters; it can
+be compared with the same rows.
 
 **What this does not show.** (1) The plan above names a 4-ary heap, a
 pairing heap (Q2) and, if Q1 exceeds 30 % of the event loop, a calendar
