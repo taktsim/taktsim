@@ -5,6 +5,8 @@
 
 use taktsim_units::{Count, Rate, Ratio, SimDuration};
 
+use super::MAX_DEPTH;
+use super::error::{ErrorKind, ExprError};
 use super::span::{Span, Spanned};
 use super::types::Dimension;
 
@@ -19,6 +21,11 @@ pub(crate) fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
+/// A keyword, in any case: `in`, `IN`, `In`.
+pub(crate) fn is_keyword_in_any_case(word: &str) -> bool {
+    KEYWORDS.iter().any(|k| k.eq_ignore_ascii_case(word))
+}
+
 /// `[A-Za-z_][A-Za-z0-9_]*`, keywords included.
 fn is_word(s: &str) -> bool {
     let mut bytes = s.bytes();
@@ -28,13 +35,16 @@ fn is_word(s: &str) -> bool {
 /// A name: a path segment or a function name.
 ///
 /// ASCII letters, digits and `_`, not starting with a digit, and not one of
-/// the keywords `and`, `or`, `not`, `in`, `true`, `false`.
+/// the keywords `and`, `or`, `not`, `in`, `true`, `false` in any case
+/// (`NOT` is reserved too, so that it can get the fix "keywords are
+/// lowercase").
 ///
 /// ```
 /// use taktsim_model::expr::Ident;
 ///
 /// assert_eq!(Ident::new("buf1").map(|i| i.to_string()), Some("buf1".to_owned()));
 /// assert!(Ident::new("in").is_none());
+/// assert!(Ident::new("True").is_none());
 /// assert!(Ident::new("weld-1").is_none());
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -51,7 +61,7 @@ impl Ident {
     /// ```
     #[must_use]
     pub fn new(name: &str) -> Option<Self> {
-        (is_word(name) && !KEYWORDS.contains(&name)).then(|| Self(name.to_owned()))
+        (is_word(name) && !is_keyword_in_any_case(name)).then(|| Self(name.to_owned()))
     }
 
     /// The name.
@@ -257,7 +267,7 @@ impl Path {
 /// ```
 /// use taktsim_model::expr::{Dimension, ExprKind, Quantity, parse};
 ///
-/// let ExprKind::Quantity(q) = parse("40 parts")?.kind else { unreachable!() };
+/// let ExprKind::Quantity(q) = parse("40 parts")?.into_kind() else { unreachable!() };
 /// assert_eq!(q, Quantity::Count(taktsim_units::Count::new(40)));
 /// assert_eq!(q.dimension(), Dimension::Count);
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
@@ -300,7 +310,7 @@ impl Quantity {
 /// ```
 /// use taktsim_model::expr::{ExprKind, parse};
 ///
-/// let ExprKind::Call(call) = parse("state_shares(cut, weld-1)")?.kind else { unreachable!() };
+/// let ExprKind::Call(call) = parse("state_shares(cut, weld-1)")?.into_kind() else { unreachable!() };
 /// assert_eq!(call.name.value.as_str(), "state_shares");
 /// assert_eq!(call.args[1].value.as_str(), "weld-1");
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
@@ -318,7 +328,7 @@ pub struct Call {
 /// ```
 /// use taktsim_model::expr::{BinOp, ExprKind, parse};
 ///
-/// let ExprKind::Binary { op, .. } = parse("a and b")?.kind else { unreachable!() };
+/// let ExprKind::Binary { op, .. } = parse("a and b")?.into_kind() else { unreachable!() };
 /// assert_eq!(op, BinOp::And);
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
 /// ```
@@ -343,7 +353,7 @@ pub enum BinOp {
 /// ```
 /// use taktsim_model::expr::{CmpOp, ExprKind, parse};
 ///
-/// let ExprKind::Compare { op, .. } = parse("wip(buf1) <= 30 parts")?.kind else { unreachable!() };
+/// let ExprKind::Compare { op, .. } = parse("wip(buf1) <= 30 parts")?.into_kind() else { unreachable!() };
 /// assert_eq!(op, CmpOp::Le);
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
 /// ```
@@ -368,7 +378,7 @@ pub enum CmpOp {
 /// ```
 /// use taktsim_model::expr::{ExprKind, parse};
 ///
-/// let ExprKind::In { list, .. } = parse("variant in ['basic', 'premium']")?.kind else { unreachable!() };
+/// let ExprKind::In { list, .. } = parse("variant in ['basic', 'premium']")?.into_kind() else { unreachable!() };
 /// assert_eq!(list.items.len(), 2);
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
 /// ```
@@ -380,23 +390,28 @@ pub struct List {
     pub span: Span,
 }
 
-/// An expression: a node of the syntax tree with its span.
+/// An expression: a node of the syntax tree, with its span and depth.
+///
+/// A tree is at most [`MAX_DEPTH`] levels deep: [`Expr::new`] refuses a
+/// deeper one, and the fields are private, so a deeper tree cannot exist.
+/// Every tree can therefore be printed and parsed back, and every pass over
+/// one runs in a small, fixed stack.
 ///
 /// ```
 /// use taktsim_model::expr::{BinOp, ExprKind, parse};
 ///
 /// let expr = parse("a or b and c")?;
 /// // `and` binds tighter than `or`.
-/// let ExprKind::Binary { op: BinOp::Or, rhs, .. } = expr.kind else { unreachable!() };
-/// assert!(matches!(rhs.kind, ExprKind::Binary { op: BinOp::And, .. }));
+/// let ExprKind::Binary { op: BinOp::Or, rhs, .. } = expr.kind() else { unreachable!() };
+/// assert!(matches!(rhs.kind(), ExprKind::Binary { op: BinOp::And, .. }));
+/// assert_eq!(expr.depth(), 3);
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
-    /// What the node is.
-    pub kind: ExprKind,
-    /// The source text it covers, including enclosing parentheses.
-    pub span: Span,
+    kind: ExprKind,
+    span: Span,
+    depth: usize,
 }
 
 /// The kinds of expression nodes. Parentheses are not nodes; they only
@@ -405,7 +420,7 @@ pub struct Expr {
 /// ```
 /// use taktsim_model::expr::{ExprKind, parse};
 ///
-/// assert!(matches!(parse("(true)")?.kind, ExprKind::Bool(true)));
+/// assert!(matches!(parse("(true)")?.kind(), ExprKind::Bool(true)));
 /// # Ok::<(), taktsim_model::expr::ExprError>(())
 /// ```
 #[derive(Debug, Clone, PartialEq)]
@@ -456,6 +471,113 @@ pub enum ExprKind {
 }
 
 impl Expr {
+    /// The node `kind`, written at `span`.
+    ///
+    /// # Errors
+    ///
+    /// [`ErrorKind::TooDeep`], at `span`, if the tree would be more than
+    /// [`MAX_DEPTH`] levels deep.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{Expr, ExprKind, MAX_DEPTH, Span};
+    ///
+    /// let mut e = Expr::new(ExprKind::Bool(true), Span::default())?;
+    /// for _ in 1..MAX_DEPTH {
+    ///     e = Expr::new(ExprKind::Not(Box::new(e)), Span::default())?;
+    /// }
+    /// assert_eq!(e.depth(), MAX_DEPTH);
+    /// assert!(Expr::new(ExprKind::Not(Box::new(e)), Span::default()).is_err());
+    /// # Ok::<(), taktsim_model::expr::ExprError>(())
+    /// ```
+    pub fn new(kind: ExprKind, span: Span) -> Result<Self, ExprError> {
+        let below = match &kind {
+            ExprKind::Bool(_)
+            | ExprKind::Int(_)
+            | ExprKind::Number(_)
+            | ExprKind::Quantity(_)
+            | ExprKind::Str(_)
+            | ExprKind::Path(_)
+            | ExprKind::Call(_) => 0,
+            ExprKind::Neg(x) | ExprKind::Not(x) => x.depth,
+            ExprKind::Binary { lhs, rhs, .. } | ExprKind::Compare { lhs, rhs, .. } => {
+                lhs.depth.max(rhs.depth)
+            }
+            ExprKind::In { lhs, list } => list
+                .items
+                .iter()
+                .map(|item| item.depth)
+                .fold(lhs.depth, usize::max),
+        };
+        let depth = below + 1;
+        if depth > MAX_DEPTH {
+            return Err(ExprError::new(
+                ErrorKind::TooDeep { limit: MAX_DEPTH },
+                span,
+            ));
+        }
+        Ok(Self { kind, span, depth })
+    }
+
+    /// What the node is.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{ExprKind, parse};
+    ///
+    /// assert!(matches!(parse("(true)")?.kind(), ExprKind::Bool(true)));
+    /// # Ok::<(), taktsim_model::expr::ExprError>(())
+    /// ```
+    #[must_use]
+    pub const fn kind(&self) -> &ExprKind {
+        &self.kind
+    }
+
+    /// The node, taken apart.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{ExprKind, parse};
+    ///
+    /// let ExprKind::Path(path) = parse("unit.age")?.into_kind() else { unreachable!() };
+    /// assert_eq!(path.to_string(), "unit.age");
+    /// # Ok::<(), taktsim_model::expr::ExprError>(())
+    /// ```
+    #[must_use]
+    pub fn into_kind(self) -> ExprKind {
+        self.kind
+    }
+
+    /// The source text the node covers, including enclosing parentheses.
+    ///
+    /// ```
+    /// use taktsim_model::expr::{Span, parse};
+    ///
+    /// assert_eq!(parse("(a)")?.span(), Span::new(0, 3));
+    /// # Ok::<(), taktsim_model::expr::ExprError>(())
+    /// ```
+    #[must_use]
+    pub const fn span(&self) -> Span {
+        self.span
+    }
+
+    /// The number of levels of the tree, from 1 for a leaf to
+    /// [`MAX_DEPTH`].
+    ///
+    /// ```
+    /// use taktsim_model::expr::parse;
+    ///
+    /// assert_eq!(parse("x")?.depth(), 1);
+    /// assert_eq!(parse("-(a + b)")?.depth(), 3);
+    /// # Ok::<(), taktsim_model::expr::ExprError>(())
+    /// ```
+    #[must_use]
+    pub const fn depth(&self) -> usize {
+        self.depth
+    }
+
+    /// The same node, written at `span`.
+    pub(crate) fn with_span(self, span: Span) -> Self {
+        Self { span, ..self }
+    }
+
     /// A copy of the tree with every span set to `0..0`, for comparing
     /// trees regardless of where they were written.
     ///
@@ -502,9 +624,11 @@ impl Expr {
                 },
             },
         };
+        // Same shape, so the same depth.
         Self {
             kind,
             span: Span::default(),
+            depth: self.depth,
         }
     }
 }

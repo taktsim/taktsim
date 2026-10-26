@@ -55,14 +55,16 @@ pub use ast::{
 };
 pub use check::{Checked, check, condition};
 pub use error::{ErrorKind, Expectation, ExprError, Hint, Operator};
-pub use eval::{Condition, EvalError, Input, Value, Values};
+pub use eval::{Condition, EvalError, Input, InputKind, Value, Values};
 pub use parser::parse;
 pub use span::{Span, Spanned};
 pub use types::{Arity, Dimension, EnvError, Expected, Signature, Type, TypeEnv};
 
 /// The deepest nesting an expression may have: levels of the syntax tree,
-/// and open parentheses and brackets. It keeps every recursive pass over a
-/// tree within a small, fixed stack (ADR-0015).
+/// and open parentheses in its text. [`Expr::new`] refuses a deeper tree,
+/// so every pass over a tree (checking, printing, evaluating, dropping)
+/// runs within a small, fixed stack, and every tree that exists prints to
+/// text that parses back (ADR-0015).
 ///
 /// ```
 /// use taktsim_model::expr::{ErrorKind, MAX_DEPTH, parse};

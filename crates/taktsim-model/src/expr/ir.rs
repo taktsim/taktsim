@@ -3,12 +3,13 @@
 //! of each exact or floating-point subexpression is a type parameter, so an
 //! ill-typed tree cannot be represented.
 
-use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use taktsim_units::SimDuration;
 
 use super::eval::Input;
+use super::types::Enumeration;
 
 /// Dimension markers. Exact dimensions are evaluated as `i128`, the others
 /// as `f64` (ADR-0015, "Evaluation").
@@ -59,15 +60,8 @@ pub(crate) enum FloatIr<D> {
 #[derive(Debug, Clone)]
 pub(crate) enum TextIr {
     Const(String),
-    /// An input and, for an enum, its enumeration.
-    Input(Input, Option<EnumValues>),
-}
-
-/// An enumeration and its allowed values, to check input values against.
-#[derive(Debug, Clone)]
-pub(crate) struct EnumValues {
-    pub(crate) name: String,
-    pub(crate) values: BTreeSet<String>,
+    /// An input and, for an enum, its enumeration, to check values against.
+    Input(Input, Option<Arc<Enumeration>>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::sync::Arc;
 
 use super::ast::{ComponentId, Ident, Path};
 
@@ -283,7 +284,10 @@ pub enum EnvError {
         id: String,
     },
     /// An enum value that a string literal cannot write.
-    #[error("enum `{enumeration}` value `{value}` contains `'`, which a string literal cannot")]
+    #[error(
+        "enum `{enumeration}` value `{value}` contains `'`, which a string literal cannot \
+         write; example: premium"
+    )]
     InvalidEnumValue {
         /// The enumeration.
         enumeration: String,
@@ -291,7 +295,7 @@ pub enum EnvError {
         value: String,
     },
     /// An enumeration without values.
-    #[error("enum `{name}` has no values")]
+    #[error("enum `{name}` has no values; give at least one, e.g. [\"basic\", \"premium\"]")]
     EmptyEnum {
         /// The enumeration.
         name: String,
@@ -303,11 +307,22 @@ pub enum EnvError {
         name: String,
     },
     /// A name defined twice.
-    #[error("`{name}` is defined twice")]
+    #[error(
+        "`{name}` is defined twice; define each enum, path, function and component once, \
+         e.g. `unit.priority` once and `unit.rank` once"
+    )]
     Duplicate {
         /// The name.
         name: String,
     },
+}
+
+/// An enumeration and its values, shared by every expression that uses
+/// it rather than copied.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Enumeration {
+    pub(crate) name: String,
+    pub(crate) values: BTreeSet<String>,
 }
 
 /// What an expression may refer to in one context: paths and their types,
@@ -331,7 +346,7 @@ pub enum EnvError {
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TypeEnv {
-    enums: BTreeMap<String, BTreeSet<String>>,
+    enums: BTreeMap<String, Arc<Enumeration>>,
     paths: BTreeMap<Path, Type>,
     functions: BTreeMap<Ident, Signature>,
     components: BTreeMap<ComponentId, String>,
@@ -387,7 +402,11 @@ impl TypeEnv {
                 value: value.clone(),
             });
         }
-        self.enums.insert(name.to_owned(), values);
+        let enumeration = Enumeration {
+            name: name.to_owned(),
+            values,
+        };
+        self.enums.insert(name.to_owned(), Arc::new(enumeration));
         Ok(self)
     }
 
@@ -502,11 +521,16 @@ impl TypeEnv {
         self.components.get(id).map(String::as_str)
     }
 
-    pub(crate) fn component_ids(&self) -> impl Iterator<Item = &str> {
-        self.components.keys().map(ComponentId::as_str)
+    /// The ids of the components that `signature` takes, in order.
+    pub(crate) fn components_for(&self, signature: &Signature) -> Vec<String> {
+        self.components
+            .iter()
+            .filter(|(_, kind)| signature.accepts().is_none_or(|a| a.contains(*kind)))
+            .map(|(id, _)| id.as_str().to_owned())
+            .collect()
     }
 
-    pub(crate) fn enum_values(&self, name: &str) -> Option<&BTreeSet<String>> {
+    pub(crate) fn enumeration(&self, name: &str) -> Option<&Arc<Enumeration>> {
         self.enums.get(name)
     }
 }

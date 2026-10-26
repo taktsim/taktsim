@@ -19,16 +19,16 @@ use common::env;
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 use taktsim_model::expr::{
-    BinOp, Call, CmpOp, ComponentId, Condition, ErrorKind, Expected, Expr, ExprKind, Ident, List,
-    Number, Path, Quantity, Span, Spanned, Text, Value, check, condition, parse,
+    BinOp, Call, CmpOp, ComponentId, Condition, ErrorKind, Expected, Expr, ExprError, ExprKind,
+    Ident, List, MAX_DEPTH, Number, Path, Quantity, Span, Spanned, Text, Value, check, condition,
+    parse,
 };
 use taktsim_units::{Count, Rate, Ratio, SimDuration};
 
+/// A node of a generated tree, which stays far below the depth limit.
+#[allow(clippy::unwrap_used)] // test helper
 fn node(kind: ExprKind) -> Expr {
-    Expr {
-        kind,
-        span: Span::default(),
-    }
+    Expr::new(kind, Span::default()).unwrap()
 }
 
 fn unspanned<T>(value: T) -> Spanned<T> {
@@ -188,7 +188,7 @@ fn env_leaf() -> impl Strategy<Value = ExprKind> {
     let leaves: Vec<ExprKind> = paths
         .iter()
         .chain(sources.iter())
-        .map(|s| parse(s).unwrap().without_spans().kind)
+        .map(|s| parse(s).unwrap().without_spans().into_kind())
         .collect();
     prop::sample::select(leaves)
 }
@@ -253,8 +253,8 @@ fn valid_span(src: &str, span: Span) -> Result<(), TestCaseError> {
 }
 
 fn valid_spans(src: &str, e: &Expr) -> Result<(), TestCaseError> {
-    valid_span(src, e.span)?;
-    match &e.kind {
+    valid_span(src, e.span())?;
+    match e.kind() {
         ExprKind::Bool(_)
         | ExprKind::Int(_)
         | ExprKind::Number(_)
@@ -288,7 +288,7 @@ fn exercise(src: &str) -> Result<(), TestCaseError> {
             valid_span(src, e.span())?;
             prop_assert!(!e.to_string().is_empty());
             prop_assert!(e.render(src).contains('^'));
-            return Ok(());
+            return fix_moves_on(src, &e);
         }
     };
     valid_spans(src, &expr)?;
@@ -300,6 +300,7 @@ fn exercise(src: &str) -> Result<(), TestCaseError> {
         if let Err(e) = check(&expr, &env, expected) {
             valid_span(src, e.span())?;
             prop_assert!(e.render(src).contains('^'));
+            fix_moves_on(src, &e)?;
         }
     }
     if let Ok(cond) = Condition::new(&expr, &env) {
@@ -307,6 +308,24 @@ fn exercise(src: &str) -> Result<(), TestCaseError> {
             let result = cond.eval(&values);
             prop_assert!(result.is_ok(), "{src:?}: {result:?}");
         }
+    }
+    Ok(())
+}
+
+/// Applying the replacement an error offers fixes that error: the text
+/// then parses and checks, or fails with a different error or elsewhere.
+fn fix_moves_on(src: &str, e: &ExprError) -> Result<(), TestCaseError> {
+    let Some(replacement) = e.replacement() else {
+        return Ok(());
+    };
+    let mut fixed = src.to_owned();
+    fixed.replace_range(e.span().range(), &replacement);
+    let next = parse(&fixed).and_then(|expr| check(&expr, &env(), Expected::Any).map(|_| ()));
+    if let Err(next) = next {
+        prop_assert!(
+            !(next.kind() == e.kind() && next.span() == e.span()),
+            "{src:?} -> {fixed:?} still fails with {next}"
+        );
     }
     Ok(())
 }
@@ -782,5 +801,132 @@ proptest! {
         ]);
         let unit = Unit { variant, quality, reworked, priority };
         prop_assert_eq!(compiled.eval(&values).unwrap(), cond_reference(&c, &unit), "{}", src);
+    }
+}
+
+// --- the deepest trees ------------------------------------------------------------------
+
+/// `e` wrapped in one more level, in each shape the syntax tree has, with
+/// `e` in every operand position.
+#[allow(clippy::unwrap_used)] // test helper
+fn wrap(shape: u8, e: Expr) -> Expr {
+    let leaf = || Box::new(node(ExprKind::Bool(true)));
+    let e = Box::new(e);
+    let kind = match shape % 11 {
+        0 => ExprKind::Neg(e),
+        1 => ExprKind::Not(e),
+        2 => ExprKind::Binary {
+            op: BinOp::Sub,
+            lhs: e,
+            rhs: leaf(),
+        },
+        3 => ExprKind::Binary {
+            op: BinOp::Sub,
+            lhs: leaf(),
+            rhs: e,
+        },
+        4 => ExprKind::Binary {
+            op: BinOp::Div,
+            lhs: leaf(),
+            rhs: e,
+        },
+        5 => ExprKind::Binary {
+            op: BinOp::Or,
+            lhs: leaf(),
+            rhs: e,
+        },
+        6 => ExprKind::Compare {
+            op: CmpOp::Lt,
+            lhs: e,
+            rhs: leaf(),
+        },
+        7 => ExprKind::Compare {
+            op: CmpOp::Eq,
+            lhs: leaf(),
+            rhs: e,
+        },
+        8 => ExprKind::In {
+            lhs: e,
+            list: List {
+                items: vec![*leaf()],
+                span: Span::default(),
+            },
+        },
+        9 => ExprKind::In {
+            lhs: leaf(),
+            list: List {
+                items: vec![*leaf(), *e],
+                span: Span::default(),
+            },
+        },
+        _ => ExprKind::Binary {
+            op: BinOp::And,
+            lhs: e,
+            rhs: leaf(),
+        },
+    };
+    Expr::new(kind, Span::default()).unwrap()
+}
+
+/// A tree of exactly `MAX_DEPTH` levels, from `shapes`.
+fn deepest(shapes: &[u8]) -> Expr {
+    shapes
+        .iter()
+        .fold(node(ExprKind::Bool(true)), |e, &shape| wrap(shape, e))
+}
+
+/// The deepest tree prints to text that parses back to it, one more level
+/// is refused, and every pass over it works.
+fn deepest_round_trip(shapes: &[u8]) -> Result<(), TestCaseError> {
+    let e = deepest(shapes);
+    prop_assert_eq!(e.depth(), MAX_DEPTH);
+    let text = e.to_string();
+    let parsed = parse(&text).map_err(|err| TestCaseError::fail(format!("{text:?}: {err}")))?;
+    prop_assert_eq!(parsed.without_spans(), e.clone());
+    let deeper = Expr::new(ExprKind::Not(Box::new(e)), Span::default());
+    let refused = matches!(
+        deeper.map_err(|err| err.kind().clone()),
+        Err(ErrorKind::TooDeep { limit: MAX_DEPTH })
+    );
+    prop_assert!(refused, "a tree deeper than the limit was built");
+    exercise(&text)
+}
+
+#[test]
+fn the_deepest_tree_of_every_shape_prints_and_parses_back() {
+    for shape in 0..11 {
+        let shapes = vec![shape; MAX_DEPTH - 1];
+        deepest_round_trip(&shapes).unwrap();
+    }
+}
+
+#[test]
+fn no_tree_deeper_than_the_limit_can_be_built() {
+    // The review's probe: a million nested negations. Building stops at the
+    // limit, so no pass (check, print, evaluate, drop) can overflow the stack.
+    let mut e = node(ExprKind::Int(1));
+    let mut levels = 1;
+    let err = loop {
+        match Expr::new(ExprKind::Neg(Box::new(e.clone())), Span::default()) {
+            Ok(deeper) => {
+                e = deeper;
+                levels += 1;
+                assert!(levels <= 1_000_000);
+            }
+            Err(err) => break err,
+        }
+    };
+    assert_eq!(levels, MAX_DEPTH);
+    assert_eq!(err.kind(), &ErrorKind::TooDeep { limit: MAX_DEPTH });
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(500))]
+
+    #[test]
+    fn the_deepest_trees_print_and_parse_back(
+        shapes in prop::collection::vec(0_u8..11, MAX_DEPTH - 1)
+    ) {
+        deepest_round_trip(&shapes)?;
     }
 }

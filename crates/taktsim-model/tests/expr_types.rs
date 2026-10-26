@@ -147,7 +147,9 @@ fn calls_take_the_declared_number_of_arguments() {
         ErrorKind::ArgumentCount {
             function: "throughput".into(),
             arity: Arity::Exactly(1),
-            found: 0
+            found: 0,
+            // The first component the function takes, in id order.
+            example: "throughput(buf1)".into(),
         }
     );
     assert_eq!(at, "throughput()");
@@ -163,12 +165,21 @@ fn calls_take_the_declared_number_of_arguments() {
     ));
     assert_eq!(
         err("throughput(sink, buf1)").to_string(),
-        "`throughput` takes 1 component id, found 2"
+        "`throughput` takes 1 component id, found 2; e.g. `throughput(buf1)`"
     );
+    // `state_shares` takes machines only.
     assert_eq!(
         err("state_shares()").to_string(),
-        "`state_shares` takes at least 1 component id, found 0"
+        "`state_shares` takes at least 1 component id, found 0; e.g. `state_shares(cut)`"
     );
+    // A model with too few components gets placeholders.
+    let env = TypeEnv::new()
+        .with_function("pair", Signature::new(Arity::Exactly(2), Type::Int))
+        .unwrap()
+        .with_component("a", "Machine")
+        .unwrap();
+    let e = check(&parse("pair(a)").unwrap(), &env, Expected::Any).unwrap_err();
+    assert!(e.to_string().ends_with("e.g. `pair(a, c2)`"), "{e}");
 }
 
 #[test]
@@ -179,14 +190,35 @@ fn call_arguments_must_be_components_of_the_model() {
         ErrorKind::UnknownComponent {
             function: "throughput".into(),
             id: "snk".into(),
-            suggestion: Some("sink".into())
+            suggestion: Some("sink".into()),
+            known: vec!["buf1".into(), "cut".into(), "sink".into(), "weld-1".into()],
         }
     );
     assert_eq!(at, "snk");
     assert_eq!(
         err("throughput(snk)").to_string(),
-        "`throughput` refers to `snk`, which is not a component of the model; did you mean `sink`?"
+        "`throughput` refers to `snk`, which is not a component of the model; it takes: \
+         `buf1`, `cut`, `sink`, `weld-1`; did you mean `sink`?"
     );
+    // Only components the function takes are suggested: `buf1` is close to
+    // `buf2` but is no machine.
+    let (kind, _) = err_at("state_shares(buf2)");
+    assert!(matches!(
+        &kind,
+        ErrorKind::UnknownComponent { suggestion: None, known, .. } if known == &["cut", "weld-1"]
+    ));
+}
+
+#[test]
+fn long_component_lists_are_shortened() {
+    let mut env = TypeEnv::new()
+        .with_function("wip", Signature::new(Arity::Exactly(1), COUNT))
+        .unwrap();
+    for i in 0..12 {
+        env = env.with_component(&format!("b{i:02}"), "Buffer").unwrap();
+    }
+    let e = check(&parse("wip(x)").unwrap(), &env, Expected::Any).unwrap_err();
+    assert!(e.to_string().ends_with("`b08`, `b09` and 2 more"), "{e}");
 }
 
 #[test]
@@ -720,6 +752,209 @@ fn context_messages() {
     assert_eq!(Expected::Any.to_string(), "any type");
 }
 
+// --- equality next to a bare number ---------------------------------------------------------
+
+#[test]
+fn equality_never_suggests_a_unit_it_would_then_reject() {
+    // `==` does not apply to counts, rates, ratios or numbers, so adding a
+    // unit would not help: say so instead.
+    for (src, found) in [
+        ("wip(buf1) == 30", COUNT),
+        ("30 == wip(buf1)", COUNT),
+        ("throughput(sink) != 120", RATE),
+        // The literal is the inexact side here.
+        ("2.5 == unit.share", Type::Number),
+        ("unit.weight == 1", Type::Number),
+        ("1 == unit.weight", Type::Number),
+        ("30 in [wip(buf1)]", COUNT),
+    ] {
+        let e = err(src);
+        assert!(
+            matches!(e.kind(), ErrorKind::EqualityNotAllowed { ty, .. } if *ty == found),
+            "{src}: {e}"
+        );
+        assert_eq!(e.replacement(), None, "{src}");
+    }
+    // Durations compare exactly, so there the unit is the fix.
+    for (src, literal, fixed) in [
+        ("unit.age == 30", "30", "unit.age == 30s"),
+        ("30 != unit.age", "30", "30s != unit.age"),
+        ("unit.age in [30s, 60]", "60", "unit.age in [30s, 60s]"),
+    ] {
+        let e = err(src);
+        assert!(
+            matches!(e.kind(), ErrorKind::MissingUnit { .. }),
+            "{src}: {e}"
+        );
+        assert_eq!(&src[e.span().range()], literal);
+        assert_eq!(apply(src, &e), fixed);
+        assert_eq!(ty(fixed), Type::Bool);
+    }
+}
+
+// --- suggested fixes ------------------------------------------------------------------------
+
+/// `src` with the error's replacement applied at its span.
+#[allow(clippy::unwrap_used)] // test helper
+fn apply(src: &str, e: &ExprError) -> String {
+    let mut fixed = src.to_owned();
+    fixed.replace_range(e.span().range(), &e.replacement().unwrap());
+    fixed
+}
+
+#[test]
+fn every_offered_fix_type_checks() {
+    // Each source has one mistake; applying the replacement the error
+    // offers must give an expression that type-checks.
+    let cases = [
+        // MissingUnit
+        "wip(buf1) <= 30",
+        "30 + 1s",
+        "unit.share > 2.5",
+        "throughput(sink) >= 120",
+        "unit.batch < 2.5",
+        "unit.age == 30",
+        "unit.age in [30s, 60]",
+        // Suggested names, functions, components and enum values
+        "varient == 'premium'",
+        "unit.priorty > 1",
+        "throughputt(sink) > 1 parts/h",
+        "throughput(snk) > 1 parts/h",
+        "wip(buf) > 1 parts",
+        "variant == 'premum'",
+        "'premum' == variant",
+        "variant in ['basic', 'deluxx']",
+        // Units
+        "unit.age > 30 mn",
+        "unit.age > 30 S",
+        "throughput(sink) > 120 parts/hour",
+        // Keywords in another case
+        "unit.reworked AND true",
+        "NOT unit.reworked",
+        "unit.reworked == TRUE",
+        "unit.priority IN [1]",
+        "unit.priority == 1 OR unit.reworked",
+        // Operators from other languages
+        "unit.reworked && true",
+        "unit.reworked || true",
+        "!unit.reworked",
+        "unit.priority = 1",
+        "unit.priority <> 1",
+        "unit.priority =< 1",
+        "unit.priority => 1",
+    ];
+    for src in cases {
+        let e = match parse(src) {
+            Err(e) => e,
+            Ok(expr) => check(&expr, &env(), Expected::Bool).unwrap_err(),
+        };
+        assert!(e.replacement().is_some(), "{src}: no fix in {e}");
+        let fixed = apply(src, &e);
+        let checked = parse(&fixed).map(|expr| check(&expr, &env(), Expected::Any));
+        assert!(
+            matches!(checked, Ok(Ok(_))),
+            "{src} -> {fixed}: {checked:?}"
+        );
+    }
+}
+
+#[test]
+fn errors_without_a_mechanical_fix_offer_none() {
+    for src in [
+        "30s + 2 parts",
+        "unit.weight / 0.0",
+        "unit.priority * unit.rank * 2",
+        "variant < 'premium'",
+        "quality == 'gold'",
+        "x in [",
+    ] {
+        let e = match parse(src) {
+            Err(e) => e,
+            Ok(expr) => check(&expr, &env(), Expected::Bool).unwrap_err(),
+        };
+        assert_eq!(e.replacement(), None, "{src}: {e}");
+    }
+}
+
+// --- error order ----------------------------------------------------------------------------
+
+#[test]
+fn errors_are_reported_in_reading_order() {
+    // An operand that does not fit its operator is reported before any
+    // error in a later operand (ADR-0015, "Errors").
+    for (src, at, kind) in [
+        ("1 and (unit.priority + 2.0)", "1", "NotDefinedFor"),
+        (
+            "variant < (unit.priority + 2.0)",
+            "variant",
+            "NotDefinedFor",
+        ),
+        ("'a' + (unit.priority + 2.0)", "'a'", "NotDefinedFor"),
+        ("true * (unit.priority + 2.0)", "true", "NotDefinedFor"),
+        (
+            "wip(buf1) == (unit.priority + 2.0)",
+            "wip(buf1) == (unit.priority + 2.0)",
+            "EqualityNotAllowed",
+        ),
+        (
+            "unit.weight in [(unit.priority + 2.0)]",
+            "unit.weight in [(unit.priority + 2.0)]",
+            "EqualityNotAllowed",
+        ),
+        (
+            "variant / (unit.priority + 2.0)",
+            "variant",
+            "NotDefinedFor",
+        ),
+        (
+            "unit.weight / (unit.priority + 2.0)",
+            "(unit.priority + 2.0)",
+            "DivisorNotLiteral",
+        ),
+        // List elements are checked one by one.
+        (
+            "unit.priority in [2.0, (unit.priority + 2.0)]",
+            "2.0",
+            "Mismatch",
+        ),
+        (
+            "variant in ['premum', unknown]",
+            "'premum'",
+            "UnknownEnumValue",
+        ),
+        // Then the right operand, then the pair.
+        ("unit.priority + (1 + 2.0)", "(1 + 2.0)", "Mismatch"),
+        ("unit.reworked and 1", "1", "NotDefinedFor"),
+    ] {
+        let e = err(src);
+        assert_eq!(&src[e.span().range()], at, "{src}: {e}");
+        assert!(format!("{:?}", e.kind()).starts_with(kind), "{src}: {e:?}");
+    }
+}
+
+// --- examples in every message --------------------------------------------------------------
+
+#[test]
+fn every_message_has_an_example() {
+    for src in [
+        "unit.priority * unit.rank * 2",
+        "unit.weight / 0.0",
+        "throughput()",
+        "unit.in",
+        "throughput(x)",
+    ] {
+        let e = match parse(src) {
+            Err(e) => e,
+            Ok(expr) => check(&expr, &env(), Expected::Any).unwrap_err(),
+        };
+        let text = e.to_string();
+        assert!(
+            text.contains("e.g.") || text.contains("it takes:"),
+            "{src}: {text}"
+        );
+    }
+}
+
 #[test]
 fn parse_errors_come_first() {
     let e = condition("variant ==", &env()).unwrap_err();
@@ -751,16 +986,17 @@ fn checked_expressions_list_their_inputs() {
         .collect();
     assert_eq!(
         inputs,
+        // In the order of their canonical text.
         [
-            ("unit.age".to_owned(), DURATION),
             ("throughput(sink)".to_owned(), RATE),
+            ("unit.age".to_owned(), DURATION),
             ("wip(buf1)".to_owned(), COUNT),
         ]
     );
     assert!(
         checked
             .inputs()
-            .contains_key(&Input::Path(Path::parse("unit.age").unwrap()))
+            .contains_key(&Input::path(Path::parse("unit.age").unwrap()))
     );
     assert_eq!(
         checked.expr().to_string(),
@@ -816,6 +1052,16 @@ fn environments_reject_names_the_language_cannot_write() {
             .with_component("a", "Buffer"),
         Err(EnvError::Duplicate { .. })
     ));
+    assert_eq!(
+        TypeEnv::new()
+            .with_component("a", "Machine")
+            .unwrap()
+            .with_component("a", "Buffer")
+            .unwrap_err()
+            .to_string(),
+        "`a` is defined twice; define each enum, path, function and component once, \
+         e.g. `unit.priority` once and `unit.rank` once"
+    );
     assert!(matches!(
         TypeEnv::new().with_enum("e", ["it's"]),
         Err(EnvError::InvalidEnumValue { .. })
@@ -832,7 +1078,7 @@ fn environments_reject_names_the_language_cannot_write() {
             .with_enum("e", Vec::<&str>::new())
             .unwrap_err()
             .to_string(),
-        "enum `e` has no values"
+        "enum `e` has no values; give at least one, e.g. [\"basic\", \"premium\"]"
     );
 }
 
