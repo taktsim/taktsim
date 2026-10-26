@@ -110,6 +110,17 @@ fn equality_on_every_type_that_has_it() {
         ("unit.age == 1.5min", true),
         ("unit.age != 90000ms", false),
         ("lead_time(sink) == 0.75h", true),
+        // count: batch = 5, wip = 12; counts are exact integers
+        ("unit.batch == 5 parts", true),
+        ("unit.batch != 5 parts", false),
+        ("5 parts == unit.batch", true),
+        ("wip(buf1) == 12 parts", true),
+        ("wip(buf1) != unit.batch", true),
+        ("unit.batch == wip(buf1)", false),
+        ("unit.batch + 7 parts == wip(buf1)", true),
+        ("unit.batch * 2 + 2 parts == wip(buf1)", true),
+        ("unit.batch * unit.rank == 0 parts - 10 parts", true),
+        ("unit.batch - 10 parts != 5 parts", true),
         // enum and string
         ("variant == 'premium'", true),
         ("variant != 'premium'", false),
@@ -280,6 +291,19 @@ fn membership_on_every_type_that_has_it() {
         ("unit.priority in [1, 2]", false),
         ("unit.priority in [unit.rank, (-unit.rank)]", false),
         ("unit.priority in [(unit.rank + 5)]", true),
+        // A list element may be negated without parentheses.
+        ("unit.rank in [-2]", true),
+        ("unit.rank in [-1, -2, -3]", true),
+        ("unit.rank in [-1, 2]", false),
+        ("unit.priority in [-unit.rank]", false),
+        ("unit.priority in [1, -unit.rank, 3]", true),
+        ("unit.rank in [-unit.priority, -(2)]", true),
+        ("unit.rank in [-(unit.priority - 1)]", true),
+        // count
+        ("unit.batch in [5 parts]", true),
+        ("unit.batch in [1 parts, 5 parts, 9 parts]", true),
+        ("unit.batch in [1 parts, 2 parts]", false),
+        ("wip(buf1) in [unit.batch, (unit.batch + 7 parts)]", true),
         ("unit.age in [1min, 90s]", true),
         ("unit.age in [1min]", false),
         ("unit.reworked in [false]", false),
@@ -305,12 +329,14 @@ fn exact_arithmetic_has_no_overflow_at_the_extremes() {
     // (2^64 - 1 ns) + (2^64 - 1 ns) > 2^64 - 1 ns, beyond SimDuration.
     assert!(eval_with("unit.age + unit.age > unit.age", &v));
     assert!(eval_with("unit.age * unit.priority < 0s", &v));
-    // Counts have no `==` (ADR-0009); `<=` and `>=` pin the value.
+    // Counts compare exactly (ADR-0015), also beyond the u64 range.
     let back = "unit.batch * 2 - unit.batch";
+    assert!(eval_with(&format!("{back} == unit.batch"), &v));
     assert!(eval_with(
-        &format!("{back} <= unit.batch and {back} >= unit.batch"),
+        "unit.batch + unit.batch != unit.batch and unit.batch + unit.batch > unit.batch",
         &v
     ));
+    assert!(eval_with("unit.batch == 18446744073709551615 parts", &v));
     assert!(eval_with(
         "18446744073709551615 * 9223372036854775807 > 18446744073709551615",
         &v

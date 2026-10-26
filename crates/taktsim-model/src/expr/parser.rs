@@ -12,12 +12,13 @@
 //! atom = quantity | number | string | bool | call | path | "(" expr ")" ;
 //! call = ident "(" [ component-id { "," component-id } ] ")" ;
 //! path = ident { "." ident } ;
-//! list = "[" [ atom { "," atom } ] "]" ;
+//! list = "[" [ unary { "," unary } ] "]" ;
 //! ```
 //!
 //! Nodes are built with [`Expr::new`], which enforces the depth limit.
 //! Only parentheses make the parser recurse, so they are counted against
-//! the same limit; a list cannot nest without them.
+//! the same limit; a list cannot nest without them. List elements are
+//! `unary`, so `[-1]` needs no parentheses (ADR-0015).
 
 use super::MAX_DEPTH;
 use super::ast::{BinOp, Call, ComponentId, Expr, ExprKind, Ident, List, Number, Path, Text};
@@ -236,7 +237,7 @@ impl Parser<'_> {
     }
 
     fn term(&mut self) -> Result<Expr, ExprError> {
-        let mut lhs = self.unary()?;
+        let mut lhs = self.unary(Expectation::Expression)?;
         loop {
             let op = if self.at(&Tok::Star) {
                 BinOp::Mul
@@ -246,20 +247,21 @@ impl Parser<'_> {
                 return Ok(lhs);
             };
             self.bump();
-            let rhs = self.unary()?;
+            let rhs = self.unary(Expectation::Expression)?;
             lhs = Self::binary(op, lhs, rhs)?;
         }
     }
 
-    fn unary(&mut self) -> Result<Expr, ExprError> {
+    /// An optionally negated atom; `expected` says what an error names.
+    fn unary(&mut self, expected: Expectation) -> Result<Expr, ExprError> {
         if !self.at(&Tok::Minus) {
-            return self.atom(Expectation::Expression);
+            return self.atom(expected);
         }
         let minus = self.bump();
         if self.at(&Tok::Minus) {
             return Err(ExprError::new(ErrorKind::DoubleMinus, self.peek().span));
         }
-        let operand = self.atom(Expectation::Expression)?;
+        let operand = self.atom(expected)?;
         let span = minus.span.to(operand.span());
         Expr::new(ExprKind::Neg(Box::new(operand)), span)
     }
@@ -277,9 +279,6 @@ impl Parser<'_> {
             Tok::LParen => return self.paren(),
             Tok::Keyword(Keyword::Not) => {
                 return Err(self.unexpected(expected, Some(Hint::ParenthesizeNot)));
-            }
-            Tok::Minus if expected == Expectation::ListElement => {
-                return Err(self.unexpected(expected, Some(Hint::ParenthesizeElement)));
             }
             Tok::RParen | Tok::RBracket if self.previous() == Some(&Tok::Comma) => {
                 return Err(self.unexpected(expected, Some(Hint::TrailingComma)));
@@ -397,8 +396,8 @@ impl Parser<'_> {
         Ok(inner.with_span(open.span.to(close.span)))
     }
 
-    /// The list after `in`. Its elements are atoms, so it recurses only
-    /// through a parenthesized element.
+    /// The list after `in`. Its elements are unary expressions, so it
+    /// recurses only through a parenthesized element.
     fn list(&mut self) -> Result<List, ExprError> {
         if !self.at(&Tok::LBracket) {
             return Err(self.unexpected(Expectation::List, None));
@@ -407,7 +406,7 @@ impl Parser<'_> {
         let mut items = Vec::new();
         if !self.at(&Tok::RBracket) {
             loop {
-                items.push(self.atom(Expectation::ListElement)?);
+                items.push(self.unary(Expectation::ListElement)?);
                 if self.at(&Tok::Comma) {
                     self.bump();
                 } else if self.at(&Tok::RBracket) {

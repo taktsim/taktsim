@@ -332,7 +332,7 @@ fn fix_moves_on(src: &str, e: &ExprError) -> Result<(), TestCaseError> {
 
 /// Fragments that form valid and invalid expressions in about equal
 /// measure.
-const FRAGMENTS: [&str; 52] = [
+const FRAGMENTS: [&str; 53] = [
     "variant",
     "quality",
     "unit.priority",
@@ -378,6 +378,7 @@ const FRAGMENTS: [&str; 52] = [
     "(",
     ")",
     "[",
+    "[-",
     "]",
     ",",
     ".",
@@ -501,6 +502,14 @@ fn typed(ty: Ty, depth: u32) -> BoxedStrategy<String> {
             .boxed()
     };
     let neg = |a: Ty| sub(a).prop_map(|a| format!("-({a})")).boxed();
+    // A list element: a sign on a leaf, or on a parenthesized operand.
+    let signed = |t: Ty| {
+        prop_oneof![
+            prop::sample::select(typed_leaves(t)).prop_map(|leaf| format!("-{leaf}")),
+            sub(t).prop_map(|a| format!("-({a})")),
+        ]
+        .boxed()
+    };
     let sum = vec!["+", "-"];
     let options = match ty {
         Ty::Bool => {
@@ -511,6 +520,12 @@ fn typed(ty: Ty, depth: u32) -> BoxedStrategy<String> {
                 op(Ty::Bool, vec!["and", "or", "==", "!="], Ty::Bool),
                 op(Ty::Int, vec!["==", "!="], Ty::Int),
                 op(Ty::Time, vec!["==", "!="], Ty::Time),
+                // A count is an exact integer (ADR-0015).
+                op(Ty::Count, vec!["==", "!="], Ty::Count),
+                // List elements are unary: a sign needs no parentheses.
+                (sub(Ty::Int), signed(Ty::Int), signed(Ty::Int))
+                    .prop_map(|(a, b, c)| format!("({a} in [{b}, {c}])"))
+                    .boxed(),
             ];
             for t in [
                 Ty::Int,
@@ -522,7 +537,7 @@ fn typed(ty: Ty, depth: u32) -> BoxedStrategy<String> {
             ] {
                 options.push(op(t, order.clone(), t));
             }
-            for t in [Ty::Int, Ty::Time, Ty::Bool] {
+            for t in [Ty::Int, Ty::Time, Ty::Count, Ty::Bool] {
                 options.push(
                     (sub(t), sub(t), sub(t))
                         .prop_map(|(a, b, c)| format!("({a} in [({b}), ({c})])"))
@@ -928,5 +943,76 @@ proptest! {
         shapes in prop::collection::vec(0_u8..11, MAX_DEPTH - 1)
     ) {
         deepest_round_trip(&shapes)?;
+    }
+}
+
+// --- signed list elements (ADR-0015, answer 6) --------------------------------------------
+
+/// `x in [items]`, with a path on the left.
+#[allow(clippy::unwrap_used)] // test helper
+fn membership(items: Vec<Expr>) -> Expr {
+    let lhs = node(ExprKind::Path(
+        Path::new(vec![Ident::new("x").unwrap()]).unwrap(),
+    ));
+    node(ExprKind::In {
+        lhs: Box::new(lhs),
+        list: List {
+            items,
+            span: Span::default(),
+        },
+    })
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_signed_list_element_prints_without_parentheses() {
+    let neg = |e| node(ExprKind::Neg(Box::new(e)));
+    let int = |n| node(ExprKind::Int(n));
+    let add = |a, b| {
+        node(ExprKind::Binary {
+            op: BinOp::Add,
+            lhs: Box::new(a),
+            rhs: Box::new(b),
+        })
+    };
+    for (items, text) in [
+        (vec![neg(int(1))], "x in [-1]"),
+        (vec![int(1), neg(int(2))], "x in [1, -2]"),
+        // The sign applies to an atom; anything else keeps its parentheses.
+        (vec![neg(add(int(1), int(2)))], "x in [-(1 + 2)]"),
+        (vec![neg(neg(int(1)))], "x in [-(-1)]"),
+        (vec![add(neg(int(1)), int(2))], "x in [(-1 + 2)]"),
+        (
+            vec![node(ExprKind::Not(Box::new(int(1))))],
+            "x in [(not 1)]",
+        ),
+    ] {
+        let e = membership(items);
+        assert_eq!(e.to_string(), text);
+        assert_eq!(parse(text).unwrap().without_spans(), e, "{text}");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(1_000))]
+
+    /// A list of signed elements, whatever they are signed on, prints to
+    /// text that parses back to the same tree.
+    #[test]
+    fn signed_list_elements_print_and_parse_back(
+        operands in prop::collection::vec(tree(leaf()), 1..4),
+        plain in prop::collection::vec(tree(leaf()), 0..3),
+    ) {
+        let items: Vec<Expr> = operands
+            .into_iter()
+            .map(|e| node(ExprKind::Neg(Box::new(e))))
+            .chain(plain)
+            .collect();
+        let e = membership(items);
+        let text = e.to_string();
+        prop_assert!(text.contains("[-"), "{}", text);
+        let parsed = parse(&text).map_err(|err| TestCaseError::fail(format!("{text:?}: {err}")))?;
+        prop_assert_eq!(parsed.without_spans(), e.without_spans());
+        prop_assert_eq!(parsed.to_string(), text);
     }
 }

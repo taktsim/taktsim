@@ -78,8 +78,8 @@ pub(crate) enum OrdOp {
     Ge,
 }
 
-/// A boolean expression. Equality exists only for the types ADR-0009
-/// allows it on; ordering only for numeric types.
+/// A boolean expression. Equality exists only for the types ADR-0009 and
+/// ADR-0015 allow it on; ordering only for numeric types.
 #[derive(Debug, Clone)]
 pub(crate) enum BoolIr {
     Const(bool),
@@ -91,6 +91,7 @@ pub(crate) enum BoolIr {
     EqText(EqOp, Box<TextIr>, Box<TextIr>),
     EqInt(EqOp, Box<ExactIr<IntD>>, Box<ExactIr<IntD>>),
     EqTime(EqOp, Box<ExactIr<TimeD>>, Box<ExactIr<TimeD>>),
+    EqCount(EqOp, Box<ExactIr<CountD>>, Box<ExactIr<CountD>>),
     OrdInt(OrdOp, Box<ExactIr<IntD>>, Box<ExactIr<IntD>>),
     OrdTime(OrdOp, Box<ExactIr<TimeD>>, Box<ExactIr<TimeD>>),
     OrdCount(OrdOp, Box<ExactIr<CountD>>, Box<ExactIr<CountD>>),
@@ -101,4 +102,5 @@ pub(crate) enum BoolIr {
     InText(Box<TextIr>, Vec<TextIr>),
     InInt(Box<ExactIr<IntD>>, Vec<ExactIr<IntD>>),
     InTime(Box<ExactIr<TimeD>>, Vec<ExactIr<TimeD>>),
+    InCount(Box<ExactIr<CountD>>, Vec<ExactIr<CountD>>),
 }
