@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 892.07 100" width="892.07" height="100" role="img" aria-label="taktsim">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 942.07 150" width="942.07" height="150" role="img" aria-label="taktsim">
 <title>taktsim</title>
+<rect x="0" y="0" width="942.07" height="150" fill="#0A0A0A"/>
+<g transform="translate(25 25)">
 <rect x="0" y="0" width="22" height="22" fill="#E8E8E3"/>
 <rect x="26" y="0" width="22" height="22" fill="#E8E8E3"/>
 <rect x="52" y="0" width="22" height="22" fill="#E8E8E3"/>
@@ -97,5 +99,6 @@
 <rect x="432" y="36" width="10" height="10" fill="#E8E8E3"/>
 <rect x="384" y="48" width="10" height="10" fill="#E8E8E3"/>
 <rect x="432" y="48" width="10" height="10" fill="#E8E8E3"/>
+</g>
 </g>
 </svg>
