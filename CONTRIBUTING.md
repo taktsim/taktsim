@@ -47,6 +47,7 @@ CI runs these gates; all must be green:
 | lint | `rustfmt`, `clippy` (pedantic, `-D warnings`, no `unwrap`/`expect`/`panic!` in library code, no wildcard arms on enums), `cargo-deny` (licenses, advisories, duplicates), crate rules (`forbid(unsafe_code)`, `deny(missing_docs)`) |
 | test | unit, property and doc tests on Windows x86-64, Linux x86-64 and ARM64, macOS ARM64 |
 | msrv | the workspace builds with the minimum supported Rust version |
+| schemas | the JSON Schemas under `schemas/` are what the Rust types generate (regenerate with `cargo run -p taktsim-model --example schemas -- schemas` and commit them with the types) |
 | coverage | ≥ 90 % lines overall, 100 % branches in `taktsim-core` |
 | python | pytest, ruff, pyright strict (warnings fail) on Python 3.13, 3.14, 3.15 |
 | docs | rustdoc without warnings; a code example on every public item; `compile_fail` examples fail with the stated error code |
@@ -62,6 +63,7 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo deny check
 ci/check-crates.sh
+ci/check-schemas.sh
 cargo nextest run --workspace --exclude taktsim-python --all-features
 cargo test --workspace --exclude taktsim-python --all-features --doc
 # coverage (needs the pinned nightly from .github/workflows/ci.yml):
