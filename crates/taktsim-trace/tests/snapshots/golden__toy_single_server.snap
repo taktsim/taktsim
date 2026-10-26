@@ -1,0 +1,344 @@
+---
+source: crates/taktsim-trace/tests/golden.rs
+expression: golden.snapshot()
+---
+case: toy_single_server
+messages: taktsim-trace.toy/1
+model hash: ce1a9a1e079c41daf601fa3643b76f8648f9a17f14b5dfd4fce4c5855dbf9d5c
+seed: 42
+components: source, station, sink
+records: 332 (223 events) in 1 chunks
+stream sha256: c86ca63bf7f7872c94dad43b55172f708429a3e8cd0f4d782b40e6cbcf1011fc
+---
+68.464025213s event #0 source -> source Next
+68.464025213s item 0 created by source
+68.464025213s event #1 source -> station Arrive, item 0
+87.212471293s event #3 station -> station Done { lot: 1 }
+87.212471293s event #4 station -> sink Arrive, item 0
+87.212471293s item 0 delivered by sink
+92.639686207s event #2 source -> source Next
+92.639686207s item 1 created by source
+92.639686207s event #5 source -> station Arrive, item 1
+144.918258804s event #6 source -> source Next
+144.918258804s item 2 created by source
+144.918258804s event #8 source -> station Arrive, item 2
+167.389628015s event #7 station -> station Done { lot: 2 }
+167.389628015s event #10 station -> sink Arrive, item 1
+167.389628015s item 1 delivered by sink
+194.224842463s event #11 station -> station Done { lot: 3 }
+194.224842463s event #12 station -> sink Arrive, item 2
+194.224842463s item 2 delivered by sink
+226.028919674s event #9 source -> source Next
+226.028919674s item 3 created by source
+226.028919674s event #13 source -> station Arrive, item 3
+265.084682438s event #14 source -> source Next
+265.084682438s item 4 created by source
+265.084682438s event #16 source -> station Arrive, item 4
+298.565127657s event #15 station -> station Done { lot: 4 }
+298.565127657s event #18 station -> sink Arrive, item 3
+298.565127657s item 3 delivered by sink
+302.077100609s event #19 station -> station Done { lot: 5 }
+302.077100609s event #20 station -> sink Arrive, item 4
+302.077100609s item 4 delivered by sink
+306.300664456s event #17 source -> source Next
+306.300664456s item 5 created by source
+306.300664456s event #21 source -> station Arrive, item 5
+318.070213821s event #23 station -> station Done { lot: 6 }
+318.070213821s event #24 station -> sink Arrive, item 5
+318.070213821s item 5 delivered by sink
+323.220460317s event #22 source -> source Next
+323.220460317s item 6 created by source
+323.220460317s event #25 source -> station Arrive, item 6
+340.63866073s event #27 station -> station Done { lot: 7 }
+340.63866073s event #28 station -> sink Arrive, item 6
+340.63866073s item 6 delivered by sink
+428.144331809s event #26 source -> source Next
+428.144331809s item 7 created by source
+428.144331809s event #29 source -> station Arrive, item 7
+437.115374962s event #30 source -> source Next
+437.115374962s item 8 created by source
+437.115374962s event #32 source -> station Arrive, item 8
+458.294262631s event #31 station -> station Done { lot: 8 }
+458.294262631s event #34 station -> sink Arrive, item 7
+458.294262631s item 7 delivered by sink
+492.630750268s event #35 station -> station Done { lot: 9 }
+492.630750268s event #36 station -> sink Arrive, item 8
+492.630750268s item 8 delivered by sink
+601.882542943s event #33 source -> source Next
+601.882542943s item 9 created by source
+601.882542943s event #37 source -> station Arrive, item 9
+607.197798752s event #39 station -> station Done { lot: 10 }
+607.197798752s event #40 station -> sink Arrive, item 9
+607.197798752s item 9 delivered by sink
+607.197798752s event #41 station -> sink Note { text: "lot 10 done", share: 3.3333333333333335 }
+629.134588701s event #38 source -> source Next
+629.134588701s item 10 created by source
+629.134588701s event #42 source -> station Arrive, item 10
+674.290736638s event #43 source -> source Next
+674.290736638s item 11 created by source
+674.290736638s event #45 source -> station Arrive, item 11
+678.420648391s event #44 station -> station Done { lot: 11 }
+678.420648391s event #47 station -> sink Arrive, item 10
+678.420648391s item 10 delivered by sink
+718.294555305s event #48 station -> station Done { lot: 12 }
+718.294555305s event #49 station -> sink Arrive, item 11
+718.294555305s item 11 delivered by sink
+847.402415906s event #46 source -> source Next
+847.402415906s item 12 created by source
+847.402415906s event #50 source -> station Arrive, item 12
+876.820742717s event #51 source -> source Next
+876.820742717s item 13 created by source
+876.820742717s event #53 source -> station Arrive, item 13
+885.378112748s event #52 station -> station Done { lot: 13 }
+885.378112748s event #55 station -> sink Arrive, item 12
+885.378112748s item 12 delivered by sink
+1013.114628654s event #56 station -> station Done { lot: 14 }
+1013.114628654s event #57 station -> sink Arrive, item 13
+1013.114628654s item 13 delivered by sink
+1196.774859386s event #54 source -> source Next
+1196.774859386s item 14 created by source
+1196.774859386s event #58 source -> station Arrive, item 14
+1225.346349243s event #60 station -> station Done { lot: 15 }
+1225.346349243s event #61 station -> sink Arrive, item 14
+1225.346349243s item 14 delivered by sink
+1329.637241671s event #59 source -> source Next
+1329.637241671s item 15 created by source
+1329.637241671s event #62 source -> station Arrive, item 15
+1341.653098673s event #63 source -> source Next
+1341.653098673s item 16 created by source
+1341.653098673s event #65 source -> station Arrive, item 16
+1363.514055971s event #64 station -> station Done { lot: 16 }
+1363.514055971s event #67 station -> sink Arrive, item 15
+1363.514055971s item 15 delivered by sink
+1408.269402952s event #68 station -> station Done { lot: 17 }
+1408.269402952s event #69 station -> sink Arrive, item 16
+1408.269402952s item 16 delivered by sink
+1422.896517722s event #66 source -> source Next
+1422.896517722s item 17 created by source
+1422.896517722s event #70 source -> station Arrive, item 17
+1427.086029632s event #72 station -> station Done { lot: 18 }
+1427.086029632s event #73 station -> sink Arrive, item 17
+1427.086029632s item 17 delivered by sink
+1455.354448321s event #71 source -> source Next
+1455.354448321s item 18 created by source
+1455.354448321s event #74 source -> station Arrive, item 18
+1497.039069135s event #76 station -> station Done { lot: 19 }
+1497.039069135s event #77 station -> sink Arrive, item 18
+1497.039069135s item 18 delivered by sink
+1661.208939419s event #75 source -> source Next
+1661.208939419s item 19 created by source
+1661.208939419s event #78 source -> station Arrive, item 19
+1703.610510872s event #79 source -> source Next
+1703.610510872s item 20 created by source
+1703.610510872s event #81 source -> station Arrive, item 20
+1741.096072688s event #82 source -> source Next
+1741.096072688s item 21 created by source
+1741.096072688s event #83 source -> station Arrive, item 21
+1791.709139012s event #80 station -> station Done { lot: 20 }
+1791.709139012s event #85 station -> sink Arrive, item 19
+1791.709139012s item 19 delivered by sink
+1791.709139012s event #86 station -> sink Note { text: "lot 20 done", share: 6.666666666666667 }
+1796.41015366s event #87 station -> station Done { lot: 21 }
+1796.41015366s event #88 station -> sink Arrive, item 20
+1796.41015366s item 20 delivered by sink
+1899.430295044s event #89 station -> station Done { lot: 22 }
+1899.430295044s event #90 station -> sink Arrive, item 21
+1899.430295044s item 21 delivered by sink
+1940.063805697s event #84 source -> source Next
+1940.063805697s item 22 created by source
+1940.063805697s event #91 source -> station Arrive, item 22
+2002.992642019s event #92 source -> source Next
+2002.992642019s item 23 created by source
+2002.992642019s event #94 source -> station Arrive, item 23
+2007.669545993s event #95 source -> source Next
+2007.669545993s item 24 created by source
+2007.669545993s event #96 source -> station Arrive, item 24
+2009.270887479s event #97 source -> source Next
+2009.270887479s item 25 created by source
+2009.270887479s event #98 source -> station Arrive, item 25
+2044.905765768s event #93 station -> station Done { lot: 23 }
+2044.905765768s event #100 station -> sink Arrive, item 22
+2044.905765768s item 22 delivered by sink
+2052.411903524s event #101 station -> station Done { lot: 24 }
+2052.411903524s event #102 station -> sink Arrive, item 23
+2052.411903524s item 23 delivered by sink
+2079.444323864s event #99 source -> source Next
+2079.444323864s item 26 created by source
+2079.444323864s event #104 source -> station Arrive, item 26
+2108.063524488s event #105 source -> source Next
+2108.063524488s item 27 created by source
+2108.063524488s event #106 source -> station Arrive, item 27
+2113.481095734s event #107 source -> source Next
+2113.481095734s item 28 created by source
+2113.481095734s event #108 source -> station Arrive, item 28
+2122.155303636s event #109 source -> source Next
+2122.155303636s item 29 created by source
+2122.155303636s event #110 source -> station Arrive, item 29
+2133.750925345s event #103 station -> station Done { lot: 25 }
+2133.750925345s event #112 station -> sink Arrive, item 24
+2133.750925345s item 24 delivered by sink
+2158.731881807s event #111 source -> source Next
+2158.731881807s item 30 created by source
+2158.731881807s event #114 source -> station Arrive, item 30
+2215.969742543s event #115 source -> source Next
+2215.969742543s item 31 created by source
+2215.969742543s event #116 source -> station Arrive, item 31
+2262.10230378s event #113 station -> station Done { lot: 26 }
+2262.10230378s event #118 station -> sink Arrive, item 25
+2262.10230378s item 25 delivered by sink
+2284.128319512s event #117 source -> source Next
+2284.128319512s item 32 created by source
+2284.128319512s event #120 source -> station Arrive, item 32
+2299.236145218s event #119 station -> station Done { lot: 27 }
+2299.236145218s event #122 station -> sink Arrive, item 26
+2299.236145218s item 26 delivered by sink
+2308.497547637s event #123 station -> station Done { lot: 28 }
+2308.497547637s event #124 station -> sink Arrive, item 27
+2308.497547637s item 27 delivered by sink
+2321.987067442s event #121 source -> source Next
+2321.987067442s item 33 created by source
+2321.987067442s event #126 source -> station Arrive, item 33
+2356.509473076s event #127 source -> source Next
+2356.509473076s item 34 created by source
+2356.509473076s event #128 source -> station Arrive, item 34
+2358.676301902s event #125 station -> station Done { lot: 29 }
+2358.676301902s event #130 station -> sink Arrive, item 28
+2358.676301902s item 28 delivered by sink
+2365.948395893s event #131 station -> station Done { lot: 30 }
+2365.948395893s event #132 station -> sink Arrive, item 29
+2365.948395893s item 29 delivered by sink
+2365.948395893s event #133 station -> sink Note { text: "lot 30 done", share: 10.0 }
+2401.554340869s event #134 station -> station Done { lot: 31 }
+2401.554340869s event #135 station -> sink Arrive, item 30
+2401.554340869s item 30 delivered by sink
+2410.044240234s event #136 station -> station Done { lot: 32 }
+2410.044240234s event #137 station -> sink Arrive, item 31
+2410.044240234s item 31 delivered by sink
+2423.473425165s event #138 station -> station Done { lot: 33 }
+2423.473425165s event #139 station -> sink Arrive, item 32
+2423.473425165s item 32 delivered by sink
+2474.111049664s event #140 station -> station Done { lot: 34 }
+2474.111049664s event #141 station -> sink Arrive, item 33
+2474.111049664s item 33 delivered by sink
+2492.092772898s event #142 station -> station Done { lot: 35 }
+2492.092772898s event #143 station -> sink Arrive, item 34
+2492.092772898s item 34 delivered by sink
+2501.702419206s event #129 source -> source Next
+2501.702419206s item 35 created by source
+2501.702419206s event #144 source -> station Arrive, item 35
+2516.864247741s event #145 source -> source Next
+2516.864247741s item 36 created by source
+2516.864247741s event #147 source -> station Arrive, item 36
+2580.234711385s event #148 source -> source Next
+2580.234711385s item 37 created by source
+2580.234711385s event #149 source -> station Arrive, item 37
+2587.905114499s event #146 station -> station Done { lot: 36 }
+2587.905114499s event #151 station -> sink Arrive, item 35
+2587.905114499s item 35 delivered by sink
+2647.77326224s event #152 station -> station Done { lot: 37 }
+2647.77326224s event #153 station -> sink Arrive, item 36
+2647.77326224s item 36 delivered by sink
+2663.287713684s event #150 source -> source Next
+2663.287713684s item 38 created by source
+2663.287713684s event #155 source -> station Arrive, item 38
+2687.218200226s event #154 station -> station Done { lot: 38 }
+2687.218200226s event #157 station -> sink Arrive, item 37
+2687.218200226s item 37 delivered by sink
+2716.267395246s event #156 source -> source Next
+2716.267395246s item 39 created by source
+2716.267395246s event #159 source -> station Arrive, item 39
+2726.949318705s event #158 station -> station Done { lot: 39 }
+2726.949318705s event #161 station -> sink Arrive, item 38
+2726.949318705s item 38 delivered by sink
+2744.830160471s event #160 source -> source Next
+2744.830160471s item 40 created by source
+2744.830160471s event #163 source -> station Arrive, item 40
+2787.279646632s event #162 station -> station Done { lot: 40 }
+2787.279646632s event #165 station -> sink Arrive, item 39
+2787.279646632s item 39 delivered by sink
+2787.279646632s event #166 station -> sink Note { text: "lot 40 done", share: 13.333333333333334 }
+2826.462560924s event #164 source -> source Next
+2826.462560924s item 41 created by source
+2826.462560924s event #168 source -> station Arrive, item 41
+2827.719660439s event #167 station -> station Done { lot: 41 }
+2827.719660439s event #170 station -> sink Arrive, item 40
+2827.719660439s item 40 delivered by sink
+2849.12857621s event #169 source -> source Next
+2849.12857621s item 42 created by source
+2849.12857621s event #172 source -> station Arrive, item 42
+2891.289725433s event #171 station -> station Done { lot: 42 }
+2891.289725433s event #174 station -> sink Arrive, item 41
+2891.289725433s item 41 delivered by sink
+2901.850231848s event #175 station -> station Done { lot: 43 }
+2901.850231848s event #176 station -> sink Arrive, item 42
+2901.850231848s item 42 delivered by sink
+2961.452979873s event #173 source -> source Next
+2961.452979873s item 43 created by source
+2961.452979873s event #177 source -> station Arrive, item 43
+3001.952834824s event #179 station -> station Done { lot: 44 }
+3001.952834824s event #180 station -> sink Arrive, item 43
+3001.952834824s item 43 delivered by sink
+3158.550710124s event #178 source -> source Next
+3158.550710124s item 44 created by source
+3158.550710124s event #181 source -> station Arrive, item 44
+3162.738076295s event #183 station -> station Done { lot: 45 }
+3162.738076295s event #184 station -> sink Arrive, item 44
+3162.738076295s item 44 delivered by sink
+3174.789659471s event #182 source -> source Next
+3174.789659471s item 45 created by source
+3174.789659471s event #185 source -> station Arrive, item 45
+3200.824988281s event #187 station -> station Done { lot: 46 }
+3200.824988281s event #188 station -> sink Arrive, item 45
+3200.824988281s item 45 delivered by sink
+3366.472384159s event #186 source -> source Next
+3366.472384159s item 46 created by source
+3366.472384159s event #189 source -> station Arrive, item 46
+3373.497820168s event #191 station -> station Done { lot: 47 }
+3373.497820168s event #192 station -> sink Arrive, item 46
+3373.497820168s item 46 delivered by sink
+3395.361535047s event #190 source -> source Next
+3395.361535047s item 47 created by source
+3395.361535047s event #193 source -> station Arrive, item 47
+3400.908472282s event #194 source -> source Next
+3400.908472282s item 48 created by source
+3400.908472282s event #196 source -> station Arrive, item 48
+3402.817970672s event #197 source -> source Next
+3402.817970672s item 49 created by source
+3402.817970672s event #198 source -> station Arrive, item 49
+3413.185918752s event #195 station -> station Done { lot: 48 }
+3413.185918752s event #200 station -> sink Arrive, item 47
+3413.185918752s item 47 delivered by sink
+3454.15528199s event #201 station -> station Done { lot: 49 }
+3454.15528199s event #202 station -> sink Arrive, item 48
+3454.15528199s item 48 delivered by sink
+3484.404624005s event #199 source -> source Next
+3484.404624005s item 50 created by source
+3484.404624005s event #204 source -> station Arrive, item 50
+3487.758077646s event #205 source -> source Next
+3487.758077646s item 51 created by source
+3487.758077646s event #206 source -> station Arrive, item 51
+3515.883541451s event #203 station -> station Done { lot: 50 }
+3515.883541451s event #208 station -> sink Arrive, item 49
+3515.883541451s item 49 delivered by sink
+3515.883541451s event #209 station -> sink Note { text: "lot 50 done", share: 16.666666666666668 }
+3518.297565986s event #207 source -> source Next
+3518.297565986s item 52 created by source
+3518.297565986s event #211 source -> station Arrive, item 52
+3535.732807287s event #210 station -> station Done { lot: 51 }
+3535.732807287s event #213 station -> sink Arrive, item 50
+3535.732807287s item 50 delivered by sink
+3543.7373102s event #212 source -> source Next
+3543.7373102s item 53 created by source
+3543.7373102s event #215 source -> station Arrive, item 53
+3550.3729122s event #214 station -> station Done { lot: 52 }
+3550.3729122s event #217 station -> sink Arrive, item 51
+3550.3729122s item 51 delivered by sink
+3550.589597811s event #218 station -> station Done { lot: 53 }
+3550.589597811s event #219 station -> sink Arrive, item 52
+3550.589597811s item 52 delivered by sink
+3574.792939369s event #216 source -> source Next
+3574.792939369s item 54 created by source
+3574.792939369s event #221 source -> station Arrive, item 54
+3593.492026682s event #220 station -> station Done { lot: 54 }
+3593.492026682s event #223 station -> sink Arrive, item 53
+3593.492026682s item 53 delivered by sink
