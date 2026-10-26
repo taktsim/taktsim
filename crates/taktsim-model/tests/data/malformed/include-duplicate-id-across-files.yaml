@@ -1,0 +1,15 @@
+# An id in the model and in an included file.
+format: "1.0"
+model: {name: m}
+include: [parts/ok.yaml]
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+  - {id: extra, type: Buffer, capacity: 1 parts}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components[3].id @ 10:10 DuplicateId

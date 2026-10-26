@@ -1,0 +1,13 @@
+# A negative shape.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: {dist: weibull, scale: 6h, shape: -1.5}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components[1].cycle_time.shape @ 7:76 Distribution

@@ -1,0 +1,13 @@
+# Throughput of a machine.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(cut)
+# expect: observe[0] @ 12:16 Expression

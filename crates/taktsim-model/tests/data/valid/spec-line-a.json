@@ -1,0 +1,24 @@
+{
+  "observe": ["throughput( sink )", "state_shares(cut,weld)", "wip(buf1)"],
+  "flow": [
+    {"from": "source", "to": "cut"},
+    {"from": ["cut"], "to": ["buf1"]},
+    ["buf1", "weld", "sink"]
+  ],
+  "components": [
+    {"type": "Source", "id": "source", "interarrival": {"mean": "40000ms", "dist": "exponential"}},
+    {
+      "id": "cut",
+      "type": "Machine",
+      "mttr": {"dist": "exponential", "mean": "0.2h"},
+      "mtbf": "360min",
+      "cycle_time": {"sigma": 8e-2, "mean": "42000ms", "dist": "lognormal"}
+    },
+    {"id": "buf1", "type": "Buffer", "capacity": "20 part"},
+    {"id": "weld", "type": "Machine", "cycle_time": "0.75 min", "setup": {"per_variant": "240s"}},
+    {"id": "sink", "type": "Sink"}
+  ],
+  "experiment": {"horizon": "480min", "precision": {"throughput(sink)": "2.0%"}, "type": "terminating"},
+  "model": {"seed": 42, "time_unit": "s", "name": "line-a"},
+  "format": "1.0"
+}

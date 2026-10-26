@@ -1,0 +1,14 @@
+# A fractional count.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+  - {id: buf, type: Buffer, capacity: 2.5 parts}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components[3].capacity @ 9:39 Unit

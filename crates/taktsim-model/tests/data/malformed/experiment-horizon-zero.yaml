@@ -1,0 +1,13 @@
+# A zero horizon.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 0s}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: experiment.horizon @ 4:42 NotAllowed

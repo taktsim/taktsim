@@ -1,0 +1,3 @@
+# A list at the top.
+- format: "1.0"
+# expect: (document) @ 2:1 WrongType
