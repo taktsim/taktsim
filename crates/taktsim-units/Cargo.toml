@@ -14,6 +14,14 @@ workspace = true
 
 [dependencies]
 thiserror.workspace = true
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
+serde_json.workspace = true
+
+[features]
+default = []
+# `Serialize` as the canonical text (`42s`, `20 parts`), for the model's
+# normalized form (ADR-0020).
+serde = ["dep:serde"]
