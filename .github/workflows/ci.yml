@@ -94,7 +94,9 @@ jobs:
         with:
           pattern: trace-hashes-*
           path: trace-hashes
-      - run: ci/trace-hashes.sh trace-hashes 4 >> "$GITHUB_STEP_SUMMARY"
+      # `shell: bash` sets pipefail, so a failed comparison is not hidden by tee.
+      - shell: bash
+        run: ci/trace-hashes.sh trace-hashes 4 | tee -a "$GITHUB_STEP_SUMMARY"
 
   msrv:
     name: msrv
