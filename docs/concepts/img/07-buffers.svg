@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 300" role="img" aria-labelledby="f07a-t f07a-d"><title id="f07a-t">More buffer helps, but less each time</title><desc id="f07a-d">Parts per 8-hour shift against buffer size from 0 to 30 places. With variable process times (CV 0.53) output rises steeply over the first few places and then flattens below the weld&#x27;s capacity of 640; the README line (CV 0.08) stays near 639 whatever the buffer.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style>
+<line x1="64" y1="252" x2="616" y2="252" class="ts-grid"/>
+<text x="56" y="256" text-anchor="end">500</text>
+<line x1="64" y1="179.5" x2="616" y2="179.5" class="ts-grid"/>
+<text x="56" y="183.5" text-anchor="end">550</text>
+<line x1="64" y1="107" x2="616" y2="107" class="ts-grid"/>
+<text x="56" y="111" text-anchor="end">600</text>
+<line x1="64" y1="34.5" x2="616" y2="34.5" class="ts-grid"/>
+<text x="56" y="38.5" text-anchor="end">650</text>
+<line x1="64" y1="252" x2="64" y2="256" class="ts-axis"/>
+<text x="64" y="270" text-anchor="middle">0</text>
+<line x1="248" y1="252" x2="248" y2="256" class="ts-axis"/>
+<text x="248" y="270" text-anchor="middle">10</text>
+<line x1="432" y1="252" x2="432" y2="256" class="ts-axis"/>
+<text x="432" y="270" text-anchor="middle">20</text>
+<line x1="616" y1="252" x2="616" y2="256" class="ts-axis"/>
+<text x="616" y="270" text-anchor="middle">30</text>
+<line x1="64" y1="252" x2="616" y2="252" class="ts-axis"/>
+<line x1="64" y1="20" x2="64" y2="252" class="ts-axis"/>
+<text x="340" y="292" text-anchor="middle">BUFFER PLACES</text>
+<text x="14" y="136" text-anchor="middle" transform="rotate(-90 14 136)">PARTS PER SHIFT</text>
+<path d="M64 222.8 L82.4 135.8 L100.8 100.7 L119.2 83.3 L156 66.2 L211.2 55.4 L248 51.6 L340 49 L432 48.6 L616 48 L616 63.2 L432 63.4 L340 63.7 L248 65.9 L211.2 69 L156 78.4 L119.2 94.9 L100.8 112.7 L82.4 146.6 L64 232.1 Z" class="ts-ci"/>
+<path d="M64 227.4 L82.4 141.2 L100.8 106.7 L119.2 89.1 L156 72.3 L211.2 62.2 L248 58.7 L340 56.3 L432 56 L616 55.6" class="ts-ink-line"/>
+<rect x="61" y="224.4" width="6" height="6" class="ts-ink-fill"/>
+<rect x="79.4" y="138.2" width="6" height="6" class="ts-ink-fill"/>
+<rect x="97.8" y="103.7" width="6" height="6" class="ts-ink-fill"/>
+<rect x="116.2" y="86.1" width="6" height="6" class="ts-ink-fill"/>
+<rect x="153" y="69.3" width="6" height="6" class="ts-ink-fill"/>
+<rect x="208.2" y="59.2" width="6" height="6" class="ts-ink-fill"/>
+<rect x="245" y="55.7" width="6" height="6" class="ts-ink-fill"/>
+<rect x="337" y="53.3" width="6" height="6" class="ts-ink-fill"/>
+<rect x="429" y="53" width="6" height="6" class="ts-ink-fill"/>
+<rect x="613" y="52.6" width="6" height="6" class="ts-ink-fill"/>
+<path d="M64 58.9 L82.4 50.8 L100.8 50.8 L119.2 50.8 L156 50.8 L211.2 50.8 L248 50.8 L340 50.8 L432 50.8 L616 50.8" class="ts-muted-line"/>
+<rect x="150" y="66.3" width="12" height="12" class="ts-acid"/>
+<text x="168" y="94.3" text-anchor="start" class="ts-strong">5 places: most of the gain</text>
+<rect x="76" y="22" width="10" height="10" class="ts-ink-fill"/>
+<text x="94" y="31" text-anchor="start">CV 0.53</text>
+<line x1="162" y1="27" x2="176" y2="27" class="ts-muted-line"/>
+<text x="180" y="31" text-anchor="start">README LINE, CV 0.08</text>
+</svg>
