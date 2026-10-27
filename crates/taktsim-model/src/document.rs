@@ -210,11 +210,10 @@ impl ModelInfo {
         &self.name
     }
 
-    /// The model's time unit, if given (spec §4's example writes
-    /// `time_unit: s`). Every quantity carries its own unit, so this does
-    /// not change how a model reads; what it is used for (for example the
-    /// unit of reported results) is decided with the CLI and the statistics
-    /// (M7, M8).
+    /// The unit results are reported in, if given (spec §4's example
+    /// writes `time_unit: s`). It is only that: it never changes how a
+    /// model reads, and a bare number never takes it as its unit; every
+    /// quantity carries its own (ADR-0020, answer 8).
     ///
     /// ```
     /// use taktsim_model::TimeUnit;

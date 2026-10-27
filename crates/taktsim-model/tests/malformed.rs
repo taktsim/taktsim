@@ -60,7 +60,7 @@ fn every_malformed_model_fails_with_the_expected_errors() {
         paths.len(),
         failures.join("\n\n")
     );
-    assert_eq!(paths.len(), 100);
+    assert_eq!(paths.len(), 103);
 }
 
 /// Every error carries what was found, what is allowed and, for a value
@@ -120,6 +120,55 @@ fn every_error_says_what_was_found_and_what_is_allowed() {
             let text = e.to_string();
             assert!(text.contains(&e.path().to_string()), "{text}");
         }
+    }
+}
+
+/// Ids that differ only in case are an error that names both, each with
+/// its path and line:column, also across files (ADR-0020, answer 5).
+#[test]
+fn a_case_clash_names_both_ids() {
+    let catalog = catalog();
+    let loader = Loader::new(&catalog);
+    let text =
+        std::fs::read_to_string(data("malformed").join("component-case-clash.yaml")).unwrap();
+    let errors = loader.load_str(&text, Format::Yaml).unwrap_err();
+    let message = errors.first().to_string();
+    assert!(
+        message.ends_with(
+            "9:10: components[3].id: the component ids `Cut` and `cut` differ only in case; \
+             `cut` is components[1].id at 7:10"
+        ),
+        "{message}"
+    );
+    let path = data("malformed").join("include-case-clash-across-files.yaml");
+    let errors = loader.load_file(&path).unwrap_err();
+    let message = errors.first().to_string();
+    assert!(
+        message.ends_with(
+            "10:10: components[3].id: the component ids `Extra` and `extra` differ only in case; \
+             `extra` is components[0].id at parts/ok.yaml:3:10"
+        ),
+        "{message}"
+    );
+}
+
+/// A share written as a bare number offers the same share with its unit
+/// as the fix (ADR-0020, answer 10).
+#[test]
+fn a_bare_share_offers_its_percentage() {
+    let catalog = catalog();
+    let loader = Loader::new(&catalog);
+    for (file, fix) in [
+        ("share-bare-number.yaml", "2%"),
+        ("component-share-bare-number.yaml", "2%"),
+    ] {
+        let errors = loader.load_file(&data("malformed").join(file)).unwrap_err();
+        let kind = errors.first().kind();
+        assert_eq!(kind.example().as_deref(), Some(fix), "{file}");
+        assert!(
+            kind.to_string().ends_with(&format!("write `{fix}`")),
+            "{kind}"
+        );
     }
 }
 

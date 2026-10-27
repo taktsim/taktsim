@@ -2,10 +2,9 @@
 //! same model has the same hash.
 //!
 //! The examples of spec §4 and the README are read from the documents
-//! themselves, so a change there is tested. Where this format version
-//! cannot load them as written, the test states the exact errors, and
-//! `data/valid/spec-line-a.yaml` is the example with the changes listed in
-//! ADR-0020.
+//! themselves, so a change there is tested. Every example presented as
+//! v0.1 loads; one labelled v0.2, or v0.1 from a later milestone, is
+//! rejected for exactly the sections that wait for it.
 
 mod support;
 
@@ -121,75 +120,78 @@ fn the_canonical_form_and_hash_are_fixed() {
     );
 }
 
-#[test]
-fn the_spec_model_document_as_written() {
+/// The spec's YAML block that starts with `first_line`.
+#[allow(clippy::panic)] // Test helper: a missing example fails the test.
+fn spec_block(first_line: &str) -> String {
     let spec = repo_file("docs/spec.md");
-    let blocks = yaml_blocks(&spec);
-    let example = &blocks[0];
-    assert!(example.starts_with("simcode: \"1.0\""), "{example}");
-    // ADR-0008: the header is `format:`.
-    let example = example.replacen("simcode:", "format:", 1);
+    let blocks: Vec<String> = yaml_blocks(&spec)
+        .into_iter()
+        .filter(|b| b.starts_with(first_line))
+        .collect();
+    match blocks.as_slice() {
+        [block] => block.clone(),
+        _ => panic!("{} spec examples start with {first_line:?}", blocks.len()),
+    }
+}
+
+/// Spec §4's v0.1 model document loads, with the spec's placeholder header
+/// read as `format:` (ADR-0008), and is the model whose hash is pinned.
+#[test]
+fn the_spec_v0_1_model_document_loads() {
+    let example = spec_block("simcode: \"1.0\"").replacen("simcode:", "format:", 1);
+    let catalog = catalog();
+    let model = match Loader::new(&catalog).load_str(&example, Format::Yaml) {
+        Ok(model) => model,
+        Err(errors) => panic!("{errors}"),
+    };
     assert_eq!(
-        errors_of(&example),
-        [
-            // `source` and `sink` are not declared (ADR-0020, open point).
-            "experiment.precision[\"throughput(sink)\"] @ 9:27 Expression",
-            "flow[0][0] @ 24:6 UnknownComponent",
-            "flow[0][4] @ 24:31 UnknownComponent",
-            // Shift calendars arrive with v0.2.
-            "shifts @ 25:1 UnknownField",
-            "observe[0] @ 28:16 Expression",
-        ]
+        model.hash().to_string(),
+        "56d63bb349f4eef8da1e437c48f4e01206eaee6315c97c5913637f56ff462dae"
     );
-    // With those three changes it loads: data/valid/spec-line-a.yaml.
-    load(&data("valid").join("spec-line-a.yaml"));
 }
 
 #[test]
-fn the_readme_model_as_written() {
+fn the_readme_model_loads() {
     let readme = repo_file("README.md");
     let example = &yaml_blocks(&readme)[0];
-    assert_eq!(
-        errors_of(example),
-        [
-            "flow[0][0] @ 20:6 UnknownComponent",
-            "flow[0][4] @ 20:31 UnknownComponent",
-            "observe[0] @ 22:16 Expression",
-        ]
-    );
-    // Declaring `source` and `sink` is all it needs.
-    let completed = example.replace(
-        "components:\n",
-        "components:\n  - {id: source, type: Source, interarrival: 40s}\n  - {id: sink, type: Sink}\n",
-    );
     let catalog = catalog();
-    assert!(
-        Loader::new(&catalog)
-            .load_str(&completed, Format::Yaml)
-            .is_ok()
+    if let Err(errors) = Loader::new(&catalog).load_str(example, Format::Yaml) {
+        panic!("{errors}");
+    }
+}
+
+/// Spec §4's v0.2 shift calendars, added to the v0.1 model: rejected
+/// until v0.2 defines them.
+#[test]
+fn the_spec_v0_2_shifts_are_not_v0_1() {
+    let model = spec_block("simcode: \"1.0\"").replacen("simcode:", "format:", 1);
+    let shifts = spec_block("shifts:");
+    assert_eq!(
+        errors_of(&format!("{model}{shifts}")),
+        ["shifts @ 34:1 UnknownField"]
     );
 }
 
+/// The routing header the two routing examples are added to.
+const ROUTING_HEAD: &str = "format: \"1.0\"\nmodel: {name: routing}\nexperiment: {type: terminating, horizon: 8h}\n\
+    components:\n  - {id: source, type: Source, interarrival: 1min}\n  - {id: cut, type: Machine, cycle_time: 1min}\n\
+    \x20 - {id: weld-1, type: Machine, cycle_time: 1min}\n  - {id: weld-2, type: Machine, cycle_time: 1min}\n\
+    \x20 - {id: qc, type: Machine, cycle_time: 1min}\n  - {id: paint, type: Machine, cycle_time: 1min}\n\
+    \x20 - {id: pack, type: Sink}\n";
+
+/// Spec §4's routing example is v0.1 from milestone M6: until then its
+/// conditions, choice rules and dispatching are rejected, and the rest
+/// loads.
 #[test]
-fn the_spec_routing_example_as_written() {
-    let spec = repo_file("docs/spec.md");
-    let routing = &yaml_blocks(&spec)[2];
-    assert!(routing.starts_with("flow:"), "{routing}");
-    let head = "format: \"1.0\"\nmodel: {name: routing}\nexperiment: {type: terminating, horizon: 8h}\n\
-                components:\n  - {id: source, type: Source, interarrival: 1min}\n  - {id: cut, type: Machine, cycle_time: 1min}\n\
-                \x20 - {id: weld-1, type: Machine, cycle_time: 1min}\n  - {id: weld-2, type: Machine, cycle_time: 1min}\n\
-                \x20 - {id: qc, type: Machine, cycle_time: 1min}\n  - {id: paint, type: Machine, cycle_time: 1min}\n\
-                \x20 - {id: pack, type: Sink}\n";
-    let document = format!("{head}{routing}");
-    // Choice rules, conditions, dispatching, release control and order
-    // lists arrive with M6 and v0.2.
+fn the_spec_routing_example_waits_for_m6() {
+    let routing = spec_block("flow:\n  - { from: source, to: cut }");
+    let document = format!("{ROUTING_HEAD}{routing}");
     assert_eq!(
         errors_of(&document),
         [
             "flow[1].choose @ 14:40 UnknownField",
             "flow[3].when @ 16:28 UnknownField",
             "control @ 18:1 UnknownField",
-            "orders @ 21:1 UnknownField",
         ]
     );
     let without = document
@@ -203,24 +205,29 @@ fn the_spec_routing_example_as_written() {
     assert_eq!(model.document().flow().len(), 5);
 }
 
+/// Spec §4's v0.2 examples (release control and order lists; materials and
+/// BOMs) are rejected for exactly their v0.2 sections.
 #[test]
-fn the_spec_materials_example_is_v0_2() {
-    let spec = repo_file("docs/spec.md");
-    let materials = &yaml_blocks(&spec)[1];
-    assert!(materials.starts_with("materials:"), "{materials}");
+fn the_spec_v0_2_examples_are_not_v0_1() {
+    let release = spec_block("control:\n  release:");
+    let document = format!("{ROUTING_HEAD}flow: [[source, cut, pack]]\n{release}");
+    assert_eq!(
+        errors_of(&document),
+        ["control @ 13:1 UnknownField", "orders @ 15:1 UnknownField"]
+    );
+
+    let materials = spec_block("materials:");
     let document = format!(
         "format: \"1.0\"\nmodel: {{name: asm}}\nexperiment: {{type: terminating, horizon: 8h}}\nflow: [[asm, qc]]\n{materials}"
     );
-    // Materials, products and Assembly come with v0.2; the tests'
-    // stand-in Inspection has no scrap or rework rates.
+    // Materials, products and Assembly come with v0.2; the Inspection's
+    // shares are read (with their unit, ADR-0020 answer 10).
     assert_eq!(
         errors_of(&document),
         [
             "materials @ 5:1 UnknownField",
             "products @ 9:1 UnknownField",
             "components[0].type @ 17:11 UnknownValue",
-            "components[1].scrap_rate @ 23:5 UnknownField",
-            "components[1].rework_rate @ 24:5 UnknownField",
         ]
     );
 }
