@@ -10,18 +10,16 @@
 
 use std::path::{Path, PathBuf};
 
-use schemars::JsonSchema;
-use serde::Serialize;
 use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
-    Catalog, ComponentParams, ComponentRef, Decode, Decoder, Distribution, Fields, LoadErrors, Node,
+    Catalog, ComponentParams, ComponentRef, Decode, Decoder, Distribution, Encode, Fields, Json,
+    LoadErrors, Node,
 };
 use taktsim_units::{Count, SimDuration};
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 pub struct Source {
     pub interarrival: Distribution,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub batch: Option<Count>,
 }
 
@@ -40,8 +38,7 @@ impl ComponentParams for Source {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
-#[schemars(deny_unknown_fields)]
+#[derive(Debug)]
 pub struct Setup {
     pub per_variant: SimDuration,
 }
@@ -60,16 +57,12 @@ impl Decode for Setup {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 pub struct Machine {
     pub cycle_time: Distribution,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub mtbf: Option<Distribution>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub mttr: Option<Distribution>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub setup: Option<Setup>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub capacity: Option<Count>,
 }
 
@@ -93,7 +86,7 @@ impl ComponentParams for Machine {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 pub struct Buffer {
     pub capacity: Count,
 }
@@ -109,7 +102,7 @@ impl ComponentParams for Buffer {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 pub struct Sink {}
 
 impl ComponentParams for Sink {
@@ -123,7 +116,7 @@ impl ComponentParams for Sink {
 
 /// A component type that refers to another component (spec §4's
 /// Inspection, reduced to its reference).
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 pub struct Inspection {
     pub inspection_time: Distribution,
     pub rework_to: ComponentRef,
@@ -145,6 +138,51 @@ impl ComponentParams for Inspection {
 
     fn references(&self) -> Vec<&ComponentRef> {
         vec![&self.rework_to]
+    }
+}
+
+impl Encode for Source {
+    fn encode(&self) -> Json {
+        Json::object([])
+            .with("interarrival", &self.interarrival)
+            .with_optional("batch", self.batch.as_ref())
+    }
+}
+
+impl Encode for Setup {
+    fn encode(&self) -> Json {
+        Json::object([]).with("per_variant", &self.per_variant)
+    }
+}
+
+impl Encode for Machine {
+    fn encode(&self) -> Json {
+        Json::object([])
+            .with("cycle_time", &self.cycle_time)
+            .with_optional("mtbf", self.mtbf.as_ref())
+            .with_optional("mttr", self.mttr.as_ref())
+            .with_optional("setup", self.setup.as_ref())
+            .with_optional("capacity", self.capacity.as_ref())
+    }
+}
+
+impl Encode for Buffer {
+    fn encode(&self) -> Json {
+        Json::object([]).with("capacity", &self.capacity)
+    }
+}
+
+impl Encode for Sink {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
+
+impl Encode for Inspection {
+    fn encode(&self) -> Json {
+        Json::object([])
+            .with("inspection_time", &self.inspection_time)
+            .with("rework_to", &self.rework_to)
     }
 }
 

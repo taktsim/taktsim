@@ -7,15 +7,12 @@ mod support;
 
 use std::io;
 
-use schemars::JsonSchema;
-use serde::Serialize;
-use serde::ser::{Error as _, Serializer};
 use support::summary;
 use taktsim_core::random::DistributionError;
 use taktsim_model::expr::parse;
 use taktsim_model::{
-    Ambiguity, Catalog, ComponentParams, Fields, Format, Found, IncludePathProblem, JsonProblem,
-    LoadErrorKind, Loader, Location, NormalizeProblem, Place, Resolver,
+    Ambiguity, Catalog, ComponentParams, Encode, Fields, Format, Found, IncludePathProblem, Json,
+    JsonProblem, LoadErrorKind, Loader, Location, NormalizeProblem, Place, Resolver,
 };
 use taktsim_units::UnitError;
 
@@ -43,9 +40,14 @@ fn summary_one(e: &taktsim_model::LoadError) -> String {
     )
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(transparent)]
+#[derive(Debug)]
 struct NotAMap(u32);
+
+impl Encode for NotAMap {
+    fn encode(&self) -> Json {
+        self.0.encode()
+    }
+}
 
 impl ComponentParams for NotAMap {
     const TYPE: &'static str = "Odd";
@@ -55,9 +57,15 @@ impl ComponentParams for NotAMap {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 struct Reserved {
     id: u32,
+}
+
+impl Encode for Reserved {
+    fn encode(&self) -> Json {
+        Json::object([]).with("id", &self.id)
+    }
 }
 
 impl ComponentParams for Reserved {
@@ -68,16 +76,17 @@ impl ComponentParams for Reserved {
     }
 }
 
-#[derive(Debug, JsonSchema)]
-struct Failing;
+/// Encodes a number canonical JSON cannot write.
+#[derive(Debug)]
+struct NotFinite;
 
-impl Serialize for Failing {
-    fn serialize<S: Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
-        Err(S::Error::custom("no normalized form"))
+impl Encode for NotFinite {
+    fn encode(&self) -> Json {
+        Json::object([]).with("x", &f64::NAN)
     }
 }
 
-impl ComponentParams for Failing {
+impl ComponentParams for NotFinite {
     const TYPE: &'static str = "Odd";
     const EXAMPLE: &'static str = "{id: a, type: Odd}";
     fn decode(_: &mut Fields<'_, '_>) -> Option<Self> {
@@ -85,9 +94,15 @@ impl ComponentParams for Failing {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 struct Huge {
     n: u64,
+}
+
+impl Encode for Huge {
+    fn encode(&self) -> Json {
+        Json::object([]).with("n", &self.n)
+    }
 }
 
 impl ComponentParams for Huge {
@@ -98,8 +113,14 @@ impl ComponentParams for Huge {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug)]
 struct Silent;
+
+impl Encode for Silent {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
 
 impl ComponentParams for Silent {
     const TYPE: &'static str = "Odd";
@@ -125,12 +146,11 @@ fn parameters_without_a_normalized_form_are_errors_not_panics() {
           the parameters serialize the reserved key `id`"
         ]
     );
-    assert_eq!(
-        errors_with::<Failing>(),
-        [
-            "components[0] @ 4:14 the parameters of component type `Odd` cannot be normalized: \
-          serialization failed: no normalized form"
-        ]
+    let not_finite = errors_with::<NotFinite>();
+    assert_eq!(not_finite.len(), 1);
+    assert!(
+        not_finite[0].starts_with("(document) @ 1:1 the parameters of component type `(document)` cannot be normalized: the number"),
+        "{not_finite:?}"
     );
     let huge = errors_with::<Huge>();
     assert_eq!(huge.len(), 1);

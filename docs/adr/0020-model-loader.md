@@ -23,7 +23,16 @@ deviation 5) without M5 changing the document format or the hash.
 
 Each decision below is a detail of an accepted ADR or a default the spec
 leaves to the implementation. None changes the spec or an accepted ADR;
-where M4 reads one of them, the reading is stated.
+where M4 reads one of them, the reading is stated. One replaces a spec
+*default*: the schema generator (`schemars`), section 11.
+
+**Owner's decision (2026-10-27): slim shipped dependencies.** The library
+ships with `libm`, `thiserror` (and its compile-time macro crates),
+`saphyr-parser` and `arraydeque` only. So the model crate has no JSON or
+serialization library: it reads JSON with its own parser (section 2),
+holds the normalized form and the schema in its own `Json` value (section
+4), writes them with its own JCS code (section 8), and takes SHA-256 from
+`taktsim_core::digest` (section 8).
 
 ## Decisions
 
@@ -76,7 +85,7 @@ keys. Both formats then share everything else.
 - Locations are a line and a column, both from 1; the column counts
   characters, not bytes.
 
-### 4. Decoding: an own typed decoder; serde only for output
+### 4. Decoding and the normalized form: own code, no serde
 
 | | serde `Deserialize` over the tree | own `Decode` trait |
 | --- | --- | --- |
@@ -85,17 +94,23 @@ keys. Both formats then share everything else.
 | Spans | lost inside internally tagged and untagged enums (distributions, flow entries), which serde buffers | exact for every value |
 | Code per type | a derive | a short `decode` function |
 | Drift between decoder and output | none | possible; closed by tests (below) |
+| Dependencies | `serde` (and a JSON value type) | none |
 
 **Own decoder.** `Decode` (with `EXPECTED` and `EXAMPLE` for messages), a
 `Decoder` that collects errors with their field paths, and `Fields` for a
 mapping: each key read once, every key not read reported as unknown with
-the keys that were, and a "did you mean" suggestion. The normalized form is
-produced by `serde::Serialize` into a `serde_json::Value`; the test that
-the canonical form of every model loads back to itself (property-tested)
-keeps decoder and serializer in step. `serde` and `serde_json` (both MIT OR
-Apache-2.0, already in the lockfile) are dependencies of `taktsim-model`;
-`taktsim-units` gains a `serde` feature that serializes each quantity as
-its canonical text.
+the keys that were, and a "did you mean" suggestion.
+
+**Own JSON value and `Encode`.** The normalized form is a `Json` value
+(null, bool, integer, float, string, array, object with sorted keys),
+produced by the `Encode` trait: quantities as their canonical text,
+distributions, ids, and each section listing its fields
+(`Json::object([]).with(..).with_optional(..)`, which leaves absent
+optional values out). The test that the canonical form of every model
+loads back to itself (property-tested) keeps decoder and encoder in step.
+An earlier draft used `serde_json` for this; replacing it changed no byte
+of the normalized form (the pinned canonical text and hash of spec §4's
+example stayed the same).
 
 ### 5. One error type
 
@@ -182,8 +197,8 @@ model's hash unchanged.
 **JCS: own code** (`taktsim_model::jcs`, about 150 lines), not a crate: the
 crates found are small and unmaintained (`serde_jcs` 0.1) or do not state
 ECMAScript's tie rule, and byte exactness is the whole point. Keys are
-sorted by UTF-16 code units, independent of `serde_json`'s map type (so
-feature unification of `preserve_order` cannot change a hash). Numbers use
+sorted by UTF-16 code units. Integers beyond ±2^53 and non-finite numbers
+have no canonical form and are errors. Numbers use
 Rust's shortest round-trip digits, laid out as ECMAScript's
 `Number.prototype.toString` does. One trap: on an exact tie between two
 shortest candidates Rust rounds up, ECMAScript picks the even digit (RFC
@@ -193,12 +208,13 @@ expansion. Verified against RFC 8785 Appendix B, the examples of §3.2.2 and
 §3.2.3, and 3,500 doubles written by Node.js 26.12.0 (1,000 of them exact
 ties), with the generator committed next to the vectors.
 
-**SHA-256: `sha2` 0.11** (RustCrypto, MIT OR Apache-2.0), default features
-off. It detects SHA instructions at run time (`cpufeatures`, already in the
-lockfile) and falls back to portable code; a hash is the same either way,
-which is ADR-0010's rule for CPU-specific code. The hash is displayed as 64
-lowercase hex digits. The canonical form and hash of spec §4's example are
-pinned in a test that runs on every tier-1 target.
+**SHA-256: `taktsim_core::digest::sha256`** (M3, pull request #21), by the
+owner's decision of 2026-10-27, so no hash crate ships. Until that module
+is merged, `sha2` 0.11 (RustCrypto, MIT OR Apache-2.0, default features
+off) stands in; the switch must not change any hash. The hash is displayed
+as 64 lowercase hex digits. The canonical form and hash of spec §4's
+example are pinned in a test that runs on every tier-1 target, and were
+checked independently with `sha256sum` and Python.
 
 ### 9. `include:` (detail of spec §4 and ADR-0002)
 
@@ -246,11 +262,20 @@ include:
 
 ### 11. JSON Schema (second M4 pull request)
 
-- **Generator: `schemars` 1.x** (MIT), the spec's default, JSON Schema
-  draft 2020-12. Quantities get a `schemars` feature in `taktsim-units`;
-  distributions, component references and the document sections implement
-  `JsonSchema` next to their decoders, describing the input format with its
-  shorthands; component parameter structs derive it (M5).
+- **Generator: own code, replacing the spec's default `schemars`.** Two
+  reasons: the dependency footprint (the owner's decision above; `schemars`
+  brings its derive crate and four more), and one source for decoder and
+  schema. With `schemars`, a type's schema comes from a derive that reads
+  serde attributes, while this crate decodes with its own `Decode`, so the
+  two could drift. Instead every `Decode` type states its schema next to
+  its decoder, and a mapping read through `Fields` gets its schema by
+  running the same reading code in a describing mode: each `required` or
+  `optional` key becomes a property (required or not) with that value
+  type's schema, and the object is closed to other keys. A component
+  type's schema is its `ComponentParams::decode` run that way, so M5
+  implements no schema for its parameter structs, only for new value types
+  (`Decode::schema`). Output is draft 2020-12, keys sorted, written by the
+  model crate's own `Json`.
 - **Layout:** `schemas/model/1.0.json`, one file per format version (spec
   §10); `schemas/cli/describe.json` follows with M7 (ADR-0019). Generated
   by a binary in the repository and checked by `ci/check-schemas.sh` in CI
@@ -262,18 +287,15 @@ include:
   catalog.
 - A contract test checks the corpus against the schema: every valid model
   and included file is accepted, and every malformed model whose error a
-  schema can state is rejected (51 of the 86 that parse; the rest need
-  the whole document, such as unknown references). The JSON Schema
-  validator crates (`jsonschema`, `boon`) depend on `borrow-or-share`,
-  licensed MIT-0, which `deny.toml` does not allow (dev-dependencies are
-  not license-checked, but the allow-list is the policy). So the test has
-  its own checker for exactly the keywords the generator emits, and a
-  test fails if the schema uses any other keyword. The patterns use
-  `regex` (already in the lockfile) and are property-tested against the
-  units parser.
-- `null` is never valid: derived schemas let optional fields be null, so
-  the generator removes `null` from every type (an optional parameter is
-  left out, not written as null).
+  schema can state is rejected (the rest need the whole document, such as
+  unknown references). The JSON Schema validator crates (`jsonschema`,
+  `boon`) depend on `borrow-or-share`, licensed MIT-0, which `deny.toml`
+  does not allow, so the test has its own checker for exactly the keywords
+  the generator emits, and a test fails if the schema uses any other
+  keyword. The patterns are checked with `regex` (tests only, already in
+  the lockfile), and property-tested against the units parser.
+- `null` is never valid: an optional parameter is left out, not written as
+  null, as the decoder requires.
 - No `$id` until the owner chooses one (question 9).
 
 ## Consequences
@@ -286,15 +308,11 @@ include:
   and spacing inside expressions, and compare hashes.
 - M5 implements `ComponentParams` for Source, Machine, Buffer and Sink and
   fills a catalog; it changes neither the document format nor the hash.
-- New dependencies of `taktsim-model`: `saphyr-parser` (with `arraydeque`)
-  and `sha2` (with `digest`, `block-buffer`, `crypto-common`,
-  `hybrid-array`, `typenum`), all MIT OR Apache-2.0 (`typenum`: MIT OR
-  Apache-2.0); `serde` and `serde_json` were already in the lockfile.
-  `taktsim-model` now depends on `taktsim-core` for the distribution
-  constructors (allowed: every crate depends on core). The schema adds
-  `schemars` and `schemars_derive` (MIT) with `dyn-clone`, `ref-cast`,
-  `ref-cast-impl` and `serde_derive_internals` (MIT OR Apache-2.0), and
-  `regex` (already in the lockfile) for tests.
+- New dependencies of `taktsim-model`: `saphyr-parser` (with `arraydeque`),
+  MIT OR Apache-2.0; `sha2` and its family only until
+  `taktsim_core::digest` is merged. `taktsim-model` now depends on
+  `taktsim-core` for the distribution constructors and the digest
+  (allowed: every crate depends on core). `taktsim-units` is unchanged.
 
 ## What the spec's examples need (found while testing them)
 
@@ -338,4 +356,5 @@ exactly why each does not load as written:
     because the rule is a model-format rule.
 11. MIT-0 (`borrow-or-share`, used by the JSON Schema validator crates):
     add it to the license allow-list (a gate change, its own pull
-    request), so a standard validator can replace the test's own checker?
+    request), so a standard validator can check the schema in tests
+    instead of the test's own checker?

@@ -451,9 +451,8 @@ pub enum NormalizeProblem {
     /// The parameters serialized a key the entry itself uses (`id`,
     /// `type`).
     ReservedKey(String),
-    /// serde reported an error.
-    Serialize(String),
-    /// A number outside what canonical JSON can represent exactly.
+    /// A number canonical JSON cannot represent: an integer beyond ±2^53,
+    /// or one that is not finite.
     Number(String),
 }
 
@@ -464,7 +463,6 @@ impl fmt::Display for NormalizeProblem {
             Self::ReservedKey(key) => {
                 write!(f, "the parameters serialize the reserved key `{key}`")
             }
-            Self::Serialize(message) => write!(f, "serialization failed: {message}"),
             Self::Number(n) => write!(f, "the number {n} has no exact canonical JSON form"),
         }
     }
