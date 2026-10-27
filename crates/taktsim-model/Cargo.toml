@@ -13,13 +13,11 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-taktsim-units = { workspace = true, features = ["serde"] }
+taktsim-units.workspace = true
 # Distribution parameters are checked by the constructors that sample them.
 taktsim-core.workspace = true
 thiserror.workspace = true
 saphyr-parser.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
