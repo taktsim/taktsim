@@ -183,7 +183,7 @@ disposal, message (`Debug` text). Built in M11, not in this PR.
 
 ### Core changes
 
-Kept to three, none with a branch:
+Three small changes, none with a branch:
 
 - `taktsim_core::ENGINE_VERSION`: the engine version for provenance.
 - `Engine::config()`: so the header takes the seed from the engine and
@@ -192,18 +192,65 @@ Kept to three, none with a branch:
   every kind, and with the attribute a new kind would compile and be
   dropped by a wildcard arm (CLAUDE.md: no wildcard arms).
 
+And one module, `taktsim_core::digest` (below).
+
+### Hashes and checksums in our own code
+
+The first version of this PR used `sha2` 0.11.1 (with `digest`,
+`block-buffer`, `crypto-common`, `hybrid-array`, `typenum`) and
+`crc32fast` 1.5.3. The owner decided on 2026-10-27 to keep shipped
+dependencies slim and replace both with our own code. It lives in
+`taktsim_core::digest`: pure computation, which core may contain (no I/O,
+no new dependency), and the model hash of M4 (ADR-0002) uses it too.
+
+```rust
+pub struct Sha256;           // Default, Clone, Debug
+impl Sha256 {
+    pub const fn new() -> Self;
+    pub fn update(&mut self, bytes: &[u8]);
+    pub fn finalize(self) -> [u8; 32];
+}
+pub fn sha256(bytes: &[u8]) -> [u8; 32];
+
+pub struct Crc32;            // Default, Clone, Debug
+impl Crc32 {
+    pub const fn new() -> Self;
+    pub fn update(&mut self, bytes: &[u8]);
+    pub const fn finalize(self) -> u32;
+}
+pub fn crc32(bytes: &[u8]) -> u32;
+```
+
+- **SHA-256** follows FIPS 180-4: arithmetic modulo 2^32 with wrapping
+  operations, the message length counted in a `u64` of bits, padding per
+  5.1.1. Portable scalar code, no CPU-specific paths. It is checked
+  against all 65 NIST CAVP short-message vectors (every length from 0 to
+  64 bytes, `SHA256ShortMsg.rsp`), the first 8 long-message vectors
+  (`SHA256LongMsg.rsp`), the FIPS 180-4 examples including one million
+  `a`, padding edge cases at 55, 56, 63, 64, 65, 119, 120, 127 and 128
+  bytes, and a property test that any split across `update` calls gives
+  the one-shot digest.
+- **CRC32** is CRC-32/ISO-HDLC (reflected polynomial `0xEDB88320`,
+  initial value and final XOR `0xFFFFFFFF`), byte-wise with a table built
+  by a `const fn`. Checked against the check value
+  `crc32(b"123456789") == 0xCBF43926`, zlib values and the same split
+  property.
+- **Same bytes as before.** These are the functions `sha2` and
+  `crc32fast` computed, so every trace, snapshot and hash is unchanged. A
+  test in `tests/golden.rs` rebuilds the golden traces and compares their
+  stream and file hashes with the values CI recorded on all four targets
+  with the replaced crates.
+- **Cost.** The table-driven CRC and scalar SHA-256 are slower than the
+  replaced crates' hardware paths; the wall times below were measured
+  with each (orientation only).
+
 ### Dependencies
 
 | Crate | Version | License | Why |
 | --- | --- | --- | --- |
-| `sha2` | 0.11.1 | MIT OR Apache-2.0 | SHA-256 (ADR-0002 and ADR-0004 name it); pulls in `digest`, `block-buffer`, `crypto-common`, `hybrid-array`, `typenum` (all MIT OR Apache-2.0); `cpufeatures` and `cfg-if` are already in the lock file |
-| `crc32fast` | 1.5.3 | MIT OR Apache-2.0 | CRC32 per block |
-| `insta` (dev) | 1.49.0 | Apache-2.0 | snapshots; pulls in `similar` (Apache-2.0) |
+| `insta` (dev) | 1.49.0 | Apache-2.0 | snapshots in tests; pulls in `similar` (Apache-2.0) |
 
-`sha2` and `crc32fast` use SHA and carry-less-multiply instructions when
-the CPU has them, detected at run time, with portable fallbacks. Both
-compute exact integer functions, so every path gives the same bits
-(ADR-0010's rule for CPU-specific code).
+No new crate is linked into a shipped binary or library.
 
 ## Measurements
 
