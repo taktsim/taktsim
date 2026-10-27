@@ -35,6 +35,7 @@ measurements.
 | [0017](0017-csv-adapter-and-observation-table.md) | CSV adapter and the observation table | accepted | M11 |
 | [0018](0018-engine-architecture.md) | Engine architecture | accepted | M2b |
 | [0019](0019-cli-agent-interface.md) | The CLI is the agent interface; no MCP server | accepted | M7, v0.2 |
+| [0022](0022-developing-with-ai-agents.md) | Developing with AI agents: pace follows understanding | proposed | M5 on |
 
 Open decisions from spec §15 that do **not** block v0.1, to be written
 before the tier that needs them: async boundary (v0.2), viewer rendering
