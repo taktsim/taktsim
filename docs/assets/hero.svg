@@ -97,21 +97,5 @@
 <rect x="384" y="48" width="10" height="10" class="ts-ink-fill"/>
 <rect x="432" y="48" width="10" height="10" class="ts-ink-fill"/>
 </g>
-<rect x="52" y="78" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:0.250s"/>
-<rect x="78" y="78" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:0.365s"/>
-<rect x="0" y="0" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:0.481s"/>
-<rect x="26" y="0" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:0.596s"/>
-<rect x="52" y="0" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:0.712s"/>
-<rect x="78" y="0" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:0.827s"/>
-<rect x="0" y="26" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:0.942s"/>
-<rect x="26" y="26" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.058s"/>
-<rect x="52" y="26" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.173s"/>
-<rect x="78" y="26" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.288s"/>
-<rect x="0" y="52" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.404s"/>
-<rect x="26" y="52" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.519s"/>
-<rect x="52" y="52" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.635s"/>
-<rect x="78" y="52" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.750s"/>
-<rect x="0" y="78" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.865s"/>
-<rect x="26" y="78" width="22" height="22" class="ts-acid ts-beat" style="animation-delay:1.981s"/>
-<rect x="26" y="78" width="22" height="22" class="ts-acid ts-rest"/>
+<rect x="26" y="78" width="22" height="22" class="ts-acid ts-playhead"/>
 </svg>

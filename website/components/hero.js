@@ -4,7 +4,7 @@
 // this only sets the class ts-play at the right moments.
 (function () {
   "use strict";
-  const PLAY_MS = 3942; // a quarter-second pause and two bars at 130 BPM
+  const PLAY_MS = 3692; // two bars at 130 BPM
 
   function setup(svg) {
     const still = window.matchMedia("(prefers-reduced-motion: reduce)");
