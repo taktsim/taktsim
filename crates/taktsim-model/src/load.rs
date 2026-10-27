@@ -14,17 +14,18 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::component::{Catalog, Component};
-use crate::decode::{Decode, Decoder};
+use crate::decode::{Decode, Decoder, Fields, Schemas};
 use crate::document::{
     Document, Edge, MainFile, Observable, Parts, Precision, RawExpr, read_main, read_parts,
 };
 use crate::error::{
     FieldPath, LoadError, LoadErrorKind, LoadErrors, Location, Place, Segment, suggest,
 };
-use crate::expr::{Expected, ExprKind, TypeEnv, check, parse};
+use crate::expr::{Expected, ExprKind, TypeEnv, check, parse as parse_expr};
 use crate::hash::ModelHash;
 use crate::include::{DirResolver, Included, Resolver};
 use crate::jcs::canonicalize;
+use crate::json::Json;
 use crate::syntax::{self, Format, Node};
 
 /// A model that loaded: its typed document, canonical form and hash.
@@ -708,7 +709,7 @@ impl Run<'_> {
         let mut ok = true;
         for r in raw {
             let place = r.place.clone();
-            let checked = parse(&r.text).and_then(|expr| {
+            let checked = parse_expr(&r.text).and_then(|expr| {
                 check(&expr, env, expected)?;
                 Ok(expr)
             });
@@ -785,20 +786,37 @@ impl Run<'_> {
     }
 }
 
-/// Reads an included file: any of `components`, `flow`, `observe`.
-fn read_fragment(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<Parts> {
-    /// For the error when the file is not a mapping.
-    struct Fragment;
-    impl Decode for Fragment {
-        const EXPECTED: &'static str =
-            "an included file: a mapping with any of `components`, `flow`, `observe`";
-        const EXAMPLE: &'static str = "components: [{id: cut, type: Machine, cycle_time: 42s}]";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
-        }
+/// An included file, for the message when it is not a mapping.
+struct Fragment;
+
+impl Decode for Fragment {
+    const EXPECTED: &'static str =
+        "an included file: a mapping with any of `components`, `flow`, `observe`";
+    const EXAMPLE: &'static str = "components: [{id: cut, type: Machine, cycle_time: 42s}]";
+
+    /// Not used: an included file is read with [`read_fragment`], which
+    /// needs the catalog.
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        cx.wrong_type::<Self>(node);
+        None
     }
 
+    /// Not used: the schema describes [`read_fragment_fields`].
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([("type", Json::from("object"))])
+    }
+}
+
+/// Reads an included file: any of `components`, `flow`, `observe`.
+fn read_fragment(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<Parts> {
     let mut fields = cx.fields::<Fragment>(node)?;
+    let parts = read_fragment_fields(&mut fields, catalog);
+    fields.finish();
+    Some(parts)
+}
+
+/// The keys of an included file. Also run to describe it in the schema.
+pub(crate) fn read_fragment_fields(fields: &mut Fields<'_, '_>, catalog: &Catalog) -> Parts {
     if let Some(entry) = fields.entry("include") {
         let at = entry.key_start();
         fields.take("include");
@@ -808,9 +826,33 @@ fn read_fragment(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<Par
                 cx.error(at, LoadErrorKind::NestedInclude);
             });
     }
-    let parts = read_parts(&mut fields, catalog);
-    fields.finish();
-    Some(parts)
+    read_parts(fields, catalog)
+}
+
+/// Parses `text` into a tree with locations, without decoding it: for
+/// tools that work on the document as written, such as checking it against
+/// the schema ([`model_schema`](crate::model_schema)).
+///
+/// # Errors
+///
+/// The syntax errors of `text` (YAML subset or JSON).
+///
+/// ```
+/// use taktsim_model::{Format, parse};
+///
+/// let node = parse("model: {name: m}", Format::Yaml)?;
+/// assert_eq!(node.to_json()["model"]["name"], "m");
+/// assert!(parse("a: 1\na: 2\n", Format::Yaml).is_err());
+/// # Ok::<(), taktsim_model::LoadErrors>(())
+/// ```
+pub fn parse(text: &str, format: Format) -> Result<Node, LoadErrors> {
+    syntax::parse(text, format).map_err(|errors| {
+        let errors = errors
+            .into_iter()
+            .map(|e| LoadError::new(None, e.location, e.path, e.kind))
+            .collect();
+        LoadErrors::from_vec(errors).unwrap_or_else(|| LoadErrors::single(empty()))
+    })
 }
 
 /// Decodes a value of type `T` from `text`: for testing a component type's
@@ -828,13 +870,7 @@ fn read_fragment(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<Par
 /// # Ok::<(), taktsim_model::LoadErrors>(())
 /// ```
 pub fn decode_str<T: Decode>(text: &str, format: Format) -> Result<T, LoadErrors> {
-    let node = syntax::parse(text, format).map_err(|errors| {
-        let errors = errors
-            .into_iter()
-            .map(|e| LoadError::new(None, e.location, e.path, e.kind))
-            .collect();
-        LoadErrors::from_vec(errors).unwrap_or_else(|| LoadErrors::single(empty()))
-    })?;
+    let node = parse(text, format)?;
     let mut cx = Decoder::new(None);
     let value = T::decode(&node, &mut cx);
     match (value, LoadErrors::from_vec(cx.into_errors())) {

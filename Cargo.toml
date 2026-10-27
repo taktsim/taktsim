@@ -32,6 +32,9 @@ taktsim-core = { path = "crates/taktsim-core", version = "0.0.0" }
 libm = { version = "0.2.16", default-features = false }
 thiserror = "2.0.21"
 proptest = "1.12.0"
+# Tests only: the schema's patterns (taktsim-model), checked against the
+# parsers. Already in the lockfile through the benchmarks.
+regex = "1.13.1"
 # Model loader (M4, ADR-0020): the YAML event parser (wrapped in one
 # module) and, until taktsim_core::digest exists, SHA-256 for the hash.
 saphyr-parser = "0.3.2"

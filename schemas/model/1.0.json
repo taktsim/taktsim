@@ -1,0 +1,459 @@
+{
+  "$defs": {
+    "Component": {
+      "description": "A component: `id`, `type` and the parameters of that type. No component type is registered in this catalog, so none is valid.",
+      "not": {}
+    },
+    "ComponentId": {
+      "description": "A component id: letters, digits and `_`, starting with a letter or `_`, optionally joined by single `-` (ADR-0015).",
+      "examples": [
+        "cut",
+        "weld-1"
+      ],
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(-[A-Za-z0-9_]+)*$",
+      "type": "string"
+    },
+    "Count": {
+      "description": "A whole number of parts.",
+      "examples": [
+        "20 parts",
+        "1 part"
+      ],
+      "pattern": "^[0-9]+(\\.0+)? ?parts?$",
+      "type": "string"
+    },
+    "Distribution": {
+      "description": "A duration (a constant), or a distribution named by `dist` with named parameters (ADR-0003).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Duration",
+          "description": "A constant duration."
+        },
+        {
+          "additionalProperties": false,
+          "description": "Exponential with the given mean.",
+          "properties": {
+            "dist": {
+              "const": "exponential"
+            },
+            "mean": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "required": [
+            "dist",
+            "mean"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Normal, truncated at zero by rejection (ADR-0013).",
+          "properties": {
+            "dist": {
+              "const": "normal"
+            },
+            "mean": {
+              "$ref": "#/$defs/Duration"
+            },
+            "sd": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "required": [
+            "dist",
+            "mean",
+            "sd"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Lognormal: `mean` is the distribution's mean, `sigma` the standard deviation of its logarithm.",
+          "properties": {
+            "dist": {
+              "const": "lognormal"
+            },
+            "mean": {
+              "$ref": "#/$defs/Duration"
+            },
+            "sigma": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "dist",
+            "mean",
+            "sigma"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Uniform between `min` and `max`.",
+          "properties": {
+            "dist": {
+              "const": "uniform"
+            },
+            "max": {
+              "$ref": "#/$defs/Duration"
+            },
+            "min": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "required": [
+            "dist",
+            "min",
+            "max"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Triangular with `min <= mode <= max`.",
+          "properties": {
+            "dist": {
+              "const": "triangular"
+            },
+            "max": {
+              "$ref": "#/$defs/Duration"
+            },
+            "min": {
+              "$ref": "#/$defs/Duration"
+            },
+            "mode": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "required": [
+            "dist",
+            "min",
+            "mode",
+            "max"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Gamma with the given mean and coefficient of variation.",
+          "properties": {
+            "cv": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            "dist": {
+              "const": "gamma"
+            },
+            "mean": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "required": [
+            "dist",
+            "mean",
+            "cv"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Erlang: the sum of `k` exponential phases.",
+          "properties": {
+            "dist": {
+              "const": "erlang"
+            },
+            "k": {
+              "maximum": 4294967295,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "mean": {
+              "$ref": "#/$defs/Duration"
+            }
+          },
+          "required": [
+            "dist",
+            "mean",
+            "k"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Weibull.",
+          "properties": {
+            "dist": {
+              "const": "weibull"
+            },
+            "scale": {
+              "$ref": "#/$defs/Duration"
+            },
+            "shape": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "dist",
+            "scale",
+            "shape"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Duration": {
+      "description": "A duration: a number and one of the units d, h, min, s, ms, with at most one space; exact to the nanosecond.",
+      "examples": [
+        "42s",
+        "12min",
+        "0.5h",
+        "8h"
+      ],
+      "pattern": "^[0-9]+(\\.[0-9]+)? ?(d|h|min|s|ms)$",
+      "type": "string"
+    },
+    "EdgeEnd": {
+      "description": "A component id, or a list of different ones.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ComponentId"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/ComponentId"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      ]
+    },
+    "Experiment": {
+      "additionalProperties": false,
+      "description": "How the model is run: a terminating experiment over `horizon`, with optional relative precision targets per observable (ADR-0014).",
+      "properties": {
+        "horizon": {
+          "$ref": "#/$defs/Duration"
+        },
+        "precision": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Ratio"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/Observable"
+          },
+          "type": "object"
+        },
+        "type": {
+          "const": "terminating"
+        }
+      },
+      "required": [
+        "type",
+        "horizon"
+      ],
+      "type": "object"
+    },
+    "FlowEntry": {
+      "description": "A chain of at least two components, or an edge from one or several components to one or several components (branch, merge, loop-back).",
+      "oneOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ComponentId"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/EdgeEnd"
+            },
+            "to": {
+              "$ref": "#/$defs/EdgeEnd"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Include": {
+      "description": "A file whose components, flow and observables come before the model's own; optionally pinned to the SHA-256 of its content.",
+      "oneOf": [
+        {
+          "description": "A path relative to the model file, with `/` separators, in its directory or below, to a .yaml, .yml or .json file.",
+          "examples": [
+            "cells/welding.yaml"
+          ],
+          "pattern": "^(?:(?:[A-Za-z0-9_-]|\\.[A-Za-z0-9_-]|\\.\\.[A-Za-z0-9._-])[A-Za-z0-9._-]*/)*[A-Za-z0-9._-]*\\.(?:[Yy][Aa]?[Mm][Ll]|[Jj][Ss][Oo][Nn])$",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "description": "A path relative to the model file, with `/` separators, in its directory or below, to a .yaml, .yml or .json file.",
+              "examples": [
+                "cells/welding.yaml"
+              ],
+              "pattern": "^(?:(?:[A-Za-z0-9_-]|\\.[A-Za-z0-9_-]|\\.\\.[A-Za-z0-9._-])[A-Za-z0-9._-]*/)*[A-Za-z0-9._-]*\\.(?:[Yy][Aa]?[Mm][Ll]|[Jj][Ss][Oo][Nn])$",
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "IncludedFile": {
+      "additionalProperties": false,
+      "description": "A file named in `include:`.",
+      "properties": {
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "type": "array"
+        },
+        "flow": {
+          "items": {
+            "$ref": "#/$defs/FlowEntry"
+          },
+          "type": "array"
+        },
+        "observe": {
+          "items": {
+            "$ref": "#/$defs/Observable"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "Model": {
+      "additionalProperties": false,
+      "description": "The model's name and defaults.",
+      "properties": {
+        "name": {
+          "examples": [
+            "line-a"
+          ],
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(-[A-Za-z0-9_]+)*$",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "time_unit": {
+          "enum": [
+            "d",
+            "h",
+            "min",
+            "s",
+            "ms"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "Observable": {
+      "description": "An observable; this catalog declares none, so none is valid.",
+      "not": {}
+    },
+    "Ratio": {
+      "description": "A percentage.",
+      "examples": [
+        "2%",
+        "0.5%"
+      ],
+      "pattern": "^[0-9]+(\\.[0-9]+)? ?%$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A taktsim model (spec §4). Generated from the Rust types; do not edit.",
+  "if": {
+    "not": {
+      "required": [
+        "include"
+      ]
+    }
+  },
+  "properties": {
+    "components": {
+      "items": {
+        "$ref": "#/$defs/Component"
+      },
+      "type": "array"
+    },
+    "experiment": {
+      "$ref": "#/$defs/Experiment"
+    },
+    "flow": {
+      "items": {
+        "$ref": "#/$defs/FlowEntry"
+      },
+      "type": "array"
+    },
+    "format": {
+      "const": "1.0",
+      "description": "The format version (ADR-0008); quote it."
+    },
+    "include": {
+      "items": {
+        "$ref": "#/$defs/Include"
+      },
+      "type": "array"
+    },
+    "model": {
+      "$ref": "#/$defs/Model"
+    },
+    "observe": {
+      "items": {
+        "$ref": "#/$defs/Observable"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "format",
+    "model",
+    "experiment"
+  ],
+  "then": {
+    "properties": {
+      "components": {
+        "minItems": 1
+      },
+      "flow": {
+        "minItems": 1
+      }
+    },
+    "required": [
+      "components",
+      "flow"
+    ]
+  },
+  "title": "taktsim model, format 1.0",
+  "type": "object"
+}

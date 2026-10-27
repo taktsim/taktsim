@@ -84,6 +84,19 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo +"$MSRV" check --workspace --all-targets --all-features --locked
 
+  schemas:
+    name: schema freshness (JSON Schemas generated and committed)
+    # Spec §10 order: after the tests, before coverage. ADR-0020 §11.
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The check's own tests first, so a broken check cannot pass every PR.
+      - run: ci/schemas-test.sh
+      - run: ci/check-schemas.sh
+
   coverage:
     name: coverage (≥ 90 % lines, 100 % branches in core)
     needs: lint

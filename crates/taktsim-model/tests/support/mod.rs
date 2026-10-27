@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 
 use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
-    Catalog, ComponentParams, ComponentRef, Decode, Decoder, Distribution, Encode, Fields, Json,
-    LoadErrors, Node,
+    Catalog, ComponentParams, ComponentRef, Distribution, Encode, Fields, Json, LoadErrors, Record,
 };
 use taktsim_units::{Count, Ratio, SimDuration};
 
@@ -43,16 +42,13 @@ pub struct Setup {
     pub per_variant: SimDuration,
 }
 
-impl Decode for Setup {
+impl Record for Setup {
     const EXPECTED: &'static str = "a setup such as `{per_variant: 4min}`";
     const EXAMPLE: &'static str = "{per_variant: 4min}";
 
-    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-        let mut fields = cx.fields::<Self>(node)?;
-        let per_variant = fields.required("per_variant");
-        fields.finish();
+    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
         Some(Self {
-            per_variant: per_variant?,
+            per_variant: fields.required("per_variant")?,
         })
     }
 }
