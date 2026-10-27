@@ -261,28 +261,36 @@ line of 1,000 components (source, 998 single-server stations, sink) runs
 trace is then read and replayed. Peak memory is the process's resident
 high-water mark (`VmHWM`); median of 10 runs per mode.
 
-Run: 2026-10-26, GitHub-hosted `ubuntu-24.04` (x86-64, 4 CPUs, 15.6 GiB),
-PR #21 head `47430a8` (merge commit `0d479bf`), workflow run 40393351697.
+Two runs on GitHub-hosted `ubuntu-24.04` (x86-64, 4 CPUs, 15.6 GiB): the
+first with `sha2` and `crc32fast` (2026-10-26, PR #21 head `47430a8`,
+workflow run 40393351697), the second with `taktsim_core::digest`, as
+shipped (2026-10-27, head `655ead5`, workflow run 40468566195).
 
-| Mode | Peak memory, median (min–max) |
-| --- | --- |
-| run without trace (baseline) | 3.5 MiB (3.4–3.5) |
-| run, trace written to a file | 3.6 MiB (3.6–3.6) |
-| read and decode every record | 2.5 MiB (2.5–2.5) |
-| replay from the trace | 3.7 MiB (3.7–3.8) |
+| Mode | Peak memory, median (min–max), `digest` | Same, `sha2`/`crc32fast` |
+| --- | --- | --- |
+| run without trace (baseline) | 3.3 MiB (3.2–3.4) | 3.5 MiB (3.4–3.5) |
+| run, trace written to a file | 3.4 MiB (3.3–3.4) | 3.6 MiB (3.6–3.6) |
+| read and decode every record | 2.3 MiB (2.3–2.3) | 2.5 MiB (2.5–2.5) |
+| replay from the trace | 3.5 MiB (3.5–3.5) | 3.7 MiB (3.7–3.8) |
 
 - **File size:** 400,186,879 bytes (381.6 MiB) for 10,009,528 records
   (10,000,000 events, the rest items created and disposed of) in 6,107
   chunks: 40.0 bytes per record. The size follows from the format, so it
   is the same on every platform; so is the stream hash
-  (`0eb3b0ef…f4bda0`).
+  (`0eb3b0ef…f4bda0`), identical in both runs.
 - **Memory:** writing the trace adds about 0.1 MiB to the run, the open
-  chunk; reading needs 2.5 MiB in all. Neither grows with the length of
+  chunk; reading needs 2.3 MiB in all. Neither grows with the length of
   the trace. The 2 GB target of spec §9 (1,000 components, 10 M events)
   is far away for the trace; the full check with real components is M13
   (ADR-0007).
-- Wall times (orientation only, not evidence): median 4.0 s without
-  trace, 6.5 s with, 0.8 s to read, 4.9 s to replay.
+- Wall times, median, orientation only (not evidence; the baseline alone
+  varied from 4.0 s to 5.1 s between the runs): with `digest` 5.1 s
+  without trace, 8.9 s with, 3.4 s to read, 8.7 s to replay; with
+  `sha2`/`crc32fast` 4.0 s, 6.5 s, 0.8 s and 4.9 s. Scalar SHA-256 and
+  byte-wise CRC32 cost about 2.5 s per 400 MB read here. If that matters
+  later (e.g. for `trace query` on long traces), a faster portable CRC
+  (slicing-by-8) and hashing on a second thread are options that keep the
+  bytes the same.
 
 ## Consequences
 
