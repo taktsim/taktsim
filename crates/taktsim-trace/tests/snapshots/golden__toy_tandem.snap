@@ -1,0 +1,513 @@
+---
+source: crates/taktsim-trace/tests/golden.rs
+expression: golden.snapshot()
+---
+case: toy_tandem
+messages: taktsim-trace.toy/1
+model hash: cdf881adbf59db283b82d60a3c731a317d3e782c884be16184d2800206892a49
+seed: 7
+components: source, cut, weld, sink
+records: 1824 (1379 events) in 1 chunks
+stream sha256: e1ce08bd264dd183ae810a4cbe84200525dced7c477463ea0f53549bcf87148c
+---
+24.73972074s event #0 source -> source Next
+24.73972074s item 0 created by source
+24.73972074s event #2 source -> cut Arrive, item 0
+98.361515622s event #4 cut -> cut Done { lot: 1 }
+98.361515622s event #5 cut -> weld Arrive, item 0
+143.799729728s event #3 source -> source Next
+143.799729728s item 1 created by source
+143.799729728s event #7 source -> cut Arrive, item 1
+145.190795996s event #8 source -> source Next
+145.190795996s item 2 created by source
+145.190795996s event #10 source -> cut Arrive, item 2
+146.327312547s event #6 weld -> weld Done { lot: 1 }
+146.327312547s event #12 weld -> sink Arrive, item 0
+146.327312547s item 0 delivered by sink
+181.191764237s event #9 cut -> cut Done { lot: 2 }
+181.191764237s event #13 cut -> weld Arrive, item 1
+182.129694105s event #11 source -> source Next
+182.129694105s item 3 created by source
+182.129694105s event #16 source -> cut Arrive, item 3
+199.647066975s event #14 cut -> cut Done { lot: 3 }
+199.647066975s event #18 cut -> weld Arrive, item 2
+207.068482517s event #15 weld -> weld Done { lot: 2 }
+207.068482517s event #20 weld -> sink Arrive, item 1
+207.068482517s item 1 delivered by sink
+233.296263017s event #21 weld -> weld Done { lot: 3 }
+233.296263017s event #22 weld -> sink Arrive, item 2
+233.296263017s item 2 delivered by sink
+264.388389735s event #17 source -> source Next
+264.388389735s item 4 created by source
+264.388389735s event #23 source -> cut Arrive, item 4
+277.106143612s event #19 cut -> cut Done { lot: 4 }
+277.106143612s event #25 cut -> weld Arrive, item 3
+287.898072088s event #26 cut -> cut Done { lot: 5 }
+287.898072088s event #28 cut -> weld Arrive, item 4
+326.429270907s event #27 weld -> weld Done { lot: 4 }
+326.429270907s event #29 weld -> sink Arrive, item 3
+326.429270907s item 3 delivered by sink
+343.028460407s event #30 weld -> weld Done { lot: 5 }
+343.028460407s event #31 weld -> sink Arrive, item 4
+343.028460407s item 4 delivered by sink
+455.941339381s event #24 source -> source Next
+455.941339381s item 5 created by source
+455.941339381s event #32 source -> cut Arrive, item 5
+479.333645097s event #34 cut -> cut Done { lot: 6 }
+479.333645097s event #35 cut -> weld Arrive, item 5
+481.497601347s event #33 source -> source Next
+481.497601347s item 6 created by source
+481.497601347s event #37 source -> cut Arrive, item 6
+487.591079633s event #38 source -> source Next
+487.591079633s item 7 created by source
+487.591079633s event #40 source -> cut Arrive, item 7
+488.346071266s event #41 source -> source Next
+488.346071266s item 8 created by source
+488.346071266s event #42 source -> cut Arrive, item 8
+502.805735777s event #39 cut -> cut Done { lot: 7 }
+502.805735777s event #44 cut -> weld Arrive, item 6
+513.058165913s event #36 weld -> weld Done { lot: 6 }
+513.058165913s event #46 weld -> sink Arrive, item 5
+513.058165913s item 5 delivered by sink
+515.89862766s event #43 source -> source Next
+515.89862766s item 9 created by source
+515.89862766s event #48 source -> cut Arrive, item 9
+530.649528511s event #49 source -> source Next
+530.649528511s item 10 created by source
+530.649528511s event #50 source -> cut Arrive, item 10
+537.544427164s event #47 weld -> weld Done { lot: 7 }
+537.544427164s item 6 scrapped by weld
+547.319645371s event #51 source -> source Next
+547.319645371s item 11 created by source
+547.319645371s event #52 source -> cut Arrive, item 11
+554.520174666s event #45 cut -> cut Done { lot: 8 }
+554.520174666s event #54 cut -> weld Arrive, item 7
+599.798647972s event #55 cut -> cut Done { lot: 9 }
+599.798647972s event #57 cut -> weld Arrive, item 8
+615.985159097s event #58 cut -> cut Done { lot: 10 }
+615.985159097s event #59 cut -> weld Arrive, item 9
+615.985159097s event #60 cut -> weld Note { text: "lot 10 done", share: 3.3333333333333335 }
+616.902039804s event #56 weld -> weld Done { lot: 8 }
+616.902039804s event #62 weld -> sink Arrive, item 7
+616.902039804s item 7 delivered by sink
+627.574002888s event #63 weld -> weld Done { lot: 9 }
+627.574002888s event #64 weld -> sink Arrive, item 8
+627.574002888s item 8 delivered by sink
+633.853561406s event #61 cut -> cut Done { lot: 11 }
+633.853561406s event #66 cut -> weld Arrive, item 10
+641.306910211s event #65 weld -> weld Done { lot: 10 }
+641.306910211s event #68 weld -> sink Arrive, item 9
+641.306910211s item 9 delivered by sink
+641.306910211s event #69 weld -> sink Note { text: "lot 10 done", share: 3.3333333333333335 }
+643.815986184s event #53 source -> source Next
+643.815986184s item 12 created by source
+643.815986184s event #71 source -> cut Arrive, item 12
+659.104136635s event #72 source -> source Next
+659.104136635s item 13 created by source
+659.104136635s event #73 source -> cut Arrive, item 13
+669.643398036s event #74 source -> source Next
+669.643398036s item 14 created by source
+669.643398036s event #75 source -> cut Arrive, item 14
+704.598601088s event #67 cut -> cut Done { lot: 12 }
+704.598601088s event #77 cut -> weld Arrive, item 11
+716.906114054s event #78 cut -> cut Done { lot: 13 }
+716.906114054s event #79 cut -> weld Arrive, item 12
+731.639488359s event #80 cut -> cut Done { lot: 14 }
+731.639488359s event #81 cut -> weld Arrive, item 13
+739.72170874s event #76 source -> source Next
+739.72170874s item 15 created by source
+739.72170874s event #83 source -> cut Arrive, item 15
+748.288000311s event #70 weld -> weld Done { lot: 11 }
+748.288000311s event #85 weld -> sink Arrive, item 10
+748.288000311s item 10 delivered by sink
+760.085741878s event #86 weld -> weld Done { lot: 12 }
+760.085741878s event #87 weld -> sink Arrive, item 11
+760.085741878s item 11 delivered by sink
+781.24089985s event #88 weld -> weld Done { lot: 13 }
+781.24089985s event #89 weld -> sink Arrive, item 12
+781.24089985s item 12 delivered by sink
+830.471436161s event #90 weld -> weld Done { lot: 14 }
+830.471436161s item 13 scrapped by weld
+834.557675139s event #84 source -> source Next
+834.557675139s item 16 created by source
+834.557675139s event #91 source -> cut Arrive, item 16
+837.202973863s event #92 source -> source Next
+837.202973863s item 17 created by source
+837.202973863s event #93 source -> cut Arrive, item 17
+889.914175305s event #82 cut -> cut Done { lot: 15 }
+889.914175305s event #95 cut -> weld Arrive, item 14
+894.346301809s event #94 source -> source Next
+894.346301809s item 18 created by source
+894.346301809s event #98 source -> cut Arrive, item 18
+916.681060885s event #96 cut -> cut Done { lot: 16 }
+916.681060885s event #100 cut -> weld Arrive, item 15
+926.249230136s event #97 weld -> weld Done { lot: 15 }
+926.249230136s event #102 weld -> sink Arrive, item 14
+926.249230136s item 14 delivered by sink
+936.064082483s event #99 source -> source Next
+936.064082483s item 19 created by source
+936.064082483s event #104 source -> cut Arrive, item 19
+944.939313709s event #103 weld -> weld Done { lot: 16 }
+944.939313709s event #106 weld -> sink Arrive, item 15
+944.939313709s item 15 delivered by sink
+957.405007374s event #105 source -> source Next
+957.405007374s item 20 created by source
+957.405007374s event #107 source -> cut Arrive, item 20
+1013.318585666s event #108 source -> source Next
+1013.318585666s item 21 created by source
+1013.318585666s event #109 source -> cut Arrive, item 21
+1017.26802054s event #110 source -> source Next
+1017.26802054s item 22 created by source
+1017.26802054s event #111 source -> cut Arrive, item 22
+1025.000369625s event #112 source -> source Next
+1025.000369625s item 23 created by source
+1025.000369625s event #113 source -> cut Arrive, item 23
+1036.972677303s event #101 cut -> cut Done { lot: 17 }
+1036.972677303s event #115 cut -> weld Arrive, item 16
+1050.609196468s event #114 source -> source Next
+1050.609196468s item 24 created by source
+1050.609196468s event #118 source -> cut Arrive, item 24
+1057.087700054s event #117 weld -> weld Done { lot: 17 }
+1057.087700054s event #120 weld -> sink Arrive, item 16
+1057.087700054s item 16 delivered by sink
+1076.495629414s event #116 cut -> cut Done { lot: 18 }
+1076.495629414s event #121 cut -> weld Arrive, item 17
+1087.091421439s event #123 weld -> weld Done { lot: 18 }
+1087.091421439s event #124 weld -> sink Arrive, item 17
+1087.091421439s item 17 delivered by sink
+1099.457852852s event #122 cut -> cut Done { lot: 19 }
+1099.457852852s event #125 cut -> weld Arrive, item 18
+1106.476612021s event #126 cut -> cut Done { lot: 20 }
+1106.476612021s event #128 cut -> weld Arrive, item 19
+1106.476612021s event #129 cut -> weld Note { text: "lot 20 done", share: 6.666666666666667 }
+1144.28856236s event #130 cut -> cut Done { lot: 21 }
+1144.28856236s event #131 cut -> weld Arrive, item 20
+1152.42376092s event #127 weld -> weld Done { lot: 19 }
+1152.42376092s event #133 weld -> sink Arrive, item 18
+1152.42376092s item 18 delivered by sink
+1156.845597885s event #132 cut -> cut Done { lot: 22 }
+1156.845597885s event #135 cut -> weld Arrive, item 21
+1161.754563068s event #119 source -> source Next
+1161.754563068s item 25 created by source
+1161.754563068s event #137 source -> cut Arrive, item 25
+1163.291981002s event #134 weld -> weld Done { lot: 20 }
+1163.291981002s event #139 weld -> sink Arrive, item 19
+1163.291981002s item 19 delivered by sink
+1163.291981002s event #140 weld -> sink Note { text: "lot 20 done", share: 6.666666666666667 }
+1176.861984136s event #138 source -> source Next
+1176.861984136s item 26 created by source
+1176.861984136s event #142 source -> cut Arrive, item 26
+1200.058913325s event #136 cut -> cut Done { lot: 23 }
+1200.058913325s event #144 cut -> weld Arrive, item 22
+1202.557993273s event #145 cut -> cut Done { lot: 24 }
+1202.557993273s event #146 cut -> weld Arrive, item 23
+1220.135591234s event #141 weld -> weld Done { lot: 21 }
+1220.135591234s item 20 scrapped by weld
+1236.533195704s event #147 cut -> cut Done { lot: 25 }
+1236.533195704s event #149 cut -> weld Arrive, item 24
+1240.728226091s event #148 weld -> weld Done { lot: 22 }
+1240.728226091s event #151 weld -> sink Arrive, item 21
+1240.728226091s item 21 delivered by sink
+1243.817375328s event #152 weld -> weld Done { lot: 23 }
+1243.817375328s event #153 weld -> sink Arrive, item 22
+1243.817375328s item 22 delivered by sink
+1257.605270752s event #154 weld -> weld Done { lot: 24 }
+1257.605270752s event #155 weld -> sink Arrive, item 23
+1257.605270752s item 23 delivered by sink
+1302.082536384s event #150 cut -> cut Done { lot: 26 }
+1302.082536384s event #157 cut -> weld Arrive, item 25
+1303.172337911s event #156 weld -> weld Done { lot: 25 }
+1303.172337911s event #159 weld -> sink Arrive, item 24
+1303.172337911s item 24 delivered by sink
+1311.286124599s event #160 weld -> weld Done { lot: 26 }
+1311.286124599s event #161 weld -> sink Arrive, item 25
+1311.286124599s item 25 delivered by sink
+1353.837235758s event #158 cut -> cut Done { lot: 27 }
+1353.837235758s event #162 cut -> weld Arrive, item 26
+1386.184957185s event #143 source -> source Next
+1386.184957185s item 27 created by source
+1386.184957185s event #164 source -> cut Arrive, item 27
+1394.439141304s event #163 weld -> weld Done { lot: 27 }
+1394.439141304s event #167 weld -> sink Arrive, item 26
+1394.439141304s item 26 delivered by sink
+1400.837018323s event #165 source -> source Next
+1400.837018323s item 28 created by source
+1400.837018323s event #168 source -> cut Arrive, item 28
+1405.13392761s event #169 source -> source Next
+1405.13392761s item 29 created by source
+1405.13392761s event #170 source -> cut Arrive, item 29
+1439.820469093s event #171 source -> source Next
+1439.820469093s item 30 created by source
+1439.820469093s event #172 source -> cut Arrive, item 30
+1566.621822905s event #166 cut -> cut Done { lot: 28 }
+1566.621822905s event #174 cut -> weld Arrive, item 27
+1576.657028933s event #173 source -> source Next
+1576.657028933s item 31 created by source
+1576.657028933s event #177 source -> cut Arrive, item 31
+1587.037585649s event #176 weld -> weld Done { lot: 28 }
+1587.037585649s item 27 scrapped by weld
+1620.722765233s event #178 source -> source Next
+1620.722765233s item 32 created by source
+1620.722765233s event #179 source -> cut Arrive, item 32
+1628.865085234s event #175 cut -> cut Done { lot: 29 }
+1628.865085234s event #181 cut -> weld Arrive, item 28
+1642.458615145s event #182 cut -> cut Done { lot: 30 }
+1642.458615145s event #184 cut -> weld Arrive, item 29
+1642.458615145s event #185 cut -> weld Note { text: "lot 30 done", share: 10.0 }
+1673.116707877s event #180 source -> source Next
+1673.116707877s item 33 created by source
+1673.116707877s event #187 source -> cut Arrive, item 33
+1673.385151229s event #183 weld -> weld Done { lot: 29 }
+1673.385151229s event #189 weld -> sink Arrive, item 28
+1673.385151229s item 28 delivered by sink
+1677.164422885s event #186 cut -> cut Done { lot: 31 }
+1677.164422885s event #191 cut -> weld Arrive, item 30
+1685.883838043s event #192 cut -> cut Done { lot: 32 }
+1685.883838043s event #193 cut -> weld Arrive, item 31
+1706.770989337s event #194 cut -> cut Done { lot: 33 }
+1706.770989337s event #195 cut -> weld Arrive, item 32
+1710.576161364s event #188 source -> source Next
+1710.576161364s item 34 created by source
+1710.576161364s event #197 source -> cut Arrive, item 34
+1723.769412277s event #190 weld -> weld Done { lot: 30 }
+1723.769412277s event #199 weld -> sink Arrive, item 29
+1723.769412277s item 29 delivered by sink
+1723.769412277s event #200 weld -> sink Note { text: "lot 30 done", share: 10.0 }
+1726.203433094s event #196 cut -> cut Done { lot: 34 }
+1726.203433094s event #202 cut -> weld Arrive, item 33
+1740.324865798s event #198 source -> source Next
+1740.324865798s item 35 created by source
+1740.324865798s event #204 source -> cut Arrive, item 35
+1749.788919614s event #203 cut -> cut Done { lot: 35 }
+1749.788919614s event #206 cut -> weld Arrive, item 34
+1784.170928056s event #207 cut -> cut Done { lot: 36 }
+1784.170928056s event #208 cut -> weld Arrive, item 35
+1802.113755508s event #205 source -> source Next
+1802.113755508s item 36 created by source
+1802.113755508s event #209 source -> cut Arrive, item 36
+1811.339516826s event #211 cut -> cut Done { lot: 37 }
+1811.339516826s event #212 cut -> weld Arrive, item 36
+1852.850379457s event #201 weld -> weld Done { lot: 31 }
+1852.850379457s event #213 weld -> sink Arrive, item 30
+1852.850379457s item 30 delivered by sink
+1855.439710423s event #210 source -> source Next
+1855.439710423s item 37 created by source
+1855.439710423s event #215 source -> cut Arrive, item 37
+1856.956235004s event #217 cut -> cut Done { lot: 38 }
+1856.956235004s event #218 cut -> weld Arrive, item 37
+1860.383707005s event #216 source -> source Next
+1860.383707005s item 38 created by source
+1860.383707005s event #219 source -> cut Arrive, item 38
+1868.457459542s event #214 weld -> weld Done { lot: 32 }
+1868.457459542s event #222 weld -> sink Arrive, item 31
+1868.457459542s item 31 delivered by sink
+1889.019544443s event #221 cut -> cut Done { lot: 39 }
+1889.019544443s event #224 cut -> weld Arrive, item 38
+1976.241883482s event #220 source -> source Next
+1976.241883482s item 39 created by source
+1976.241883482s event #225 source -> cut Arrive, item 39
+1992.490836346s event #223 weld -> weld Done { lot: 33 }
+1992.490836346s event #228 weld -> sink Arrive, item 32
+1992.490836346s item 32 delivered by sink
+1995.311731377s event #227 cut -> cut Done { lot: 40 }
+1995.311731377s event #230 cut -> weld Arrive, item 39
+1995.311731377s event #231 cut -> weld Note { text: "lot 40 done", share: 13.333333333333334 }
+2013.634718718s event #226 source -> source Next
+2013.634718718s item 40 created by source
+2013.634718718s event #232 source -> cut Arrive, item 40
+2085.28842887s event #234 cut -> cut Done { lot: 41 }
+2085.28842887s event #235 cut -> weld Arrive, item 40
+2090.671660172s event #229 weld -> weld Done { lot: 34 }
+2090.671660172s event #236 weld -> sink Arrive, item 33
+2090.671660172s item 33 delivered by sink
+2097.951324189s event #237 weld -> weld Done { lot: 35 }
+2097.951324189s item 34 scrapped by weld
+2106.644723518s event #238 weld -> weld Done { lot: 36 }
+2106.644723518s event #239 weld -> sink Arrive, item 35
+2106.644723518s item 35 delivered by sink
+2108.595258622s event #233 source -> source Next
+2108.595258622s item 41 created by source
+2108.595258622s event #241 source -> cut Arrive, item 41
+2114.307303405s event #243 cut -> cut Done { lot: 42 }
+2114.307303405s event #244 cut -> weld Arrive, item 41
+2165.50163345s event #242 source -> source Next
+2165.50163345s item 42 created by source
+2165.50163345s event #245 source -> cut Arrive, item 42
+2166.44880539s event #247 cut -> cut Done { lot: 43 }
+2166.44880539s event #248 cut -> weld Arrive, item 42
+2199.633911568s event #240 weld -> weld Done { lot: 37 }
+2199.633911568s event #249 weld -> sink Arrive, item 36
+2199.633911568s item 36 delivered by sink
+2223.007682402s event #250 weld -> weld Done { lot: 38 }
+2223.007682402s event #251 weld -> sink Arrive, item 37
+2223.007682402s item 37 delivered by sink
+2228.949737946s event #252 weld -> weld Done { lot: 39 }
+2228.949737946s event #253 weld -> sink Arrive, item 38
+2228.949737946s item 38 delivered by sink
+2260.413138005s event #254 weld -> weld Done { lot: 40 }
+2260.413138005s event #255 weld -> sink Arrive, item 39
+2260.413138005s item 39 delivered by sink
+2260.413138005s event #256 weld -> sink Note { text: "lot 40 done", share: 13.333333333333334 }
+2308.914491153s event #246 source -> source Next
+2308.914491153s item 43 created by source
+2308.914491153s event #258 source -> cut Arrive, item 43
+2348.828477242s event #259 source -> source Next
+2348.828477242s item 44 created by source
+2348.828477242s event #261 source -> cut Arrive, item 44
+2368.802036129s event #260 cut -> cut Done { lot: 44 }
+2368.802036129s event #263 cut -> weld Arrive, item 43
+2374.74164709s event #257 weld -> weld Done { lot: 41 }
+2374.74164709s event #265 weld -> sink Arrive, item 40
+2374.74164709s item 40 delivered by sink
+2404.002246855s event #1 cut -> cut Breakdown
+2408.982394672s event #262 source -> source Next
+2408.982394672s item 45 created by source
+2408.982394672s event #268 source -> cut Arrive, item 45
+2415.945556533s event #267 cut -> cut Repaired
+2427.698851548s event #269 source -> source Next
+2427.698851548s item 46 created by source
+2427.698851548s event #272 source -> cut Arrive, item 46
+2454.059002835s event #266 weld -> weld Done { lot: 42 }
+2454.059002835s item 41 scrapped by weld
+2462.413529065s event #274 weld -> weld Done { lot: 43 }
+2462.413529065s event #275 weld -> sink Arrive, item 42
+2462.413529065s item 42 delivered by sink
+2477.181912758s event #276 weld -> weld Done { lot: 44 }
+2477.181912758s event #277 weld -> sink Arrive, item 43
+2477.181912758s item 43 delivered by sink
+2540.12345439s event #273 source -> source Next
+2540.12345439s item 47 created by source
+2540.12345439s event #278 source -> cut Arrive, item 47
+2542.635074168s event #279 source -> source Next
+2542.635074168s item 48 created by source
+2542.635074168s event #280 source -> cut Arrive, item 48
+2574.366105994s event #271 cut -> cut Done { lot: 45 }
+2574.366105994s event #282 cut -> weld Arrive, item 44
+2587.176992469s event #283 cut -> cut Done { lot: 46 }
+2587.176992469s event #285 cut -> weld Arrive, item 45
+2588.564732418s event #281 source -> source Next
+2588.564732418s item 49 created by source
+2588.564732418s event #287 source -> cut Arrive, item 49
+2596.137939325s event #286 cut -> cut Done { lot: 47 }
+2596.137939325s event #289 cut -> weld Arrive, item 46
+2599.40700214s event #284 weld -> weld Done { lot: 45 }
+2599.40700214s event #291 weld -> sink Arrive, item 44
+2599.40700214s item 44 delivered by sink
+2604.813575425s event #290 cut -> cut Done { lot: 48 }
+2604.813575425s event #293 cut -> weld Arrive, item 47
+2618.281120103s event #292 weld -> weld Done { lot: 46 }
+2618.281120103s event #295 weld -> sink Arrive, item 45
+2618.281120103s item 45 delivered by sink
+2620.96232501s event #294 cut -> cut Done { lot: 49 }
+2620.96232501s event #297 cut -> weld Arrive, item 48
+2624.959527384s event #296 weld -> weld Done { lot: 47 }
+2624.959527384s event #299 weld -> sink Arrive, item 46
+2624.959527384s item 46 delivered by sink
+2642.341229567s event #288 source -> source Next
+2642.341229567s item 50 created by source
+2642.341229567s event #301 source -> cut Arrive, item 50
+2649.415222262s event #302 source -> source Next
+2649.415222262s item 51 created by source
+2649.415222262s event #303 source -> cut Arrive, item 51
+2653.25038327s event #304 source -> source Next
+... 1324 records not shown ...
+13386.588493355s item 211 created by source
+13386.588493355s event #1313 source -> cut Arrive, item 211
+13387.994116961s event #1299 cut -> cut Breakdown
+13434.905044013s event #1315 cut -> cut Repaired
+13496.847168769s event #1317 cut -> cut Done { lot: 211 }
+13496.847168769s event #1318 cut -> weld Arrive, item 210
+13511.803202444s event #1320 weld -> weld Done { lot: 211 }
+13511.803202444s event #1321 weld -> sink Arrive, item 210
+13511.803202444s item 210 delivered by sink
+13514.20340007s event #1314 source -> source Next
+13514.20340007s item 212 created by source
+13514.20340007s event #1322 source -> cut Arrive, item 212
+13530.695044301s event #1319 cut -> cut Done { lot: 212 }
+13530.695044301s event #1324 cut -> weld Arrive, item 211
+13543.123818909s event #1326 weld -> weld Done { lot: 212 }
+13543.123818909s event #1327 weld -> sink Arrive, item 211
+13543.123818909s item 211 delivered by sink
+13558.244562999s event #1325 cut -> cut Done { lot: 213 }
+13558.244562999s event #1328 cut -> weld Arrive, item 212
+13591.801725725s event #1329 weld -> weld Done { lot: 213 }
+13591.801725725s event #1330 weld -> sink Arrive, item 212
+13591.801725725s item 212 delivered by sink
+13643.944043903s event #1323 source -> source Next
+13643.944043903s item 213 created by source
+13643.944043903s event #1331 source -> cut Arrive, item 213
+13706.566511931s event #1333 cut -> cut Done { lot: 214 }
+13706.566511931s event #1334 cut -> weld Arrive, item 213
+13770.610380521s event #1332 source -> source Next
+13770.610380521s item 214 created by source
+13770.610380521s event #1336 source -> cut Arrive, item 214
+13777.867859551s event #1337 source -> source Next
+13777.867859551s item 215 created by source
+13777.867859551s event #1339 source -> cut Arrive, item 215
+13780.202351317s event #1335 weld -> weld Done { lot: 214 }
+13780.202351317s event #1341 weld -> sink Arrive, item 213
+13780.202351317s item 213 delivered by sink
+13789.229918394s event #1340 source -> source Next
+13789.229918394s item 216 created by source
+13789.229918394s event #1342 source -> cut Arrive, item 216
+13819.823773531s event #1343 source -> source Next
+13819.823773531s item 217 created by source
+13819.823773531s event #1344 source -> cut Arrive, item 217
+13873.070630527s event #1345 source -> source Next
+13873.070630527s item 218 created by source
+13873.070630527s event #1346 source -> cut Arrive, item 218
+13874.644748933s event #1347 source -> source Next
+13874.644748933s item 219 created by source
+13874.644748933s event #1348 source -> cut Arrive, item 219
+13876.082395928s event #1338 cut -> cut Done { lot: 215 }
+13876.082395928s event #1350 cut -> weld Arrive, item 214
+13905.979506096s event #1351 cut -> cut Done { lot: 216 }
+13905.979506096s event #1353 cut -> weld Arrive, item 215
+13915.686074455s event #1354 cut -> cut Done { lot: 217 }
+13915.686074455s event #1355 cut -> weld Arrive, item 216
+13916.893478639s event #1352 weld -> weld Done { lot: 215 }
+13916.893478639s event #1357 weld -> sink Arrive, item 214
+13916.893478639s item 214 delivered by sink
+13928.728346135s event #1349 source -> source Next
+13928.728346135s item 220 created by source
+13928.728346135s event #1359 source -> cut Arrive, item 220
+13953.113963887s event #1358 weld -> weld Done { lot: 216 }
+13953.113963887s event #1361 weld -> sink Arrive, item 215
+13953.113963887s item 215 delivered by sink
+13993.439621903s event #1360 source -> source Next
+13993.439621903s item 221 created by source
+13993.439621903s event #1363 source -> cut Arrive, item 221
+14003.449417047s event #1362 weld -> weld Done { lot: 217 }
+14003.449417047s item 216 scrapped by weld
+14016.012963653s event #1356 cut -> cut Done { lot: 218 }
+14016.012963653s event #1365 cut -> weld Arrive, item 217
+14017.217272936s event #1366 cut -> cut Done { lot: 219 }
+14017.217272936s event #1368 cut -> weld Arrive, item 218
+14042.099803267s event #1369 cut -> cut Done { lot: 220 }
+14042.099803267s event #1370 cut -> weld Arrive, item 219
+14042.099803267s event #1371 cut -> weld Note { text: "lot 220 done", share: 73.33333333333333 }
+14080.95074144s event #1372 cut -> cut Done { lot: 221 }
+14080.95074144s event #1373 cut -> weld Arrive, item 220
+14098.478173907s event #1374 cut -> cut Done { lot: 222 }
+14098.478173907s event #1375 cut -> weld Arrive, item 221
+14168.45401889s event #1367 weld -> weld Done { lot: 218 }
+14168.45401889s event #1376 weld -> sink Arrive, item 217
+14168.45401889s item 217 delivered by sink
+14218.494809135s event #1377 weld -> weld Done { lot: 219 }
+14218.494809135s event #1378 weld -> sink Arrive, item 218
+14218.494809135s item 218 delivered by sink
+14268.331668849s event #1364 source -> source Next
+14268.331668849s item 222 created by source
+14268.331668849s event #1380 source -> cut Arrive, item 222
+14279.725618087s event #1382 cut -> cut Done { lot: 223 }
+14279.725618087s event #1383 cut -> weld Arrive, item 222
+14353.650010866s event #1381 source -> source Next
+14353.650010866s item 223 created by source
+14353.650010866s event #1384 source -> cut Arrive, item 223
+14383.40999028s event #1379 weld -> weld Done { lot: 220 }
+14383.40999028s event #1387 weld -> sink Arrive, item 219
+14383.40999028s item 219 delivered by sink
+14383.40999028s event #1388 weld -> sink Note { text: "lot 220 done", share: 73.33333333333333 }
+14392.064973841s event #1385 source -> source Next
+14392.064973841s item 224 created by source
+14392.064973841s event #1390 source -> cut Arrive, item 224

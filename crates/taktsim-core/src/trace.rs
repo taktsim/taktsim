@@ -2,7 +2,8 @@
 //!
 //! The engine emits a record for every delivered event and every item
 //! created or disposed of. It writes them to a [`TraceSink`] the caller
-//! provides; the core itself does no I/O. Storage and replay are roadmap M3.
+//! provides; the core itself does no I/O. Storage and replay live in
+//! `taktsim-trace` (ADR-0004, ADR-0021).
 
 use taktsim_units::SimTime;
 
@@ -24,8 +25,11 @@ use crate::engine::{ComponentId, Disposal, ItemId};
 /// assert!(matches!(record, TraceRecord::Event { seq: 0, .. }));
 /// # Ok::<(), taktsim_units::UnitError>(())
 /// ```
+///
+/// Not `#[non_exhaustive]`: a trace writer must encode every kind, so a new
+/// kind has to fail to compile there instead of being dropped by a wildcard
+/// arm (ADR-0021).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
 pub enum TraceRecord<'a, M> {
     /// An event was delivered to `target`.
     Event {

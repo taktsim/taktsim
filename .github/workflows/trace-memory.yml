@@ -1,0 +1,41 @@
+# Peak memory and file size of a 10 M event trace on the CI proxy runner
+# (roadmap M3, ADR-0007, ADR-0010, ADR-0021). A measurement, not a gate:
+# the 2 GB target becomes required in v0.2 (ADR-0007). The numbers are in
+# the job summary; ADR-0021 records them.
+# Changing this file needs the `gate-change` label (ci/check-gates.sh).
+name: trace-memory
+
+on:
+  pull_request:
+    paths:
+      - crates/taktsim-core/**
+      - crates/taktsim-trace/**
+      - ci/trace-memory.sh
+      - .github/workflows/trace-memory.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trace-memory-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  measure:
+    name: trace memory (10 M events, CI proxy)
+    # The CI proxy runner of ADR-0010: standard GitHub-hosted x86-64 Linux.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # In the job summary and in the log, which keeps it after the summary
+      # expires and makes it readable from the command line. `shell: bash`
+      # sets pipefail, so a failure is not hidden by tee.
+      - shell: bash
+        run: ci/trace-memory.sh 10000000 10 | tee -a "$GITHUB_STEP_SUMMARY"

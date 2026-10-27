@@ -1,0 +1,513 @@
+---
+source: crates/taktsim-trace/tests/golden.rs
+expression: golden.snapshot()
+---
+case: toy_line_20
+messages: taktsim-trace.toy/1
+model hash: cda1f729e07790fddb2b71d07f5db052af875ceb23ed61e54a227ac3d7f68e00
+seed: 2026
+components: source, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, sink
+records: 22394 (21429 events) in 14 chunks
+stream sha256: ea72b70a24c61ddb15b0fc153dd666b6b08391dde3991e7edcbece5fd84ea655
+---
+144.874300362s event #0 source -> source Next
+144.874300362s item 0 created by source
+144.874300362s event #1 source -> s0 Arrive, item 0
+154.251398577s event #3 s0 -> s0 Done { lot: 1 }
+154.251398577s event #4 s0 -> s1 Arrive, item 0
+187.672112574s event #5 s1 -> s1 Done { lot: 1 }
+187.672112574s event #6 s1 -> s2 Arrive, item 0
+188.250424827s event #7 s2 -> s2 Done { lot: 1 }
+188.250424827s event #8 s2 -> s3 Arrive, item 0
+190.408951551s event #2 source -> source Next
+190.408951551s item 1 created by source
+190.408951551s event #10 source -> s0 Arrive, item 1
+190.574255584s event #9 s3 -> s3 Done { lot: 1 }
+190.574255584s event #13 s3 -> s4 Arrive, item 0
+224.539185923s event #11 source -> source Next
+224.539185923s item 2 created by source
+224.539185923s event #15 source -> s0 Arrive, item 2
+242.498909575s event #14 s4 -> s4 Done { lot: 1 }
+242.498909575s event #17 s4 -> s5 Arrive, item 0
+251.469277792s event #12 s0 -> s0 Done { lot: 2 }
+251.469277792s event #19 s0 -> s1 Arrive, item 1
+281.737256685s event #21 s1 -> s1 Done { lot: 2 }
+281.737256685s event #22 s1 -> s2 Arrive, item 1
+309.666680265s event #23 s2 -> s2 Done { lot: 2 }
+309.666680265s event #24 s2 -> s3 Arrive, item 1
+318.365732699s event #20 s0 -> s0 Done { lot: 3 }
+318.365732699s event #26 s0 -> s1 Arrive, item 2
+327.364122513s event #27 s1 -> s1 Done { lot: 3 }
+327.364122513s event #28 s1 -> s2 Arrive, item 2
+334.163528141s event #18 s5 -> s5 Done { lot: 1 }
+334.163528141s event #30 s5 -> s6 Arrive, item 0
+397.540210309s event #25 s3 -> s3 Done { lot: 2 }
+397.540210309s event #32 s3 -> s4 Arrive, item 1
+403.714324264s event #31 s6 -> s6 Done { lot: 1 }
+403.714324264s event #34 s6 -> s7 Arrive, item 0
+417.179904735s event #35 s7 -> s7 Done { lot: 1 }
+417.179904735s event #36 s7 -> s8 Arrive, item 0
+452.164118536s event #37 s8 -> s8 Done { lot: 1 }
+452.164118536s event #38 s8 -> s9 Arrive, item 0
+454.851254025s event #33 s4 -> s4 Done { lot: 2 }
+454.851254025s event #40 s4 -> s5 Arrive, item 1
+470.168296891s event #29 s2 -> s2 Done { lot: 3 }
+470.168296891s event #42 s2 -> s3 Arrive, item 2
+475.239664803s event #43 s3 -> s3 Done { lot: 3 }
+475.239664803s event #44 s3 -> s4 Arrive, item 2
+476.264381122s event #41 s5 -> s5 Done { lot: 2 }
+476.264381122s event #46 s5 -> s6 Arrive, item 1
+487.33574864s event #39 s9 -> s9 Done { lot: 1 }
+487.33574864s event #48 s9 -> s10 Arrive, item 0
+497.10511058s event #47 s6 -> s6 Done { lot: 2 }
+497.10511058s event #50 s6 -> s7 Arrive, item 1
+501.308614614s event #45 s4 -> s4 Done { lot: 3 }
+501.308614614s event #52 s4 -> s5 Arrive, item 2
+504.434947276s event #51 s7 -> s7 Done { lot: 2 }
+504.434947276s event #54 s7 -> s8 Arrive, item 1
+505.82901596s event #49 s10 -> s10 Done { lot: 1 }
+505.82901596s event #56 s10 -> s11 Arrive, item 0
+507.054781949s event #57 s11 -> s11 Done { lot: 1 }
+507.054781949s event #58 s11 -> s12 Arrive, item 0
+516.036217506s event #55 s8 -> s8 Done { lot: 2 }
+516.036217506s event #60 s8 -> s9 Arrive, item 1
+527.611723663s event #53 s5 -> s5 Done { lot: 3 }
+527.611723663s event #62 s5 -> s6 Arrive, item 2
+543.316359406s event #63 s6 -> s6 Done { lot: 3 }
+543.316359406s event #64 s6 -> s7 Arrive, item 2
+565.280769089s event #65 s7 -> s7 Done { lot: 3 }
+565.280769089s event #66 s7 -> s8 Arrive, item 2
+577.497752964s event #16 source -> source Next
+577.497752964s item 3 created by source
+577.497752964s event #68 source -> s0 Arrive, item 3
+581.969182717s event #59 s12 -> s12 Done { lot: 1 }
+581.969182717s event #71 s12 -> s13 Arrive, item 0
+595.710030027s event #61 s9 -> s9 Done { lot: 2 }
+595.710030027s event #73 s9 -> s10 Arrive, item 1
+622.85589133s event #74 s10 -> s10 Done { lot: 2 }
+622.85589133s event #75 s10 -> s11 Arrive, item 1
+629.705053853s event #69 source -> source Next
+629.705053853s item 4 created by source
+629.705053853s event #77 source -> s0 Arrive, item 4
+630.910861824s event #78 source -> source Next
+630.910861824s item 5 created by source
+630.910861824s event #79 source -> s0 Arrive, item 5
+639.598896085s event #67 s8 -> s8 Done { lot: 3 }
+639.598896085s event #81 s8 -> s9 Arrive, item 2
+646.50575881s event #82 s9 -> s9 Done { lot: 3 }
+646.50575881s event #83 s9 -> s10 Arrive, item 2
+647.935545776s event #76 s11 -> s11 Done { lot: 2 }
+647.935545776s event #85 s11 -> s12 Arrive, item 1
+654.086195179s event #86 s12 -> s12 Done { lot: 2 }
+654.086195179s event #87 s12 -> s13 Arrive, item 1
+663.327976934s event #72 s13 -> s13 Done { lot: 1 }
+663.327976934s event #88 s13 -> s14 Arrive, item 0
+663.688775806s event #70 s0 -> s0 Done { lot: 4 }
+663.688775806s event #91 s0 -> s1 Arrive, item 3
+673.163181031s event #92 s0 -> s0 Done { lot: 5 }
+673.163181031s event #94 s0 -> s1 Arrive, item 4
+675.592778189s event #89 s13 -> s13 Done { lot: 2 }
+675.592778189s event #96 s13 -> s14 Arrive, item 1
+676.867460301s event #90 s14 -> s14 Done { lot: 1 }
+676.867460301s event #97 s14 -> s15 Arrive, item 0
+685.337637818s event #99 s15 -> s15 Done { lot: 1 }
+685.337637818s event #100 s15 -> s16 Arrive, item 0
+691.729480541s event #95 s0 -> s0 Done { lot: 6 }
+691.729480541s event #102 s0 -> s1 Arrive, item 5
+716.063275665s event #98 s14 -> s14 Done { lot: 2 }
+716.063275665s event #103 s14 -> s15 Arrive, item 1
+740.286151123s event #104 s15 -> s15 Done { lot: 2 }
+740.286151123s event #105 s15 -> s16 Arrive, item 1
+760.400777216s event #93 s1 -> s1 Done { lot: 4 }
+760.400777216s event #106 s1 -> s2 Arrive, item 3
+791.662373945s event #107 s1 -> s1 Done { lot: 5 }
+791.662373945s event #109 s1 -> s2 Arrive, item 4
+799.269039544s event #110 s1 -> s1 Done { lot: 6 }
+799.269039544s event #111 s1 -> s2 Arrive, item 5
+801.485592379s event #84 s10 -> s10 Done { lot: 3 }
+801.485592379s event #112 s10 -> s11 Arrive, item 2
+829.425632964s event #108 s2 -> s2 Done { lot: 4 }
+829.425632964s event #114 s2 -> s3 Arrive, item 3
+829.79264414s event #115 s2 -> s2 Done { lot: 5 }
+829.79264414s event #117 s2 -> s3 Arrive, item 4
+832.746969394s event #118 s2 -> s2 Done { lot: 6 }
+832.746969394s event #119 s2 -> s3 Arrive, item 5
+837.328952295s event #101 s16 -> s16 Done { lot: 1 }
+837.328952295s event #120 s16 -> s17 Arrive, item 0
+858.440539161s event #121 s16 -> s16 Done { lot: 2 }
+858.440539161s event #123 s16 -> s17 Arrive, item 1
+874.59914155s event #113 s11 -> s11 Done { lot: 3 }
+874.59914155s event #124 s11 -> s12 Arrive, item 2
+874.818140912s event #122 s17 -> s17 Done { lot: 1 }
+874.818140912s event #126 s17 -> s18 Arrive, item 0
+883.144752603s event #80 source -> source Next
+883.144752603s item 6 created by source
+883.144752603s event #129 source -> s0 Arrive, item 6
+884.059264974s event #125 s12 -> s12 Done { lot: 3 }
+884.059264974s event #132 s12 -> s13 Arrive, item 2
+893.206349641s event #116 s3 -> s3 Done { lot: 4 }
+893.206349641s event #134 s3 -> s4 Arrive, item 3
+895.256524939s event #130 source -> source Next
+895.256524939s item 7 created by source
+895.256524939s event #137 source -> s0 Arrive, item 7
+899.051485034s event #128 s18 -> s18 Done { lot: 1 }
+899.051485034s event #139 s18 -> s19 Arrive, item 0
+909.032670086s event #131 s0 -> s0 Done { lot: 7 }
+909.032670086s event #141 s0 -> s1 Arrive, item 6
+914.45636509s event #140 s19 -> s19 Done { lot: 1 }
+914.45636509s event #144 s19 -> sink Arrive, item 0
+914.45636509s item 0 delivered by sink
+914.831289536s event #133 s13 -> s13 Done { lot: 3 }
+914.831289536s event #145 s13 -> s14 Arrive, item 2
+918.247145791s event #143 s1 -> s1 Done { lot: 7 }
+918.247145791s event #147 s1 -> s2 Arrive, item 6
+919.43283189s event #127 s17 -> s17 Done { lot: 2 }
+919.43283189s event #149 s17 -> s18 Arrive, item 1
+921.756556481s event #148 s2 -> s2 Done { lot: 7 }
+921.756556481s event #151 s2 -> s3 Arrive, item 6
+935.176132863s event #142 s0 -> s0 Done { lot: 8 }
+935.176132863s event #152 s0 -> s1 Arrive, item 7
+937.356308341s event #150 s18 -> s18 Done { lot: 2 }
+937.356308341s event #154 s18 -> s19 Arrive, item 1
+937.750765984s event #153 s1 -> s1 Done { lot: 8 }
+937.750765984s event #156 s1 -> s2 Arrive, item 7
+937.960173665s event #135 s3 -> s3 Done { lot: 5 }
+937.960173665s event #158 s3 -> s4 Arrive, item 4
+940.306765974s event #155 s19 -> s19 Done { lot: 2 }
+940.306765974s event #160 s19 -> sink Arrive, item 1
+940.306765974s item 1 delivered by sink
+961.393851265s event #159 s3 -> s3 Done { lot: 6 }
+961.393851265s event #161 s3 -> s4 Arrive, item 5
+967.76295545s event #162 s3 -> s3 Done { lot: 7 }
+967.76295545s event #163 s3 -> s4 Arrive, item 6
+980.453730726s event #146 s14 -> s14 Done { lot: 3 }
+980.453730726s event #164 s14 -> s15 Arrive, item 2
+990.664491311s event #165 s15 -> s15 Done { lot: 3 }
+990.664491311s event #166 s15 -> s16 Arrive, item 2
+990.990082524s event #136 s4 -> s4 Done { lot: 4 }
+990.990082524s event #168 s4 -> s5 Arrive, item 3
+998.866199112s event #169 s4 -> s4 Done { lot: 5 }
+998.866199112s event #171 s4 -> s5 Arrive, item 4
+1001.811727491s event #172 s4 -> s4 Done { lot: 6 }
+1001.811727491s event #173 s4 -> s5 Arrive, item 5
+1002.431256915s event #167 s16 -> s16 Done { lot: 3 }
+1002.431256915s event #175 s16 -> s17 Arrive, item 2
+1003.338200942s event #170 s5 -> s5 Done { lot: 4 }
+1003.338200942s event #177 s5 -> s6 Arrive, item 3
+1003.699433014s event #178 s5 -> s5 Done { lot: 5 }
+1003.699433014s event #180 s5 -> s6 Arrive, item 4
+1006.313545484s event #176 s17 -> s17 Done { lot: 3 }
+1006.313545484s event #182 s17 -> s18 Arrive, item 2
+1008.480559793s event #138 source -> source Next
+1008.480559793s item 8 created by source
+1008.480559793s event #184 source -> s0 Arrive, item 8
+1020.558524033s event #174 s4 -> s4 Done { lot: 7 }
+1020.558524033s event #187 s4 -> s5 Arrive, item 6
+1027.643226625s event #179 s6 -> s6 Done { lot: 4 }
+1027.643226625s event #188 s6 -> s7 Arrive, item 3
+1029.210943371s event #190 s7 -> s7 Done { lot: 4 }
+1029.210943371s event #191 s7 -> s8 Arrive, item 3
+1035.409497932s event #189 s6 -> s6 Done { lot: 5 }
+1035.409497932s event #193 s6 -> s7 Arrive, item 4
+1039.974208359s event #194 s7 -> s7 Done { lot: 5 }
+1039.974208359s event #195 s7 -> s8 Arrive, item 4
+1041.802020779s event #186 s0 -> s0 Done { lot: 9 }
+1041.802020779s event #196 s0 -> s1 Arrive, item 8
+1042.588022159s event #192 s8 -> s8 Done { lot: 4 }
+1042.588022159s event #198 s8 -> s9 Arrive, item 3
+1058.8121654s event #185 source -> source Next
+1058.8121654s item 9 created by source
+1058.8121654s event #201 source -> s0 Arrive, item 9
+1058.992959786s event #203 s0 -> s0 Done { lot: 10 }
+1058.992959786s event #204 s0 -> s1 Arrive, item 9
+1058.992959786s event #205 s0 -> s1 Note { text: "lot 10 done", share: 3.3333333333333335 }
+1061.175199122s event #199 s8 -> s8 Done { lot: 5 }
+1061.175199122s event #206 s8 -> s9 Arrive, item 4
+1065.331088083s event #197 s1 -> s1 Done { lot: 9 }
+1065.331088083s event #207 s1 -> s2 Arrive, item 8
+1065.604759609s event #208 s1 -> s1 Done { lot: 10 }
+1065.604759609s event #209 s1 -> s2 Arrive, item 9
+1065.604759609s event #210 s1 -> s2 Note { text: "lot 10 done", share: 3.3333333333333335 }
+1069.300599224s event #202 source -> source Next
+1069.300599224s item 10 created by source
+1069.300599224s event #211 source -> s0 Arrive, item 10
+1075.428848497s event #181 s5 -> s5 Done { lot: 6 }
+1075.428848497s event #214 s5 -> s6 Arrive, item 5
+1079.397614816s event #212 source -> source Next
+1079.397614816s item 11 created by source
+1079.397614816s event #217 source -> s0 Arrive, item 11
+1080.219772822s event #157 s2 -> s2 Done { lot: 8 }
+1080.219772822s event #219 s2 -> s3 Arrive, item 7
+1084.357602095s event #218 source -> source Next
+1084.357602095s item 12 created by source
+1084.357602095s event #222 source -> s0 Arrive, item 12
+1087.850247134s event #213 s0 -> s0 Done { lot: 11 }
+1087.850247134s event #224 s0 -> s1 Arrive, item 10
+1094.735080744s event #221 s3 -> s3 Done { lot: 8 }
+1094.735080744s event #227 s3 -> s4 Arrive, item 7
+1102.71422447s event #216 s6 -> s6 Done { lot: 6 }
+1102.71422447s event #229 s6 -> s7 Arrive, item 5
+1104.054357757s event #200 s9 -> s9 Done { lot: 4 }
+1104.054357757s event #231 s9 -> s10 Arrive, item 3
+1111.59868437s event #232 s9 -> s9 Done { lot: 5 }
+1111.59868437s event #234 s9 -> s10 Arrive, item 4
+1121.005019024s event #220 s2 -> s2 Done { lot: 9 }
+1121.005019024s event #235 s2 -> s3 Arrive, item 8
+1121.22936486s event #233 s10 -> s10 Done { lot: 4 }
+1121.22936486s event #238 s10 -> s11 Arrive, item 3
+1123.085271527s event #228 s4 -> s4 Done { lot: 8 }
+1123.085271527s event #241 s4 -> s5 Arrive, item 7
+1128.302169859s event #239 s10 -> s10 Done { lot: 5 }
+1128.302169859s event #242 s10 -> s11 Arrive, item 4
+1131.242831782s event #237 s3 -> s3 Done { lot: 9 }
+1131.242831782s event #243 s3 -> s4 Arrive, item 8
+1135.499730692s event #244 s4 -> s4 Done { lot: 9 }
+1135.499730692s event #245 s4 -> s5 Arrive, item 8
+1138.339411358s event #240 s11 -> s11 Done { lot: 4 }
+1138.339411358s event #246 s11 -> s12 Arrive, item 3
+1148.70159667s event #223 source -> source Next
+1148.70159667s item 13 created by source
+1148.70159667s event #249 source -> s0 Arrive, item 13
+1149.286036807s event #248 s12 -> s12 Done { lot: 4 }
+1149.286036807s event #251 s12 -> s13 Arrive, item 3
+1149.696810077s event #215 s5 -> s5 Done { lot: 7 }
+1149.696810077s event #253 s5 -> s6 Arrive, item 6
+1162.048686938s event #183 s18 -> s18 Done { lot: 3 }
+1162.048686938s event #256 s18 -> s19 Arrive, item 2
+1173.225740323s event #226 s1 -> s1 Done { lot: 11 }
+1173.225740323s event #258 s1 -> s2 Arrive, item 10
+1175.683248049s event #247 s11 -> s11 Done { lot: 5 }
+1175.683248049s event #259 s11 -> s12 Arrive, item 4
+1178.34447507s event #257 s19 -> s19 Done { lot: 3 }
+1178.34447507s event #261 s19 -> sink Arrive, item 2
+1178.34447507s item 2 delivered by sink
+1178.784038949s event #255 s6 -> s6 Done { lot: 7 }
+1178.784038949s event #262 s6 -> s7 Arrive, item 6
+1185.445302803s event #250 source -> source Next
+1185.445302803s item 14 created by source
+1185.445302803s event #263 source -> s0 Arrive, item 14
+1195.578920114s event #260 s12 -> s12 Done { lot: 5 }
+1195.578920114s event #265 s12 -> s13 Arrive, item 4
+1222.755024566s event #236 s2 -> s2 Done { lot: 10 }
+1222.755024566s event #266 s2 -> s3 Arrive, item 9
+1222.755024566s event #267 s2 -> s3 Note { text: "lot 10 done", share: 3.3333333333333335 }
+1225.248020479s event #252 s13 -> s13 Done { lot: 4 }
+1225.248020479s event #270 s13 -> s14 Arrive, item 3
+1227.680024053s event #264 source -> source Next
+1227.680024053s item 15 created by source
+1227.680024053s event #273 source -> s0 Arrive, item 15
+1235.78379284s event #254 s5 -> s5 Done { lot: 8 }
+1235.78379284s event #275 s5 -> s6 Arrive, item 7
+1246.829498407s event #230 s7 -> s7 Done { lot: 6 }
+1246.829498407s event #278 s7 -> s8 Arrive, item 5
+1251.482556422s event #274 source -> source Next
+1251.482556422s item 16 created by source
+1251.482556422s event #281 source -> s0 Arrive, item 16
+1261.658270664s event #279 s7 -> s7 Done { lot: 7 }
+1261.658270664s event #283 s7 -> s8 Arrive, item 6
+1263.167754101s event #282 source -> source Next
+1263.167754101s item 17 created by source
+1263.167754101s event #284 source -> s0 Arrive, item 17
+1263.960843126s event #225 s0 -> s0 Done { lot: 12 }
+1263.960843126s event #286 s0 -> s1 Arrive, item 11
+1265.921469739s event #272 s14 -> s14 Done { lot: 4 }
+1265.921469739s event #289 s14 -> s15 Arrive, item 3
+1266.87715446s event #287 s0 -> s0 Done { lot: 13 }
+1266.87715446s event #291 s0 -> s1 Arrive, item 12
+1267.872597099s event #288 s1 -> s1 Done { lot: 12 }
+1267.872597099s event #293 s1 -> s2 Arrive, item 11
+1273.66555538s event #277 s6 -> s6 Done { lot: 8 }
+1273.66555538s event #295 s6 -> s7 Arrive, item 7
+1284.426484736s event #296 s7 -> s7 Done { lot: 8 }
+1284.426484736s event #297 s7 -> s8 Arrive, item 7
+1289.045493745s event #292 s0 -> s0 Done { lot: 14 }
+1289.045493745s event #298 s0 -> s1 Arrive, item 13
+1289.452761535s event #280 s8 -> s8 Done { lot: 6 }
+1289.452761535s event #300 s8 -> s9 Arrive, item 5
+1297.809513477s event #276 s5 -> s5 Done { lot: 9 }
+1297.809513477s event #303 s5 -> s6 Arrive, item 8
+1299.886550459s event #302 s9 -> s9 Done { lot: 6 }
+1299.886550459s event #305 s9 -> s10 Arrive, item 5
+1305.311663518s event #271 s13 -> s13 Done { lot: 5 }
+1305.311663518s event #307 s13 -> s14 Arrive, item 4
+1305.670575736s event #308 s14 -> s14 Done { lot: 5 }
+1305.670575736s event #309 s14 -> s15 Arrive, item 4
+1306.014611484s event #301 s8 -> s8 Done { lot: 7 }
+1306.014611484s event #310 s8 -> s9 Arrive, item 6
+1317.499853538s event #312 s9 -> s9 Done { lot: 7 }
+1317.499853538s event #313 s9 -> s10 Arrive, item 6
+1318.615240519s event #290 s15 -> s15 Done { lot: 4 }
+1318.615240519s event #314 s15 -> s16 Arrive, item 3
+1330.765455863s event #316 s16 -> s16 Done { lot: 4 }
+1330.765455863s event #317 s16 -> s17 Arrive, item 3
+1333.07225405s event #299 s0 -> s0 Done { lot: 15 }
+1333.07225405s event #319 s0 -> s1 Arrive, item 14
+1341.344411918s event #311 s8 -> s8 Done { lot: 8 }
+1341.344411918s event #321 s8 -> s9 Arrive, item 7
+1347.939605472s event #315 s15 -> s15 Done { lot: 5 }
+1347.939605472s event #323 s15 -> s16 Arrive, item 4
+1349.297010721s event #268 s2 -> s2 Done { lot: 11 }
+1349.297010721s event #325 s2 -> s3 Arrive, item 10
+1352.999094702s event #324 s16 -> s16 Done { lot: 5 }
+1352.999094702s event #327 s16 -> s17 Arrive, item 4
+1354.205213433s event #326 s2 -> s2 Done { lot: 12 }
+1354.205213433s event #328 s2 -> s3 Arrive, item 11
+1363.086550918s event #304 s6 -> s6 Done { lot: 9 }
+1363.086550918s event #329 s6 -> s7 Arrive, item 8
+1364.008574293s event #318 s17 -> s17 Done { lot: 4 }
+1364.008574293s event #331 s17 -> s18 Arrive, item 3
+1366.78685488s event #294 s1 -> s1 Done { lot: 13 }
+1366.78685488s event #334 s1 -> s2 Arrive, item 12
+1371.698255653s event #322 s9 -> s9 Done { lot: 8 }
+1371.698255653s event #337 s9 -> s10 Arrive, item 7
+1378.866182752s event #320 s0 -> s0 Done { lot: 16 }
+1378.866182752s event #338 s0 -> s1 Arrive, item 15
+1379.245020051s event #336 s2 -> s2 Done { lot: 13 }
+1379.245020051s event #340 s2 -> s3 Arrive, item 12
+1380.111974505s event #333 s18 -> s18 Done { lot: 4 }
+1380.111974505s event #341 s18 -> s19 Arrive, item 3
+1382.603433844s event #285 source -> source Next
+1382.603433844s item 18 created by source
+1382.603433844s event #343 source -> s0 Arrive, item 18
+1384.29371574s event #332 s17 -> s17 Done { lot: 5 }
+1384.29371574s event #345 s17 -> s18 Arrive, item 4
+1393.330533335s event #339 s0 -> s0 Done { lot: 17 }
+1393.330533335s event #347 s0 -> s1 Arrive, item 16
+1393.804895249s event #306 s10 -> s10 Done { lot: 6 }
+1393.804895249s event #349 s10 -> s11 Arrive, item 5
+1394.407117582s event #330 s7 -> s7 Done { lot: 9 }
+1394.407117582s event #352 s7 -> s8 Arrive, item 8
+1395.591185177s event #351 s11 -> s11 Done { lot: 6 }
+1395.591185177s event #354 s11 -> s12 Arrive, item 5
+1397.19180234s event #269 s3 -> s3 Done { lot: 10 }
+1397.19180234s event #356 s3 -> s4 Arrive, item 9
+1397.19180234s event #357 s3 -> s4 Note { text: "lot 10 done", share: 3.3333333333333335 }
+1402.226375941s event #344 source -> source Next
+1402.226375941s item 19 created by source
+1402.226375941s event #360 source -> s0 Arrive, item 19
+1407.965862828s event #335 s1 -> s1 Done { lot: 14 }
+1407.965862828s event #362 s1 -> s2 Arrive, item 13
+1415.740709847s event #364 s2 -> s2 Done { lot: 14 }
+1415.740709847s event #365 s2 -> s3 Arrive, item 13
+1422.778231912s event #359 s4 -> s4 Done { lot: 10 }
+1422.778231912s event #366 s4 -> s5 Arrive, item 9
+1422.778231912s event #367 s4 -> s5 Note { text: "lot 10 done", share: 3.3333333333333335 }
+1423.93731277s event #353 s8 -> s8 Done { lot: 9 }
+1423.93731277s event #369 s8 -> s9 Arrive, item 8
+1424.348460626s event #361 source -> source Next
+1424.348460626s item 20 created by source
+1424.348460626s event #371 source -> s0 Arrive, item 20
+1425.209877369s event #355 s12 -> s12 Done { lot: 6 }
+1425.209877369s event #373 s12 -> s13 Arrive, item 5
+1431.026346882s event #348 s0 -> s0 Done { lot: 18 }
+1431.026346882s event #375 s0 -> s1 Arrive, item 17
+1434.331311738s event #358 s3 -> s3 Done { lot: 11 }
+1434.331311738s event #377 s3 -> s4 Arrive, item 10
+1437.611612014s event #372 source -> source Next
+1437.611612014s item 21 created by source
+1437.611612014s event #380 source -> s0 Arrive, item 21
+1444.269924879s event #370 s9 -> s9 Done { lot: 9 }
+1444.269924879s event #382 s9 -> s10 Arrive, item 8
+1444.791038105s event #376 s0 -> s0 Done { lot: 19 }
+1444.791038105s event #383 s0 -> s1 Arrive, item 18
+... 21894 records not shown ...
+28646.587973172s event #21329 s19 -> s19 Done { lot: 456 }
+28646.587973172s event #21351 s19 -> sink Arrive, item 455
+28646.587973172s item 455 delivered by sink
+28652.534590618s event #21347 s12 -> s12 Done { lot: 480 }
+28652.534590618s event #21353 s12 -> s13 Arrive, item 479
+28652.534590618s event #21354 s12 -> s13 Note { text: "lot 480 done", share: 160.0 }
+28654.887619222s event #21343 s1 -> s1 Done { lot: 499 }
+28654.887619222s event #21356 s1 -> s2 Arrive, item 498
+28655.237351125s event #21341 s0 -> s0 Done { lot: 500 }
+28655.237351125s event #21357 s0 -> s1 Arrive, item 499
+28655.237351125s event #21358 s0 -> s1 Note { text: "lot 500 done", share: 166.66666666666666 }
+28655.356959162s event #21253 s15 -> s15 Done { lot: 474 }
+28655.356959162s event #21361 s15 -> s16 Arrive, item 473
+28658.339568863s event #21359 s0 -> s0 Done { lot: 501 }
+28658.339568863s event #21364 s0 -> s1 Arrive, item 500
+28658.923071949s event #21332 s13 -> s13 Done { lot: 478 }
+28658.923071949s event #21366 s13 -> s14 Arrive, item 477
+28664.07423837s event #21367 s13 -> s13 Done { lot: 479 }
+28664.07423837s event #21368 s13 -> s14 Arrive, item 478
+28665.189213045s event #21369 s13 -> s13 Done { lot: 480 }
+28665.189213045s event #21370 s13 -> s14 Arrive, item 479
+28665.189213045s event #21371 s13 -> s14 Note { text: "lot 480 done", share: 160.0 }
+28668.246039676s event #21352 s19 -> s19 Done { lot: 457 }
+28668.246039676s event #21372 s19 -> sink Arrive, item 456
+28668.246039676s item 456 delivered by sink
+28676.287764846s event #21363 s16 -> s16 Done { lot: 474 }
+28676.287764846s event #21374 s16 -> s17 Arrive, item 473
+28680.852744648s event #21355 s12 -> s12 Done { lot: 481 }
+28680.852744648s event #21376 s12 -> s13 Arrive, item 480
+28683.316065542s event #21345 s14 -> s14 Done { lot: 476 }
+28683.316065542s event #21378 s14 -> s15 Arrive, item 475
+28684.436003706s event #21261 s8 -> s8 Done { lot: 491 }
+28684.436003706s event #21380 s8 -> s9 Arrive, item 490
+28689.679992293s event #21377 s13 -> s13 Done { lot: 481 }
+28689.679992293s event #21383 s13 -> s14 Arrive, item 480
+28694.751584768s event #21360 s1 -> s1 Done { lot: 500 }
+28694.751584768s event #21384 s1 -> s2 Arrive, item 499
+28694.751584768s event #21385 s1 -> s2 Note { text: "lot 500 done", share: 166.66666666666666 }
+28701.830235923s event #21325 s7 -> s7 Done { lot: 493 }
+28701.830235923s event #21387 s7 -> s8 Arrive, item 492
+28706.437148853s event #21386 s1 -> s1 Done { lot: 501 }
+28706.437148853s event #21388 s1 -> s2 Arrive, item 500
+28706.877717419s event #21381 s8 -> s8 Done { lot: 492 }
+28706.877717419s event #21389 s8 -> s9 Arrive, item 491
+28712.338661022s event #21390 s8 -> s8 Done { lot: 493 }
+28712.338661022s event #21391 s8 -> s9 Arrive, item 492
+28716.58705502s event #21373 s19 -> s19 Done { lot: 458 }
+28716.58705502s event #21392 s19 -> sink Arrive, item 457
+28716.58705502s item 457 delivered by sink
+28719.830047575s event #21393 s19 -> s19 Done { lot: 459 }
+28719.830047575s event #21394 s19 -> sink Arrive, item 458
+28719.830047575s item 458 delivered by sink
+28727.11716827s event #21365 s0 -> s0 Done { lot: 502 }
+28727.11716827s event #21396 s0 -> s1 Arrive, item 501
+28729.084272014s event #21375 s17 -> s17 Done { lot: 474 }
+28729.084272014s event #21399 s17 -> s18 Arrive, item 473
+28731.91573348s event #21382 s9 -> s9 Done { lot: 491 }
+28731.91573348s event #21401 s9 -> s10 Arrive, item 490
+28739.190301018s event #21400 s18 -> s18 Done { lot: 474 }
+28739.190301018s event #21403 s18 -> s19 Arrive, item 473
+28740.174671631s event #21395 s19 -> s19 Done { lot: 460 }
+28740.174671631s event #21404 s19 -> sink Arrive, item 459
+28740.174671631s item 459 delivered by sink
+28740.174671631s event #21405 s19 -> sink Note { text: "lot 460 done", share: 153.33333333333334 }
+28741.298284561s event #21350 s3 -> s3 Done { lot: 496 }
+28741.298284561s event #21407 s3 -> s4 Arrive, item 495
+28741.812401943s event #21408 s4 -> s4 Done { lot: 496 }
+28741.812401943s event #21409 s4 -> s5 Arrive, item 495
+28752.609338459s event #21362 s15 -> s15 Done { lot: 475 }
+28752.609338459s event #21410 s15 -> s16 Arrive, item 474
+28755.83881133s event #21411 s15 -> s15 Done { lot: 476 }
+28755.83881133s event #21413 s15 -> s16 Arrive, item 475
+28765.889677121s event #21335 s10 -> s10 Done { lot: 486 }
+28765.889677121s event #21414 s10 -> s11 Arrive, item 485
+28767.48825157s event #21299 source -> source Next
+28767.48825157s item 503 created by source
+28767.48825157s event #21416 source -> s0 Arrive, item 503
+28775.190019722s event #21406 s19 -> s19 Done { lot: 461 }
+28775.190019722s event #21418 s19 -> sink Arrive, item 460
+28775.190019722s item 460 delivered by sink
+28779.393918572s event #21412 s16 -> s16 Done { lot: 475 }
+28779.393918572s event #21420 s16 -> s17 Arrive, item 474
+28779.681586969s event #21415 s10 -> s10 Done { lot: 487 }
+28779.681586969s event #21423 s10 -> s11 Arrive, item 486
+28781.687606274s event #21421 s16 -> s16 Done { lot: 476 }
+28781.687606274s event #21425 s16 -> s17 Arrive, item 475
+28783.931092728s event #21424 s10 -> s10 Done { lot: 488 }
+28783.931092728s event #21426 s10 -> s11 Arrive, item 487
+28787.775170339s event #21379 s14 -> s14 Done { lot: 477 }
+28787.775170339s event #21428 s14 -> s15 Arrive, item 476
+28790.091962769s event #21402 s9 -> s9 Done { lot: 492 }
+28790.091962769s event #21431 s9 -> s10 Arrive, item 491
+28791.310779583s event #21429 s14 -> s14 Done { lot: 478 }
+28791.310779583s event #21433 s14 -> s15 Arrive, item 477
+28792.379492833s event #21422 s17 -> s17 Done { lot: 475 }
+28792.379492833s event #21435 s17 -> s18 Arrive, item 474
+28794.548013976s event #21306 s5 -> s5 Done { lot: 494 }
+28794.548013976s event #21438 s5 -> s6 Arrive, item 493
+28799.411339786s event #21439 s5 -> s5 Done { lot: 495 }
+28799.411339786s event #21441 s5 -> s6 Arrive, item 494

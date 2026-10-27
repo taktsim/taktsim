@@ -65,9 +65,38 @@ jobs:
       - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: cargo-nextest@0.9.149
-      # The Python binding crate is tested by pytest (job python).
+      # The Python binding crate is tested by pytest (job python). Golden-trace
+      # cases also write their hashes, for job trace-hashes (ADR-0021).
       - run: cargo nextest run --workspace --exclude taktsim-python --all-features --locked
+        env:
+          TAKTSIM_TRACE_HASHES: ${{ runner.temp }}/trace-hashes
       - run: cargo test --workspace --exclude taktsim-python --all-features --doc --locked
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trace-hashes-${{ matrix.target }}
+          path: ${{ runner.temp }}/trace-hashes
+          if-no-files-found: error
+
+  trace-hashes:
+    # A4: the same golden traces, byte for byte, on every tier-1 target
+    # (ADR-0010, ADR-0021). Fails if any target's hashes differ.
+    name: trace hashes (identical on every target)
+    needs: test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: test the comparison (ci/trace-hashes-test.sh)
+        run: ci/trace-hashes-test.sh
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: trace-hashes-*
+          path: trace-hashes
+      # `shell: bash` sets pipefail, so a failed comparison is not hidden by tee.
+      - shell: bash
+        run: ci/trace-hashes.sh trace-hashes 4 | tee -a "$GITHUB_STEP_SUMMARY"
 
   msrv:
     name: msrv

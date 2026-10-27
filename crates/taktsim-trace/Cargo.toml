@@ -11,3 +11,23 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+taktsim-units.workspace = true
+taktsim-core.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+insta.workspace = true
+
+[features]
+default = []
+# The golden-trace harness for tests of reference models (ADR-0021): runs a
+# model, checks that it replays, and writes its trace hashes for the
+# cross-platform comparison in CI.
+golden = []
+
+[[test]]
+name = "golden"
+required-features = ["golden"]

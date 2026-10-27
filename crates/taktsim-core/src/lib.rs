@@ -56,6 +56,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod digest;
 mod engine;
 mod error;
 mod queue;
@@ -70,3 +71,12 @@ pub use error::{
     ComponentError, ConservationProblem, EngineError, RecentEvent, RunError, Violation,
 };
 pub use trace::{NoTrace, TraceRecord, TraceSink};
+
+/// The engine version, part of every run's provenance (spec §7 Layer 3):
+/// the same model, seed and engine version give the same trace, byte for
+/// byte. Trace headers record it (ADR-0021).
+///
+/// ```
+/// assert!(!taktsim_core::ENGINE_VERSION.is_empty());
+/// ```
+pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
