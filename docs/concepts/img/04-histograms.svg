@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 220" role="img" aria-labelledby="f04a-t f04a-d"><title id="f04a-t">Same mean, very different spread</title><desc id="f04a-d">Histograms of 4000 cutting times with a mean of 42 seconds: with sigma 0.08 they all fall between about 33 and 54 seconds; with sigma 0.5 they spread from under 15 to over 120 seconds.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style>
+<text x="12" y="18" text-anchor="start" class="ts-strong">CV 0.08</text>
+<rect x="70.9" y="175.8" width="4.8" height="0.2" class="ts-ink-fill"/>
+<rect x="76.7" y="161.5" width="4.8" height="14.5" class="ts-ink-fill"/>
+<rect x="82.6" y="104.4" width="4.8" height="71.6" class="ts-ink-fill"/>
+<rect x="88.4" y="34" width="4.8" height="142" class="ts-ink-fill"/>
+<rect x="94.3" y="43.4" width="4.8" height="132.6" class="ts-ink-fill"/>
+<rect x="100.1" y="110.9" width="4.8" height="65.1" class="ts-ink-fill"/>
+<rect x="105.9" y="162.8" width="4.8" height="13.2" class="ts-ink-fill"/>
+<rect x="111.8" y="172.9" width="4.8" height="3.1" class="ts-ink-fill"/>
+<rect x="117.6" y="175.7" width="4.8" height="0.3" class="ts-ink-fill"/>
+<rect x="123.5" y="175.9" width="4.8" height="0.1" class="ts-ink-fill"/>
+<line x1="12" y1="176" x2="304" y2="176" class="ts-axis"/>
+<line x1="12" y1="176" x2="12" y2="180" class="ts-axis"/>
+<text x="12" y="194" text-anchor="middle">0</text>
+<line x1="109.3" y1="176" x2="109.3" y2="180" class="ts-axis"/>
+<text x="109.3" y="194" text-anchor="middle">50</text>
+<line x1="206.7" y1="176" x2="206.7" y2="180" class="ts-axis"/>
+<text x="206.7" y="194" text-anchor="middle">100</text>
+<line x1="304" y1="176" x2="304" y2="180" class="ts-axis"/>
+<text x="304" y="194" text-anchor="middle">150</text>
+<text x="158" y="214" text-anchor="middle">CUT TIME (S)</text>
+<text x="336" y="18" text-anchor="start" class="ts-strong">CV 0.53</text>
+<rect x="342.3" y="175.4" width="4.8" height="0.6" class="ts-ink-fill"/>
+<rect x="348.2" y="174.8" width="4.8" height="1.2" class="ts-ink-fill"/>
+<rect x="354" y="172" width="4.8" height="4" class="ts-ink-fill"/>
+<rect x="359.9" y="165.4" width="4.8" height="10.6" class="ts-ink-fill"/>
+<rect x="365.7" y="160.7" width="4.8" height="15.3" class="ts-ink-fill"/>
+<rect x="371.5" y="150.5" width="4.8" height="25.5" class="ts-ink-fill"/>
+<rect x="377.4" y="146.2" width="4.8" height="29.8" class="ts-ink-fill"/>
+<rect x="383.2" y="144.9" width="4.8" height="31.1" class="ts-ink-fill"/>
+<rect x="389.1" y="145.1" width="4.8" height="30.9" class="ts-ink-fill"/>
+<rect x="394.9" y="144.6" width="4.8" height="31.4" class="ts-ink-fill"/>
+<rect x="400.7" y="146.2" width="4.8" height="29.8" class="ts-ink-fill"/>
+<rect x="406.6" y="149.3" width="4.8" height="26.7" class="ts-ink-fill"/>
+<rect x="412.4" y="151.4" width="4.8" height="24.6" class="ts-ink-fill"/>
+<rect x="418.3" y="149.8" width="4.8" height="26.2" class="ts-ink-fill"/>
+<rect x="424.1" y="155.4" width="4.8" height="20.6" class="ts-ink-fill"/>
+<rect x="429.9" y="157.6" width="4.8" height="18.4" class="ts-ink-fill"/>
+<rect x="435.8" y="159.3" width="4.8" height="16.7" class="ts-ink-fill"/>
+<rect x="441.6" y="164.5" width="4.8" height="11.5" class="ts-ink-fill"/>
+<rect x="447.5" y="164.8" width="4.8" height="11.2" class="ts-ink-fill"/>
+<rect x="453.3" y="163.7" width="4.8" height="12.3" class="ts-ink-fill"/>
+<rect x="459.1" y="166.3" width="4.8" height="9.7" class="ts-ink-fill"/>
+<rect x="465" y="169.2" width="4.8" height="6.8" class="ts-ink-fill"/>
+<rect x="470.8" y="169.7" width="4.8" height="6.3" class="ts-ink-fill"/>
+<rect x="476.7" y="170.6" width="4.8" height="5.4" class="ts-ink-fill"/>
+<rect x="482.5" y="171.9" width="4.8" height="4.1" class="ts-ink-fill"/>
+<rect x="488.3" y="171.5" width="4.8" height="4.5" class="ts-ink-fill"/>
+<rect x="494.2" y="171.6" width="4.8" height="4.4" class="ts-ink-fill"/>
+<rect x="500" y="171.9" width="4.8" height="4.1" class="ts-ink-fill"/>
+<rect x="505.9" y="173.2" width="4.8" height="2.8" class="ts-ink-fill"/>
+<rect x="511.7" y="173.3" width="4.8" height="2.7" class="ts-ink-fill"/>
+<rect x="517.5" y="174" width="4.8" height="2" class="ts-ink-fill"/>
+<rect x="523.4" y="174.5" width="4.8" height="1.5" class="ts-ink-fill"/>
+<rect x="529.2" y="175" width="4.8" height="1" class="ts-ink-fill"/>
+<rect x="535.1" y="175.1" width="4.8" height="0.9" class="ts-ink-fill"/>
+<rect x="540.9" y="175.1" width="4.8" height="0.9" class="ts-ink-fill"/>
+<rect x="546.7" y="175.3" width="4.8" height="0.7" class="ts-ink-fill"/>
+<rect x="552.6" y="175" width="4.8" height="1" class="ts-ink-fill"/>
+<rect x="558.4" y="175.6" width="4.8" height="0.4" class="ts-ink-fill"/>
+<rect x="564.3" y="175.1" width="4.8" height="0.9" class="ts-ink-fill"/>
+<rect x="570.1" y="175.3" width="4.8" height="0.7" class="ts-ink-fill"/>
+<rect x="575.9" y="175.8" width="4.8" height="0.2" class="ts-ink-fill"/>
+<rect x="581.8" y="175.9" width="4.8" height="0.1" class="ts-ink-fill"/>
+<rect x="587.6" y="175.3" width="4.8" height="0.7" class="ts-ink-fill"/>
+<rect x="593.5" y="175.7" width="4.8" height="0.3" class="ts-ink-fill"/>
+<rect x="599.3" y="175.6" width="4.8" height="0.4" class="ts-ink-fill"/>
+<rect x="611" y="175.8" width="4.8" height="0.2" class="ts-ink-fill"/>
+<rect x="622.7" y="175.8" width="4.8" height="0.2" class="ts-ink-fill"/>
+<line x1="336" y1="176" x2="628" y2="176" class="ts-axis"/>
+<line x1="336" y1="176" x2="336" y2="180" class="ts-axis"/>
+<text x="336" y="194" text-anchor="middle">0</text>
+<line x1="433.3" y1="176" x2="433.3" y2="180" class="ts-axis"/>
+<text x="433.3" y="194" text-anchor="middle">50</text>
+<line x1="530.7" y1="176" x2="530.7" y2="180" class="ts-axis"/>
+<text x="530.7" y="194" text-anchor="middle">100</text>
+<line x1="628" y1="176" x2="628" y2="180" class="ts-axis"/>
+<text x="628" y="194" text-anchor="middle">150</text>
+<text x="482" y="214" text-anchor="middle">CUT TIME (S)</text>
+<line x1="423.6" y1="28" x2="423.6" y2="176" class="ts-acid-line"/>
+<text x="429.6" y="38" text-anchor="start" class="ts-strong">45 s: weld</text>
+</svg>

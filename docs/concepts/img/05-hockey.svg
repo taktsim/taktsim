@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 300" role="img" aria-labelledby="f05a-t f05a-d"><title id="f05a-t">Close to 100 % busy, waiting explodes</title><desc id="f05a-d">Mean wait in queue at one station with a 45-second process time, against its utilization from 50 to 95 percent, for process-time CV 1 (upper curve) and 0.5 (lower curve). Simulated points with confidence bands sit on Kingman&#x27;s formula, which turns sharply upward above about 85 percent.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style>
+<line x1="64" y1="252" x2="616" y2="252" class="ts-grid"/>
+<text x="56" y="256" text-anchor="end">0</text>
+<line x1="64" y1="179.5" x2="616" y2="179.5" class="ts-grid"/>
+<text x="56" y="183.5" text-anchor="end">5</text>
+<line x1="64" y1="107" x2="616" y2="107" class="ts-grid"/>
+<text x="56" y="111" text-anchor="end">10</text>
+<line x1="64" y1="34.5" x2="616" y2="34.5" class="ts-grid"/>
+<text x="56" y="38.5" text-anchor="end">15</text>
+<line x1="64" y1="252" x2="64" y2="256" class="ts-axis"/>
+<text x="64" y="270" text-anchor="middle">0.3</text>
+<line x1="142.9" y1="252" x2="142.9" y2="256" class="ts-axis"/>
+<text x="142.9" y="270" text-anchor="middle">0.4</text>
+<line x1="221.7" y1="252" x2="221.7" y2="256" class="ts-axis"/>
+<text x="221.7" y="270" text-anchor="middle">0.5</text>
+<line x1="300.6" y1="252" x2="300.6" y2="256" class="ts-axis"/>
+<text x="300.6" y="270" text-anchor="middle">0.6</text>
+<line x1="379.4" y1="252" x2="379.4" y2="256" class="ts-axis"/>
+<text x="379.4" y="270" text-anchor="middle">0.7</text>
+<line x1="458.3" y1="252" x2="458.3" y2="256" class="ts-axis"/>
+<text x="458.3" y="270" text-anchor="middle">0.8</text>
+<line x1="537.1" y1="252" x2="537.1" y2="256" class="ts-axis"/>
+<text x="537.1" y="270" text-anchor="middle">0.9</text>
+<line x1="616" y1="252" x2="616" y2="256" class="ts-axis"/>
+<text x="616" y="270" text-anchor="middle">1</text>
+<line x1="64" y1="252" x2="616" y2="252" class="ts-axis"/>
+<line x1="64" y1="20" x2="64" y2="252" class="ts-axis"/>
+<text x="340" y="292" text-anchor="middle">UTILIZATION</text>
+<text x="14" y="136" text-anchor="middle" transform="rotate(-90 14 136)">WAIT IN QUEUE (MIN)</text>
+<path d="M221.7 240.9 L300.6 235.2 L379.4 226.1 L458.3 206.1 L497.7 186 L537.1 145.5 L576.6 20 L576.6 83 L537.1 162.3 L497.7 194.5 L458.3 211.3 L379.4 228.1 L300.6 236.4 L221.7 241.5 Z" class="ts-ci"/>
+<path d="M221.7 241.2 L300.6 235.8 L379.4 227.1 L458.3 208.7 L497.7 190.2 L537.1 153.9 L576.6 46.7" class="ts-ink-line"/>
+<rect x="218.7" y="238.2" width="6" height="6" class="ts-ink-fill"/>
+<rect x="297.6" y="232.8" width="6" height="6" class="ts-ink-fill"/>
+<rect x="376.4" y="224.1" width="6" height="6" class="ts-ink-fill"/>
+<rect x="455.3" y="205.7" width="6" height="6" class="ts-ink-fill"/>
+<rect x="494.7" y="187.2" width="6" height="6" class="ts-ink-fill"/>
+<rect x="534.1" y="150.9" width="6" height="6" class="ts-ink-fill"/>
+<rect x="573.6" y="43.7" width="6" height="6" class="ts-ink-fill"/>
+<path d="M64 247.3 L67.9 247.2 L71.9 247.1 L75.8 247 L79.8 246.9 L83.7 246.8 L87.7 246.6 L91.6 246.5 L95.5 246.4 L99.5 246.3 L103.4 246.1 L107.4 246 L111.3 245.9 L115.3 245.7 L119.2 245.6 L123.1 245.5 L127.1 245.3 L131 245.2 L135 245 L138.9 244.9 L142.9 244.8 L146.8 244.6 L150.7 244.4 L154.7 244.3 L158.6 244.1 L162.6 244 L166.5 243.8 L170.5 243.6 L174.4 243.5 L178.3 243.3 L182.3 243.1 L186.2 242.9 L190.2 242.7 L194.1 242.5 L198.1 242.4 L202 242.2 L205.9 242 L209.9 241.8 L213.8 241.6 L217.8 241.3 L221.7 241.1 L225.7 240.9 L229.6 240.7 L233.5 240.5 L237.5 240.2 L241.4 240 L245.4 239.7 L249.3 239.5 L253.3 239.2 L257.2 239 L261.1 238.7 L265.1 238.4 L269 238.2 L273 237.9 L276.9 237.6 L280.9 237.3 L284.8 237 L288.7 236.7 L292.7 236.4 L296.6 236 L300.6 235.7 L304.5 235.3 L308.5 235 L312.4 234.6 L316.3 234.3 L320.3 233.9 L324.2 233.5 L328.2 233.1 L332.1 232.7 L336.1 232.2 L340 231.8 L343.9 231.4 L347.9 230.9 L351.8 230.4 L355.8 229.9 L359.7 229.4 L363.7 228.9 L367.6 228.4 L371.5 227.8 L375.5 227.2 L379.4 226.6 L383.4 226 L387.3 225.4 L391.3 224.7 L395.2 224 L399.1 223.3 L403.1 222.6 L407 221.8 L411 221 L414.9 220.2 L418.9 219.4 L422.8 218.5 L426.7 217.6 L430.7 216.6 L434.6 215.6 L438.6 214.5 L442.5 213.4 L446.5 212.3 L450.4 211.1 L454.3 209.8 L458.3 208.5 L462.2 207.1 L466.2 205.6 L470.1 204.1 L474.1 202.5 L478 200.7 L481.9 198.9 L485.9 197 L489.8 194.9 L493.8 192.7 L497.7 190.4 L501.7 187.9 L505.6 185.2 L509.5 182.3 L513.5 179.2 L517.4 175.9 L521.4 172.3 L525.3 168.3 L529.3 164 L533.2 159.3 L537.1 154.1 L541.1 148.4 L545 142 L549 134.9 L552.9 126.9 L556.9 117.9 L560.8 107.5 L564.7 95.6 L568.7 81.6 L572.6 65.1 L576.6 45.4 L580.5 21.2" class="ts-muted-line"/>
+<path d="M221.7 245.1 L300.6 241.7 L379.4 235.9 L458.3 222.9 L497.7 208.4 L537.1 180.3 L576.6 79.2 L576.6 155.7 L537.1 199.7 L497.7 217.5 L458.3 226.7 L379.4 237 L300.6 242.3 L221.7 245.5 Z" class="ts-ci"/>
+<path d="M221.7 245.3 L300.6 242 L379.4 236.5 L458.3 224.8 L497.7 213 L537.1 190 L576.6 117.5" class="ts-ink-line"/>
+<rect x="218.7" y="242.3" width="6" height="6" class="ts-ink-fill"/>
+<rect x="297.6" y="239" width="6" height="6" class="ts-ink-fill"/>
+<rect x="376.4" y="233.5" width="6" height="6" class="ts-ink-fill"/>
+<rect x="455.3" y="221.8" width="6" height="6" class="ts-ink-fill"/>
+<rect x="494.7" y="210" width="6" height="6" class="ts-ink-fill"/>
+<rect x="534.1" y="187" width="6" height="6" class="ts-ink-fill"/>
+<rect x="573.6" y="114.5" width="6" height="6" class="ts-ink-fill"/>
+<path d="M64 249.1 L67.9 249 L71.9 248.9 L75.8 248.9 L79.8 248.8 L83.7 248.7 L87.7 248.7 L91.6 248.6 L95.5 248.5 L99.5 248.4 L103.4 248.3 L107.4 248.3 L111.3 248.2 L115.3 248.1 L119.2 248 L123.1 247.9 L127.1 247.8 L131 247.7 L135 247.7 L138.9 247.6 L142.9 247.5 L146.8 247.4 L150.7 247.3 L154.7 247.2 L158.6 247.1 L162.6 247 L166.5 246.9 L170.5 246.8 L174.4 246.7 L178.3 246.6 L182.3 246.4 L186.2 246.3 L190.2 246.2 L194.1 246.1 L198.1 246 L202 245.9 L205.9 245.7 L209.9 245.6 L213.8 245.5 L217.8 245.3 L221.7 245.2 L225.7 245.1 L229.6 244.9 L233.5 244.8 L237.5 244.6 L241.4 244.5 L245.4 244.3 L249.3 244.2 L253.3 244 L257.2 243.9 L261.1 243.7 L265.1 243.5 L269 243.3 L273 243.2 L276.9 243 L280.9 242.8 L284.8 242.6 L288.7 242.4 L292.7 242.2 L296.6 242 L300.6 241.8 L304.5 241.6 L308.5 241.4 L312.4 241.1 L316.3 240.9 L320.3 240.7 L324.2 240.4 L328.2 240.2 L332.1 239.9 L336.1 239.7 L340 239.4 L343.9 239.1 L347.9 238.8 L351.8 238.5 L355.8 238.2 L359.7 237.9 L363.7 237.6 L367.6 237.2 L371.5 236.9 L375.5 236.5 L379.4 236.1 L383.4 235.8 L387.3 235.4 L391.3 234.9 L395.2 234.5 L399.1 234.1 L403.1 233.6 L407 233.1 L411 232.7 L414.9 232.1 L418.9 231.6 L422.8 231.1 L426.7 230.5 L430.7 229.9 L434.6 229.2 L438.6 228.6 L442.5 227.9 L446.5 227.2 L450.4 226.4 L454.3 225.6 L458.3 224.8 L462.2 223.9 L466.2 223 L470.1 222.1 L474.1 221 L478 220 L481.9 218.8 L485.9 217.6 L489.8 216.3 L493.8 214.9 L497.7 213.5 L501.7 211.9 L505.6 210.2 L509.5 208.4 L513.5 206.5 L517.4 204.4 L521.4 202.2 L525.3 199.7 L529.3 197 L533.2 194.1 L537.1 190.8 L541.1 187.3 L545 183.3 L549 178.8 L552.9 173.8 L556.9 168.2 L560.8 161.7 L564.7 154.2 L568.7 145.5 L572.6 135.2 L576.6 122.9 L580.5 107.8 L584.5 88.9 L588.4 64.6" class="ts-muted-line"/>
+<rect x="531.1" y="148.1" width="12" height="12" class="ts-acid"/>
+<text x="525.1" y="144.1" text-anchor="end" class="ts-strong">90 % busy: wait = 9 × process time</text>
+<rect x="76" y="22" width="10" height="10" class="ts-ink-fill"/>
+<text x="94" y="31" text-anchor="start">SIMULATED</text>
+<line x1="178" y1="27" x2="192" y2="27" class="ts-muted-line"/>
+<text x="196" y="31" text-anchor="start">KINGMAN</text>
+</svg>
