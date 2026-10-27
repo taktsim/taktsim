@@ -1,0 +1,47 @@
+/* Generated from tokens.json by docs/concepts/scripts/build_all.py; do not edit. */
+
+:root {
+  --ts-mono: "JetBrains Mono", ui-monospace, monospace;
+  --ts-sans: "Inter", system-ui, sans-serif;
+}
+
+.light, .rust, html:not(.js) {
+  --ts-ground: #FFFFFF;
+  --ts-surface: #F2F2EF;
+  --ts-unlit: #D9D9D3;
+  --ts-line: #C9C9C2;
+  --ts-ink: #0A0A0A;
+  --ts-ink-muted: #55554F;
+  --ts-acid: #D4FF00;
+  --ts-keyline: #0A0A0A;
+  --ts-signal: #C2410C;
+  --ts-focus: var(--ts-ink);
+}
+
+.coal, .navy, .ayu {
+  --ts-ground: #0A0A0A;
+  --ts-surface: #141414;
+  --ts-unlit: #2A2A2A;
+  --ts-line: #333333;
+  --ts-ink: #E8E8E3;
+  --ts-ink-muted: #8A8A85;
+  --ts-acid: #D4FF00;
+  --ts-keyline: #D4FF00;
+  --ts-signal: #FF6B4A;
+  --ts-focus: var(--ts-acid);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.js) {
+  --ts-ground: #0A0A0A;
+  --ts-surface: #141414;
+  --ts-unlit: #2A2A2A;
+  --ts-line: #333333;
+  --ts-ink: #E8E8E3;
+  --ts-ink-muted: #8A8A85;
+  --ts-acid: #D4FF00;
+  --ts-keyline: #D4FF00;
+  --ts-signal: #FF6B4A;
+  --ts-focus: var(--ts-acid);
+  }
+}

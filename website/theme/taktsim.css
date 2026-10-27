@@ -1,22 +1,528 @@
-/* Site styles on top of mdBook's themes. Colours for machine states are
-   defined in website/components/palette.js and mirrored here as custom
-   properties; the light and dark values differ only in brightness. */
+/* The Taktsim look on top of mdBook: black first, square everything,
+   hairlines instead of shadows, JetBrains Mono for labels and numbers,
+   Inter for prose, acid for one highlighted mark per figure.
+   Colours come from tokens.css (generated from tokens.json). */
 
-.content figure {
-  margin: 1.5em 0;
+/* mdBook's themes mapped onto the brand: dark for coal (and the unused
+   navy and ayu), light for light (and rust, and pages without JavaScript). */
+.coal, .navy, .ayu, .light, .rust, html:not(.js) {
+  --bg: var(--ts-ground);
+  --fg: var(--ts-ink);
+  --sidebar-bg: var(--ts-surface);
+  --sidebar-fg: var(--ts-ink-muted);
+  --sidebar-non-existant: var(--ts-ink-muted);
+  --sidebar-active: var(--ts-ink);
+  --sidebar-spacer: var(--ts-line);
+  --sidebar-header-border-color: var(--ts-line);
+  --scrollbar: var(--ts-line);
+  --icons: var(--ts-ink-muted);
+  --icons-hover: var(--ts-ink);
+  --links: var(--ts-ink);
+  --inline-code-color: var(--ts-ink);
+  --theme-popup-bg: var(--ts-surface);
+  --theme-popup-border: var(--ts-line);
+  --theme-hover: var(--ts-unlit);
+  --quote-bg: var(--ts-surface);
+  --quote-border: var(--ts-line);
+  --warning-border: var(--ts-signal);
+  --table-border-color: var(--ts-line);
+  --table-header-bg: var(--ts-surface);
+  --table-alternate-bg: var(--ts-ground);
+  --searchbar-border-color: var(--ts-line);
+  --searchbar-bg: var(--ts-ground);
+  --searchbar-fg: var(--ts-ink);
+  --searchbar-shadow-color: transparent;
+  --searchresults-header-fg: var(--ts-ink-muted);
+  --searchresults-border-color: var(--ts-line);
+  --searchresults-li-bg: var(--ts-surface);
+  --search-mark-bg: var(--ts-unlit);
+  --footnote-highlight: var(--ts-ink-muted);
+  --blockquote-note-color: var(--ts-ink-muted);
+  --blockquote-tip-color: var(--ts-ink-muted);
+  --blockquote-important-color: var(--ts-ink);
+  --blockquote-warning-color: var(--ts-signal);
+  --blockquote-caution-color: var(--ts-signal);
+  --mono-font: var(--ts-mono);
+  --content-max-width: 760px;
 }
 
-.content figure img {
+html {
+  font-family: var(--ts-sans);
+}
+
+body {
+  background: var(--ts-ground);
+  font-size: 1.6rem;
+  line-height: 1.65;
+}
+
+/* Only the two brand themes in the theme menu. */
+#mdbook-theme-list li:has(#mdbook-theme-rust),
+#mdbook-theme-list li:has(#mdbook-theme-navy),
+#mdbook-theme-list li:has(#mdbook-theme-ayu) {
+  display: none;
+}
+
+#mdbook-theme-coal {
+  font-size: 0;
+}
+
+#mdbook-theme-coal::after {
+  content: "Dark";
+  font-size: 1.4rem;
+}
+
+/* Square everything. */
+*, *::before, *::after {
+  border-radius: 0 !important;
+}
+
+/* Header: the mark (mark-light.svg, mark-dark.svg from the design system,
+   inlined so the stylesheet needs no other file) beside an uppercase mono
+   title. */
+.menu-title {
+  font-family: var(--ts-mono);
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.menu-title::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  vertical-align: -2px;
+  background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJ0YWt0c2ltIj48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMwQTBBMEEiPjwvcmVjdD48cmVjdCB4PSIyNiIgeT0iMCIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjMEEwQTBBIj48L3JlY3Q+PHJlY3QgeD0iNTIiIHk9IjAiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iIzBBMEEwQSI+PC9yZWN0PjxyZWN0IHg9Ijc4IiB5PSIwIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMwQTBBMEEiPjwvcmVjdD48cmVjdCB4PSIwIiB5PSIyNiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRDlEOUQzIj48L3JlY3Q+PHJlY3QgeD0iMjYiIHk9IjI2IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMwQTBBMEEiPjwvcmVjdD48cmVjdCB4PSI1MiIgeT0iMjYiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iIzBBMEEwQSI+PC9yZWN0PjxyZWN0IHg9Ijc4IiB5PSIyNiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRDlEOUQzIj48L3JlY3Q+PHJlY3QgeD0iMCIgeT0iNTIiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0Q5RDlEMyI+PC9yZWN0PjxyZWN0IHg9IjI2IiB5PSI1MiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjMEEwQTBBIj48L3JlY3Q+PHJlY3QgeD0iNTIiIHk9IjUyIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMwQTBBMEEiPjwvcmVjdD48cmVjdCB4PSI3OCIgeT0iNTIiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0Q5RDlEMyI+PC9yZWN0PjxyZWN0IHg9IjAiIHk9Ijc4IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNEOUQ5RDMiPjwvcmVjdD48cmVjdCB4PSIyNy4yNSIgeT0iNzkuMjUiIHdpZHRoPSIxOS41IiBoZWlnaHQ9IjE5LjUiIGZpbGw9IiNENEZGMDAiIHN0cm9rZT0iIzBBMEEwQSIgc3Ryb2tlLXdpZHRoPSIyLjUiPjwvcmVjdD48cmVjdCB4PSI1MiIgeT0iNzgiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iIzBBMEEwQSI+PC9yZWN0PjxyZWN0IHg9Ijc4IiB5PSI3OCIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRDlEOUQzIj48L3JlY3Q+PC9zdmc+') center / contain no-repeat;
+}
+
+.coal .menu-title::before, .navy .menu-title::before, .ayu .menu-title::before {
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJ0YWt0c2ltIj48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSIyNiIgeT0iMCIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRThFOEUzIj48L3JlY3Q+PHJlY3QgeD0iNTIiIHk9IjAiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0U4RThFMyI+PC9yZWN0PjxyZWN0IHg9Ijc4IiB5PSIwIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSIwIiB5PSIyNiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjMkEyQTJBIj48L3JlY3Q+PHJlY3QgeD0iMjYiIHk9IjI2IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSI1MiIgeT0iMjYiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0U4RThFMyI+PC9yZWN0PjxyZWN0IHg9Ijc4IiB5PSIyNiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjMkEyQTJBIj48L3JlY3Q+PHJlY3QgeD0iMCIgeT0iNTIiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iIzJBMkEyQSI+PC9yZWN0PjxyZWN0IHg9IjI2IiB5PSI1MiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRThFOEUzIj48L3JlY3Q+PHJlY3QgeD0iNTIiIHk9IjUyIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSI3OCIgeT0iNTIiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iIzJBMkEyQSI+PC9yZWN0PjxyZWN0IHg9IjAiIHk9Ijc4IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMyQTJBMkEiPjwvcmVjdD48cmVjdCB4PSIyNiIgeT0iNzgiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0Q0RkYwMCI+PC9yZWN0PjxyZWN0IHg9IjUyIiB5PSI3OCIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRThFOEUzIj48L3JlY3Q+PHJlY3QgeD0iNzgiIHk9Ijc4IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMyQTJBMkEiPjwvcmVjdD48L3N2Zz4=');
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.js) .menu-title::before {
+    background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJ0YWt0c2ltIj48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSIyNiIgeT0iMCIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRThFOEUzIj48L3JlY3Q+PHJlY3QgeD0iNTIiIHk9IjAiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0U4RThFMyI+PC9yZWN0PjxyZWN0IHg9Ijc4IiB5PSIwIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSIwIiB5PSIyNiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjMkEyQTJBIj48L3JlY3Q+PHJlY3QgeD0iMjYiIHk9IjI2IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSI1MiIgeT0iMjYiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0U4RThFMyI+PC9yZWN0PjxyZWN0IHg9Ijc4IiB5PSIyNiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjMkEyQTJBIj48L3JlY3Q+PHJlY3QgeD0iMCIgeT0iNTIiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iIzJBMkEyQSI+PC9yZWN0PjxyZWN0IHg9IjI2IiB5PSI1MiIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRThFOEUzIj48L3JlY3Q+PHJlY3QgeD0iNTIiIHk9IjUyIiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiNFOEU4RTMiPjwvcmVjdD48cmVjdCB4PSI3OCIgeT0iNTIiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iIzJBMkEyQSI+PC9yZWN0PjxyZWN0IHg9IjAiIHk9Ijc4IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMyQTJBMkEiPjwvcmVjdD48cmVjdCB4PSIyNiIgeT0iNzgiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgZmlsbD0iI0Q0RkYwMCI+PC9yZWN0PjxyZWN0IHg9IjUyIiB5PSI3OCIgd2lkdGg9IjIyIiBoZWlnaHQ9IjIyIiBmaWxsPSIjRThFOEUzIj48L3JlY3Q+PHJlY3QgeD0iNzgiIHk9Ijc4IiB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIGZpbGw9IiMyQTJBMkEiPjwvcmVjdD48L3N2Zz4=');
+  }
+}
+
+#mdbook-menu-bar, .menu-bar {
+  border-bottom: 1px solid var(--ts-line);
+}
+
+/* Sidebar: part titles as equipment labels. */
+.chapter li.part-title {
+  font-family: var(--ts-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ts-ink-muted);
+  margin: 2em 0 0.6em;
+}
+
+.chapter li a.active {
+  font-weight: 600;
+}
+
+/* Prose. */
+.content h1, .content h2, .content h3, .content h4 {
+  font-family: var(--ts-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.content h1 {
+  font-size: 3.2rem;
+  line-height: 1.15;
+}
+
+.content a:link, .content a:visited {
+  color: var(--ts-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ts-ink-muted);
+  text-underline-offset: 0.18em;
+}
+
+.content a:hover {
+  text-decoration-color: var(--ts-ink);
+}
+
+.content a.header:link, .content a.header:visited {
+  text-decoration: none;
+}
+
+code, pre, kbd {
+  font-family: var(--ts-mono);
+}
+
+:not(pre) > .hljs, :not(pre) > code {
+  background: var(--ts-surface);
+  border: 1px solid var(--ts-line);
+  padding: 0.05em 0.3em;
+}
+
+pre > code.hljs, pre {
+  background: var(--ts-surface);
+}
+
+/* Code in ink and greys only: keys bold, values muted, comments faint. */
+.hljs, .hljs-subst {
+  color: var(--ts-ink);
+}
+
+.hljs-attr, .hljs-keyword, .hljs-selector-tag, .hljs-section, .hljs-title, .hljs-name {
+  color: var(--ts-ink);
+  font-weight: 700;
+}
+
+.hljs-string, .hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet, .hljs-built_in,
+.hljs-type, .hljs-variable, .hljs-template-variable, .hljs-meta, .hljs-link, .hljs-params {
+  color: var(--ts-ink-muted);
+}
+
+.hljs-comment, .hljs-quote {
+  color: var(--ts-ink-muted);
+  font-style: italic;
+}
+
+pre {
+  border: 1px solid var(--ts-line);
+}
+
+.content table {
+  font-variant-numeric: tabular-nums;
+  border-collapse: collapse;
+}
+
+.content table thead th {
+  font-family: var(--ts-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.content table td, .content table th {
+  border: 1px solid var(--ts-line);
+  padding: 0.35em 0.7em;
+}
+
+blockquote {
+  border-top: 1px solid var(--ts-line);
+  border-bottom: 1px solid var(--ts-line);
+}
+
+/* Keyboard focus: a ground-coloured gap, then an acid ring (ink on light). */
+:focus-visible {
+  outline: 2px solid var(--ts-focus);
+  outline-offset: 2px;
+}
+
+/* ----- Concept pages ----- */
+
+/* A mono label, like a marking on a piece of equipment. */
+.ts-label {
+  font-family: var(--ts-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ts-ink-muted);
+}
+
+/* The page's one-line summary under the title. */
+.ts-lede {
+  font-size: 1.9rem;
+  line-height: 1.45;
+  color: var(--ts-ink-muted);
+  margin-top: -0.4em;
+}
+
+/* Panels: "You will learn", "Rule of thumb", model snippets. */
+.ts-panel {
+  border: 1px solid var(--ts-line);
+  background: var(--ts-surface);
+  padding: 16px 20px;
+  margin: 24px 0;
+}
+
+.ts-panel > .ts-label:first-child {
   display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 0 auto;
+  margin-bottom: 8px;
 }
 
-.content figcaption {
-  font-size: 0.9em;
-  color: var(--fg);
-  opacity: 0.8;
-  text-align: center;
-  margin-top: 0.5em;
+.ts-panel > :last-child {
+  margin-bottom: 0;
+}
+
+.ts-panel ul {
+  padding-left: 1.2em;
+}
+
+.ts-rule {
+  border-color: var(--ts-ink);
+}
+
+.ts-rule p {
+  font-size: 1.8rem;
+  line-height: 1.45;
+}
+
+/* Figures: a takeaway title, the SVG, a one-sentence caption. */
+.ts-figure {
+  border: 1px solid var(--ts-line);
+  background: var(--ts-surface);
+  margin: 28px 0;
+  padding: 16px 16px 12px;
+}
+
+.ts-figure-title {
+  font-family: var(--ts-sans);
+  font-weight: 600;
+  font-size: 1.8rem;
+  line-height: 1.3;
+  margin: 4px 0 12px;
+  color: var(--ts-ink);
+}
+
+.ts-figure .ts-plot {
+  overflow-x: auto;
+}
+
+.ts-figure svg {
+  display: block;
+  width: 100%;
+  min-width: 520px;
+  height: auto;
+}
+
+.ts-figure figcaption {
+  font-size: 1.4rem;
+  line-height: 1.5;
+  color: var(--ts-ink-muted);
+  margin-top: 10px;
+}
+
+/* SVG text and marks; shared by the static figures and the components. */
+.ts-svg text {
+  font-family: var(--ts-mono);
+  font-size: 12px;
+  fill: var(--ts-ink-muted);
+}
+
+.ts-svg text.ts-strong {
+  fill: var(--ts-ink);
+  font-weight: 700;
+}
+
+.ts-svg text.ts-on-acid {
+  fill: #0A0A0A;
+  font-weight: 700;
+}
+
+.ts-svg .ts-axis {
+  stroke: var(--ts-line);
+  stroke-width: 1;
+  fill: none;
+}
+
+.ts-svg .ts-grid {
+  stroke: var(--ts-line);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  fill: none;
+}
+
+.ts-svg .ts-ink-line {
+  stroke: var(--ts-ink);
+  stroke-width: 2;
+  fill: none;
+}
+
+.ts-svg .ts-muted-line {
+  stroke: var(--ts-ink-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  fill: none;
+}
+
+.ts-svg .ts-ink-fill {
+  fill: var(--ts-ink);
+}
+
+.ts-svg .ts-muted-fill {
+  fill: var(--ts-ink-muted);
+}
+
+.ts-svg .ts-unlit-fill {
+  fill: var(--ts-unlit);
+}
+
+.ts-svg .ts-ground-fill {
+  fill: var(--ts-ground);
+}
+
+.ts-svg .ts-outline {
+  fill: var(--ts-ground);
+  stroke: var(--ts-line);
+  stroke-width: 1;
+}
+
+.ts-svg .ts-ink-outline {
+  fill: none;
+  stroke: var(--ts-ink);
+  stroke-width: 1.5;
+}
+
+.ts-svg .ts-acid {
+  fill: var(--ts-acid);
+  stroke: var(--ts-keyline);
+  stroke-width: 1.5;
+}
+
+.ts-svg .ts-acid-line {
+  stroke: var(--ts-acid);
+  stroke-width: 2.5;
+  fill: none;
+}
+
+.ts-svg .ts-ci {
+  fill: var(--ts-ink);
+  opacity: 0.14;
+}
+
+/* Machine states: fill plus pattern, so they read without colour. */
+.ts-svg .st-working { fill: var(--ts-ink); }
+.ts-svg .st-starved { fill: var(--ts-ground); stroke: var(--ts-line); stroke-width: 1; }
+.ts-svg .st-blocked-bg { fill: var(--ts-ground); }
+.ts-svg .st-pattern-hatch { stroke: var(--ts-ink-muted); stroke-width: 1.6; }
+.ts-svg .st-down { fill: var(--ts-signal); }
+.ts-svg .st-pattern-dots { fill: var(--ts-ink-muted); }
+
+/* ----- Interactive components ----- */
+
+.ts-widget-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.ts-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 24px;
+  margin: 12px 0 16px;
+}
+
+.ts-control label {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--ts-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ts-ink-muted);
+}
+
+.ts-control output {
+  color: var(--ts-ink);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ts-control input[type="range"] {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  height: 24px;
+  margin: 4px 0 0;
+}
+
+.ts-control input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--ts-line);
+}
+
+.ts-control input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--ts-line);
+}
+
+.ts-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  background: var(--ts-ink);
+  border: 0;
+}
+
+.ts-control input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--ts-ink);
+  border: 0;
+}
+
+.ts-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 10px;
+  font-family: var(--ts-mono);
+  font-size: 1.3rem;
+  color: var(--ts-ink-muted);
+}
+
+.ts-readout b {
+  color: var(--ts-ink);
+}
+
+.ts-button {
+  font-family: var(--ts-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ts-ink);
+  background: var(--ts-ground);
+  border: 1px solid var(--ts-line);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.ts-button:hover {
+  border-color: var(--ts-ink);
+}
+
+/* Without JavaScript, or before it runs, the static figure is shown. */
+.ts-widget .ts-live {
+  display: none;
+}
+
+.ts-widget.ts-ready .ts-live {
+  display: block;
+}
+
+.ts-widget.ts-ready .ts-static {
+  display: none;
+}
+
+@media print {
+  .ts-widget .ts-live, .ts-widget .ts-controls {
+    display: none !important;
+  }
+
+  .ts-widget .ts-static {
+    display: block !important;
+  }
 }
