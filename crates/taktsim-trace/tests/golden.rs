@@ -90,3 +90,53 @@ fn the_harness_checks_names_and_writes_hash_files() {
     std::fs::remove_file(&blocked).unwrap();
     assert!(matches!(result, Err(golden::GoldenError::Hashes { .. })));
 }
+
+/// The hashes CI recorded on all four tier-1 targets when traces were
+/// hashed with `sha2` 0.11.1 and checksummed with `crc32fast` 1.5.3 (PR #21,
+/// workflow run 40393351617, engine version 0.0.0). The `taktsim_core::digest`
+/// implementations that replaced them must give the same bytes: the stream
+/// hash covers the records, the file hash also every CRC32 and the header.
+/// The header's engine version is set to 0.0.0, so a release does not
+/// change these values.
+#[test]
+fn hashes_are_those_of_the_replaced_implementations() {
+    type Build = fn() -> Result<taktsim_core::Engine<support::Toy>, taktsim_core::EngineError>;
+    let cases: [(Build, &str, &[u8], &str, &str); 3] = [
+        (
+            || support::single_server(42),
+            "1h",
+            b"toy single server: source 1min, station 45s, sink",
+            "c86ca63bf7f7872c94dad43b55172f708429a3e8cd0f4d782b40e6cbcf1011fc",
+            "c50bc48124633c669b4cba5d42c01d7d1235552aa245ac86005741f378d63386",
+        ),
+        (
+            || support::tandem(7),
+            "4h",
+            b"toy tandem: source 1min, cut 40s mtbf 20min mttr 3min, weld 50s scrap 1/7, sink",
+            "e1ce08bd264dd183ae810a4cbe84200525dced7c477463ea0f53549bcf87148c",
+            "ff2ddaa9478deaac2fce455e024431c912827ce0d2ffa3eb2965125982972ed7",
+        ),
+        (
+            || support::line(2026, 20),
+            "8h",
+            b"toy line: source 1min, 20 stations 40s, sink",
+            "ea72b70a24c61ddb15b0fc153dd666b6b08391dde3991e7edcbece5fd84ea655",
+            "51c94cad52d0a86d9a95639cedf4563b013d6d0089115454f3a2ba2cd54383ed",
+        ),
+    ];
+    for (build, until, model, stream, file) in cases {
+        let mut engine = build().unwrap();
+        let mut header = taktsim_trace::Header::for_engine(&engine, ModelHash::sha256(model));
+        header.engine_version = "0.0.0".to_owned();
+        let mut writer = taktsim_trace::TraceWriter::new(Vec::new(), &header).unwrap();
+        engine
+            .run(
+                taktsim_core::RunLimits::until(until.parse().unwrap()),
+                &mut writer,
+            )
+            .unwrap();
+        let (bytes, summary) = writer.finish().unwrap();
+        assert_eq!(summary.hash.to_string(), stream);
+        assert_eq!(taktsim_trace::TraceHash::sha256(&bytes).to_string(), file);
+    }
+}
