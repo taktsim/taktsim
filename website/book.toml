@@ -1,0 +1,28 @@
+# The documentation site (spec §10: mdBook). The content lives in docs/;
+# this directory holds only the site's configuration, styles and scripts.
+# Build: `mdbook build website` (see CONTRIBUTING.md, Working on the docs).
+
+[book]
+title = "taktsim"
+authors = ["The taktsim contributors"]
+language = "en"
+src = "../docs"
+
+[build]
+build-dir = "book"
+# A chapter missing from docs/ is an error, not a new empty file.
+create-missing = false
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+site-url = "/taktsim/"
+git-repository-url = "https://github.com/taktsim/taktsim"
+edit-url-template = "https://github.com/taktsim/taktsim/edit/main/docs/{path}"
+mathjax-support = true
+additional-css = ["theme/taktsim.css"]
+# mermaid*.js are written by `mdbook-mermaid install website` and not committed.
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+# Chapter numbers are part of the titles of the concept pages.
+no-section-label = true

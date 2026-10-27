@@ -1,0 +1,47 @@
+# Summary
+
+[Welcome](introduction.md)
+
+# Concepts
+
+- [Learning path](concepts/index.md)
+  - [1. What a production system is]()
+  - [2. Capacity and the bottleneck]()
+  - [3. Little's Law]()
+  - [4. Variability]()
+  - [5. Utilization and waiting]()
+  - [6. Starving and blocking]()
+  - [7. Buffers]()
+  - [8. Unreliable machines]()
+  - [9. Longer lines]()
+  - [10. Takt time and pull]()
+  - [11. Batching and setups]()
+  - [12. Scrap and rework]()
+  - [13. Simulation you can trust]()
+  - [14. From model to reality]()
+- [Glossary]()
+
+# Reference
+
+- [Specification](spec.md)
+- [Roadmap](roadmap.md)
+- [Architecture decisions](adr/README.md)
+  - [0001 Event queue](adr/0001-event-queue.md)
+  - [0002 Model language](adr/0002-model-language.md)
+  - [0003 Distribution syntax](adr/0003-distribution-syntax.md)
+  - [0004 Trace storage](adr/0004-trace-storage.md)
+  - [0005 Python API shape](adr/0005-python-api-shape.md)
+  - [0006 License and contributions](adr/0006-license-and-contributions.md)
+  - [0007 Initial targets for v0.1](adr/0007-initial-targets-v0.1.md)
+  - [0008 Project name](adr/0008-project-name.md)
+  - [0009 Expression language](adr/0009-expression-language.md)
+  - [0010 Platforms and reference hardware](adr/0010-platforms-and-reference-hardware.md)
+  - [0011 Toolchain and CI tooling](adr/0011-toolchain-and-ci-tooling.md)
+  - [0012 Units](adr/0012-units-implementation.md)
+  - [0013 Random streams and math](adr/0013-random-streams-and-math.md)
+  - [0014 Output analysis](adr/0014-output-analysis.md)
+  - [0015 Expression language details](adr/0015-expression-language-details.md)
+  - [0016 Benchmarks and regression gate](adr/0016-benchmarks-and-regression-gate.md)
+  - [0017 CSV adapter and observation table](adr/0017-csv-adapter-and-observation-table.md)
+  - [0018 Engine architecture](adr/0018-engine-architecture.md)
+  - [0019 CLI as the agent interface](adr/0019-cli-agent-interface.md)

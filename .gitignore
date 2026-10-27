@@ -6,3 +6,7 @@ __pycache__/
 .DS_Store
 # Worktrees of parallel agent sessions (Claude Code).
 /.claude/worktrees/
+# The documentation site build (mdbook build website).
+/website/book/
+/website/mermaid.min.js
+/website/mermaid-init.js
