@@ -550,3 +550,133 @@ blockquote {
     display: block !important;
   }
 }
+
+/* ----- Welcome page ----- */
+
+.ts-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ts-hero-block {
+  padding: 56px 0 32px;
+}
+
+.ts-hero {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+}
+
+.ts-hero .ts-ink-fill { fill: var(--ts-ink); }
+.ts-hero .ts-unlit-fill { fill: var(--ts-unlit); }
+.ts-hero .ts-acid { fill: var(--ts-acid); stroke: var(--ts-keyline); stroke-width: 1.5; }
+
+/* The playhead (design system, Motion): the acid step walks the mark's 16
+   steps, one bar at 130 BPM, jumping without easing, for two bars, then
+   rests on the firing step. Each beat is lit for one sixteenth of a bar;
+   the delays (in docs/assets/hero.svg) start after a quarter-second pause. */
+.ts-hero .ts-beat {
+  opacity: 0;
+  animation: ts-beat 1.846s step-end 2;
+}
+
+.ts-hero .ts-rest {
+  opacity: 0;
+  /* A quarter-second pause, then two bars: 0.25 s + 2 × 1.846 s. */
+  animation: ts-rest 3.942s step-end 1 forwards;
+}
+
+@keyframes ts-beat {
+  0% { opacity: 1; }
+  6.25% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@keyframes ts-rest {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce), print {
+  .ts-hero .ts-beat { animation: none; opacity: 0; }
+  .ts-hero .ts-rest { animation: none; opacity: 1; }
+}
+
+.ts-hero-tagline {
+  font-size: 2.6rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  max-width: 22em;
+  margin: 32px 0 12px;
+}
+
+/* Entry points: square, hairline boxes with a mono number. */
+.ts-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--ts-line);
+  border: 1px solid var(--ts-line);
+  margin: 24px 0 40px;
+}
+
+.content a.ts-card:link, .content a.ts-card:visited {
+  display: block;
+  background: var(--ts-ground);
+  color: var(--ts-ink);
+  text-decoration: none;
+  padding: 20px;
+}
+
+.content a.ts-card:hover, .content a.ts-card:focus-visible {
+  background: var(--ts-surface);
+}
+
+.ts-card .ts-label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.ts-card strong {
+  display: block;
+  font-size: 1.9rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.ts-card span.ts-card-text {
+  color: var(--ts-ink-muted);
+  font-size: 1.5rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+  .ts-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A step row: the brand's one decorative pattern, every fourth step lit. */
+.ts-steprow {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 6px;
+  margin: 48px 0 16px;
+}
+
+.ts-steprow i {
+  display: block;
+  aspect-ratio: 1;
+  background: var(--ts-unlit);
+}
+
+.ts-steprow i:nth-child(4n + 1) {
+  background: var(--ts-ink);
+}
