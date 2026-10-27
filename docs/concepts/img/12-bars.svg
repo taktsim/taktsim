@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 254" role="img" aria-labelledby="f12b-t f12b-d"><title id="f12b-t">Every scrapped or reworked part takes welding time from a good one</title><desc id="f12b-d">For each case, welding&#x27;s 640 possible operations per shift split into good parts, rework, scrapped parts and time lost to waiting; with 5 % scrap and 10 % rework only about 540 good parts remain.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-muted-dots{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:2;stroke-dasharray:1 4;stroke-linecap:round;fill:none}.ts-svg .ts-muted-solid{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style><defs><pattern id="f12b-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><rect width="5" height="5" class="st-blocked-bg"/><line x1="0" y1="0" x2="0" y2="5" class="st-pattern-hatch"/></pattern><pattern id="f12b-dots" patternUnits="userSpaceOnUse" width="4" height="4"><rect width="4" height="4" class="st-blocked-bg"/><rect x="1" y="1" width="2" height="2" class="st-pattern-dots"/></pattern></defs>
+<rect x="200" y="10" width="10" height="10" class="ts-ink-fill"/>
+<text x="216" y="19" text-anchor="start">GOOD</text>
+<rect x="262" y="10" width="10" height="10" fill="url(#f12b-hatch)"/>
+<text x="278" y="19" text-anchor="start">REWORK</text>
+<rect x="340" y="10" width="10" height="10" class="ts-muted-fill"/>
+<text x="356" y="19" text-anchor="start">SCRAP</text>
+<rect x="410.5" y="10.5" width="9" height="9" class="ts-outline"/>
+<text x="426" y="19" text-anchor="start">WAITING</text>
+<text x="190" y="54" text-anchor="end">scrap 0%, rework 0%</text>
+<rect x="200" y="40" width="406.8" height="20" class="ts-ink-fill"/>
+<rect x="607.3" y="40.5" width="8.2" height="19" class="ts-outline"/>
+<text x="190" y="88" text-anchor="end">scrap 2%, rework 0%</text>
+<rect x="200" y="74" width="398.6" height="20" class="ts-ink-fill"/>
+<rect x="598.6" y="74" width="8.1" height="20" class="ts-muted-fill"/>
+<rect x="607.3" y="74.5" width="8.2" height="19" class="ts-outline"/>
+<text x="190" y="122" text-anchor="end">scrap 0%, rework 5%</text>
+<rect x="200" y="108" width="389.7" height="20" class="ts-ink-fill"/>
+<rect x="589.7" y="108" width="20.7" height="20" fill="url(#f12b-hatch)"/>
+<rect x="610.9" y="108.5" width="4.6" height="19" class="ts-outline"/>
+<rect x="8" y="147" width="10" height="10" class="ts-acid"/>
+<text x="190" y="156" text-anchor="end" class="ts-strong">scrap 2%, rework 5%</text>
+<rect x="200" y="142" width="381.6" height="20" class="ts-ink-fill"/>
+<rect x="581.6" y="142" width="20.8" height="20" fill="url(#f12b-hatch)"/>
+<rect x="602.3" y="142" width="8.2" height="20" class="ts-muted-fill"/>
+<rect x="611" y="142.5" width="4.5" height="19" class="ts-outline"/>
+<text x="190" y="190" text-anchor="end">scrap 5%, rework 10%</text>
+<rect x="200" y="176" width="349.6" height="20" class="ts-ink-fill"/>
+<rect x="549.6" y="176" width="41.9" height="20" fill="url(#f12b-hatch)"/>
+<rect x="591.5" y="176" width="20.7" height="20" class="ts-muted-fill"/>
+<rect x="612.7" y="176.5" width="2.8" height="19" class="ts-outline"/>
+<line x1="200" y1="210" x2="200" y2="214" class="ts-axis"/>
+<text x="200" y="228" text-anchor="middle">0</text>
+<line x1="330" y1="210" x2="330" y2="214" class="ts-axis"/>
+<text x="330" y="228" text-anchor="middle">200</text>
+<line x1="460" y1="210" x2="460" y2="214" class="ts-axis"/>
+<text x="460" y="228" text-anchor="middle">400</text>
+<line x1="590" y1="210" x2="590" y2="214" class="ts-axis"/>
+<text x="590" y="228" text-anchor="middle">600</text>
+<line x1="200" y1="210" x2="616" y2="210" class="ts-axis"/>
+<text x="408" y="250" text-anchor="middle">WELDING OPERATIONS PER SHIFT</text>
+</svg>

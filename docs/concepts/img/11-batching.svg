@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 300" role="img" aria-labelledby="f11a-t f11a-d"><title id="f11a-t">Too small loses capacity, too large loses time</title><desc id="f11a-d">Lead time at the welding station against batch size from 17 to 80: very high just above the minimum of 16, where setups use almost all spare capacity, lowest around 22, then rising steadily as parts wait for their batch to fill; the dashed line is the lead time without any queueing.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-muted-dots{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:2;stroke-dasharray:1 4;stroke-linecap:round;fill:none}.ts-svg .ts-muted-solid{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style>
+<line x1="64" y1="252" x2="616" y2="252" class="ts-grid"/>
+<text x="56" y="256" text-anchor="end">0</text>
+<line x1="64" y1="203.7" x2="616" y2="203.7" class="ts-grid"/>
+<text x="56" y="207.7" text-anchor="end">25</text>
+<line x1="64" y1="155.3" x2="616" y2="155.3" class="ts-grid"/>
+<text x="56" y="159.3" text-anchor="end">50</text>
+<line x1="64" y1="107" x2="616" y2="107" class="ts-grid"/>
+<text x="56" y="111" text-anchor="end">75</text>
+<line x1="64" y1="58.7" x2="616" y2="58.7" class="ts-grid"/>
+<text x="56" y="62.7" text-anchor="end">100</text>
+<line x1="142.9" y1="252" x2="142.9" y2="256" class="ts-axis"/>
+<text x="142.9" y="270" text-anchor="middle">20</text>
+<line x1="300.6" y1="252" x2="300.6" y2="256" class="ts-axis"/>
+<text x="300.6" y="270" text-anchor="middle">40</text>
+<line x1="458.3" y1="252" x2="458.3" y2="256" class="ts-axis"/>
+<text x="458.3" y="270" text-anchor="middle">60</text>
+<line x1="616" y1="252" x2="616" y2="256" class="ts-axis"/>
+<text x="616" y="270" text-anchor="middle">80</text>
+<line x1="64" y1="252" x2="616" y2="252" class="ts-axis"/>
+<line x1="64" y1="20" x2="64" y2="252" class="ts-axis"/>
+<text x="340" y="292" text-anchor="middle">BATCH SIZE (PARTS)</text>
+<text x="14" y="136" text-anchor="middle" transform="rotate(-90 14 136)">LEAD TIME (MIN)</text>
+<line x1="111.3" y1="20" x2="111.3" y2="252" class="ts-muted-line"/>
+<text x="117.3" y="244" text-anchor="start">minimum: 16</text>
+<path d="M119.2 60.8 L127.1 144.1 L142.9 175.9 L158.6 179.6 L182.3 177.2 L221.7 168.2 L261.1 157.5 L300.6 146.1 L379.4 122.7 L458.3 98.8 L616 50.7 L616 51.9 L458.3 99.7 L379.4 123.6 L300.6 146.8 L261.1 158.3 L221.7 169.1 L182.3 178.9 L158.6 182.9 L142.9 184.1 L127.1 184.1 L119.2 190.5 Z" class="ts-ci"/>
+<path d="M119.2 125.6 L127.1 164.1 L142.9 180 L158.6 181.2 L182.3 178.1 L221.7 168.6 L261.1 157.9 L300.6 146.4 L379.4 123.1 L458.3 99.3 L616 51.3" class="ts-ink-line"/>
+<rect x="116.2" y="122.6" width="6" height="6" class="ts-ink-fill"/>
+<rect x="124.1" y="161.1" width="6" height="6" class="ts-ink-fill"/>
+<rect x="139.9" y="177" width="6" height="6" class="ts-ink-fill"/>
+<rect x="155.6" y="178.2" width="6" height="6" class="ts-ink-fill"/>
+<rect x="179.3" y="175.1" width="6" height="6" class="ts-ink-fill"/>
+<rect x="218.7" y="165.6" width="6" height="6" class="ts-ink-fill"/>
+<rect x="258.1" y="154.9" width="6" height="6" class="ts-ink-fill"/>
+<rect x="297.6" y="143.4" width="6" height="6" class="ts-ink-fill"/>
+<rect x="376.4" y="120.1" width="6" height="6" class="ts-ink-fill"/>
+<rect x="455.3" y="96.3" width="6" height="6" class="ts-ink-fill"/>
+<rect x="613" y="48.3" width="6" height="6" class="ts-ink-fill"/>
+<path d="M119.2 204.2 L127.1 201.7 L135 199.3 L142.9 196.9 L150.7 194.5 L158.6 192.1 L166.5 189.7 L174.4 187.2 L182.3 184.8 L190.2 182.4 L198.1 180 L205.9 177.6 L213.8 175.2 L221.7 172.7 L229.6 170.3 L237.5 167.9 L245.4 165.5 L253.3 163.1 L261.1 160.7 L269 158.2 L276.9 155.8 L284.8 153.4 L292.7 151 L300.6 148.6 L308.5 146.2 L316.3 143.7 L324.2 141.3 L332.1 138.9 L340 136.5 L347.9 134.1 L355.8 131.6 L363.7 129.2 L371.5 126.8 L379.4 124.4 L387.3 122 L395.2 119.6 L403.1 117.1 L411 114.7 L418.9 112.3 L426.7 109.9 L434.6 107.5 L442.5 105.1 L450.4 102.6 L458.3 100.2 L466.2 97.8 L474.1 95.4 L481.9 93 L489.8 90.6 L497.7 88.1 L505.6 85.7 L513.5 83.3 L521.4 80.9 L529.3 78.5 L537.1 76.1 L545 73.6 L552.9 71.2 L560.8 68.8 L568.7 66.4 L576.6 64 L584.5 61.6 L592.3 59.1 L600.2 56.7 L608.1 54.3 L616 51.9" class="ts-muted-line"/>
+<rect x="152.6" y="175.2" width="12" height="12" class="ts-acid"/>
+<text x="170.6" y="203.2" text-anchor="start" class="ts-strong">batch 22: shortest lead time</text>
+<rect x="76" y="22" width="10" height="10" class="ts-ink-fill"/>
+<text x="94" y="31" text-anchor="start">SIMULATED</text>
+<line x1="178" y1="27" x2="192" y2="27" class="ts-muted-line"/>
+<text x="196" y="31" text-anchor="start">WITHOUT QUEUEING</text>
+</svg>

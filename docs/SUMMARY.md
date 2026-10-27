@@ -12,14 +12,14 @@
   - [5. Utilization and waiting](concepts/05-utilization.md)
   - [6. Starving and blocking](concepts/06-starving-blocking.md)
   - [7. Buffers](concepts/07-buffers.md)
-  - [8. Unreliable machines]()
-  - [9. Longer lines]()
-  - [10. Takt time and pull]()
-  - [11. Batching and setups]()
-  - [12. Scrap and rework]()
-  - [13. Simulation you can trust]()
-  - [14. From model to reality]()
-- [Glossary]()
+  - [8. Unreliable machines](concepts/08-unreliable-machines.md)
+  - [9. Longer lines](concepts/09-longer-lines.md)
+  - [10. Takt time and pull](concepts/10-takt-pull.md)
+  - [11. Batching and setups](concepts/11-batching-setups.md)
+  - [12. Scrap and rework](concepts/12-scrap-rework.md)
+  - [13. Simulation you can trust](concepts/13-trustworthy-results.md)
+  - [14. From model to reality](concepts/14-model-to-reality.md)
+- [Glossary](concepts/glossary.md)
 
 # Reference
 
