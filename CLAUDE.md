@@ -16,9 +16,9 @@ as `format: "1.0"` (ADR-0008).
 - `docs/roadmap.md`: milestones and the acceptance criteria each proves.
   Work on the current milestone, or on a parallel track that the roadmap
   marks as independent of it ("Parallel tracks"; owner's decision,
-  2026-10-25). Each track has its own branch, PR and ADR number, and does
-  not edit the roadmap, the ADR index or CLAUDE.md; the lead session
-  integrates.
+  2026-10-25) and that the owner has started (ADR-0022). Each track has
+  its own branch, PR and ADR number, and does not edit the roadmap, the
+  ADR index or CLAUDE.md; the lead session integrates.
 - `docs/adr/`: decisions. Only the owner accepts an ADR, in one of two ways:
   - **Explicitly**, by saying so. Required for an ADR that changes the spec
     or an accepted ADR.
@@ -34,6 +34,28 @@ as `format: "1.0"` (ADR-0008).
   accepts it. A number marked *initial target* is confirmed in an ADR with
   measurements.
 - If code and spec disagree, stop and raise it; do not silently pick one.
+
+## Pace (ADR-0022)
+
+The owner's understanding, not agent capacity, sets the pace.
+
+- No milestone or parallel track starts while open or recently merged
+  one-way-door work is not yet understood by the owner. One milestone at a
+  time; parallel tracks only when the owner starts them.
+- Every question to the owner says whether it is a **one-way door**
+  (formats, hash and identity definitions, public interfaces, determinism
+  rules, dependency policy) or a two-way door. One-way doors: one decision
+  at a time, with the cost of the choice and of reversing it; the owner
+  answers in their own words. Never batch them into "accept all".
+- Verification over volume: prefer checks a machine runs (theory, published
+  vectors, pinned hashes, cross-platform equality, mutation). An agent's
+  review supplements them, never replaces them.
+- Each milestone gets a one-page guide in `docs/guide/`. A PR with a
+  one-way door merges only after the owner's hands-on walkthrough and its
+  guide page.
+- PRs are small enough for the owner to read the non-test code, and their
+  description has "What you need to understand" (at most five points) and
+  "One-way doors".
 
 ## Design principles (spec §2)
 
