@@ -580,16 +580,31 @@ blockquote {
 /* The playhead (design system, Motion): the acid step walks the mark's 16
    steps, one bar at 130 BPM, jumping without easing, for two bars, then
    rests on the firing step. Each beat is lit for one sixteenth of a bar;
-   the delays (in docs/assets/hero.svg) start after a quarter-second pause. */
+   the delays (in docs/assets/hero.svg) start after a quarter-second pause.
+   It runs only while the class ts-play is set, which website/components/
+   hero.js does when the logo comes into view and again on hover, click or
+   Enter. Without JavaScript, with reduced motion and in print the logo
+   simply rests. */
 .ts-hero .ts-beat {
   opacity: 0;
-  animation: ts-beat 1.846s step-end 2;
 }
 
 .ts-hero .ts-rest {
+  opacity: 1;
+}
+
+.ts-hero.ts-play .ts-beat {
+  animation: ts-beat 1.846s step-end 2;
+}
+
+.ts-hero.ts-play .ts-rest {
   opacity: 0;
-  /* A quarter-second pause, then two bars: 0.25 s + 2 × 1.846 s. */
+  /* The pause and two bars: 0.25 s + 2 × 1.846 s. */
   animation: ts-rest 3.942s step-end 1 forwards;
+}
+
+.ts-hero.ts-interactive {
+  cursor: pointer;
 }
 
 @keyframes ts-beat {
@@ -604,8 +619,8 @@ blockquote {
 }
 
 @media (prefers-reduced-motion: reduce), print {
-  .ts-hero .ts-beat { animation: none; opacity: 0; }
-  .ts-hero .ts-rest { animation: none; opacity: 1; }
+  .ts-hero.ts-play .ts-beat { animation: none; opacity: 0; }
+  .ts-hero.ts-play .ts-rest { animation: none; opacity: 1; }
 }
 
 .ts-hero-tagline {

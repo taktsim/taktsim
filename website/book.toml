@@ -25,7 +25,7 @@ default-theme = "light"
 preferred-dark-theme = "coal"
 additional-css = ["theme/tokens.css", "theme/taktsim.css"]
 # mermaid*.js are written by `mdbook-mermaid install website` and not committed.
-additional-js = ["mermaid.min.js", "mermaid-init.js", "components/sim.js", "components/viz.js"]
+additional-js = ["mermaid.min.js", "mermaid-init.js", "components/sim.js", "components/viz.js", "components/hero.js"]
 # Chapter numbers are part of the titles of the concept pages.
 no-section-label = true
 # Keep file names as written: fonts/fonts.css refers to the font files by name.
