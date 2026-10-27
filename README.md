@@ -24,12 +24,15 @@ in a text file: its machines, how long each step takes, how much can wait
 between them. taktsim simulates a shift, a week or a year in seconds and
 reports what comes out and where work piles up.
 
-Take two machines with a shelf between them. Cutting takes about 42 s
-per part, but the time varies; welding takes 45 s. Arithmetic says
-welding sets the pace: 80 parts an hour, 640 per shift. In practice
-cutting sometimes runs slow, the shelf runs empty and welding waits.
-taktsim plays the shift event by event, many times over, and reports the
-throughput you would really get, with an error bar.
+Take two machines with a shelf between them. Cutting takes 42 s per part
+on average, welding 45 s, and both vary from part to part. Arithmetic says
+welding sets the pace: 80 parts an hour, 640 per shift. In practice each
+machine sometimes runs slow and the other has to wait. taktsim plays the
+shift event by event, many times over, and reports the throughput you
+would really get, with an error bar: about 635 parts with a shelf of 20,
+about 576 with a shelf of one. The
+[concepts guide](https://taktsim.github.io/taktsim/concepts/07-buffers.html)
+explains why.
 
 Use it to:
 
@@ -59,13 +62,13 @@ experiment:
 components:
   - id: cut
     type: Machine
-    cycle_time: { dist: lognormal, mean: 42s, sigma: 0.08 }
+    cycle_time: { dist: lognormal, mean: 42s, sigma: 0.5 }
   - id: buf1
     type: Buffer
     capacity: 20 parts
   - id: weld
     type: Machine
-    cycle_time: 45s
+    cycle_time: { dist: lognormal, mean: 45s, sigma: 0.5 }
 flow:
   - [source, cut, buf1, weld, sink]
 observe:
