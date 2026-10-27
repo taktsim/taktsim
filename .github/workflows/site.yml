@@ -1,0 +1,61 @@
+# The documentation site (spec §10, docs; mdBook). Builds on every pull
+# request that touches the docs and deploys to GitHub Pages from main.
+# Separate from ci.yml: it needs no Rust build and runs only when the docs
+# change. Changing this file needs the `gate-change` label (ci/check-gates.sh).
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths: [docs/**, website/**, .nvmrc, .github/workflows/site.yml]
+  pull_request:
+    paths: [docs/**, website/**, .nvmrc, .github/workflows/site.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: build (mdBook, links)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: mdbook@0.5.4,mdbook-mermaid@0.17.1,lychee@0.24.2
+      - run: mdbook-mermaid install website
+      - run: mdbook build website
+      # A broken link or anchor between pages fails the build. External links
+      # are not checked here, so the build does not depend on other sites.
+      # 404.html links to the site root on purpose, which exists only online.
+      - run: lychee --offline --include-fragments --no-progress --exclude-path website/book/404.html website/book
+      - if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/book
+
+  deploy:
+    name: deploy (GitHub Pages)
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Never cancel a deployment halfway; a newer push waits for it.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
