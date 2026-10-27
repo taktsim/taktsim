@@ -1,0 +1,21 @@
+# The model of spec-line-a.yaml with its components and part of its flow in
+# other files. It has the same hash: the hash covers the resolved content.
+format: "1.0"
+model:
+  name: line-a
+  time_unit: s
+  seed: 42
+include:
+  - parts/stations.yaml
+  - {path: parts/ends.json, sha256: 7a4bada22af401f3ddb7c1416ebf85875bf5192061775e00038aedca29870a33}
+experiment:
+  type: terminating
+  horizon: 8h
+  precision: { throughput(sink): 2% }
+components:
+  - id: sink
+    type: Sink
+flow:
+  - [weld, sink]
+observe:
+  - wip(buf1)

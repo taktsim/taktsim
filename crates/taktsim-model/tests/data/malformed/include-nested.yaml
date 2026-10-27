@@ -1,0 +1,14 @@
+# An included file that includes another.
+format: "1.0"
+model: {name: m}
+include: [parts/nested.yaml]
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: parts/nested.yaml: include @ 1:1 NestedInclude

@@ -1,0 +1,9 @@
+# No components.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components @ 2:1 MissingField

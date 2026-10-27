@@ -1,0 +1,4 @@
+components:
+  - {id: extra, type: Bufer, capacity: 5 parts}
+observe: [wip(extra)]
+flows: []

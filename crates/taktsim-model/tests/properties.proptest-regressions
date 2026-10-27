@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 520b3ed05c6ef29822d2f1f1b33a16b4cbd452871ef8ac0ecdc970c5875e0fc2 # shrinks to model = Model { name: "y", seed: Some(0), time_unit: Some("d"), horizon: 1000000, precision: Some(1), components: [Source { id: "a0", mean: 1000000 }, Buffer { id: "a1", capacity: 1 }, Sink { id: "a2" }], observe_spacing: false }, seeds = [0, 0, 1972593003260770248, 0]

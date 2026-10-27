@@ -1,0 +1,13 @@
+# An integer beyond 2^53 - 1.
+format: "1.0"
+model: {name: m, seed: 9007199254740992}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: model.seed @ 3:24 IntegerRange

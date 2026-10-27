@@ -1,0 +1,10 @@
+# An empty list.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components: []
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: components @ 2:1 TooFew
