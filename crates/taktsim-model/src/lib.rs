@@ -15,19 +15,24 @@
 //!   observables type-checked with the expression language ([`expr`],
 //!   ADR-0009);
 //! - normalization and the model hash: SHA-256 of the canonical JSON
-//!   (RFC 8785, [`jcs`]) of the normalized document, the same for every
-//!   spelling of a model.
+//!   (RFC 8785, [`jcs`]) of the normalized document ([`Encode`], [`Json`]),
+//!   the same for every spelling of a model.
 //!
 //! Component types are not part of this crate: the caller registers them,
 //! with the observables, in a [`Catalog`] (see [`ComponentParams`]).
 //!
 //! ```
-//! use serde::Serialize;
-//! use taktsim_model::{Catalog, ComponentParams, Distribution, Fields, Format, Loader};
+//! use taktsim_model::{Catalog, ComponentParams, Distribution, Encode, Fields, Format, Json, Loader};
 //!
-//! #[derive(Debug, Serialize)]
+//! #[derive(Debug)]
 //! struct Machine {
 //!     cycle_time: Distribution,
+//! }
+//!
+//! impl Encode for Machine {
+//!     fn encode(&self) -> Json {
+//!         Json::object([]).with("cycle_time", &self.cycle_time)
+//!     }
 //! }
 //!
 //! impl ComponentParams for Machine {
@@ -74,6 +79,7 @@ pub mod expr;
 mod hash;
 mod include;
 pub mod jcs;
+mod json;
 mod load;
 mod syntax;
 
@@ -90,5 +96,6 @@ pub use error::{
 };
 pub use hash::{ModelHash, ParseHashError};
 pub use include::{DirResolver, Included, Resolver};
+pub use json::{Encode, Json};
 pub use load::{Loader, Model, decode_str};
 pub use syntax::{Entry, Format, MAX_NESTING, Node, Value};

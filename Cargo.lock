@@ -929,8 +929,6 @@ version = "0.0.0"
 dependencies = [
  "proptest",
  "saphyr-parser",
- "serde",
- "serde_json",
  "sha2",
  "taktsim-core",
  "taktsim-units",
@@ -964,8 +962,6 @@ name = "taktsim-units"
 version = "0.0.0"
 dependencies = [
  "proptest",
- "serde",
- "serde_json",
  "thiserror",
 ]
 

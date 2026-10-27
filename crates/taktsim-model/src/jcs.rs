@@ -15,16 +15,17 @@
 
 use std::fmt::Write;
 
-use serde_json::{Number, Value};
+use crate::json::Json;
 
 /// Why a value has no canonical form.
 ///
 /// ```
-/// use serde_json::json;
+/// use taktsim_model::Json;
 /// use taktsim_model::jcs::{CanonicalError, canonicalize};
 ///
-/// let err = canonicalize(&json!(9007199254740993_u64)).unwrap_err();
+/// let err = canonicalize(&Json::from(9007199254740993_u64)).unwrap_err();
 /// assert_eq!(err, CanonicalError::InexactInteger("9007199254740993".into()));
+/// assert_eq!(canonicalize(&Json::Float(f64::NAN)), Err(CanonicalError::NotFinite));
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CanonicalError {
@@ -32,6 +33,9 @@ pub enum CanonicalError {
     /// readers of the canonical form would see another number.
     #[error("the integer {0} cannot be represented exactly as a double")]
     InexactInteger(String),
+    /// NaN or an infinity, which JSON cannot write.
+    #[error("a number that is not finite has no JSON form")]
+    NotFinite,
 }
 
 /// The canonical JSON text of `value` (RFC 8785).
@@ -39,30 +43,46 @@ pub enum CanonicalError {
 /// # Errors
 ///
 /// [`CanonicalError::InexactInteger`] for an integer beyond ±2^53, which
-/// RFC 8785 cannot represent exactly. A loaded model never has one: its
-/// integers are within ±(2^53 − 1).
+/// RFC 8785 cannot represent exactly, and [`CanonicalError::NotFinite`]
+/// for NaN or an infinity. A loaded model has neither: its integers are
+/// within ±(2^53 − 1) and its numbers finite.
 ///
 /// ```
-/// use serde_json::json;
+/// use taktsim_model::Json;
 /// use taktsim_model::jcs::canonicalize;
 ///
-/// let value = json!({"b": [1.0, 1e21, 1e-7, "€"], "a": null});
+/// let value = Json::object([
+///     ("b", Json::Array(vec![Json::from(1.0), Json::from(1e21), Json::from(1e-7), Json::from("€")])),
+///     ("a", Json::Null),
+/// ]);
 /// assert_eq!(canonicalize(&value)?, r#"{"a":null,"b":[1,1e+21,1e-7,"€"]}"#);
 /// # Ok::<(), taktsim_model::jcs::CanonicalError>(())
 /// ```
-pub fn canonicalize(value: &Value) -> Result<String, CanonicalError> {
+pub fn canonicalize(value: &Json) -> Result<String, CanonicalError> {
     let mut out = String::new();
     write_value(&mut out, value)?;
     Ok(out)
 }
 
-fn write_value(out: &mut String, value: &Value) -> Result<(), CanonicalError> {
+fn write_value(out: &mut String, value: &Json) -> Result<(), CanonicalError> {
     match value {
-        Value::Null => out.push_str("null"),
-        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        Value::Number(n) => write_number(out, n)?,
-        Value::String(s) => write_string(out, s),
-        Value::Array(items) => {
+        Json::Null => out.push_str("null"),
+        Json::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Json::Integer(n) => {
+            if n.unsigned_abs() > EXACT {
+                return Err(CanonicalError::InexactInteger(n.to_string()));
+            }
+            // Below 1e21, so ECMAScript writes the integer's digits.
+            let _ = write!(out, "{n}");
+        }
+        Json::Float(x) => {
+            if !x.is_finite() {
+                return Err(CanonicalError::NotFinite);
+            }
+            out.push_str(&number_to_string(*x));
+        }
+        Json::String(s) => write_string(out, s),
+        Json::Array(items) => {
             out.push('[');
             for (i, item) in items.iter().enumerate() {
                 if i > 0 {
@@ -72,8 +92,8 @@ fn write_value(out: &mut String, value: &Value) -> Result<(), CanonicalError> {
             }
             out.push(']');
         }
-        Value::Object(map) => {
-            let mut entries: Vec<(&String, &Value)> = map.iter().collect();
+        Json::Object(map) => {
+            let mut entries: Vec<(&String, &Json)> = map.iter().collect();
             entries.sort_by(|(a, _), (b, _)| a.encode_utf16().cmp(b.encode_utf16()));
             out.push('{');
             for (i, (key, item)) in entries.into_iter().enumerate() {
@@ -91,29 +111,10 @@ fn write_value(out: &mut String, value: &Value) -> Result<(), CanonicalError> {
 }
 
 /// The largest integer every double holds exactly, with its neighbours.
-const EXACT: u64 = 1 << 53;
-
-fn write_number(out: &mut String, n: &Number) -> Result<(), CanonicalError> {
-    if let Some(u) = n.as_u64() {
-        if u > EXACT {
-            return Err(CanonicalError::InexactInteger(u.to_string()));
-        }
-        // Below 1e21, so ECMAScript writes the integer's digits.
-        out.push_str(&u.to_string());
-    } else if let Some(i) = n.as_i64() {
-        if i.unsigned_abs() > EXACT {
-            return Err(CanonicalError::InexactInteger(i.to_string()));
-        }
-        out.push_str(&i.to_string());
-    } else if let Some(x) = n.as_f64() {
-        out.push_str(&number_to_string(x));
-    }
-    Ok(())
-}
+const EXACT: u128 = 1 << 53;
 
 /// ECMAScript's `Number.prototype.toString(x)` for a finite `x`
-/// (ECMA-262, `Number::toString`). `serde_json` cannot hold NaN or
-/// infinities, which have no JSON form.
+/// (ECMA-262, `Number::toString`); NaN and infinities have no JSON form.
 ///
 /// ```
 /// use taktsim_model::jcs::number_to_string;
@@ -219,7 +220,7 @@ fn shortest_digits(x: f64) -> (String, i64) {
     (digits, exponent)
 }
 
-fn write_string(out: &mut String, s: &str) {
+pub(crate) fn write_string(out: &mut String, s: &str) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -242,7 +243,6 @@ fn write_string(out: &mut String, s: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     /// RFC 8785, Appendix B: IEEE 754 bit patterns and their canonical
     /// text.
@@ -277,7 +277,7 @@ mod tests {
         for (bits, expected) in cases {
             let x = f64::from_bits(bits);
             assert_eq!(number_to_string(x), expected, "{bits:016x}");
-            let value = Value::Number(Number::from_f64(x).unwrap());
+            let value = Json::Float(x);
             assert_eq!(canonicalize(&value).unwrap(), expected, "{bits:016x}");
         }
     }
@@ -287,17 +287,24 @@ mod tests {
     /// correctly.)
     #[test]
     fn rfc_8785_section_3_2_2_example() {
-        let value = json!({
-            "numbers": [
-                "333333333.33333329".parse::<f64>().unwrap(),
-                1e30,
-                4.50,
-                2e-3,
-                "0.000000000000000000000000001".parse::<f64>().unwrap(),
-            ],
-            "string": "\u{20ac}$\u{000F}\u{000a}A'\u{0042}\u{0022}\u{005c}\\\"/",
-            "literals": [null, true, false],
-        });
+        let numbers = [
+            "333333333.33333329".parse::<f64>().unwrap(),
+            1e30,
+            4.50,
+            2e-3,
+            "0.000000000000000000000000001".parse::<f64>().unwrap(),
+        ];
+        let value = Json::object([
+            ("numbers", Json::Array(numbers.map(Json::from).to_vec())),
+            (
+                "string",
+                Json::from("\u{20ac}$\u{000F}\u{000a}A'\u{0042}\u{0022}\u{005c}\\\"/"),
+            ),
+            (
+                "literals",
+                Json::Array(vec![Json::Null, Json::from(true), Json::from(false)]),
+            ),
+        ]);
         assert_eq!(
             canonicalize(&value).unwrap(),
             "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\
@@ -309,15 +316,18 @@ mod tests {
     /// (surrogates D83D DE00) sorts before U+FB33.
     #[test]
     fn rfc_8785_section_3_2_3_sorting() {
-        let value = json!({
-            "\u{20ac}": "Euro Sign",
-            "\r": "Carriage Return",
-            "\u{fb33}": "Hebrew Letter Dalet With Dagesh",
-            "1": "One",
-            "\u{1f600}": "Emoji: Grinning Face",
-            "\u{0080}": "Control",
-            "\u{00f6}": "Latin Small Letter O With Diaeresis",
-        });
+        let value = Json::object(
+            [
+                ("\u{20ac}", "Euro Sign"),
+                ("\r", "Carriage Return"),
+                ("\u{fb33}", "Hebrew Letter Dalet With Dagesh"),
+                ("1", "One"),
+                ("\u{1f600}", "Emoji: Grinning Face"),
+                ("\u{0080}", "Control"),
+                ("\u{00f6}", "Latin Small Letter O With Diaeresis"),
+            ]
+            .map(|(k, v)| (k, Json::from(v))),
+        );
         assert_eq!(
             canonicalize(&value).unwrap(),
             "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u{0080}\":\"Control\",\
@@ -330,7 +340,7 @@ mod tests {
     fn strings_escape_only_what_ecmascript_escapes() {
         let s = "\u{0}\u{1}\u{8}\t\n\u{b}\u{c}\r\u{1f} \u{7f}\u{2028}/<>";
         assert_eq!(
-            canonicalize(&json!(s)).unwrap(),
+            canonicalize(&Json::from(s)).unwrap(),
             "\"\\u0000\\u0001\\b\\t\\n\\u000b\\f\\r\\u001f \u{7f}\u{2028}/<>\""
         );
     }
@@ -338,17 +348,21 @@ mod tests {
     #[test]
     fn integers_are_exact_or_rejected() {
         assert_eq!(
-            canonicalize(&json!(9_007_199_254_740_992_u64)).unwrap(),
+            canonicalize(&Json::from(9_007_199_254_740_992_u64)).unwrap(),
             "9007199254740992"
         );
         assert_eq!(
-            canonicalize(&json!(-9_007_199_254_740_992_i64)).unwrap(),
+            canonicalize(&Json::from(-9_007_199_254_740_992_i64)).unwrap(),
             "-9007199254740992"
         );
-        assert_eq!(canonicalize(&json!(-42)).unwrap(), "-42");
-        assert!(canonicalize(&json!(-9_007_199_254_740_993_i64)).is_err());
-        assert!(canonicalize(&json!([u64::MAX])).is_err());
-        assert!(canonicalize(&json!({"a": u64::MAX})).is_err());
+        assert_eq!(canonicalize(&Json::from(-42)).unwrap(), "-42");
+        assert!(canonicalize(&Json::from(-9_007_199_254_740_993_i64)).is_err());
+        assert!(canonicalize(&Json::Array(vec![Json::from(u64::MAX)])).is_err());
+        assert!(canonicalize(&Json::object([("a", Json::from(u64::MAX))])).is_err());
+        assert_eq!(
+            canonicalize(&Json::Array(vec![Json::Float(f64::INFINITY)])),
+            Err(CanonicalError::NotFinite)
+        );
     }
 
     #[test]

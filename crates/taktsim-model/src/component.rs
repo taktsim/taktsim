@@ -13,11 +13,10 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 
-use serde::Serialize;
-
 use crate::decode::{Decode, Decoder, Fields};
 use crate::error::{FieldPath, LoadErrorKind, Place};
 use crate::expr::{ComponentId, Signature, TypeEnv};
+use crate::json::{Encode, Json};
 use crate::syntax::Node;
 
 /// A reference to a component by its id, e.g. `rework_to: asm`. The loader
@@ -83,9 +82,10 @@ impl PartialEq for ComponentRef {
 
 impl Eq for ComponentRef {}
 
-impl Serialize for ComponentRef {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.id)
+impl Encode for ComponentRef {
+    /// The id.
+    fn encode(&self) -> Json {
+        self.id.as_str().into()
     }
 }
 
@@ -125,19 +125,24 @@ impl Decode for ComponentRef {
 ///
 /// A component type reads its parameters with [`Fields`]: the loader has
 /// already read `id` and `type`, and reports every key the type did not
-/// read as unknown. Its normalized form is its `Serialize` output, which
-/// must be a mapping that leaves out absent optional parameters (so adding
+/// read as unknown. Its normalized form is its [`Encode`] output, which
+/// must be an object that leaves out absent optional parameters (so adding
 /// an optional parameter later does not change the hash of any existing
-/// model) and writes quantities and distributions in their canonical forms
-/// (they serialize that way).
+/// model) and writes each value with its own `Encode` (quantities and
+/// distributions in their canonical forms).
 ///
 /// ```
-/// use serde::Serialize;
-/// use taktsim_model::{Catalog, ComponentParams, Distribution, Fields};
+/// use taktsim_model::{Catalog, ComponentParams, Distribution, Encode, Fields, Json};
 ///
-/// #[derive(Debug, Serialize)]
+/// #[derive(Debug)]
 /// struct Delay {
 ///     time: Distribution,
+/// }
+///
+/// impl Encode for Delay {
+///     fn encode(&self) -> Json {
+///         Json::object([]).with("time", &self.time)
+///     }
 /// }
 ///
 /// impl ComponentParams for Delay {
@@ -153,7 +158,7 @@ impl Decode for ComponentRef {
 /// assert_eq!(catalog.types().collect::<Vec<_>>(), ["Delay"]);
 /// # Ok::<(), taktsim_model::CatalogError>(())
 /// ```
-pub trait ComponentParams: Serialize + fmt::Debug + Send + Sync + Sized + 'static {
+pub trait ComponentParams: Encode + fmt::Debug + Send + Sync + Sized + 'static {
     /// The `type` value that selects this component type, e.g. `Machine`.
     const TYPE: &'static str;
     /// One valid entry in YAML flow style, for error messages.
@@ -167,12 +172,17 @@ pub trait ComponentParams: Serialize + fmt::Debug + Send + Sync + Sized + 'stati
     /// exist.
     ///
     /// ```
-    /// use serde::Serialize;
-    /// use taktsim_model::{ComponentParams, ComponentRef, Fields};
+    /// use taktsim_model::{ComponentParams, ComponentRef, Encode, Fields, Json};
     ///
-    /// #[derive(Debug, Serialize)]
+    /// #[derive(Debug)]
     /// struct Inspection {
     ///     rework_to: ComponentRef,
+    /// }
+    ///
+    /// impl Encode for Inspection {
+    ///     fn encode(&self) -> Json {
+    ///         Json::object([]).with("rework_to", &self.rework_to)
+    ///     }
     /// }
     ///
     /// impl ComponentParams for Inspection {
@@ -214,7 +224,7 @@ impl<P: ComponentParams> Kind for KindOf<P> {
 /// Parameters with their type erased.
 trait Params: fmt::Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
-    fn to_json(&self) -> Result<serde_json::Value, serde_json::Error>;
+    fn encode(&self) -> Json;
     fn references(&self) -> Vec<&ComponentRef>;
 }
 
@@ -223,8 +233,8 @@ impl<P: ComponentParams> Params for P {
         self
     }
 
-    fn to_json(&self) -> Result<serde_json::Value, serde_json::Error> {
-        serde_json::to_value(self)
+    fn encode(&self) -> Json {
+        Encode::encode(self)
     }
 
     fn references(&self) -> Vec<&ComponentRef> {
@@ -237,8 +247,14 @@ impl<P: ComponentParams> Params for P {
 /// ```
 /// use taktsim_model::{Catalog, CatalogError, ComponentParams, Fields};
 ///
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug)]
 /// struct Sink {}
+///
+/// impl taktsim_model::Encode for Sink {
+///     fn encode(&self) -> taktsim_model::Json {
+///         taktsim_model::Json::object([])
+///     }
+/// }
 ///
 /// impl ComponentParams for Sink {
 ///     const TYPE: &'static str = "Sink";
@@ -334,8 +350,14 @@ impl Catalog {
     /// ```
     /// use taktsim_model::{Catalog, ComponentParams, Fields};
     ///
-    /// #[derive(Debug, serde::Serialize)]
+    /// #[derive(Debug)]
     /// struct Sink {}
+    ///
+    /// impl taktsim_model::Encode for Sink {
+    ///     fn encode(&self) -> taktsim_model::Json {
+    ///         taktsim_model::Json::object([])
+    ///     }
+    /// }
     ///
     /// impl ComponentParams for Sink {
     ///     const TYPE: &'static str = "Sink";
@@ -439,13 +461,18 @@ impl Catalog {
 /// One component of a model: its id, its type and its typed parameters.
 ///
 /// ```
-/// use serde::Serialize;
-/// use taktsim_model::{Catalog, ComponentParams, Fields, Format, Loader};
+/// use taktsim_model::{Catalog, ComponentParams, Encode, Fields, Format, Json, Loader};
 /// use taktsim_units::Count;
 ///
-/// #[derive(Debug, Serialize)]
+/// #[derive(Debug)]
 /// struct Buffer {
 ///     capacity: Count,
+/// }
+///
+/// impl Encode for Buffer {
+///     fn encode(&self) -> Json {
+///         Json::object([]).with("capacity", &self.capacity)
+///     }
 /// }
 ///
 /// impl ComponentParams for Buffer {
@@ -552,28 +579,25 @@ impl Component {
     }
 
     /// The normalized form: `{id, type, ...parameters}`.
-    pub(crate) fn to_json(&self) -> Result<serde_json::Value, LoadErrorKind> {
+    pub(crate) fn to_json(&self) -> Result<Json, LoadErrorKind> {
         let problem = |problem| LoadErrorKind::Normalize {
             type_name: self.type_name.to_owned(),
             problem,
         };
-        let params = self
-            .params
-            .to_json()
-            .map_err(|e| problem(crate::error::NormalizeProblem::Serialize(e.to_string())))?;
-        let serde_json::Value::Object(params) = params else {
+        let Json::Object(params) = self.params.encode() else {
             return Err(problem(crate::error::NormalizeProblem::NotAMapping));
         };
-        let mut entry = serde_json::Map::new();
-        entry.insert("id".to_owned(), self.id.clone().into());
-        entry.insert("type".to_owned(), self.type_name.into());
+        let mut entry = Json::object([
+            ("id", Json::from(self.id.as_str())),
+            ("type", Json::from(self.type_name)),
+        ]);
         for (key, value) in params {
-            if entry.contains_key(&key) {
+            if matches!(key.as_str(), "id" | "type") {
                 return Err(problem(crate::error::NormalizeProblem::ReservedKey(key)));
             }
-            entry.insert(key, value);
+            entry = entry.with(&key, &value);
         }
-        Ok(serde_json::Value::Object(entry))
+        Ok(entry)
     }
 }
 

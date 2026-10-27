@@ -1,12 +1,11 @@
 //! Distributions of durations as written in a model (ADR-0003).
 
-use serde::Serialize;
-use serde::ser::{SerializeMap, Serializer};
 use taktsim_core::random::{DistributionError, DurationDistribution};
 use taktsim_units::SimDuration;
 
 use crate::decode::{Decode, Decoder};
 use crate::error::{LoadErrorKind, Segment};
+use crate::json::{Encode, Json};
 use crate::syntax::{Node, Value};
 
 /// A stochastic duration parameter: a bare duration is a constant; any
@@ -21,14 +20,15 @@ use crate::syntax::{Node, Value};
 /// duration.
 ///
 /// ```
-/// use taktsim_model::{Distribution, Format, decode_str};
+/// use taktsim_model::jcs::canonicalize;
+/// use taktsim_model::{Distribution, Encode, Format, decode_str};
 ///
 /// let d: Distribution = decode_str("{dist: lognormal, mean: 42s, sigma: 0.08}", Format::Yaml)?;
 /// assert_eq!(d.to_string(), "{dist: lognormal, mean: 42s, sigma: 0.08}");
-/// assert_eq!(serde_json::to_string(&d)?, r#"{"dist":"lognormal","mean":"42s","sigma":0.08}"#);
+/// assert_eq!(canonicalize(&d.encode())?, r#"{"dist":"lognormal","mean":"42s","sigma":0.08}"#);
 ///
 /// let constant: Distribution = decode_str("45s", Format::Yaml)?;
-/// assert_eq!(serde_json::to_string(&constant)?, r#""45s""#);
+/// assert_eq!(canonicalize(&constant.encode())?, r#""45s""#);
 ///
 /// let err = decode_str::<Distribution>("{dist: uniform, min: 50s, max: 40s}", Format::Yaml).unwrap_err();
 /// assert_eq!(err.first().path().to_string(), "max");
@@ -194,57 +194,36 @@ impl std::fmt::Display for Distribution {
     }
 }
 
-impl Serialize for Distribution {
+impl Encode for Distribution {
     /// The normalized form: a constant as its duration text, any other
-    /// distribution as a mapping with `dist` and its parameters.
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let name = self.name().unwrap_or_default();
-        let mut map = match self {
-            Self::Constant(d) => return d.serialize(serializer),
-            Self::Exponential { .. } => serializer.serialize_map(Some(2))?,
-            Self::Normal { .. }
-            | Self::LogNormal { .. }
-            | Self::Uniform { .. }
-            | Self::Gamma { .. }
-            | Self::Erlang { .. }
-            | Self::Weibull { .. } => serializer.serialize_map(Some(3))?,
-            Self::Triangular { .. } => serializer.serialize_map(Some(4))?,
+    /// distribution as an object with `dist` and its parameters.
+    fn encode(&self) -> Json {
+        let object = |entries: &[(&str, Json)]| {
+            let mut object = Json::object([("dist", Json::from(self.name().unwrap_or_default()))]);
+            for (key, value) in entries {
+                object = object.with(key, value);
+            }
+            object
         };
-        map.serialize_entry("dist", name)?;
-        match self {
-            Self::Constant(_) => {}
-            Self::Exponential { mean } => map.serialize_entry("mean", mean)?,
-            Self::Normal { mean, sd } => {
-                map.serialize_entry("mean", mean)?;
-                map.serialize_entry("sd", sd)?;
-            }
+        match *self {
+            Self::Constant(d) => d.encode(),
+            Self::Exponential { mean } => object(&[("mean", mean.encode())]),
+            Self::Normal { mean, sd } => object(&[("mean", mean.encode()), ("sd", sd.encode())]),
             Self::LogNormal { mean, sigma } => {
-                map.serialize_entry("mean", mean)?;
-                map.serialize_entry("sigma", sigma)?;
+                object(&[("mean", mean.encode()), ("sigma", sigma.encode())])
             }
-            Self::Uniform { min, max } => {
-                map.serialize_entry("min", min)?;
-                map.serialize_entry("max", max)?;
-            }
-            Self::Triangular { min, mode, max } => {
-                map.serialize_entry("min", min)?;
-                map.serialize_entry("mode", mode)?;
-                map.serialize_entry("max", max)?;
-            }
-            Self::Gamma { mean, cv } => {
-                map.serialize_entry("mean", mean)?;
-                map.serialize_entry("cv", cv)?;
-            }
-            Self::Erlang { mean, k } => {
-                map.serialize_entry("mean", mean)?;
-                map.serialize_entry("k", k)?;
-            }
+            Self::Uniform { min, max } => object(&[("min", min.encode()), ("max", max.encode())]),
+            Self::Triangular { min, mode, max } => object(&[
+                ("min", min.encode()),
+                ("mode", mode.encode()),
+                ("max", max.encode()),
+            ]),
+            Self::Gamma { mean, cv } => object(&[("mean", mean.encode()), ("cv", cv.encode())]),
+            Self::Erlang { mean, k } => object(&[("mean", mean.encode()), ("k", k.encode())]),
             Self::Weibull { scale, shape } => {
-                map.serialize_entry("scale", scale)?;
-                map.serialize_entry("shape", shape)?;
+                object(&[("scale", scale.encode()), ("shape", shape.encode())])
             }
         }
-        map.end()
     }
 }
 
@@ -545,17 +524,19 @@ mod tests {
         assert_eq!(err[0].1, "k");
     }
 
+    /// The canonical text (RFC 8785: keys sorted, numbers as ECMAScript
+    /// writes them) of each distribution's normalized form.
     #[test]
     fn the_normalized_form_uses_canonical_durations() {
         let d = load("{dist: exponential, mean: 0.2h}").unwrap();
         assert_eq!(
-            serde_json::to_string(&d).unwrap(),
+            crate::jcs::canonicalize(&d.encode()).unwrap(),
             r#"{"dist":"exponential","mean":"12min"}"#
         );
         let d = load("{dist: triangular, min: 1s, mode: 2s, max: 3s}").unwrap();
         assert_eq!(
-            serde_json::to_string(&d).unwrap(),
-            r#"{"dist":"triangular","min":"1s","mode":"2s","max":"3s"}"#
+            crate::jcs::canonicalize(&d.encode()).unwrap(),
+            r#"{"dist":"triangular","max":"3s","min":"1s","mode":"2s"}"#
         );
         for (yaml, json) in [
             (
@@ -564,22 +545,25 @@ mod tests {
             ),
             (
                 "{dist: uniform, min: 1s, max: 2s}",
-                r#"{"dist":"uniform","min":"1s","max":"2s"}"#,
+                r#"{"dist":"uniform","max":"2s","min":"1s"}"#,
             ),
             (
                 "{dist: gamma, mean: 2s, cv: 0.5}",
-                r#"{"dist":"gamma","mean":"2s","cv":0.5}"#,
+                r#"{"cv":0.5,"dist":"gamma","mean":"2s"}"#,
             ),
             (
                 "{dist: erlang, mean: 2s, k: 2}",
-                r#"{"dist":"erlang","mean":"2s","k":2}"#,
+                r#"{"dist":"erlang","k":2,"mean":"2s"}"#,
             ),
             (
                 "{dist: weibull, scale: 2s, shape: 2}",
-                r#"{"dist":"weibull","scale":"2s","shape":2.0}"#,
+                r#"{"dist":"weibull","scale":"2s","shape":2}"#,
             ),
         ] {
-            assert_eq!(serde_json::to_string(&load(yaml).unwrap()).unwrap(), json);
+            assert_eq!(
+                crate::jcs::canonicalize(&load(yaml).unwrap().encode()).unwrap(),
+                json
+            );
         }
     }
 }

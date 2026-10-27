@@ -1,7 +1,6 @@
 //! The model document (spec §4; roadmap M4): its sections, as read from a
 //! file, and their normalized form.
 
-use serde::Serialize;
 use taktsim_units::{Ratio, SimDuration};
 
 use crate::component::{Catalog, Component, ComponentRef, read_component, read_id};
@@ -9,6 +8,7 @@ use crate::decode::{Decode, Decoder, Fields};
 use crate::error::{FieldPath, LoadErrorKind, Location, Place, Segment};
 use crate::expr::Expr;
 use crate::include::{IncludeSpec, read_includes};
+use crate::json::{Encode, Json};
 use crate::syntax::{Node, Value};
 
 /// The format version this engine reads (ADR-0008: the header is
@@ -20,11 +20,16 @@ pub const FORMAT_VERSION: &str = "1.0";
 ///
 /// ```
 /// use taktsim_model::expr::{Arity, Dimension, Signature, Type};
-/// use taktsim_model::{Catalog, ComponentParams, Distribution, Fields, Format, Loader};
+/// use taktsim_model::{Catalog, ComponentParams, Distribution, Encode, Fields, Format, Json, Loader};
 ///
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug)]
 /// struct Source {
 ///     interarrival: Distribution,
+/// }
+/// impl Encode for Source {
+///     fn encode(&self) -> Json {
+///         Json::object([]).with("interarrival", &self.interarrival)
+///     }
 /// }
 /// impl ComponentParams for Source {
 ///     const TYPE: &'static str = "Source";
@@ -33,8 +38,13 @@ pub const FORMAT_VERSION: &str = "1.0";
 ///         Some(Self { interarrival: fields.required("interarrival")? })
 ///     }
 /// }
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug)]
 /// struct Sink {}
+/// impl Encode for Sink {
+///     fn encode(&self) -> Json {
+///         Json::object([])
+///     }
+/// }
 /// impl ComponentParams for Sink {
 ///     const TYPE: &'static str = "Sink";
 ///     const EXAMPLE: &'static str = "{id: sink, type: Sink}";
@@ -144,45 +154,24 @@ impl Document {
     /// The normalized form, before canonicalization: every value typed and
     /// in canonical text, shorthands expanded, `include:` resolved, and
     /// absent or empty optional sections left out.
-    pub(crate) fn to_json(&self) -> Result<serde_json::Value, (Option<&Component>, LoadErrorKind)> {
-        let plain = |value: Result<serde_json::Value, serde_json::Error>| {
-            value.map_err(|e| {
-                (
-                    None,
-                    LoadErrorKind::Normalize {
-                        type_name: "(document)".to_owned(),
-                        problem: crate::error::NormalizeProblem::Serialize(e.to_string()),
-                    },
-                )
-            })
-        };
-        let mut doc = serde_json::Map::new();
-        doc.insert("format".to_owned(), FORMAT_VERSION.into());
-        doc.insert(
-            "model".to_owned(),
-            plain(serde_json::to_value(&self.model))?,
-        );
-        doc.insert(
-            "experiment".to_owned(),
-            plain(serde_json::to_value(&self.experiment))?,
-        );
+    pub(crate) fn to_json(&self) -> Result<Json, (&Component, LoadErrorKind)> {
         let components = self
             .components
             .iter()
-            .map(|c| c.to_json().map_err(|kind| (Some(c), kind)))
+            .map(|c| c.to_json().map_err(|kind| (c, kind)))
             .collect::<Result<Vec<_>, _>>()?;
-        doc.insert(
-            "components".to_owned(),
-            serde_json::Value::Array(components),
-        );
-        doc.insert("flow".to_owned(), plain(serde_json::to_value(&self.flow))?);
-        if !self.observe.is_empty() {
-            doc.insert(
-                "observe".to_owned(),
-                plain(serde_json::to_value(&self.observe))?,
-            );
-        }
-        Ok(serde_json::Value::Object(doc))
+        let doc = Json::object([
+            ("format", Json::from(FORMAT_VERSION)),
+            ("components", Json::Array(components)),
+        ])
+        .with("model", &self.model)
+        .with("experiment", &self.experiment)
+        .with("flow", &self.flow);
+        Ok(if self.observe.is_empty() {
+            doc
+        } else {
+            doc.with("observe", &self.observe)
+        })
     }
 }
 
@@ -193,13 +182,19 @@ impl Document {
 ///     doc.model().seed()
 /// }
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelInfo {
     name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     time_unit: Option<TimeUnit>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     seed: Option<u64>,
+}
+
+impl Encode for ModelInfo {
+    fn encode(&self) -> Json {
+        Json::object([("name", Json::from(self.name.as_str()))])
+            .with_optional("time_unit", self.time_unit.as_ref())
+            .with_optional("seed", self.seed.as_ref())
+    }
 }
 
 impl ModelInfo {
@@ -254,22 +249,17 @@ impl ModelInfo {
 ///
 /// assert_eq!(TimeUnit::Minutes.as_str(), "min");
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimeUnit {
     /// `d`
-    #[serde(rename = "d")]
     Days,
     /// `h`
-    #[serde(rename = "h")]
     Hours,
     /// `min`
-    #[serde(rename = "min")]
     Minutes,
     /// `s`
-    #[serde(rename = "s")]
     Seconds,
     /// `ms`
-    #[serde(rename = "ms")]
     Milliseconds,
 }
 
@@ -322,6 +312,12 @@ fn one_of<T: Copy>(
     None
 }
 
+impl Encode for TimeUnit {
+    fn encode(&self) -> Json {
+        self.as_str().into()
+    }
+}
+
 impl Decode for TimeUnit {
     const EXPECTED: &'static str = "a time unit: d, h, min, s or ms";
     const EXAMPLE: &'static str = "s";
@@ -371,10 +367,9 @@ impl Decode for ModelInfo {
 ///
 /// assert_eq!(ExperimentKind::Terminating.as_str(), "terminating");
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ExperimentKind {
     /// A run with a natural end, such as one shift.
-    #[serde(rename = "terminating")]
     Terminating,
 }
 
@@ -419,16 +414,30 @@ impl Decode for ExperimentKind {
 ///     doc.experiment().horizon().to_string()
 /// }
 /// ```
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Experiment {
-    #[serde(rename = "type")]
     kind: ExperimentKind,
     horizon: SimDuration,
-    #[serde(
-        skip_serializing_if = "Vec::is_empty",
-        serialize_with = "precision_map"
-    )]
     precision: Vec<Precision>,
+}
+
+impl Encode for Experiment {
+    /// `{type, horizon, precision?}`, precision as a mapping from
+    /// observable to target, left out when there is none.
+    fn encode(&self) -> Json {
+        let value =
+            Json::object([("type", Json::from(self.kind.as_str()))]).with("horizon", &self.horizon);
+        if self.precision.is_empty() {
+            return value;
+        }
+        let targets = Json::Object(
+            self.precision
+                .iter()
+                .map(|p| (p.observable.text().to_owned(), p.target.encode()))
+                .collect(),
+        );
+        value.with("precision", &targets)
+    }
 }
 
 impl Experiment {
@@ -471,19 +480,6 @@ impl Experiment {
     pub fn precision(&self) -> &[Precision] {
         &self.precision
     }
-}
-
-/// Serializes precision targets as a mapping from observable to target.
-fn precision_map<S: serde::Serializer>(
-    targets: &[Precision],
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    use serde::ser::SerializeMap;
-    let mut map = serializer.serialize_map(Some(targets.len()))?;
-    for target in targets {
-        map.serialize_entry(target.observable.text(), &target.target)?;
-    }
-    map.end()
 }
 
 /// One precision target: `throughput(sink): 2%`.
@@ -586,9 +582,10 @@ impl Observable {
     }
 }
 
-impl Serialize for Observable {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.text)
+impl Encode for Observable {
+    /// The canonical text.
+    fn encode(&self) -> Json {
+        self.text.as_str().into()
     }
 }
 
@@ -609,10 +606,19 @@ impl Serialize for Observable {
 ///         .collect()
 /// }
 /// ```
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Edge {
     from: Vec<ComponentRef>,
     to: Vec<ComponentRef>,
+}
+
+impl Encode for Edge {
+    /// `{from: [ids], to: [ids]}`.
+    fn encode(&self) -> Json {
+        Json::object([])
+            .with("from", &self.from)
+            .with("to", &self.to)
+    }
 }
 
 impl Edge {
