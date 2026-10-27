@@ -1,10 +1,8 @@
-# The model document of spec §4, as this format version loads it. Three
-# changes from the spec's text, each listed in ADR-0020:
-# - the header is `format: "1.0"` (ADR-0008), not `simcode: "1.0"`;
-# - `source` and `sink` are declared: the spec names them in `flow` and
-#   `observe` without declaring them, and references are checked;
-# - `shifts:` is left out: shift calendars arrive with v0.2.
-# The component types are the tests' stand-ins (tests/support/mod.rs).
+# The v0.1 model document of spec §4, with the spec's placeholder header
+# `simcode: "1.0"` written as `format: "1.0"` (ADR-0008). Its canonical
+# form and hash are pinned; the spec's own text has the same hash
+# (tests/examples.rs). The component types are the tests' stand-ins
+# (tests/support/mod.rs).
 format: "1.0"           # format version
 model:
   name: line-a

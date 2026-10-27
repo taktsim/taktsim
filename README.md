@@ -71,6 +71,9 @@ experiment:
   type: terminating
   horizon: 8h
 components:
+  - id: source
+    type: Source
+    interarrival: { dist: exponential, mean: 40s }
   - id: cut
     type: Machine
     cycle_time: { dist: lognormal, mean: 42s, sigma: 0.08 }
@@ -80,6 +83,8 @@ components:
   - id: weld
     type: Machine
     cycle_time: 45s
+  - id: sink
+    type: Sink
 flow:
   - [source, cut, buf1, weld, sink]
 observe:

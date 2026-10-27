@@ -14,7 +14,7 @@ use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
     Catalog, ComponentParams, ComponentRef, Distribution, Encode, Fields, Json, LoadErrors, Record,
 };
-use taktsim_units::{Count, SimDuration};
+use taktsim_units::{Count, Ratio, SimDuration};
 
 #[derive(Debug)]
 pub struct Source {
@@ -111,23 +111,30 @@ impl ComponentParams for Sink {
 }
 
 /// A component type that refers to another component (spec §4's
-/// Inspection, reduced to its reference).
+/// Inspection, reduced to its reference and shares).
 #[derive(Debug)]
-pub struct Inspection {
+pub struct InspectionParams {
     pub inspection_time: Distribution,
+    /// Shares are percentages with their unit (ADR-0020, answer 10).
+    pub scrap_rate: Option<Ratio>,
+    pub rework_rate: Option<Ratio>,
     pub rework_to: ComponentRef,
 }
 
-impl ComponentParams for Inspection {
+impl ComponentParams for InspectionParams {
     const TYPE: &'static str = "Inspection";
     const EXAMPLE: &'static str =
         "{id: qc, type: Inspection, inspection_time: 40s, rework_to: asm}";
 
     fn decode(fields: &mut Fields<'_, '_>) -> Option<Self> {
         let inspection_time = fields.required("inspection_time");
+        let scrap_rate = fields.optional("scrap_rate");
+        let rework_rate = fields.optional("rework_rate");
         let rework_to = fields.required("rework_to");
         Some(Self {
             inspection_time: inspection_time?,
+            scrap_rate: scrap_rate?,
+            rework_rate: rework_rate?,
             rework_to: rework_to?,
         })
     }
@@ -174,10 +181,12 @@ impl Encode for Sink {
     }
 }
 
-impl Encode for Inspection {
+impl Encode for InspectionParams {
     fn encode(&self) -> Json {
         Json::object([])
             .with("inspection_time", &self.inspection_time)
+            .with_optional("scrap_rate", self.scrap_rate.as_ref())
+            .with_optional("rework_rate", self.rework_rate.as_ref())
             .with("rework_to", &self.rework_to)
     }
 }
@@ -199,7 +208,7 @@ pub fn catalog() -> Catalog {
         .unwrap()
         .with::<Sink>()
         .unwrap()
-        .with::<Inspection>()
+        .with::<InspectionParams>()
         .unwrap()
         .with_observable("throughput", rate)
         .unwrap()

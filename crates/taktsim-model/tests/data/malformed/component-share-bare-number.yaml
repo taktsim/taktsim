@@ -1,0 +1,14 @@
+# A component's share parameter written as a bare number.
+format: "1.0"
+model: {name: m}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: qc, type: Inspection, inspection_time: 40s, scrap_rate: 0.02, rework_rate: 5%, rework_to: cut}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, qc, sink]
+observe:
+  - throughput(sink)
+# expect: components[2].scrap_rate @ 8:66 BareShare

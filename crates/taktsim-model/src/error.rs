@@ -656,6 +656,15 @@ pub enum LoadErrorKind {
         /// What is wrong; its span is a byte range of `text`.
         error: ExprError,
     },
+    /// A share written as a bare number (`0.02`): shares carry their unit
+    /// (`2%`), like every other quantity.
+    #[error("the share `{found}` needs its unit: write `{fix}`")]
+    BareShare {
+        /// The number as read.
+        found: String,
+        /// The same share with its unit, e.g. `2%` for `0.02`.
+        fix: String,
+    },
     /// A value outside its allowed range, or breaking a rule of its field.
     #[error("{found} is not allowed; allowed: {allowed}")]
     NotAllowed {
@@ -691,8 +700,10 @@ pub enum LoadErrorKind {
         /// The first component with it.
         first: Place,
     },
-    /// Two component ids that differ only in case.
-    #[error("the component ids `{id}` and `{other}` differ only in case; the other is at {first}")]
+    /// Two component ids that differ only in case (`Weld` and `weld`).
+    #[error(
+        "the component ids `{id}` and `{other}` differ only in case; `{other}` is {other_path} at {first}"
+    )]
     CaseClash {
         /// The later id.
         id: String,
@@ -700,6 +711,8 @@ pub enum LoadErrorKind {
         other: String,
         /// Where the earlier one is.
         first: Place,
+        /// The field path of the earlier one (boxed, to keep errors small).
+        other_path: Box<FieldPath>,
     },
     /// A reference to a component that does not exist.
     #[error(
@@ -851,6 +864,7 @@ impl LoadErrorKind {
             | Self::UnknownField { field: text, .. }
             | Self::UnknownValue { found: text, .. }
             | Self::NotAllowed { found: text, .. }
+            | Self::BareShare { found: text, .. }
             | Self::UnsupportedFormat { found: text }
             | Self::InvalidId { found: text, .. }
             | Self::DuplicateId { id: text, .. }
@@ -909,6 +923,7 @@ impl LoadErrorKind {
             Self::Distribution(_) => "the parameter rules of ADR-0003",
             Self::Expression { .. } => "an expression of the right type (ADR-0009)",
             Self::NotAllowed { allowed, .. } => return Some(allowed.clone()),
+            Self::BareShare { .. } => "a percentage with its unit, such as `2%`",
             Self::UnsupportedFormat { .. } => "\"1.0\"",
             Self::InvalidId { .. } => "[A-Za-z_][A-Za-z0-9_]*(-[A-Za-z0-9_]+)*",
             Self::DuplicateId { .. } | Self::CaseClash { .. } => {
@@ -1000,6 +1015,7 @@ impl LoadErrorKind {
             Self::Distribution(_) => "{dist: lognormal, mean: 42s, sigma: 0.08}",
             Self::Expression { .. } | Self::NotAnObservable { .. } => "throughput(sink)",
             Self::NotAllowed { example, .. } => return Some(example.clone()),
+            Self::BareShare { fix, .. } => return Some(fix.clone()),
             Self::InvalidId { .. } => "weld-1",
             Self::SteadyStateUnsupported => "type: terminating",
             Self::IncludePath { .. } => "include: [cells/welding.yaml]",

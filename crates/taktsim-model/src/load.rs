@@ -603,10 +603,12 @@ impl Run<'_> {
                 };
                 self.error(place, path, kind);
             } else if let Some(other) = folded.get(&c.id().to_ascii_lowercase()) {
+                let (other_place, other_path) = other.id_place();
                 let kind = LoadErrorKind::CaseClash {
                     id: c.id().to_owned(),
                     other: other.id().to_owned(),
-                    first: other.id_place().0.clone(),
+                    first: other_place.clone(),
+                    other_path: Box::new(other_path),
                 };
                 self.error(place, path, kind);
             } else {
