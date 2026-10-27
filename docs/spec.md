@@ -68,6 +68,9 @@ experiment:
   horizon: 8h
   precision: { throughput(sink): 2% }   # replications until the CI half-width is within 2 %
 components:
+  - id: source
+    type: Source
+    interarrival: { dist: exponential, mean: 40s }
   - id: cut
     type: Machine
     cycle_time: { dist: lognormal, mean: 42s, sigma: 0.08 }
@@ -80,14 +83,21 @@ components:
     type: Machine
     cycle_time: 45s
     setup: { per_variant: 4min }
+  - id: sink
+    type: Sink
 flow:
   - [source, cut, buf1, weld, sink]   # shorthand for a chain of edges
-shifts:
-  - { calendar: two-shift, applies_to: [cut, weld] }
 observe:
   - throughput(sink)
   - state_shares(cut, weld)
   - wip(buf1)
+```
+
+From v0.2, shift calendars apply to resources:
+
+```yaml
+shifts:                                # v0.2
+  - { calendar: two-shift, applies_to: [cut, weld] }
 ```
 
 **Rules**
@@ -104,6 +114,8 @@ observe:
 - A bill of materials (BOM) is declared once per product variant and referenced by Assembly stations. Multi-level BOMs are modelled by chaining assemblies, each producing a subassembly that the next one consumes.
 - Inputs arrive from Sources (purchased parts), Stores (inventory with a replenishment policy) or upstream stations (subassemblies).
 - Every produced unit carries a lineage record of the inputs it consumed, so results report material consumption, WIP and scrap per input material, and a finished unit can be traced back to its inputs.
+
+Example (v0.2):
 
 ```yaml
 materials:
@@ -124,8 +136,8 @@ components:
   - id: qc
     type: Inspection
     inspection_time: 40s
-    scrap_rate: 0.02
-    rework_rate: 0.05
+    scrap_rate: 2%
+    rework_rate: 5%
     rework_to: asm
 ```
 
@@ -165,6 +177,8 @@ Across the whole model the engine checks conservation at every event, per materi
 - Order lists are imported from CSV or Parquet first and through ERP and MES adapters later; they are validated against the products and BOMs in the model.
 - Every unit belongs to an order, so results report completion time, lateness and status per order.
 
+Example (v0.1, from milestone M6: conditions, choice rules and dispatching):
+
 ```yaml
 flow:
   - { from: source, to: cut }
@@ -174,6 +188,12 @@ flow:
   - { from: qc, to: pack }
 control:
   dispatch: { weld-1: earliest_due_date, weld-2: earliest_due_date }
+```
+
+Example (v0.2: release control and order lists):
+
+```yaml
+control:
   release: { policy: conwip, wip_cap: 40 parts }
 orders:
   from: orders/week-43.csv

@@ -571,8 +571,43 @@ impl Decode for Ratio {
     const EXPECTED: &'static str = "a percentage, such as `2%`";
     const EXAMPLE: &'static str = "2%";
 
+    /// A percentage with its unit. A bare number (`0.02`) is an error
+    /// whose fix is the same share with its unit (`2%`); the owner decided
+    /// that shares are written with a unit (ADR-0020, answer 10).
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-        quantity(node, cx)
+        let number = match node.value() {
+            Value::Int(n) => n.to_string(),
+            Value::Float(x) => x.to_string(),
+            Value::Null | Value::Bool(_) | Value::Str(_) | Value::List(_) | Value::Map(_) => {
+                return quantity(node, cx);
+            }
+        };
+        let kind = LoadErrorKind::BareShare {
+            fix: percent(&number),
+            found: number,
+        };
+        cx.error(node.start(), kind);
+        None
+    }
+}
+
+/// The share `number` (plain decimal text, e.g. `0.025`) as a percentage
+/// (`2.5%`), by moving the decimal point: exact, no floating point.
+fn percent(number: &str) -> String {
+    let (sign, digits) = number
+        .strip_prefix('-')
+        .map_or(("", number), |rest| ("-", rest));
+    let (int, frac) = digits.split_once('.').unwrap_or((digits, ""));
+    let frac = format!("{frac:0<2}");
+    let (moved, rest) = frac.split_at(2);
+    let whole = format!("{int}{moved}");
+    let whole = whole.trim_start_matches('0');
+    let whole = if whole.is_empty() { "0" } else { whole };
+    let rest = rest.trim_end_matches('0');
+    if rest.is_empty() {
+        format!("{sign}{whole}%")
+    } else {
+        format!("{sign}{whole}.{rest}%")
     }
 }
 
@@ -687,6 +722,29 @@ mod tests {
             assert!(decode::<Rate>(yaml).is_err());
             assert!(decode::<Ratio>(yaml).is_err());
         }
+    }
+
+    #[test]
+    fn a_bare_share_offers_the_percentage() {
+        let fix = |yaml| {
+            let errors = decode::<Ratio>(yaml).unwrap_err();
+            let LoadErrorKind::BareShare { fix, .. } = &errors[0].1 else {
+                panic!("{errors:?}")
+            };
+            fix.clone()
+        };
+        assert_eq!(fix("0.02"), "2%");
+        assert_eq!(fix("0.05"), "5%");
+        assert_eq!(fix("0.025"), "2.5%");
+        assert_eq!(fix("0.07"), "7%");
+        assert_eq!(fix("0.5"), "50%");
+        assert_eq!(fix("1"), "100%");
+        assert_eq!(fix("0"), "0%");
+        assert_eq!(fix("1e-7"), "0.00001%");
+        assert_eq!(fix("12.3456"), "1234.56%");
+        assert_eq!(percent("-0.02"), "-2%");
+        // Text is still parsed as a percentage.
+        assert_eq!(decode::<Ratio>("2%"), Ok("2%".parse().unwrap()));
     }
 
     #[derive(Debug)]
