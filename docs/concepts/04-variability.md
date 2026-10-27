@@ -100,9 +100,9 @@ components:
 
 </div>
 
-The README's example line uses sigma 0.08 for cutting and a fixed 45 s for
-welding. In the table, 18 % of its cuts are slower than welding, yet as
-[page 7](07-buffers.md) shows, that line loses almost nothing. Whether
+With sigma 0.08, 18 % of the cuts in the table are slower than welding's
+45 s, yet as [page 7](07-buffers.md) shows, a line with such cuts and a
+fixed welding time loses almost nothing. Whether
 variability costs output depends on where it is and what protects against
 it. The next three pages work that out.
 

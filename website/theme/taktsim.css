@@ -211,6 +211,16 @@ pre {
   padding: 0.35em 0.7em;
 }
 
+/* Numbers such as "516.9 ± 3.2" stay on one line; on a narrow screen the
+   table scrolls inside its wrapper instead. */
+.content table td:not(:first-child) {
+  white-space: nowrap;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
 blockquote {
   border-top: 1px solid var(--ts-line);
   border-bottom: 1px solid var(--ts-line);
@@ -347,6 +357,20 @@ blockquote {
   stroke: var(--ts-ink-muted);
   stroke-width: 1.5;
   stroke-dasharray: 5 4;
+  fill: none;
+}
+
+.ts-svg .ts-muted-dots {
+  stroke: var(--ts-ink-muted);
+  stroke-width: 2;
+  stroke-dasharray: 1 4;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.ts-svg .ts-muted-solid {
+  stroke: var(--ts-ink-muted);
+  stroke-width: 1;
   fill: none;
 }
 

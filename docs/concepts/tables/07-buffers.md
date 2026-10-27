@@ -1,4 +1,4 @@
-| Buffer places | Parts per shift (CV 0.53) | WIP (parts) | Lead time (min) | Parts per shift (README line, CV 0.08) |
+| Buffer places | Parts per shift (CV 0.53) | WIP (parts) | Lead time (min) | Parts per shift, low variability (cut CV 0.08, weld fixed) |
 | --- | --- | --- | --- | --- |
 | 0 | 516.9 ± 3.2 | 1.8 ± 0.0 | 1.7 ± 0.0 | 633.2 ± 0.2 |
 | 1 | 576.4 ± 3.7 | 2.5 ± 0.0 | 2.0 ± 0.0 | 638.7 ± 0.2 |

@@ -6,71 +6,71 @@
    "buffer": 0,
    "completed": 516.9333333333333,
    "completed_half": 3.235559047906624,
-   "readme_completed": 633.2,
-   "readme_half": 0.20567192936503423
+   "low_completed": 633.2,
+   "low_half": 0.20567192936503423
   },
   {
    "buffer": 1,
    "completed": 576.4,
    "completed_half": 3.705987983120625,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 2,
    "completed": 600.2,
    "completed_half": 4.130232010404514,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 3,
    "completed": 612.3666666666667,
    "completed_half": 4.007465178166188,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 5,
    "completed": 623.9333333333333,
    "completed_half": 4.174837741587376,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 8,
    "completed": 630.9,
    "completed_half": 4.6811676222360665,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 10,
    "completed": 633.3,
    "completed_half": 4.926134481331272,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 15,
    "completed": 634.9333333333333,
    "completed_half": 5.074925099573738,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 20,
    "completed": 635.1666666666666,
    "completed_half": 5.107169251494409,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   },
   {
    "buffer": 30,
    "completed": 635.4666666666667,
    "completed_half": 5.242464601656063,
-   "readme_completed": 638.7333333333333,
-   "readme_half": 0.16793042711935924
+   "low_completed": 638.7333333333333,
+   "low_half": 0.16793042711935924
   }
  ],
  "sigma": 0.5

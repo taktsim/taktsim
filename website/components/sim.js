@@ -136,7 +136,7 @@
     const st = line.stations;
     const n = st.length;
     const res = {
-      horizon, warmup, completed: 0, scrapped: 0, leadTimeSum: 0, wipArea: 0,
+      horizon, warmup, completed: 0, scrapped: 0, reworked: 0, leadTimeSum: 0, wipArea: 0,
       queueWaitSum: 0, queueWaitN: 0,
       stateTime: st.map(() => Object.fromEntries(STATES.map((s) => [s, 0]))),
       states: [], levels: [], wipTrace: [],
@@ -313,6 +313,7 @@
           return;
         }
         if (u < sp.scrap + sp.rework) {
+          if (now >= warmup && now <= horizon) res.reworked += 1;
           const target = sp.reworkTo == null ? k : sp.reworkTo;
           const part = x.held[0];
           if (target === k) {
