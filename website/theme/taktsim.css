@@ -577,20 +577,13 @@ blockquote {
 .ts-hero .ts-unlit-fill { fill: var(--ts-unlit); }
 .ts-hero .ts-acid { fill: var(--ts-acid); stroke: var(--ts-keyline); stroke-width: 1.5; }
 
-/* The playhead (design system, Motion): one acid step jumps across the
-   mark's 16 steps in reading order, one bar at 130 BPM (a sixteenth of a
-   bar per step), without easing, for two bars, and comes to rest on the
-   firing step where it started. It is a single element, so exactly one
-   step is lit at any moment. It runs only while the class ts-play is set,
-   which website/components/hero.js does when the logo comes into view and
-   again on hover, click or Enter. Without JavaScript, with reduced motion
-   and in print the logo simply rests. */
-.ts-hero.ts-play .ts-playhead {
+/* The playhead (design system, Motion): when the page loads, one acid
+   step jumps across the mark's 16 steps in reading order, a sixteenth of a
+   bar per step at 130 BPM, without easing, for two bars, and rests on the
+   firing step where it started. With reduced motion and in print it does
+   not move. */
+.ts-hero .ts-playhead {
   animation: ts-walk 1.846s step-end 2 forwards;
-}
-
-.ts-hero.ts-interactive {
-  cursor: pointer;
 }
 
 @keyframes ts-walk {
@@ -614,7 +607,7 @@ blockquote {
 }
 
 @media (prefers-reduced-motion: reduce), print {
-  .ts-hero.ts-play .ts-playhead { animation: none; }
+  .ts-hero .ts-playhead { animation: none; }
 }
 
 .ts-hero-tagline {
