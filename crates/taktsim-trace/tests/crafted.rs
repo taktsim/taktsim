@@ -6,9 +6,9 @@ mod support;
 
 use std::io::{self, Read};
 
-use sha2::{Digest, Sha256};
 use support::Toy;
 use taktsim_core::Message;
+use taktsim_core::digest::{Crc32, crc32, sha256};
 use taktsim_trace::{
     Block, DecodeError, Decoder, Encoder, Header, ModelHash, ReadError, Record, TraceMessage,
     TraceReader, TraceWriter, decode_message, encode_message,
@@ -33,7 +33,7 @@ fn chunk(payload: &[u8], records: u32, first: u64) -> Vec<u8> {
     head.extend_from_slice(&u32::try_from(payload.len()).unwrap().to_le_bytes());
     head.extend_from_slice(&records.to_le_bytes());
     head.extend_from_slice(&first.to_le_bytes());
-    let mut crc = crc32fast::Hasher::new();
+    let mut crc = Crc32::new();
     crc.update(&head);
     crc.update(payload);
     head.extend_from_slice(&crc.finalize().to_le_bytes());
@@ -48,7 +48,7 @@ fn end(records: u64, events: u64, chunks: u64, hash: [u8; 32]) -> Vec<u8> {
         end.extend_from_slice(&n.to_le_bytes());
     }
     end.extend_from_slice(&hash);
-    let crc = crc32fast::hash(&end);
+    let crc = crc32(&end);
     end.extend_from_slice(&crc.to_le_bytes());
     end
 }
@@ -79,7 +79,7 @@ fn event(has_item: u8, item: u64, message: &[u8]) -> Vec<u8> {
 
 /// A whole trace of one chunk holding `payload`.
 fn trace(payload: &[u8], records: u32) -> Vec<u8> {
-    let hash: [u8; 32] = Sha256::digest(payload).into();
+    let hash: [u8; 32] = sha256(payload);
     [
         header_bytes(),
         chunk(payload, records, 0),
@@ -239,7 +239,7 @@ fn the_end_marker_must_match_the_stream() {
         ),
         "{e}"
     );
-    let hash: [u8; 32] = Sha256::digest(&payload).into();
+    let hash: [u8; 32] = sha256(&payload);
     let wrong_events = [header_bytes(), chunk(&payload, 1, 0), end(1, 5, 1, hash)].concat();
     assert_eq!(
         first_error(&wrong_events).to_string(),
@@ -253,7 +253,7 @@ fn header_text_must_be_utf8() {
     let n = header.len();
     // The last component id, `b`, just before the CRC.
     header[n - 5] = 0xff;
-    let crc = crc32fast::hash(&header[..n - 4]);
+    let crc = crc32(&header[..n - 4]);
     header[n - 4..].copy_from_slice(&crc.to_le_bytes());
     let Err(e) = TraceReader::<_, Toy>::new(header.as_slice()) else {
         panic!("invalid UTF-8 was read");

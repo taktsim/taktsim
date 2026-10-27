@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 use std::marker::PhantomData;
 
-use sha2::{Digest, Sha256};
+use taktsim_core::digest::{Crc32, Sha256, crc32};
 use taktsim_core::{TraceRecord, TraceSink};
 
 use crate::codec::{EncodeError, TraceMessage};
@@ -182,14 +182,14 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
             return Err(error);
         }
         let records = self.closed_records;
-        let hash = TraceHash::from_bytes(self.hasher.finalize().into());
+        let hash = TraceHash::from_bytes(self.hasher.finalize());
         let mut end = Vec::with_capacity(1 + crate::header::END_SIZE);
         end.push(END_TAG);
         end.extend_from_slice(&records.to_le_bytes());
         end.extend_from_slice(&self.events.to_le_bytes());
         end.extend_from_slice(&self.chunks.to_le_bytes());
         end.extend_from_slice(hash.as_bytes());
-        let crc = crc32fast::hash(&end);
+        let crc = crc32(&end);
         end.extend_from_slice(&crc.to_le_bytes());
         let offset = self.bytes;
         self.out
@@ -228,7 +228,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
         head[1..5].copy_from_slice(&len32.to_le_bytes());
         head[5..9].copy_from_slice(&records.to_le_bytes());
         head[9..17].copy_from_slice(&self.closed_records.to_le_bytes());
-        let mut crc = crc32fast::Hasher::new();
+        let mut crc = Crc32::new();
         crc.update(&head[..17]);
         crc.update(payload);
         head[17..21].copy_from_slice(&crc.finalize().to_le_bytes());
