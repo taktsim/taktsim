@@ -246,7 +246,9 @@ include:
 - Required: `format: "1.0"`, `model.name` (component-id form),
   `experiment.type`, `experiment.horizon` (longer than zero), `components`
   and `flow` (each at least one entry, from the model file or its includes).
-  Optional: `model.time_unit` (`d h min s ms`), `model.seed` (0 to
+  Optional: `model.time_unit` (`d h min s ms`; only the unit results are
+  reported in: it never changes how a model reads, and a bare number never
+  takes it as its unit), `model.seed` (0 to
   2^53 − 1), `experiment.precision` (observable → ratio above 0 % and at
   most 100 %, ADR-0014), `observe`, `include`. When in doubt a field is
   required; making it optional later breaks no model.
@@ -259,6 +261,11 @@ include:
   catalog function on component ids. User-defined KPIs are v0.2.
 - A different `format` version stops decoding with that one error, since
   its sections may mean something else.
+- Shares (precision targets now; scrap and rework rates with v0.2's
+  Inspection) are percentages written with their unit, `2%`. A bare number
+  such as `0.02` is an error whose fix is the same share with its unit
+  (`2%`), computed from the number's decimal text, without floating point.
+  A component type declares a share field as `taktsim_units::Ratio`.
 
 ### 11. JSON Schema (second M4 pull request)
 
@@ -314,22 +321,30 @@ include:
   `taktsim-core` for the distribution constructors and the digest
   (allowed: every crate depends on core). `taktsim-units` is unchanged.
 
-## What the spec's examples need (found while testing them)
+## What the spec's examples needed (found while testing them)
 
-The tests read the examples from `docs/spec.md` and `README.md` and state
-exactly why each does not load as written:
+The tests read the examples from `docs/spec.md` and `README.md`. As
+written, they did not load:
 
-1. Spec §4's model document and the README name `source` and `sink` in
-   `flow` and `observe` without declaring them. With references checked
-   (spec §4 Rules) they are unknown components. `data/valid/spec-line-a.yaml`
-   declares them.
-2. Spec §4's model document has `shifts:`, a v0.2 feature (ShiftCalendar),
+1. Spec §4's model document and the README named `source` and `sink` in
+   `flow` and `observe` without declaring them.
+2. Spec §4's model document had `shifts:`, a v0.2 feature (ShiftCalendar),
    in a document that is otherwise v0.1.
-3. Spec §4's routing example uses `choose:` and `when:` (M6) and `control:`
-   and `orders:` (v0.2); its materials example uses `materials:`,
-   `products:` and Assembly (v0.2).
-4. Spec §4's materials example writes `scrap_rate: 0.02`, a bare number for
-   a share, while spec §4 Rules say every quantity carries a unit (`2%`).
+3. Spec §4's routing example used `choose:`, `when:` and `dispatch` (v0.1,
+   milestone M6) together with release control and `orders:` (v0.2); its
+   materials example uses `materials:`, `products:` and Assembly (v0.2).
+4. Spec §4's materials example wrote `scrap_rate: 0.02`, a bare number for
+   a share, while spec §4 Rules say every quantity carries a unit.
+
+With the owner's answers (below) the examples were changed to match: `source`
+and `sink` are declared (a Source with an `interarrival` distribution, a
+Sink without parameters), `shifts:` is a separate v0.2 example, the routing
+example is split into a v0.1 part (from M6) and a v0.2 part, the materials
+example is labelled v0.2 and writes `scrap_rate: 2%` and `rework_rate: 5%`.
+The tests check that spec §4's v0.1 model document and the README model
+load (the spec's with exactly the pinned hash of
+`data/valid/spec-line-a.yaml`), and that each later example is rejected for
+exactly the sections that wait for its tier or milestone.
 
 ## Questions for the owner
 
@@ -358,3 +373,37 @@ exactly why each does not load as written:
     add it to the license allow-list (a gate change, its own pull
     request), so a standard validator can check the schema in tests
     instead of the test's own checker?
+
+## Owner's answers (2026-10-27)
+
+The owner explicitly accepted every recommendation:
+
+1. **No implicit components.** `source` and `sink` are declared like any
+   other component. Spec §4's v0.1 example and the README's model declare
+   them (a minimal Source and Sink, as roadmap M5 describes).
+2. **Every example is labelled with its tier.** `shifts:` moved out of the
+   v0.1 example into a v0.2 example; the routing example is labelled v0.1
+   from milestone M6, release control and order lists v0.2, materials and
+   BOMs v0.2. Every example presented as v0.1 loads.
+3. **A constant normalizes to the bare duration** (section 7).
+4. **The strict rule on ambiguous plain values stays** (section 3).
+5. **Ids are unique ignoring case.** `Weld` and `weld` together is an error
+   that names both, each with its field path and line:column, also when
+   one of them is in an included file (`LoadErrorKind::CaseClash`).
+6. **`include:` semantics as proposed** (section 9).
+7. **Required fields as proposed** (section 10); `steady_state` stays
+   rejected until M9.
+8. **`model.time_unit` is only the unit results are reported in.** It
+   never changes parsing, and a bare number never takes it as its unit
+   (section 10). Spec §4 does not describe the field beyond its example,
+   so only this ADR states it.
+9. **No `$id` yet** (section 11).
+10. **Shares are written with a unit, `2%`.** A bare `0.02` is an error
+    (`LoadErrorKind::BareShare`) that offers `2%` as the fix (section 10).
+    Spec §4's example now writes `scrap_rate: 2%`, `rework_rate: 5%`.
+11. **No MIT-0 now.** No JSON Schema validator crate is added, so the
+    license allow-list in `deny.toml` stays unchanged; the schema contract
+    test keeps its own checker (section 11).
+
+The status line is unchanged: merging the M4 pull requests accepts this
+ADR, now with the owner's explicit answers.
