@@ -41,35 +41,41 @@ simulation covers the rest, and its answers need confidence intervals.
 Each page builds on the ones before it. One example line runs through all of
 them: it starts with two stations and grows a little on each page.
 
-1. **What a production system is:** stations, buffers and flow, and the
+1. **[What a production system is](01-production-systems.md):** stations, buffers and flow, and the
    four numbers that describe a line: throughput, work in progress, cycle
    time and lead time.
-2. **Capacity and the bottleneck:** why, in a line without randomness, the
+2. **[Capacity and the bottleneck](02-bottleneck.md):** why, in a line without randomness, the
    slowest station sets the pace for all the others.
-3. **Little's Law:** the one relation between work in progress, throughput
+3. **[Little's Law](03-littles-law.md):** the one relation between work in progress, throughput
    and lead time that holds in almost any system.
-4. **Variability:** where randomness in a line comes from and how to
+4. **[Variability](04-variability.md):** where randomness in a line comes from and how to
    measure it with the coefficient of variation.
-5. **Utilization and waiting:** why waiting times explode as a station
+5. **[Utilization and waiting](05-utilization.md):** why waiting times explode as a station
    gets close to 100 % busy, and what Kingman's formula says about it.
-6. **Starving and blocking:** how a station has to wait when its neighbour
+6. **[Starving and blocking](06-starving-blocking.md):** how a station has to wait when its neighbour
    is too slow or too full.
-7. **Buffers:** how storage between stations decouples them, and why each
+7. **[Buffers](07-buffers.md):** how storage between stations decouples them, and why each
    extra place helps less than the one before.
-8. **Unreliable machines:** failures and repairs, availability, and why
+8. **[Unreliable machines](08-unreliable-machines.md):** failures and repairs, availability, and why
    rare long breakdowns hurt more than frequent short ones.
-9. **Longer lines:** how disturbances travel along many stations, why the
+9. **[Longer lines](09-longer-lines.md):** how disturbances travel along many stations, why the
    bottleneck can move, and why more buffer everywhere is not the answer.
-10. **Takt time and pull:** pacing a line to customer demand, push versus
+10. **[Takt time and pull](10-takt-pull.md):** pacing a line to customer demand, push versus
     pull, and limiting work in progress with Kanban and CONWIP.
-11. **Batching and setups:** the trade-off between losing capacity to setups
+11. **[Batching and setups](11-batching-setups.md):** the trade-off between losing capacity to setups
     and losing time to large batches.
-12. **Scrap and rework:** how inspection, yield and rework loops reduce what
+12. **[Scrap and rework](12-scrap-rework.md):** how inspection, yield and rework loops reduce what
     a line really delivers.
-13. **Simulation you can trust:** replications, confidence intervals,
+13. **[Simulation you can trust](13-trustworthy-results.md):** replications, confidence intervals,
     warm-up, and how many runs are enough.
-14. **From model to reality:** collecting data, fitting distributions, and
+14. **[From model to reality](14-model-to-reality.md):** collecting data, fitting distributions, and
     checking a model against the real line.
 
-The pages are being written; until they appear in the sidebar, the
-[specification](../spec.md) describes what taktsim will do.
+The [glossary](glossary.md) collects every term, with the page that
+introduces it.
+
+Every number on these pages comes from a small simulation script in
+`docs/concepts/scripts/`, written for teaching and independent of taktsim,
+which cannot run models yet. The interactive figures run a port of the same
+simulator in your browser. Model snippets show taktsim's planned model
+format (spec §4); none of them runs yet.

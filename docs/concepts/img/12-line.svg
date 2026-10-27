@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 200" role="img" aria-labelledby="f12a-t f12a-d"><title id="f12a-t">Line C: welding with an inspection after it</title><desc id="f12a-d">Line C: cut, a buffer of 5, weld, a buffer of 5, and an inspection of 40 seconds; reworked parts go back to welding, scrapped parts leave the line.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-muted-dots{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:2;stroke-dasharray:1 4;stroke-linecap:round;fill:none}.ts-svg .ts-muted-solid{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style>
+<text x="31" y="102" text-anchor="middle" font-size="11">SOURCE</text>
+<line x1="57" y1="98" x2="79.7" y2="98" class="ts-axis"/>
+<path d="M74.7 94 L79.7 98 L74.7 102" class="ts-axis"/>
+<rect x="82.7" y="72" width="76" height="52" class="ts-ink-outline"/>
+<text x="120.7" y="102" text-anchor="middle" class="ts-strong" font-size="12">CUT</text>
+<text x="120.7" y="142" text-anchor="middle" font-size="11">42 s</text>
+<line x1="161.7" y1="98" x2="184.3" y2="98" class="ts-axis"/>
+<path d="M179.3 94 L184.3 98 L179.3 102" class="ts-axis"/>
+<rect x="191.8" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="203.8" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="215.8" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="227.8" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="239.8" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<text x="220.3" y="84" text-anchor="middle" font-size="10">BUF 5</text>
+<text x="220.3" y="120" text-anchor="middle" font-size="10">5 places</text>
+<line x1="256.3" y1="98" x2="279" y2="98" class="ts-axis"/>
+<path d="M274 94 L279 98 L274 102" class="ts-axis"/>
+<rect x="282" y="72" width="76" height="52" class="ts-acid"/>
+<text x="320" y="102" text-anchor="middle" class="ts-on-acid" font-size="12">WELD</text>
+<text x="320" y="142" text-anchor="middle" font-size="11">45 s</text>
+<line x1="361" y1="98" x2="383.7" y2="98" class="ts-axis"/>
+<path d="M378.7 94 L383.7 98 L378.7 102" class="ts-axis"/>
+<rect x="391.2" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="403.2" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="415.2" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="427.2" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<rect x="439.2" y="93.5" width="9" height="9" class="ts-unlit-fill"/>
+<text x="419.7" y="84" text-anchor="middle" font-size="10">BUF 5</text>
+<text x="419.7" y="120" text-anchor="middle" font-size="10">5 places</text>
+<line x1="455.7" y1="98" x2="478.3" y2="98" class="ts-axis"/>
+<path d="M473.3 94 L478.3 98 L473.3 102" class="ts-axis"/>
+<rect x="481.3" y="72" width="76" height="52" class="ts-ink-outline"/>
+<text x="519.3" y="102" text-anchor="middle" class="ts-strong" font-size="12">INSPECT</text>
+<text x="519.3" y="142" text-anchor="middle" font-size="11">40 s</text>
+<line x1="560.3" y1="98" x2="583" y2="98" class="ts-axis"/>
+<path d="M578 94 L583 98 L578 102" class="ts-axis"/>
+<text x="609" y="102" text-anchor="middle" font-size="11">SINK</text>
+<path d="M519.3 72 L519.3 48 L320 48 L320 67" class="ts-axis"/>
+<path d="M316 62 L320 68 L324 62" class="ts-axis"/>
+<text x="419.7" y="42" text-anchor="middle" font-size="10">REWORK</text>
+<line x1="543.3" y1="124" x2="543.3" y2="178" class="ts-axis"/>
+<path d="M539.3 173 L543.3 178 L547.3 173" class="ts-axis"/>
+<text x="551.3" y="176" text-anchor="start" font-size="10">SCRAP</text>
+</svg>

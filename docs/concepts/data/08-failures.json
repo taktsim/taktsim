@@ -1,0 +1,50 @@
+{
+ "horizon": 144000.0,
+ "per": 5,
+ "reps": 30,
+ "results": [
+  {
+   "buffer": 5,
+   "completed": 606.24,
+   "completed_half": 2.825235764101574,
+   "mtbf": 3600.0,
+   "mttr": 180.0
+  },
+  {
+   "buffer": 20,
+   "completed": 630.4933333333333,
+   "completed_half": 2.5665751237892214,
+   "mtbf": 3600.0,
+   "mttr": 180.0
+  },
+  {
+   "buffer": 50,
+   "completed": 635.76,
+   "completed_half": 2.6030004134927975,
+   "mtbf": 3600.0,
+   "mttr": 180.0
+  },
+  {
+   "buffer": 5,
+   "completed": 598.84,
+   "completed_half": 6.805065640971514,
+   "mtbf": 36000.0,
+   "mttr": 1800.0
+  },
+  {
+   "buffer": 20,
+   "completed": 617.7533333333333,
+   "completed_half": 6.3124160967558485,
+   "mtbf": 36000.0,
+   "mttr": 1800.0
+  },
+  {
+   "buffer": 50,
+   "completed": 626.3933333333333,
+   "completed_half": 5.586816011257206,
+   "mtbf": 36000.0,
+   "mttr": 1800.0
+  }
+ ],
+ "sigma": 0.5
+}

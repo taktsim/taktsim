@@ -1,0 +1,64 @@
+{
+ "horizon": 144000.0,
+ "per_shift": 0.20512820512820512,
+ "reps": 10,
+ "results": [
+  {
+   "cap": 1,
+   "completed": 138.11282051282052,
+   "completed_half": 1.3903664488983543
+  },
+  {
+   "cap": 2,
+   "completed": 258.03076923076924,
+   "completed_half": 1.9422217015000585
+  },
+  {
+   "cap": 3,
+   "completed": 357.825641025641,
+   "completed_half": 1.8420274047907041
+  },
+  {
+   "cap": 5,
+   "completed": 485.43589743589746,
+   "completed_half": 1.9749546492683439
+  },
+  {
+   "cap": 8,
+   "completed": 565.6820512820512,
+   "completed_half": 2.283678342791148
+  },
+  {
+   "cap": 10,
+   "completed": 590.7076923076922,
+   "completed_half": 3.211000691373316
+  },
+  {
+   "cap": 12,
+   "completed": 606.7692307692307,
+   "completed_half": 3.310011211797047
+  },
+  {
+   "cap": 15,
+   "completed": 620.4923076923077,
+   "completed_half": 3.7799786572001643
+  },
+  {
+   "cap": 20,
+   "completed": 631.1179487179486,
+   "completed_half": 4.079243537716285
+  },
+  {
+   "cap": 30,
+   "completed": 638.7692307692307,
+   "completed_half": 4.494390854782841
+  },
+  {
+   "cap": 40,
+   "completed": 640.3897435897436,
+   "completed_half": 5.23881822806124
+  }
+ ],
+ "sigma": 0.5,
+ "warmup": 3600.0
+}

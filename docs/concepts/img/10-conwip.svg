@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 340" role="img" aria-labelledby="f10a-t f10a-d"><title id="f10a-t">A small WIP cap already gives most of the output</title><desc id="f10a-d">Parts per shift of line B against the CONWIP cap from 1 to 40, with the best case (dashed) and the practical worst case (dotted) of Hopp and Spearman; a thin line marks the demand of 600 parts per shift (takt 48 s), reached with a cap of 12.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-muted-dots{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:2;stroke-dasharray:1 4;stroke-linecap:round;fill:none}.ts-svg .ts-muted-solid{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style>
+<line x1="64" y1="292" x2="616" y2="292" class="ts-grid"/>
+<text x="56" y="296" text-anchor="end">0</text>
+<line x1="64" y1="224" x2="616" y2="224" class="ts-grid"/>
+<text x="56" y="228" text-anchor="end">200</text>
+<line x1="64" y1="156" x2="616" y2="156" class="ts-grid"/>
+<text x="56" y="160" text-anchor="end">400</text>
+<line x1="64" y1="88" x2="616" y2="88" class="ts-grid"/>
+<text x="56" y="92" text-anchor="end">600</text>
+<line x1="64" y1="20" x2="616" y2="20" class="ts-grid"/>
+<text x="56" y="24" text-anchor="end">800</text>
+<line x1="64" y1="292" x2="64" y2="296" class="ts-axis"/>
+<text x="64" y="310" text-anchor="middle">0</text>
+<line x1="202" y1="292" x2="202" y2="296" class="ts-axis"/>
+<text x="202" y="310" text-anchor="middle">10</text>
+<line x1="340" y1="292" x2="340" y2="296" class="ts-axis"/>
+<text x="340" y="310" text-anchor="middle">20</text>
+<line x1="478" y1="292" x2="478" y2="296" class="ts-axis"/>
+<text x="478" y="310" text-anchor="middle">30</text>
+<line x1="616" y1="292" x2="616" y2="296" class="ts-axis"/>
+<text x="616" y="310" text-anchor="middle">40</text>
+<line x1="64" y1="292" x2="616" y2="292" class="ts-axis"/>
+<line x1="64" y1="20" x2="64" y2="292" class="ts-axis"/>
+<text x="340" y="332" text-anchor="middle">WIP CAP (PARTS)</text>
+<text x="14" y="156" text-anchor="middle" transform="rotate(-90 14 156)">PARTS PER SHIFT</text>
+<path d="M77.8 244.6 L91.6 203.6 L105.4 169.7 L133 126.3 L174.4 98.9 L202 90.1 L229.6 84.6 L271 79.7 L340 76 L478 73.3 L616 72.5 L616 76 L478 76.3 L340 78.8 L271 82.3 L229.6 86.8 L202 92.3 L174.4 100.4 L133 127.6 L105.4 171 L91.6 204.9 L77.8 245.5 Z" class="ts-ci"/>
+<path d="M77.8 245 L91.6 204.3 L105.4 170.3 L133 127 L174.4 99.7 L202 91.2 L229.6 85.7 L271 81 L340 77.4 L478 74.8 L616 74.3" class="ts-ink-line"/>
+<rect x="74.8" y="242" width="6" height="6" class="ts-ink-fill"/>
+<rect x="88.6" y="201.3" width="6" height="6" class="ts-ink-fill"/>
+<rect x="102.4" y="167.3" width="6" height="6" class="ts-ink-fill"/>
+<rect x="130" y="124" width="6" height="6" class="ts-ink-fill"/>
+<rect x="171.4" y="96.7" width="6" height="6" class="ts-ink-fill"/>
+<rect x="199" y="88.2" width="6" height="6" class="ts-ink-fill"/>
+<rect x="226.6" y="82.7" width="6" height="6" class="ts-ink-fill"/>
+<rect x="268" y="78" width="6" height="6" class="ts-ink-fill"/>
+<rect x="337" y="74.4" width="6" height="6" class="ts-ink-fill"/>
+<rect x="475" y="71.8" width="6" height="6" class="ts-ink-fill"/>
+<rect x="613" y="71.3" width="6" height="6" class="ts-ink-fill"/>
+<path d="M77.8 244.9 L81.2 233.2 L84.7 221.4 L88.2 209.6 L91.6 197.8 L95 186.1 L98.5 174.3 L102 162.5 L105.4 150.8 L108.8 139 L112.3 127.2 L115.8 115.5 L119.2 103.7 L122.7 91.9 L126.1 80.2 L129.6 74.4 L133 74.4 L136.4 74.4 L139.9 74.4 L143.3 74.4 L146.8 74.4 L150.2 74.4 L153.7 74.4 L157.2 74.4 L160.6 74.4 L164.1 74.4 L167.5 74.4 L170.9 74.4 L174.4 74.4 L177.8 74.4 L181.3 74.4 L184.8 74.4 L188.2 74.4 L191.7 74.4 L195.1 74.4 L198.5 74.4 L202 74.4 L205.4 74.4 L208.9 74.4 L212.3 74.4 L215.8 74.4 L219.2 74.4 L222.7 74.4 L226.2 74.4 L229.6 74.4 L233.1 74.4 L236.5 74.4 L239.9 74.4 L243.4 74.4 L246.8 74.4 L250.3 74.4 L253.8 74.4 L257.2 74.4 L260.6 74.4 L264.1 74.4 L267.6 74.4 L271 74.4 L274.4 74.4 L277.9 74.4 L281.4 74.4 L284.8 74.4 L288.2 74.4 L291.7 74.4 L295.1 74.4 L298.6 74.4 L302.1 74.4 L305.5 74.4 L308.9 74.4 L312.4 74.4 L315.9 74.4 L319.3 74.4 L322.8 74.4 L326.2 74.4 L329.7 74.4 L333.1 74.4 L336.6 74.4 L340 74.4 L343.4 74.4 L346.9 74.4 L350.4 74.4 L353.8 74.4 L357.2 74.4 L360.7 74.4 L364.1 74.4 L367.6 74.4 L371.1 74.4 L374.5 74.4 L377.9 74.4 L381.4 74.4 L384.9 74.4 L388.3 74.4 L391.8 74.4 L395.2 74.4 L398.6 74.4 L402.1 74.4 L405.6 74.4 L409 74.4 L412.4 74.4 L415.9 74.4 L419.4 74.4 L422.8 74.4 L426.2 74.4 L429.7 74.4 L433.1 74.4 L436.6 74.4 L440.1 74.4 L443.5 74.4 L446.9 74.4 L450.4 74.4 L453.9 74.4 L457.3 74.4 L460.8 74.4 L464.2 74.4 L467.6 74.4 L471.1 74.4 L474.6 74.4 L478 74.4 L481.4 74.4 L484.9 74.4 L488.4 74.4 L491.8 74.4 L495.2 74.4 L498.7 74.4 L502.1 74.4 L505.6 74.4 L509.1 74.4 L512.5 74.4 L516 74.4 L519.4 74.4 L522.9 74.4 L526.3 74.4 L529.8 74.4 L533.2 74.4 L536.6 74.4 L540.1 74.4 L543.5 74.4 L547 74.4 L550.5 74.4 L553.9 74.4 L557.4 74.4 L560.8 74.4 L564.2 74.4 L567.7 74.4 L571.1 74.4 L574.6 74.4 L578.1 74.4 L581.5 74.4 L584.9 74.4 L588.4 74.4 L591.9 74.4 L595.3 74.4 L598.8 74.4 L602.2 74.4 L605.6 74.4 L609.1 74.4 L612.6 74.4 L616 74.4" class="ts-muted-line"/>
+<path d="M77.8 244.9 L81.2 236.2 L84.7 228.3 L88.2 221.1 L91.6 214.6 L95 208.6 L98.5 203.1 L102 198.1 L105.4 193.4 L108.8 189.1 L112.3 185.1 L115.8 181.3 L119.2 177.8 L122.7 174.5 L126.1 171.4 L129.6 168.5 L133 165.8 L136.4 163.2 L139.9 160.8 L143.3 158.5 L146.8 156.3 L150.2 154.2 L153.7 152.3 L157.2 150.4 L160.6 148.6 L164.1 146.9 L167.5 145.3 L170.9 143.7 L174.4 142.2 L177.8 140.8 L181.3 139.4 L184.8 138.1 L188.2 136.8 L191.7 135.6 L195.1 134.5 L198.5 133.3 L202 132.3 L205.4 131.2 L208.9 130.2 L212.3 129.2 L215.8 128.3 L219.2 127.4 L222.7 126.5 L226.2 125.7 L229.6 124.9 L233.1 124.1 L236.5 123.3 L239.9 122.5 L243.4 121.8 L246.8 121.1 L250.3 120.4 L253.8 119.8 L257.2 119.1 L260.6 118.5 L264.1 117.9 L267.6 117.3 L271 116.7 L274.4 116.2 L277.9 115.6 L281.4 115.1 L284.8 114.6 L288.2 114.1 L291.7 113.6 L295.1 113.1 L298.6 112.6 L302.1 112.2 L305.5 111.7 L308.9 111.3 L312.4 110.9 L315.9 110.4 L319.3 110 L322.8 109.6 L326.2 109.2 L329.7 108.9 L333.1 108.5 L336.6 108.1 L340 107.8 L343.4 107.4 L346.9 107.1 L350.4 106.7 L353.8 106.4 L357.2 106.1 L360.7 105.8 L364.1 105.5 L367.6 105.2 L371.1 104.9 L374.5 104.6 L377.9 104.3 L381.4 104 L384.9 103.7 L388.3 103.5 L391.8 103.2 L395.2 102.9 L398.6 102.7 L402.1 102.4 L405.6 102.2 L409 101.9 L412.4 101.7 L415.9 101.5 L419.4 101.2 L422.8 101 L426.2 100.8 L429.7 100.6 L433.1 100.4 L436.6 100.1 L440.1 99.9 L443.5 99.7 L446.9 99.5 L450.4 99.3 L453.9 99.1 L457.3 98.9 L460.8 98.7 L464.2 98.6 L467.6 98.4 L471.1 98.2 L474.6 98 L478 97.8 L481.4 97.7 L484.9 97.5 L488.4 97.3 L491.8 97.2 L495.2 97 L498.7 96.8 L502.1 96.7 L505.6 96.5 L509.1 96.4 L512.5 96.2 L516 96.1 L519.4 95.9 L522.9 95.8 L526.3 95.6 L529.8 95.5 L533.2 95.4 L536.6 95.2 L540.1 95.1 L543.5 94.9 L547 94.8 L550.5 94.7 L553.9 94.5 L557.4 94.4 L560.8 94.3 L564.2 94.2 L567.7 94 L571.1 93.9 L574.6 93.8 L578.1 93.7 L581.5 93.6 L584.9 93.5 L588.4 93.3 L591.9 93.2 L595.3 93.1 L598.8 93 L602.2 92.9 L605.6 92.8 L609.1 92.7 L612.6 92.6 L616 92.5" class="ts-muted-dots"/>
+<path d="M64 88 L616 88" class="ts-muted-solid"/>
+<rect x="223.6" y="79.7" width="12" height="12" class="ts-acid"/>
+<text x="241.6" y="107.7" text-anchor="start" class="ts-strong">cap 12 meets demand</text>
+<rect x="76" y="22" width="10" height="10" class="ts-ink-fill"/>
+<text x="94" y="31" text-anchor="start">SIMULATED</text>
+<line x1="178" y1="27" x2="192" y2="27" class="ts-muted-line"/>
+<text x="196" y="31" text-anchor="start">BEST CASE</text>
+<line x1="280" y1="27" x2="294" y2="27" class="ts-muted-dots"/>
+<text x="298" y="31" text-anchor="start">PRACTICAL WORST CASE</text>
+<line x1="470" y1="27" x2="484" y2="27" class="ts-muted-solid"/>
+<text x="488" y="31" text-anchor="start">DEMAND</text>
+</svg>

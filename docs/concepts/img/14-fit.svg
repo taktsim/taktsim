@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 260" role="img" aria-labelledby="f14a-t f14a-d"><title id="f14a-t">The lognormal follows the data; the exponential does not</title><desc id="f14a-d">Histogram of 300 measured welding times, most between 20 and 80 seconds with a long tail; the fitted lognormal curve follows the bars, the exponential curve puts far too many times near zero.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-muted-dots{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:2;stroke-dasharray:1 4;stroke-linecap:round;fill:none}.ts-svg .ts-muted-solid{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style>
+<rect x="56.5" y="195.4" width="15" height="20.6" class="ts-ink-fill"/>
+<rect x="72.5" y="143.8" width="15" height="72.2" class="ts-ink-fill"/>
+<rect x="88.5" y="87.1" width="15" height="128.9" class="ts-ink-fill"/>
+<rect x="104.5" y="56.2" width="15" height="159.8" class="ts-ink-fill"/>
+<rect x="120.5" y="56.2" width="15" height="159.8" class="ts-ink-fill"/>
+<rect x="136.5" y="71.7" width="15" height="144.3" class="ts-ink-fill"/>
+<rect x="152.5" y="71.7" width="15" height="144.3" class="ts-ink-fill"/>
+<rect x="168.5" y="66.5" width="15" height="149.5" class="ts-ink-fill"/>
+<rect x="184.5" y="138.7" width="15" height="77.3" class="ts-ink-fill"/>
+<rect x="200.5" y="164.5" width="15" height="51.5" class="ts-ink-fill"/>
+<rect x="216.5" y="179.9" width="15" height="36.1" class="ts-ink-fill"/>
+<rect x="232.5" y="118.1" width="15" height="97.9" class="ts-ink-fill"/>
+<rect x="248.5" y="179.9" width="15" height="36.1" class="ts-ink-fill"/>
+<rect x="264.5" y="164.5" width="15" height="51.5" class="ts-ink-fill"/>
+<rect x="280.5" y="185.1" width="15" height="30.9" class="ts-ink-fill"/>
+<rect x="296.5" y="185.1" width="15" height="30.9" class="ts-ink-fill"/>
+<rect x="312.5" y="200.5" width="15" height="15.5" class="ts-ink-fill"/>
+<rect x="328.5" y="195.4" width="15" height="20.6" class="ts-ink-fill"/>
+<rect x="344.5" y="195.4" width="15" height="20.6" class="ts-ink-fill"/>
+<rect x="360.5" y="200.5" width="15" height="15.5" class="ts-ink-fill"/>
+<rect x="376.5" y="185.1" width="15" height="30.9" class="ts-ink-fill"/>
+<rect x="392.5" y="205.7" width="15" height="10.3" class="ts-ink-fill"/>
+<rect x="408.5" y="210.8" width="15" height="5.2" class="ts-ink-fill"/>
+<rect x="424.5" y="205.7" width="15" height="10.3" class="ts-ink-fill"/>
+<rect x="440.5" y="205.7" width="15" height="10.3" class="ts-ink-fill"/>
+<rect x="456.5" y="205.7" width="15" height="10.3" class="ts-ink-fill"/>
+<rect x="472.5" y="210.8" width="15" height="5.2" class="ts-ink-fill"/>
+<path d="M48 215.8 L64 203.7 L80 157.2 L96 100.8 L112 63.5 L128 50.5 L144 55.3 L160 70 L176 88.7 L192 107.9 L208 125.8 L224 141.6 L240 155 L256 166.2 L272 175.5 L288 183.1 L304 189.2 L320 194.2 L336 198.2 L352 201.5 L368 204.1 L384 206.3 L400 208 L416 209.4 L432 210.5 L448 211.5 L464 212.3 L480 212.9 L496 213.4 L512 213.8 L528 214.2 L544 214.5 L560 214.7 L576 214.9 L592 215.1 L608 215.2" class="ts-muted-line"/>
+<line x1="40" y1="12" x2="54" y2="12" class="ts-muted-line"/>
+<text x="58" y="16" text-anchor="start">LOGNORMAL FIT</text>
+<path d="M48 54.2 L64 71.2 L80 86.3 L96 99.9 L112 112 L128 122.9 L144 132.6 L160 141.4 L176 149.2 L192 156.2 L208 162.4 L224 168 L240 173 L256 177.5 L272 181.6 L288 185.2 L304 188.4 L320 191.3 L336 193.9 L352 196.2 L368 198.3 L384 200.1 L400 201.8 L416 203.3 L432 204.6 L448 205.8 L464 206.9 L480 207.8 L496 208.7 L512 209.4 L528 210.1 L544 210.7 L560 211.3 L576 211.8 L592 212.2 L608 212.6" class="ts-muted-dots"/>
+<line x1="174" y1="12" x2="188" y2="12" class="ts-muted-dots"/>
+<text x="192" y="16" text-anchor="start">EXPONENTIAL FIT</text>
+<line x1="40" y1="216" x2="616" y2="216" class="ts-axis"/>
+<line x1="40" y1="216" x2="40" y2="220" class="ts-axis"/>
+<text x="40" y="234" text-anchor="middle">0</text>
+<line x1="200" y1="216" x2="200" y2="220" class="ts-axis"/>
+<text x="200" y="234" text-anchor="middle">50</text>
+<line x1="360" y1="216" x2="360" y2="220" class="ts-axis"/>
+<text x="360" y="234" text-anchor="middle">100</text>
+<line x1="520" y1="216" x2="520" y2="220" class="ts-axis"/>
+<text x="520" y="234" text-anchor="middle">150</text>
+<text x="328" y="254" text-anchor="middle">WELDING TIME (S)</text>
+<line x1="184.8" y1="28" x2="184.8" y2="216" class="ts-acid-line"/>
+<text x="192.8" y="38" text-anchor="start" class="ts-strong">mean 45.2 s</text>
+</svg>

@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-svg" viewBox="0 0 640 211.7" role="img" aria-labelledby="f08b-t f08b-d"><title id="f08b-t">A long outage empties the buffer, then welding stops too</title><desc id="f08b-d">Two hours of line A with a 20-place buffer: cutting fails and is down for almost an hour; the few parts in the buffer last only minutes, after which welding is starved until cutting is repaired.</desc><style>.ts-svg text{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;fill:var(--ts-ink-muted,#8A8A85)}.ts-svg text.ts-strong{fill:var(--ts-ink,#E8E8E3);font-weight:700}.ts-svg text.ts-on-acid{fill:#0A0A0A;font-weight:700}.ts-svg .ts-axis{stroke:var(--ts-line,#333333);stroke-width:1;fill:none}.ts-svg .ts-grid{stroke:var(--ts-line,#333333);stroke-width:1;stroke-dasharray:2 4;fill:none}.ts-svg .ts-ink-line{stroke:var(--ts-ink,#E8E8E3);stroke-width:2;fill:none}.ts-svg .ts-muted-line{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.5;stroke-dasharray:5 4;fill:none}.ts-svg .ts-muted-dots{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:2;stroke-dasharray:1 4;stroke-linecap:round;fill:none}.ts-svg .ts-muted-solid{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1;fill:none}.ts-svg .ts-ink-fill{fill:var(--ts-ink,#E8E8E3)}.ts-svg .ts-muted-fill{fill:var(--ts-ink-muted,#8A8A85)}.ts-svg .ts-unlit-fill{fill:var(--ts-unlit,#2A2A2A)}.ts-svg .ts-ground-fill{fill:var(--ts-ground,#0A0A0A)}.ts-svg .ts-outline{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .ts-ink-outline{fill:none;stroke:var(--ts-ink,#E8E8E3);stroke-width:1.5}.ts-svg .ts-acid{fill:var(--ts-acid,#D4FF00);stroke:var(--ts-keyline,#D4FF00);stroke-width:1.5}.ts-svg .ts-acid-line{stroke:var(--ts-acid,#D4FF00);stroke-width:2.5;fill:none}.ts-svg .ts-ci{fill:var(--ts-ink,#E8E8E3);opacity:.14}.ts-svg .st-working{fill:var(--ts-ink,#E8E8E3)}.ts-svg .st-starved{fill:var(--ts-ground,#0A0A0A);stroke:var(--ts-line,#333333);stroke-width:1}.ts-svg .st-blocked-bg{fill:var(--ts-ground,#0A0A0A)}.ts-svg .st-pattern-hatch{stroke:var(--ts-ink-muted,#8A8A85);stroke-width:1.6}.ts-svg .st-down{fill:var(--ts-signal,#FF6B4A)}.ts-svg .st-pattern-dots{fill:var(--ts-ink-muted,#8A8A85)}</style><defs><pattern id="f08b-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><rect width="5" height="5" class="st-blocked-bg"/><line x1="0" y1="0" x2="0" y2="5" class="st-pattern-hatch"/></pattern><pattern id="f08b-dots" patternUnits="userSpaceOnUse" width="4" height="4"><rect width="4" height="4" class="st-blocked-bg"/><rect x="1" y="1" width="2" height="2" class="st-pattern-dots"/></pattern></defs>
+<rect x="92" y="8" width="10" height="10" class="st-working"/>
+<text x="108" y="17" text-anchor="start">WORKING</text>
+<rect x="184.5" y="8.5" width="9" height="9" class="st-starved"/>
+<text x="200" y="17" text-anchor="start">STARVED</text>
+<rect x="276" y="8" width="10" height="10" fill="url(#f08b-hatch)"/>
+<text x="292" y="17" text-anchor="start">BLOCKED</text>
+<rect x="368" y="8" width="10" height="10" class="st-down"/>
+<text x="384" y="17" text-anchor="start">DOWN</text>
+<text x="82" y="57.8" text-anchor="end" class="ts-strong">CUT</text>
+<rect x="92" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="100.9" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="109.7" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="118.6" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="127.5" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="136.3" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="145.2" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="154.1" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="162.9" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="171.8" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="180.7" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="189.5" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="198.4" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="207.3" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="216.1" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="225" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="233.9" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="242.7" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="251.6" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="260.5" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="269.3" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="278.2" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="287.1" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="295.9" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="304.8" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="313.7" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="322.5" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="331.4" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="340.3" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="349.1" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="358" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="366.9" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="375.7" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="384.6" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="393.5" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="402.3" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="411.2" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="420.1" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="428.9" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="437.8" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="446.7" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="455.5" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="464.4" y="52" width="6.9" height="6.9" class="st-down"/>
+<rect x="473.3" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="482.1" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="491" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="499.9" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="508.7" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="517.6" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="526.5" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="535.3" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="544.2" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="553.1" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="561.9" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="570.8" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="579.7" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="588.5" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="597.4" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="606.3" y="52" width="6.9" height="6.9" class="st-working"/>
+<rect x="615.1" y="52" width="6.9" height="6.9" class="st-working"/>
+<text x="82" y="76.7" text-anchor="end" class="ts-strong">WELD</text>
+<rect x="92" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="100.9" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="109.7" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="118.6" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="127.5" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="136.3" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="145.2" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="154.1" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="162.9" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="171.8" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="180.7" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="189.5" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="198.4" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="207.3" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="216.1" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="225" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="234.4" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="243.2" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="252.1" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="261" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="269.8" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="278.7" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="287.6" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="296.4" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="305.3" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="314.2" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="323" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="331.9" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="340.8" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="349.6" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="358.5" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="367.4" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="376.2" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="385.1" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="394" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="402.8" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="411.7" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="420.6" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="429.4" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="438.3" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="447.2" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="456" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="464.9" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="473.8" y="71.4" width="5.9" height="5.9" class="st-starved"/>
+<rect x="482.1" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="491" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="499.9" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="508.7" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="517.6" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="526.5" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="535.3" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="544.2" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="553.1" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="561.9" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="570.8" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="579.7" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="588.5" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="597.4" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="606.3" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<rect x="615.1" y="70.9" width="6.9" height="6.9" class="st-working"/>
+<text x="82" y="115.7" text-anchor="end" class="ts-strong">BUFFER</text>
+<text x="82" y="129.7" text-anchor="end">max 20</text>
+<line x1="92" y1="159.7" x2="624" y2="159.7" class="ts-axis"/>
+<line x1="92" y1="105.7" x2="624" y2="105.7" class="ts-grid"/>
+<rect x="92" y="158.4" width="6.9" height="1.4" class="ts-muted-fill"/>
+<rect x="100.9" y="154.8" width="6.9" height="4.9" class="ts-muted-fill"/>
+<rect x="109.7" y="151.6" width="6.9" height="8.1" class="ts-muted-fill"/>
+<rect x="118.6" y="148" width="6.9" height="11.8" class="ts-muted-fill"/>
+<rect x="127.5" y="147.8" width="6.9" height="12" class="ts-muted-fill"/>
+<rect x="136.3" y="151" width="6.9" height="8.7" class="ts-muted-fill"/>
+<rect x="145.2" y="149.2" width="6.9" height="10.5" class="ts-muted-fill"/>
+<rect x="154.1" y="143.5" width="6.9" height="16.2" class="ts-muted-fill"/>
+<rect x="162.9" y="144.3" width="6.9" height="15.5" class="ts-muted-fill"/>
+<rect x="171.8" y="140.6" width="6.9" height="19.1" class="ts-muted-fill"/>
+<rect x="180.7" y="138" width="6.9" height="21.8" class="ts-muted-fill"/>
+<rect x="189.5" y="139.3" width="6.9" height="20.5" class="ts-muted-fill"/>
+<rect x="198.4" y="140.1" width="6.9" height="19.7" class="ts-muted-fill"/>
+<rect x="207.3" y="143.9" width="6.9" height="15.9" class="ts-muted-fill"/>
+<rect x="216.1" y="149.3" width="6.9" height="10.4" class="ts-muted-fill"/>
+<rect x="225" y="158.6" width="6.9" height="1.1" class="ts-muted-fill"/>
+<rect x="482.1" y="157.4" width="6.9" height="2.4" class="ts-muted-fill"/>
+<rect x="491" y="154.8" width="6.9" height="4.9" class="ts-muted-fill"/>
+<rect x="499.9" y="148.6" width="6.9" height="11.1" class="ts-muted-fill"/>
+<rect x="508.7" y="144" width="6.9" height="15.7" class="ts-muted-fill"/>
+<rect x="517.6" y="141.3" width="6.9" height="18.5" class="ts-muted-fill"/>
+<rect x="526.5" y="139.2" width="6.9" height="20.5" class="ts-muted-fill"/>
+<rect x="535.3" y="134.8" width="6.9" height="24.9" class="ts-muted-fill"/>
+<rect x="544.2" y="136.6" width="6.9" height="23.2" class="ts-muted-fill"/>
+<rect x="553.1" y="140.5" width="6.9" height="19.3" class="ts-muted-fill"/>
+<rect x="561.9" y="142.5" width="6.9" height="17.2" class="ts-muted-fill"/>
+<rect x="570.8" y="142.3" width="6.9" height="17.5" class="ts-muted-fill"/>
+<rect x="579.7" y="137.5" width="6.9" height="22.2" class="ts-muted-fill"/>
+<rect x="588.5" y="135.4" width="6.9" height="24.4" class="ts-muted-fill"/>
+<rect x="597.4" y="134.1" width="6.9" height="25.6" class="ts-muted-fill"/>
+<rect x="606.3" y="133.6" width="6.9" height="26.1" class="ts-muted-fill"/>
+<rect x="615.1" y="131.9" width="6.9" height="27.8" class="ts-muted-fill"/>
+<rect x="233.9" y="42" width="6.9" height="6" class="ts-acid"/>
+<line x1="237.3" y1="48" x2="237.3" y2="159.7" class="ts-acid-line"/>
+<text x="246.7" y="48" text-anchor="start" class="ts-strong">buffer empty: weld starved</text>
+<text x="92" y="177.7" text-anchor="start">0 min</text>
+<text x="225" y="177.7" text-anchor="middle">30 min</text>
+<text x="358" y="177.7" text-anchor="middle">60 min</text>
+<text x="491" y="177.7" text-anchor="middle">90 min</text>
+<text x="624" y="177.7" text-anchor="end">120 min</text>
+</svg>
