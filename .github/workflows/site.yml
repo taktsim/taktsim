@@ -21,11 +21,29 @@ concurrency:
 
 jobs:
   build:
-    name: build (mdBook, links)
+    name: build (concept scripts, simulator tests, mdBook, links)
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Every table, figure and data file of the concept pages is generated;
+      # regenerating them must not change anything.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: python3 docs/concepts/scripts/build_all.py
+      - run: |
+          if [ -n "$(git status --porcelain -- docs website)" ]; then
+            git status --short -- docs website
+            git diff --stat -- docs website
+            echo "generated files are stale: run python3 docs/concepts/scripts/build_all.py"
+            exit 1
+          fi
+      # The in-browser simulator must agree with the scripts.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: node --test website/components/
       - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: mdbook@0.5.4,mdbook-mermaid@0.17.1,lychee@0.24.2
