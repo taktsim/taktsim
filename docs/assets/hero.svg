@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="ts-hero" viewBox="0 0 892.07 100" role="img" aria-label="taktsim"><title>taktsim</title><!-- The taktsim lockup (lockup-dark.svg of the Taktsim design system) with its colours as classes, so it follows the theme. The playhead: the playhead, an acid step that walks the mark's 16 steps and rests on the firing step (website/theme/taktsim.css, website/components/hero.js). -->
+<svg xmlns="http://www.w3.org/2000/svg" class="ts-hero" viewBox="0 0 892.07 100" role="img" aria-label="taktsim"><title>taktsim</title><!-- The taktsim lockup (lockup-dark.svg of the Taktsim design system) with its colours as classes, so it follows the theme. The playhead: the playhead, an acid step that walks the mark's 16 steps and rests on the firing step (website/theme/taktsim.css). -->
 <rect x="0" y="0" width="22" height="22" class="ts-ink-fill"/>
 <rect x="26" y="0" width="22" height="22" class="ts-ink-fill"/>
 <rect x="52" y="0" width="22" height="22" class="ts-ink-fill"/>
