@@ -329,6 +329,11 @@ fn document_kinds() -> Vec<LoadErrorKind> {
             id: "A".into(),
             other: "a".into(),
             first: place.clone(),
+            other_path: Box::default(),
+        },
+        LoadErrorKind::BareShare {
+            found: "0.02".into(),
+            fix: "2%".into(),
         },
         LoadErrorKind::UnknownComponent {
             id: "snk".into(),
@@ -428,6 +433,7 @@ fn listed(kind: &LoadErrorKind) {
         | LoadErrorKind::Distribution(_)
         | LoadErrorKind::Expression { .. }
         | LoadErrorKind::NotAllowed { .. }
+        | LoadErrorKind::BareShare { .. }
         | LoadErrorKind::UnsupportedFormat { .. }
         | LoadErrorKind::InvalidId { .. }
         | LoadErrorKind::DuplicateId { .. }
