@@ -1,4 +1,4 @@
-// Tests of the in-browser teaching simulator (run: node --test website/components/).
+// Tests of the in-browser teaching simulator (run: node --test website/components/sim.test.js).
 // It must reproduce what the Python scripts in docs/concepts/scripts/ report
 // on the pages: the same random streams, and for every interactive figure the
 // same results within the scripts' 95 % confidence intervals.
