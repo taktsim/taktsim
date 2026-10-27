@@ -343,7 +343,7 @@ fn the_schema_rejects_every_malformed_model_it_can() {
     }
     assert!(too_lax.is_empty(), "{}", too_lax.join("\n"));
     // The corpus files whose errors a schema can state, all rejected.
-    assert_eq!((parsed, rejected), (86, 51));
+    assert_eq!((parsed, rejected), (89, 53));
 }
 
 #[test]
