@@ -16,8 +16,6 @@ workspace = true
 taktsim-units.workspace = true
 taktsim-core.workspace = true
 thiserror.workspace = true
-sha2.workspace = true
-crc32fast.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
