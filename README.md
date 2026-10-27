@@ -193,6 +193,10 @@ platforms are Windows x86-64, Linux x86-64 and ARM64, and macOS ARM64
 
 ## Documentation
 
+The documentation site is at **<https://taktsim.github.io/taktsim/>**.
+
+- [Concepts](https://taktsim.github.io/taktsim/concepts/): how production
+  lines behave, a learning path for developers new to manufacturing.
 - [Specification](docs/spec.md): what taktsim is and how it behaves. The
   spec still uses the placeholder name `simcode`; read it as `taktsim`.
 - [Roadmap](docs/roadmap.md): milestones and the acceptance criteria each

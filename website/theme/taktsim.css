@@ -1,0 +1,22 @@
+/* Site styles on top of mdBook's themes. Colours for machine states are
+   defined in website/components/palette.js and mirrored here as custom
+   properties; the light and dark values differ only in brightness. */
+
+.content figure {
+  margin: 1.5em 0;
+}
+
+.content figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.content figcaption {
+  font-size: 0.9em;
+  color: var(--fg);
+  opacity: 0.8;
+  text-align: center;
+  margin-top: 0.5em;
+}

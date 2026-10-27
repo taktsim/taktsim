@@ -86,6 +86,33 @@ tightening one (a new or stricter check) may come with the code it checks.
 If your PR breaks one of the design principles, say so in its description and
 explain why; the PR template asks.
 
+## Working on the docs
+
+The documentation site is built with [mdBook](https://rust-lang.github.io/mdBook/)
+from the Markdown files in `docs/`; `website/` holds only its configuration,
+styles and scripts. The pages and their order are listed in
+`docs/SUMMARY.md`; a page missing from it is not published.
+
+Install the tools once, in the versions `.github/workflows/site.yml` uses:
+
+```sh
+cargo install --locked mdbook@0.5.4 mdbook-mermaid@0.17.1 lychee@0.24.2
+mdbook-mermaid install website   # writes the Mermaid scripts, not committed
+```
+
+Preview with live reload at <http://localhost:3000>, or build and check the
+links as CI does:
+
+```sh
+mdbook serve website --open
+mdbook build website
+lychee --offline --include-fragments --exclude-path website/book/404.html website/book
+```
+
+Link between pages with relative paths to the `.md` files, and to a folder
+(`adr/`) rather than its `README.md`. A broken link or anchor fails the
+build. The site is deployed to GitHub Pages on every push to `main`.
+
 ## Benchmarks
 
 - **Wall-clock, locally (any OS):**
