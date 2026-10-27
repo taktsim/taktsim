@@ -124,7 +124,7 @@ agrees with the scripts:
 
 ```sh
 python3 docs/concepts/scripts/build_all.py
-node --test website/components/
+node --test website/components/sim.test.js
 ```
 
 `website/components/sim.js` is a port of `docs/concepts/scripts/linesim.py`:
