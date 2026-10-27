@@ -46,8 +46,8 @@ def line_a(
     )
 
 
-def readme_line(buffer: int | None = 20) -> Line:
-    """The README's example: cut lognormal(42 s, 0.08), constant 45 s weld."""
+def low_variability_line(buffer: int | None = 20) -> Line:
+    """Line A with little variability: cut lognormal(42 s, 0.08), constant 45 s weld."""
     return line_a(sigma=0.08, buffer=buffer, weld_sigma=0.0)
 
 

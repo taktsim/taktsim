@@ -85,7 +85,7 @@
     svg.add(`<text x="14" y="${n1(my)}" text-anchor="middle" transform="rotate(-90 14 ${n1(my)})">${esc(o.ylabel.toUpperCase())}</text>`);
     for (const [v, label] of o.hlines || []) {
       svg.line(left, sy(v), W - right, sy(v), "ts-muted-line");
-      svg.text(W - right - 4, sy(v) - 6, label, "end");
+      svg.text(W - right - 4, sy(v) + 16, label, "end");
     }
     for (const s of o.series) {
       const inside = (y) => Number.isFinite(y) && y >= o.yr[0] && y <= o.yr[1];
@@ -95,8 +95,9 @@
         svg.path("M" + up.concat(lo).map((p) => `${n1(p[0])} ${n1(p[1])}`).join(" L") + " Z", "ts-ci");
       }
       const pts = s.xs.map((x, i) => [sx(x), sy(s.ys[i]), s.ys[i]]).filter((p) => inside(p[2]));
-      if (pts.length > 1) svg.path("M" + pts.map((p) => `${n1(p[0])} ${n1(p[1])}`).join(" L"), s.style === "ref" ? "ts-muted-line" : "ts-ink-line");
-      if (s.style !== "ref" && s.markers !== false) for (const p of pts) svg.rect(p[0] - 3, p[1] - 3, 6, 6, "ts-ink-fill");
+      const cls = { ref: "ts-muted-line", ref2: "ts-muted-dots", ref3: "ts-muted-solid" }[s.style] || "ts-ink-line";
+      if (pts.length > 1) svg.path("M" + pts.map((p) => `${n1(p[0])} ${n1(p[1])}`).join(" L"), cls);
+      if (cls === "ts-ink-line" && s.markers !== false) for (const p of pts) svg.rect(p[0] - 3, p[1] - 3, 6, 6, "ts-ink-fill");
     }
     if (o.highlight && Number.isFinite(o.highlight.y)) {
       const x = sx(o.highlight.x), y = sy(Math.min(Math.max(o.highlight.y, o.yr[0]), o.yr[1]));
@@ -107,7 +108,8 @@
     }
     let lx = left + 12;
     for (const s of o.series.filter((s) => s.label)) {
-      if (s.style === "ref") svg.line(lx, top + 7, lx + 14, top + 7, "ts-muted-line");
+      const lcls = { ref: "ts-muted-line", ref2: "ts-muted-dots", ref3: "ts-muted-solid" }[s.style];
+      if (lcls) svg.line(lx, top + 7, lx + 14, top + 7, lcls);
       else svg.rect(lx, top + 2, 10, 10, "ts-ink-fill");
       svg.text(lx + 18, top + 11, s.label.toUpperCase());
       lx += 30 + 8 * s.label.length;
@@ -324,12 +326,12 @@
       }
       return cache[sigma];
     };
-    // The README's line: cutting lognormal(42 s, 0.08), welding a constant 45 s.
-    const readme = (b) => ({
+    // A line with little variability: cutting lognormal(42 s, 0.08), welding a constant 45 s.
+    const lowLine = (b) => ({
       stations: [S.station("cut", S.Dist.lognormal(42, 0.08)), S.station("weld", S.Dist.const(45))],
       buffers: [b],
     });
-    const readmeYs = sizes.map((b) => S.estimate(S.replicate(readme(b), SHIFT, 10).map((r) => r.completed)).mean);
+    const lowYs = sizes.map((b) => S.estimate(S.replicate(lowLine(b), SHIFT, 10).map((r) => r.completed)).mean);
     const draw = (v) => {
       const cv = curve(v.sigma);
       const e = S.estimate(S.replicate(lineA(v.sigma, v.buffer), SHIFT, 30).map((r) => r.completed));
@@ -338,7 +340,7 @@
         title: "Parts per shift against buffer size",
         series: [
           { label: `sigma ${v.sigma.toFixed(2)}`, xs: sizes, ys: cv.ys, ci: cv.ci },
-          { label: "readme line, cv 0.08", xs: sizes, ys: readmeYs, style: "ref" },
+          { label: "low variability", xs: sizes, ys: lowYs, style: "ref" },
         ],
         xlabel: "buffer places", ylabel: "parts per shift", xr: [0, 30], yr: [Math.max(0, low), 660],
         highlight: { x: v.buffer, y: e.mean, ci: e.half, label: `${v.buffer} places: ${Math.round(e.mean)}` }, labelBelow: true,
@@ -353,6 +355,190 @@
     draw(c.values);
   };
 
+  // A histogram; band: [lo, hi] drawn as a bracket; mean: acid line.
+  function histogram(o) {
+    const height = 260, left = 40, right = 24, top = 50, bottom = 44;
+    const svg = new Svg(height, o.title);
+    const counts = new Array(o.bins).fill(0);
+    for (const v of o.data) if (v >= o.lo && v < o.hi) counts[Math.floor(((v - o.lo) / (o.hi - o.lo)) * o.bins)] += 1;
+    const peak = Math.max(1, ...counts);
+    const sx = (v) => left + ((v - o.lo) / (o.hi - o.lo)) * (W - right - left);
+    const base = height - bottom;
+    const bw = (W - right - left) / o.bins;
+    counts.forEach((k, i) => {
+      if (k) {
+        const h = (k / (peak * 1.1)) * (base - top);
+        svg.rect(left + i * bw + 0.5, base - h, bw - 1, h, "ts-ink-fill");
+      }
+    });
+    svg.line(left, base, W - right, base, "ts-axis");
+    for (const t of niceTicks(o.lo, o.hi, 6)) {
+      svg.line(sx(t), base, sx(t), base + 4, "ts-axis");
+      svg.text(sx(t), base + 18, String(t), "middle");
+    }
+    svg.text((left + W - right) / 2, height - 6, o.xlabel.toUpperCase(), "middle");
+    if (o.band && Number.isFinite(o.band[0])) {
+      const a = sx(Math.max(o.lo, o.band[0])), b = sx(Math.min(o.hi, o.band[1])), y = top - 14;
+      svg.line(a, y, b, y, "ts-ink-line");
+      svg.line(a, y - 5, a, y + 5, "ts-ink-line");
+      svg.line(b, y - 5, b, y + 5, "ts-ink-line");
+      svg.text(a - 8, y + 4, "95 % ci of the mean", "end");
+    }
+    if (o.mean) {
+      const x = sx(o.mean[0]);
+      svg.line(x, top - 6, x, base, "ts-acid-line");
+      const end = x > W * 0.6;
+      svg.text(x + (end ? -8 : 8), top + 4, o.mean[1], end ? "end" : "start", "ts-strong");
+    }
+    return svg.render();
+  }
+
+  // Page 8: failures at cutting, availability held at 95.2 %.
+  WIDGETS.failures = (live, cfg) => {
+    const A = 3600 / 3780;
+    const plot = document.createElement("div");
+    plot.className = "ts-plot";
+    const info = readout("");
+    let seed = cfg.seed || 1;
+    const make = (mtbfH, buffer) => {
+      const mtbf = mtbfH * 3600, mttr = (mtbf * (1 - A)) / A;
+      return { line: lineA(0.5, buffer, { cut: { mtbf, mttr } }), mttr };
+    };
+    const draw = (v) => {
+      const m = make(v.mtbf, v.buffer);
+      const window_ = 4 * 3600;
+      const r = S.simulate(m.line, window_, seed, 0, true);
+      const step = window_ / 60;
+      let mark = null;
+      for (let i = 0; i < 60; i++) {
+        if (dominant(r.states[1], i * step, (i + 1) * step) === "starved" && r.states[0].some((e) => e[1] === "down" && e[0] < i * step)) {
+          mark = { t: i * step, label: "weld starved" };
+          break;
+        }
+      }
+      plot.innerHTML = timeline({
+        title: "Four hours of line A with failures at cutting",
+        rows: [["cut", r.states[0]], ["weld", r.states[1]]], t0: 0, t1: window_, cells: 60,
+        levels: [["buffer", r.levels[0], v.buffer]], mark,
+      });
+      const e = S.estimate(S.replicate(m.line, 5 * SHIFT, 20).map((x) => x.completed / 5));
+      info.innerHTML = `<span>MTTR <b>${fmt(m.mttr / 60, 1)} min</b></span>` +
+        `<span>parts per shift <b>${fmt(e.mean, 1)} ± ${fmt(e.half, 1)}</b></span><span>20 runs of five shifts · timeline: run ${seed}</span>`;
+    };
+    const c = controls(live, {
+      mtbf: { label: "MTBF (MTTR follows, availability 95.2 %)", min: 0.25, max: 10, step: 0.25, value: cfg.mtbf || 1, format: (x) => `${x} h` },
+      buffer: { label: "Buffer places", min: 0, max: 50, step: 1, value: cfg.buffer == null ? 20 : cfg.buffer },
+    }, draw);
+    const again = document.createElement("button");
+    again.className = "ts-button";
+    again.type = "button";
+    again.textContent = "New run";
+    again.addEventListener("click", () => { seed += 1; draw(c.values); });
+    c.box.appendChild(again);
+    live.append(c.box, plot, info);
+    draw(c.values);
+  };
+
+  const LINE_B = [["cut", 42], ["deburr", 40], ["weld", 45], ["paint", 43], ["pack", 38]];
+  const lineB = (conwip) => ({
+    stations: LINE_B.map(([n, m]) => S.station(n, S.Dist.lognormal(m, 0.5))),
+    buffers: [null, null, null, null],
+    conwip,
+  });
+
+  // Page 10: a CONWIP cap on line B.
+  WIDGETS.conwip = (live, cfg) => {
+    const caps = [1, 2, 3, 5, 8, 10, 12, 15, 20, 30, 40];
+    const H = 5 * SHIFT, WU = 3600, perShift = SHIFT / (H - WU);
+    const plot = document.createElement("div");
+    plot.className = "ts-plot";
+    const info = readout("");
+    const run = (w, reps) => S.replicate(lineB(w), H, reps, WU);
+    const curve = caps.map((w) => S.estimate(run(w, 5).map((r) => r.completed * perShift)));
+    const draw = (v) => {
+      const rs = run(v.cap, 10);
+      const e = S.estimate(rs.map((r) => r.completed * perShift));
+      const lt = S.estimate(rs.map((r) => r.leadTime / 60));
+      plot.innerHTML = xyChart({
+        title: "Parts per shift against the WIP cap", height: 340,
+        series: [
+          { label: "simulated", xs: caps, ys: curve.map((x) => x.mean), ci: curve.map((x) => x.half) },
+          { label: "demand", xs: [0, 40], ys: [600, 600], style: "ref3" },
+        ],
+        xlabel: "wip cap (parts)", ylabel: "parts per shift", xr: [0, 40], yr: [0, 800],
+        highlight: { x: v.cap, y: e.mean, ci: e.half, label: `cap ${v.cap}: ${Math.round(e.mean)}` }, labelBelow: true,
+      });
+      info.innerHTML = `<span>parts per shift <b>${fmt(e.mean, 1)} ± ${fmt(e.half, 1)}</b></span>` +
+        `<span>lead time <b>${fmt(lt.mean, 1)} min</b></span><span>${e.mean >= 600 ? "meets" : "misses"} the demand of 600</span>`;
+    };
+    const c = controls(live, {
+      cap: { label: "WIP cap", min: 1, max: 40, step: 1, value: cfg.cap || 12 },
+    }, draw);
+    live.append(c.box, plot, info);
+    draw(c.values);
+  };
+
+  // Page 11: batch size at a welding station with setups.
+  WIDGETS.batching = (live, cfg) => {
+    const batches = [17, 18, 20, 22, 25, 30, 35, 40, 50, 60, 80];
+    const H = 10 * 86400, WU = 86400;
+    const plot = document.createElement("div");
+    plot.className = "ts-plot";
+    const info = readout("");
+    const line = (b) => ({
+      stations: [S.station("weld", S.Dist.lognormal(45, 0.5), { setup: 240, batch: b })],
+      buffers: [], arrivals: S.Dist.exp(60),
+    });
+    const lead = (b, reps) => S.estimate(S.replicate(line(b), H, reps, WU).map((r) => r.leadTime / 60));
+    const curve = batches.map((b) => lead(b, 4));
+    const draw = (v) => {
+      const e = lead(v.batch, 8);
+      plot.innerHTML = xyChart({
+        title: "Lead time against batch size",
+        series: [{ label: "simulated", xs: batches, ys: curve.map((x) => x.mean), ci: curve.map((x) => x.half) }],
+        xlabel: "batch size (parts)", ylabel: "lead time (min)", xr: [10, 80], yr: [0, 120],
+        highlight: { x: v.batch, y: e.mean, ci: e.half, label: `batch ${v.batch}: ${fmt(e.mean, 0)} min` }, labelBelow: true,
+      });
+      info.innerHTML = `<span>lead time <b>${fmt(e.mean, 1)} ± ${fmt(e.half, 1)} min</b></span>` +
+        `<span>utilization incl. setups <b>${Math.round(((45 + 240 / v.batch) / 60) * 100)} %</b></span><span>8 runs of 10 days</span>`;
+    };
+    const c = controls(live, {
+      batch: { label: "Batch size", min: 17, max: 80, step: 1, value: cfg.batch || 22 },
+    }, draw);
+    live.append(c.box, plot, info);
+    draw(c.values);
+  };
+
+  // Page 13: replications and the confidence interval.
+  WIDGETS.replications = (live, cfg) => {
+    const plot = document.createElement("div");
+    plot.className = "ts-plot";
+    const info = readout("");
+    let seed0 = 1;
+    const line = lineA(0.5, 20, { cut: { mtbf: 3600, mttr: 180 } });
+    const draw = (v) => {
+      const values = S.replicate(line, SHIFT, v.n, 0, seed0).map((r) => r.completed);
+      const e = S.estimate(values);
+      plot.innerHTML = histogram({
+        title: "Parts per shift over the runs", data: values, lo: 560, hi: 680, bins: 40, xlabel: "parts per shift",
+        band: [e.mean - e.half, e.mean + e.half], mean: [e.mean, `mean ${fmt(e.mean, 0)} ± ${fmt(e.half, 1)}`],
+      });
+      info.innerHTML = `<span>${v.n} runs: <b>${fmt(e.mean, 1)} ± ${fmt(e.half, 1)}</b> parts per shift</span>` +
+        `<span>relative half-width <b>${fmt((e.half / e.mean) * 100, 1)} %</b></span><span>seeds ${seed0} to ${seed0 + v.n - 1}</span>`;
+    };
+    const c = controls(live, {
+      n: { label: "Replications", min: 2, max: 100, step: 1, value: cfg.n || 10 },
+    }, draw);
+    const again = document.createElement("button");
+    again.className = "ts-button";
+    again.type = "button";
+    again.textContent = "New seeds";
+    again.addEventListener("click", () => { seed0 += 100; draw(c.values); });
+    c.box.appendChild(again);
+    live.append(c.box, plot, info);
+    draw(c.values);
+  };
+
   function mount(fig) {
     const make = WIDGETS[fig.dataset.widget];
     const live = fig.querySelector(".ts-live");
@@ -363,7 +549,7 @@
     fig.classList.add("ts-ready");
   }
 
-  window.TaktsimViz = { xyChart, timeline, WIDGETS, mount };
+  window.TaktsimViz = { xyChart, timeline, histogram, WIDGETS, mount };
   const start = () => document.querySelectorAll("figure.ts-widget").forEach(mount);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();

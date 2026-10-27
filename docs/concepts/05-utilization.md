@@ -68,16 +68,16 @@ mean wait in queue at a single station:
 <div class="ts-panel ts-rule">
 <span class="ts-label">Kingman's formula</span>
 
-**wait in queue ≈ (ca² + cs²) / 2 × u / (1 − u) × t**
+**wait in queue ≈ (cₐ² + cₛ²) / 2 × u / (1 − u) × t**
 
 </div>
 
-Here *ca* is the CV of the time between arrivals, *cs* the CV of the
+Here cₐ is the CV of the time between arrivals, cₛ the CV of the
 process time, *u* the utilization and *t* the mean process time. It is
 three factors multiplied together, which is why Hopp and Spearman call it
 the VUT equation:
 
-- **V, variability:** (ca² + cs²) / 2. No variability, no waiting. Halving
+- **V, variability:** (cₐ² + cₛ²) / 2. No variability, no waiting. Halving
   the process-time CV from 1 to 0.5 lowers the wait by more than a third.
 - **U, utilization:** u / (1 − u). This is the hockey stick. At 50 % it is
   1, at 90 % it is 9, at 95 % it is 19.

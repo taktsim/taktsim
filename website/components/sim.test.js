@@ -80,6 +80,62 @@ test("page 7: parts per shift against buffer size match the scripts", () => {
     const e = S.estimate(S.replicate(lineA(d.sigma, c.buffer), d.horizon, d.reps).map((r) => r.completed));
     within(e.mean, c.completed, c.completed_half, `buffer ${c.buffer}`);
     const rd = S.estimate(S.replicate(lineA(0.08, c.buffer, 0), d.horizon, d.reps).map((r) => r.completed));
-    within(rd.mean, c.readme_completed, c.readme_half, `README line, buffer ${c.buffer}`);
+    within(rd.mean, c.low_completed, c.low_half, `low variability, buffer ${c.buffer}`);
   }
+});
+
+test("page 8: failures at equal availability match the scripts", () => {
+  const d = load("08-failures.json");
+  for (const c of d.results) {
+    const line = {
+      stations: [
+        S.station("cut", S.Dist.lognormal(42, d.sigma), { mtbf: c.mtbf, mttr: c.mttr }),
+        S.station("weld", S.Dist.lognormal(45, d.sigma)),
+      ],
+      buffers: [c.buffer],
+    };
+    const e = S.estimate(S.replicate(line, d.horizon, d.reps).map((r) => r.completed / d.per));
+    within(e.mean, c.completed, c.completed_half, `MTBF ${c.mtbf}, buffer ${c.buffer}`);
+  }
+});
+
+test("page 10: CONWIP throughput matches the scripts", () => {
+  const d = load("10-conwip.json");
+  const names = [["cut", 42], ["deburr", 40], ["weld", 45], ["paint", 43], ["pack", 38]];
+  for (const c of d.results) {
+    const line = {
+      stations: names.map(([n, m]) => S.station(n, S.Dist.lognormal(m, d.sigma))),
+      buffers: [null, null, null, null],
+      conwip: c.cap,
+    };
+    const e = S.estimate(S.replicate(line, d.horizon, d.reps, d.warmup).map((r) => r.completed * d.per_shift));
+    within(e.mean, c.completed, c.completed_half, `cap ${c.cap}`);
+  }
+});
+
+test("page 11: lead time against batch size matches the scripts", () => {
+  const d = load("11-batching.json");
+  for (const c of d.results) {
+    const line = {
+      stations: [S.station("weld", S.Dist.lognormal(45, d.sigma), { setup: d.setup, batch: c.batch })],
+      buffers: [],
+      arrivals: S.Dist.exp(d.arrival),
+    };
+    const e = S.estimate(S.replicate(line, d.horizon, d.reps, d.warmup).map((r) => r.leadTime / 60));
+    within(e.mean, c.lead_min, c.lead_half, `batch ${c.batch}`);
+  }
+});
+
+test("page 13: the replications match the scripts", () => {
+  const d = load("13-replications.json");
+  const line = {
+    stations: [
+      S.station("cut", S.Dist.lognormal(42, 0.5), { mtbf: 3600, mttr: 180 }),
+      S.station("weld", S.Dist.lognormal(45, 0.5)),
+    ],
+    buffers: [20],
+  };
+  const js = S.replicate(line, d.horizon, d.values.length).map((r) => r.completed);
+  const py = S.estimate(d.values);
+  within(S.estimate(js).mean, py.mean, py.half, "100 shifts");
 });

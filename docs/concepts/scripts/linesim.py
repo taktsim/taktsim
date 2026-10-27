@@ -178,6 +178,7 @@ class Result:
     warmup: float
     completed: int = 0
     scrapped: int = 0
+    reworked: int = 0
     lead_time_sum: float = 0.0
     wip_area: float = 0.0
     queue_wait_sum: float = 0.0
@@ -391,6 +392,8 @@ def simulate(line: Line, horizon: float, seed: int, warmup: float = 0.0, trace: 
                 set_state(k, state_of(k))
                 return
             if u < sp.scrap + sp.rework:
+                if now >= warmup and now <= horizon:
+                    res.reworked += 1
                 target = k if sp.rework_to is None else sp.rework_to
                 part = x.held[0]
                 if target == k:

@@ -7,7 +7,7 @@
 
 - How a buffer decouples two stations.
 - Why more buffer has diminishing returns.
-- What buffers cost, and why the README's example line hardly needs one.
+- What buffers cost, and when a line hardly needs one.
 
 </div>
 
@@ -44,7 +44,7 @@ welding is free.
 {{#include img/07-buffers.svg}}
 </div>
 <div class="ts-live"></div>
-<figcaption>Parts per shift against buffer size, with the confidence band; the highlighted point is the buffer size in focus, five places by default, which recover most of what variability took away. The dashed line is the README's low-variability line.</figcaption>
+<figcaption>Parts per shift against buffer size, with the confidence band; the highlighted point is the buffer size in focus, five places by default, which recover most of what variability took away. The dashed line is a line with little variability (cutting CV 0.08, welding fixed).</figcaption>
 </figure>
 
 Without a buffer the variable line makes 517 parts per shift. One place gets
@@ -60,15 +60,20 @@ for 2 % more output than with five.
 
 ## The README's example
 
-The [README](https://github.com/taktsim/taktsim#readme)'s example is a line
-with the same means: cutting lognormal with sigma 0.08, welding a fixed
-45 s, a buffer of 20. It is tempting to expect that cutting sometimes runs
-slow, the buffer runs empty and welding waits. The last column of the table
-shows what really happens:
+The [README](https://github.com/taktsim/taktsim#readme)'s example is this
+line with a buffer of 20 places. Arithmetic says welding allows 640 parts
+per shift; the line makes 635. With a single place it would make 576, and
+without a buffer 517. The buffer earns its place, but even 20 places cannot
+give back everything that variability takes.
 
-- With the 20-place buffer the line makes 638.7 parts per shift, out of the
-  640 that 8 h / 45 s promises. The one part missing is the start-up, the
-  42 s before the first part reaches welding.
+## When a buffer hardly matters
+
+The last column of the table is a line with the same means and little
+variability: cutting lognormal with sigma 0.08, welding a fixed 45 s.
+
+- With 20 places it makes 638.7 parts per shift, out of the 640 that
+  8 h / 45 s promises. The one part missing is the start-up, the 42 s
+  before the first part reaches welding.
 - With a single place it makes the same 638.7. Even with no buffer at all it
   makes 633.
 
@@ -98,8 +103,8 @@ which is one reason to simulate; see [page 9](09-longer-lines.md).
 
 In figure 7.1, move the buffer slider and watch the highlighted point walk
 along the curve; then change sigma. At sigma 0.1 the curve is flat from one
-place on, as for the README line; at sigma 1 it keeps rising well past ten
-places.
+place on, as for the low-variability line; at sigma 1 it keeps rising well
+past ten places.
 
 In the model, the buffer is one number:
 

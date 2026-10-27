@@ -8,7 +8,7 @@ from svgkit import histograms
 
 N = 4000
 CASES = [
-    ("Lognormal, sigma 0.08 (the README's cut)", Dist.lognormal(CUT, 0.08)),
+    ("Lognormal, sigma 0.08", Dist.lognormal(CUT, 0.08)),
     ("Lognormal, sigma 0.5", Dist.lognormal(CUT, 0.5)),
     ("Exponential", Dist.exp(CUT)),
 ]

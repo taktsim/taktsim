@@ -54,6 +54,8 @@ def _fallback_style() -> str:
         ".ts-grid": f"stroke:var(--ts-line,{c['line']});stroke-width:1;stroke-dasharray:2 4;fill:none",
         ".ts-ink-line": f"stroke:var(--ts-ink,{c['ink']});stroke-width:2;fill:none",
         ".ts-muted-line": f"stroke:var(--ts-ink-muted,{c['ink-muted']});stroke-width:1.5;stroke-dasharray:5 4;fill:none",
+        ".ts-muted-dots": f"stroke:var(--ts-ink-muted,{c['ink-muted']});stroke-width:2;stroke-dasharray:1 4;stroke-linecap:round;fill:none",
+        ".ts-muted-solid": f"stroke:var(--ts-ink-muted,{c['ink-muted']});stroke-width:1;fill:none",
         ".ts-ink-fill": f"fill:var(--ts-ink,{c['ink']})",
         ".ts-muted-fill": f"fill:var(--ts-ink-muted,{c['ink-muted']})",
         ".ts-unlit-fill": f"fill:var(--ts-unlit,{c['unlit']})",
@@ -189,7 +191,7 @@ class Series:
     xs: Sequence[float]
     ys: Sequence[float]
     ci: Sequence[float] | None = None
-    style: str = "ink"  # ink: data, line + square markers; ref: formula, dashed
+    style: str = "ink"  # ink: data, line + square markers; ref: dashed; ref2: dotted; ref3: thin solid
     markers: bool = True
 
 
@@ -204,7 +206,7 @@ def xy_chart(
     yr: tuple[float, float],
     highlight: tuple[float, float, str] | None = None,
     label_below: bool = False,
-    hlines: Iterable[tuple[float, str]] = (),
+    hlines: Iterable[tuple[float, str] | tuple[float, str, float]] = (),
     vlines: Iterable[tuple[float, str]] = (),
     height: float = 300,
     xticks: Sequence[float] | None = None,
@@ -230,12 +232,16 @@ def xy_chart(
         f'<text x="14" y="{num((top + height - bottom) / 2)}" text-anchor="middle"'
         f' transform="rotate(-90 14 {num((top + height - bottom) / 2)})">{escape(ylabel.upper())}</text>'
     )
-    for v, label in hlines:
+    for h in hlines:
+        v, label = h[0], h[1]
         svg.line(left, sy(v), W - right, sy(v), "ts-muted-line")
-        svg.text(W - right - 4, sy(v) - 6, label, "end")
+        if len(h) > 2:  # label placed at a given x, below the line
+            svg.text(sx(h[2]), sy(v) + 16, label, "start")
+        else:
+            svg.text(W - right - 4, sy(v) + 16, label, "end")
     for v, label in vlines:
         svg.line(sx(v), top, sx(v), height - bottom, "ts-muted-line")
-        svg.text(sx(v) + 6, top + 12, label)
+        svg.text(sx(v) + 6, height - bottom - 8, label)
     for s in series:
         pts = [(sx(x), sy(y)) for x, y in zip(s.xs, s.ys, strict=True) if math.isfinite(y) and yr[0] <= y <= yr[1]]
         if s.ci is not None:
@@ -244,7 +250,7 @@ def xy_chart(
             d = "M" + " L".join(f"{num(a)} {num(b)}" for a, b in up + lo[::-1]) + " Z"
             svg.path(d, "ts-ci")
         d = "M" + " L".join(f"{num(a)} {num(b)}" for a, b in pts)
-        svg.path(d, "ts-ink-line" if s.style == "ink" else "ts-muted-line")
+        svg.path(d, {"ink": "ts-ink-line", "ref": "ts-muted-line", "ref2": "ts-muted-dots", "ref3": "ts-muted-solid"}[s.style])
         if s.markers and s.style == "ink":
             for a, b in pts:
                 svg.rect(a - 3, b - 3, 6, 6, "ts-ink-fill")
@@ -260,7 +266,7 @@ def xy_chart(
         if s.style == "ink":
             svg.rect(lx, top + 2, 10, 10, "ts-ink-fill")
         else:
-            svg.line(lx, top + 7, lx + 14, top + 7, "ts-muted-line")
+            svg.line(lx, top + 7, lx + 14, top + 7, {"ref": "ts-muted-line", "ref2": "ts-muted-dots", "ref3": "ts-muted-solid"}[s.style])
         svg.text(lx + 18, top + 11, s.label.upper())
         lx += 30 + 8 * len(s.label)
     return svg.render()
@@ -440,13 +446,13 @@ def line_diagram(
         if n.kind == "station":
             return st_w
         if n.kind == "buffer":
-            shown = min(n.capacity or 0, 5 if n_st <= 3 else 3)
-            return max(30, shown * (slot + slot_gap) + 6)
-        return 46
+            shown = min(n.capacity or 0, 5 if n_st <= 3 else 2)
+            return max(26, shown * (slot + slot_gap) + 6)
+        return 46 if n_st <= 3 else 42
 
     gaps = len(nodes) - 1
     total = sum(width(n) for n in nodes)
-    arrow = max(14, min(36, (W - 24 - total) / max(gaps, 1)))
+    arrow = max(10, min(36, (W - 16 - total) / max(gaps, 1)))
     x = (W - total - arrow * gaps) / 2
     height = 150 + (24 if loops else 0) + (26 if exits else 0)
     mid = 74 + (24 if loops else 0)
@@ -470,7 +476,7 @@ def line_diagram(
                     svg.text(x + w / 2, mid + h / 2 + 18 + 14 * j, part, "middle", "", 11)
         elif n.kind == "buffer":
             cap = n.capacity or 0
-            shown = min(cap, 5 if n_st <= 3 else 3)
+            shown = min(cap, 5 if n_st <= 3 else 2)
             bx = x + (w - shown * (slot + slot_gap) + slot_gap) / 2
             for j in range(shown):
                 svg.rect(bx + j * (slot + slot_gap), mid - slot / 2, slot, slot, "ts-unlit-fill")
@@ -572,4 +578,121 @@ def matrix_chart(
         y = base - lit * pitch - 8
         anchor = "end" if x > W * 0.7 else "start"
         svg.text(x + (-10 if anchor == "end" else 10), y, label, anchor, "ts-strong")
+    return svg.render()
+
+
+def stacked_bars(
+    uid: str,
+    title: str,
+    desc: str,
+    rows: Sequence[tuple[str, Sequence[tuple[float, str]]]],
+    total: float,
+    xlabel: str,
+    legend: Sequence[tuple[str, str]],
+    mark: int | None = None,
+) -> str:
+    """Horizontal bars split into parts, one row per case.
+
+    Parts are (value, kind) with kind good (solid ink), rework (hatched),
+    scrap (muted) or lost (outline). `mark` puts the one acid step in front
+    of a row.
+    """
+    left, right, top = 200, 24, 40
+    bar, gap = 20, 14
+    height = top + len(rows) * (bar + gap) + 44
+    svg = Svg(uid, height, title, desc)
+    svg.patterns = True
+    scale = Scale(0, total, left, W - right)
+    lx = left
+    for label, kind in legend:
+        _part(svg, lx, 10, 10, 10, kind)
+        svg.text(lx + 16, 19, label.upper())
+        lx += 30 + 8 * len(label)
+    y = top
+    for i, (label, parts) in enumerate(rows):
+        if mark == i:
+            svg.rect(8, y + 5, 10, 10, "ts-acid")
+        svg.text(left - 10, y + 14, label, "end", "ts-strong" if mark == i else "")
+        x = left
+        for value, kind in parts:
+            w = scale(value) - left
+            if w > 0.5:
+                _part(svg, x, y, w, bar, kind)
+            x += w
+        y += bar + gap
+    for t in nice_ticks(0, total, 4):
+        svg.line(scale(t), y, scale(t), y + 4, "ts-axis")
+        svg.text(scale(t), y + 18, fmt_tick(t), "middle")
+    svg.line(left, y, W - right, y, "ts-axis")
+    svg.text((left + W - right) / 2, height - 4, xlabel.upper(), "middle")
+    return svg.render()
+
+
+def _part(svg: Svg, x: float, y: float, w: float, h: float, kind: str) -> None:
+    if kind == "good":
+        svg.rect(x, y, w, h, "ts-ink-fill")
+    elif kind == "rework":
+        svg.rect(x, y, w, h, fill=f"url(#{svg.uid}-hatch)")
+    elif kind == "scrap":
+        svg.rect(x, y, w, h, "ts-muted-fill")
+    else:
+        svg.rect(x + 0.5, y + 0.5, w - 1, h - 1, "ts-outline")
+
+
+def histogram(
+    uid: str,
+    title: str,
+    desc: str,
+    data: Sequence[float],
+    lo: float,
+    hi: float,
+    bins: int,
+    xlabel: str,
+    band: tuple[float, float] | tuple[float, float, str] | None = None,
+    mean: tuple[float, str] | None = None,
+    curves: Sequence[tuple[str, Sequence[float], str]] = (),
+    height: float = 260,
+) -> str:
+    """One histogram; `band` shades an interval (a confidence interval),
+    `mean` puts the acid line, `curves` overlays densities given per bin
+    centre in counts, with a style ref (dashed) or ref2 (dotted)."""
+    svg = Svg(uid, height, title, desc)
+    left, right, top, bottom = 40, 24, 34 + (16 if band is not None else 0), 44
+    counts = [0] * bins
+    for v in data:
+        if lo <= v < hi:
+            counts[int((v - lo) / (hi - lo) * bins)] += 1
+    peak = max(max(counts), max((max(c) for _, c, _ in curves), default=0))
+    sx = Scale(lo, hi, left, W - right)
+    base = height - bottom
+    sy = Scale(0, peak * 1.1, base, top)
+    bw = (W - right - left) / bins
+    for i, k in enumerate(counts):
+        if k:
+            svg.rect(left + i * bw + 0.5, sy(k), bw - 1, base - sy(k), "ts-ink-fill")
+    lx = left
+    for label, ys, style in curves:
+        pts = [(left + (i + 0.5) * bw, sy(y)) for i, y in enumerate(ys)]
+        cls = "ts-muted-line" if style == "ref" else "ts-muted-dots"
+        svg.path("M" + " L".join(f"{num(a)} {num(b)}" for a, b in pts), cls)
+        svg.line(lx, 12, lx + 14, 12, cls)
+        svg.text(lx + 18, 16, label.upper())
+        lx += 30 + 8 * len(label)
+    svg.line(left, base, W - right, base, "ts-axis")
+    for t in nice_ticks(lo, hi, 6):
+        svg.line(sx(t), base, sx(t), base + 4, "ts-axis")
+        svg.text(sx(t), base + 18, fmt_tick(t), "middle")
+    svg.text((left + W - right) / 2, height - 6, xlabel.upper(), "middle")
+    if band is not None:
+        # The interval as a bracket above the bars.
+        a, b = sx(band[0]), sx(band[1])
+        y = top - 14
+        svg.line(a, y, b, y, "ts-ink-line")
+        svg.line(a, y - 5, a, y + 5, "ts-ink-line")
+        svg.line(b, y - 5, b, y + 5, "ts-ink-line")
+        svg.text(a - 8, y + 4, band[2] if len(band) > 2 else "95 % ci", "end")
+    if mean is not None:
+        svg.line(sx(mean[0]), top - 6, sx(mean[0]), base, "ts-acid-line")
+        anchor = "end" if sx(mean[0]) > W * 0.6 else "start"
+        svg.text(sx(mean[0]) + (-8 if anchor == "end" else 8), top + 4, mean[1], anchor, "ts-strong")
     return svg.render()
