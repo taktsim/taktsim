@@ -322,3 +322,21 @@ shipped (2026-10-27, head `655ead5`, workflow run 40468566195).
    job should become a required check on `main` for A4. The
    `trace-memory` workflow is a measurement, not a gate, until the target
    becomes required in v0.2 (ADR-0007).
+
+## Owner's answers (2026-10-27)
+
+The owner took the recommendations:
+
+1. Yes: replay compares every record, the clock, the item counts and the
+   components' invariants after every event. Digests of component-internal
+   state come with the snapshots of v0.4.
+2. Yes: ADR-0004 asks for the numbers in ADR-0007, so they are recorded
+   there and here.
+3. Yes: CSV export stays in M11, as ADR-0004 says ("CSV in v0.1 (M11)").
+4. Yes: `trace hashes (identical on every target)` becomes a required check
+   on `main`. The owner changes the ruleset; `trace-memory` stays a
+   measurement.
+
+Also confirmed: replay refuses a trace written by another engine version,
+since the determinism guarantee holds per engine version (spec §2,
+principle 3).
