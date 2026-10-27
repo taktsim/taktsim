@@ -30,10 +30,16 @@ use crate::syntax::{self, Format, Node};
 /// A model that loaded: its typed document, canonical form and hash.
 ///
 /// ```
-/// use taktsim_model::{Catalog, ComponentParams, Fields, Format, Loader};
+/// use taktsim_model::{Catalog, ComponentParams, Encode, Fields, Format, Json, Loader};
 ///
-/// #[derive(Debug, serde::Serialize)]
+/// #[derive(Debug)]
 /// struct Station {}
+///
+/// impl Encode for Station {
+///     fn encode(&self) -> Json {
+///         Json::object([])
+///     }
+/// }
 ///
 /// impl ComponentParams for Station {
 ///     const TYPE: &'static str = "Station";
@@ -429,7 +435,7 @@ impl Run<'_> {
             flow,
             observe,
         };
-        self.hash(document, included, main_place)
+        self.hash(document, included, &main_place)
     }
 
     /// Normalizes, canonicalizes and hashes a checked document.
@@ -437,14 +443,12 @@ impl Run<'_> {
         &mut self,
         document: Document,
         included: Vec<Included>,
-        main_place: Place,
+        main_place: &Place,
     ) -> Option<Model> {
         let json = match document.to_json() {
             Ok(json) => json,
             Err((component, kind)) => {
-                let place = component.map_or(main_place, |c| c.place().clone());
-                let path = component.map(|c| c.path().clone()).unwrap_or_default();
-                self.error(&place, path, kind);
+                self.error(&component.place().clone(), component.path().clone(), kind);
                 return None;
             }
         };
@@ -455,7 +459,7 @@ impl Run<'_> {
                     type_name: "(document)".to_owned(),
                     problem: crate::error::NormalizeProblem::Number(e.to_string()),
                 };
-                self.error(&main_place, FieldPath::default(), kind);
+                self.error(main_place, FieldPath::default(), kind);
                 return None;
             }
         };

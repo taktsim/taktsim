@@ -4,7 +4,7 @@
 //! exact ties between two 17-digit candidates and values around the
 //! plain/exponent boundaries.
 
-use serde_json::{Number, Value};
+use taktsim_model::Json;
 use taktsim_model::jcs::{canonicalize, number_to_string};
 
 const VECTORS: &str = include_str!("data/es-numbers.txt");
@@ -16,7 +16,7 @@ fn jcs_numbers_match_ecmascript() {
         let (hex, expected) = line.split_once(' ').unwrap();
         let x = f64::from_bits(u64::from_str_radix(hex, 16).unwrap());
         assert_eq!(number_to_string(x), expected, "{hex}");
-        let value = Value::Number(Number::from_f64(x).unwrap());
+        let value = Json::Float(x);
         assert_eq!(canonicalize(&value).unwrap(), expected, "{hex}");
         // The text reads back as the same double.
         assert_eq!(
