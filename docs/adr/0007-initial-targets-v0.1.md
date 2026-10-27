@@ -86,4 +86,4 @@ Appended as the recommendation above requires; details in the ADR named.
 
 | Target | Measured | Machine and commit | Result | Details |
 | --- | --- | --- | --- | --- |
-| 1,000 components, 10 M events, ≤ 2 GB (trace part, M3) | 2026-10-26 | CI proxy (GitHub `ubuntu-24.04`, x86-64, 4 CPUs), PR #21 head `47430a8` | peak 3.6 MiB with the trace streaming to disk (3.5 MiB without); trace file 381.6 MiB, 40.0 bytes per record; median of 10 runs | ADR-0021 |
+| 1,000 components, 10 M events, ≤ 2 GB (trace part, M3) | 2026-10-27 | CI proxy (GitHub `ubuntu-24.04`, x86-64, 4 CPUs), PR #21 head `655ead5` | peak 3.4 MiB with the trace streaming to disk (3.3 MiB without); trace file 381.6 MiB, 40.0 bytes per record; median of 10 runs | ADR-0021 |
