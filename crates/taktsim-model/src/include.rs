@@ -19,8 +19,9 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::decode::{Decode, Decoder};
+use crate::decode::{Decode, Decoder, Fields, Record, Schemas};
 use crate::error::{IncludePathProblem, LoadErrorKind, Place, Segment};
+use crate::json::Json;
 use crate::syntax::{Format, Node, Value};
 
 /// Reads the files a model includes.
@@ -197,7 +198,34 @@ impl Decode for IncludePath {
         }
         Some(Self(path))
     }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("string")),
+            (
+                "description",
+                Json::from(
+                    "A path relative to the model file, with `/` separators, in its directory or \
+                     below, to a .yaml, .yml or .json file.",
+                ),
+            ),
+            (
+                "pattern",
+                Json::from(format!(
+                    r"^(?:{SEGMENT}/)*[A-Za-z0-9._-]*\.(?:[Yy][Aa]?[Mm][Ll]|[Jj][Ss][Oo][Nn])$"
+                )),
+            ),
+            (
+                "examples",
+                Json::Array(vec![Json::from("cells/welding.yaml")]),
+            ),
+        ])
+    }
 }
+
+/// One segment of an include path in the schema's pattern: letters,
+/// digits, `.`, `_`, `-`, but not `.` or `..` alone.
+const SEGMENT: &str = r"(?:[A-Za-z0-9_-]|\.[A-Za-z0-9_-]|\.\.[A-Za-z0-9._-])[A-Za-z0-9._-]*";
 
 /// A pinned hash: 64 lowercase hex digits.
 struct Sha256(String);
@@ -215,77 +243,126 @@ impl Decode for Sha256 {
         }
         Some(Self(hash))
     }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("string")),
+            ("pattern", Json::from("^[0-9a-f]{64}$")),
+        ])
+    }
 }
 
-/// Reads one entry of `include:`: a path, or `{path, sha256}`.
-fn read_include(node: &Node, cx: &mut Decoder) -> Option<IncludeSpec> {
-    /// For the error when the entry is neither.
-    struct Entry;
-    impl Decode for Entry {
-        const EXPECTED: &'static str = "a path, or a mapping with `path` and `sha256`";
-        const EXAMPLE: &'static str = "cells/welding.yaml";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
-        }
+/// An entry of `include:` written as a mapping.
+struct IncludeMap {
+    path: IncludePath,
+    sha256: Option<Sha256>,
+}
+
+impl Record for IncludeMap {
+    const EXPECTED: &'static str = IncludeEntry::EXPECTED;
+    const EXAMPLE: &'static str = "{path: cells/welding.yaml, sha256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}";
+
+    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+        let path = fields.required("path");
+        let sha256 = fields.optional("sha256");
+        Some(Self {
+            path: path?,
+            sha256: sha256?,
+        })
+    }
+}
+
+/// One entry of `include:`: a path, or `{path, sha256}`.
+struct IncludeEntry(IncludeSpec);
+
+impl Decode for IncludeEntry {
+    const EXPECTED: &'static str = "a path, or a mapping with `path` and `sha256`";
+    const EXAMPLE: &'static str = "cells/welding.yaml";
+    const SCHEMA_NAME: Option<&'static str> = Some("Include");
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let place = Place::new(cx.file().map(str::to_owned), node.start());
+        let (path, sha256) = match node.value() {
+            Value::Str(_) => (IncludePath::decode(node, cx)?.0, None),
+            Value::Map(_) => {
+                let entry = IncludeMap::decode(node, cx)?;
+                (entry.path.0, entry.sha256.map(|h| h.0))
+            }
+            Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::List(_) => {
+                cx.wrong_type::<Self>(node);
+                return None;
+            }
+        };
+        Some(Self(IncludeSpec {
+            path,
+            sha256,
+            place,
+            field: cx.path().clone(),
+        }))
     }
 
-    let place = Place::new(cx.file().map(str::to_owned), node.start());
-    let (path, sha256) = match node.value() {
-        Value::Str(_) => (IncludePath::decode(node, cx)?.0, None),
-        Value::Map(_) => {
-            let mut fields = cx.fields::<Entry>(node)?;
-            let path = fields.required::<IncludePath>("path");
-            let sha256 = fields.optional::<Sha256>("sha256");
-            fields.finish();
-            (path?.0, sha256?.map(|h| h.0))
-        }
-        Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::List(_) => {
-            cx.wrong_type::<Entry>(node);
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            (
+                "description",
+                Json::from(
+                    "A file whose components, flow and observables come before the model's own; \
+                     optionally pinned to the SHA-256 of its content.",
+                ),
+            ),
+            (
+                "oneOf",
+                Json::Array(vec![
+                    schemas.of::<IncludePath>(),
+                    schemas.of::<IncludeMap>(),
+                ]),
+            ),
+        ])
+    }
+}
+
+/// `include:`: a list of entries, each file once (ignoring case, so the
+/// model reads the same on case-insensitive file systems).
+pub(crate) struct Includes(pub(crate) Vec<IncludeSpec>);
+
+impl Decode for Includes {
+    const EXPECTED: &'static str = "a list of paths";
+    const EXAMPLE: &'static str = "[cells/welding.yaml]";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        if !matches!(node.value(), Value::List(_)) {
+            cx.wrong_type::<Self>(node);
             return None;
         }
-    };
-    Some(IncludeSpec {
-        path,
-        sha256,
-        place,
-        field: cx.path().clone(),
-    })
-}
-
-/// Reads `include:`: a list of entries, each file once (ignoring case, so
-/// the model reads the same on case-insensitive file systems).
-pub(crate) fn read_includes(node: &Node, cx: &mut Decoder) -> Option<Vec<IncludeSpec>> {
-    /// For the error when `include:` is not a list.
-    struct List;
-    impl Decode for List {
-        const EXPECTED: &'static str = "a list of paths";
-        const EXAMPLE: &'static str = "[cells/welding.yaml]";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
+        let specs: Vec<IncludeSpec> = cx
+            .list(node, IncludeEntry::decode)?
+            .into_iter()
+            .map(|e| e.0)
+            .collect();
+        let mut seen: BTreeMap<String, &IncludeSpec> = BTreeMap::new();
+        let mut ok = true;
+        for (i, spec) in specs.iter().enumerate() {
+            if let Some(first) = seen.get(&spec.path.to_ascii_lowercase()) {
+                let kind = LoadErrorKind::DuplicateInclude {
+                    path: spec.path.clone(),
+                    first: first.place.clone(),
+                };
+                let at = spec.place.location();
+                cx.within(Segment::Index(i), |cx| cx.error(at, kind));
+                ok = false;
+            } else {
+                seen.insert(spec.path.to_ascii_lowercase(), spec);
+            }
         }
+        ok.then_some(Self(specs))
     }
 
-    if !matches!(node.value(), Value::List(_)) {
-        cx.wrong_type::<List>(node);
-        return None;
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("array")),
+            ("items", schemas.of::<IncludeEntry>()),
+        ])
     }
-    let specs = cx.list(node, read_include)?;
-    let mut seen: BTreeMap<String, &IncludeSpec> = BTreeMap::new();
-    let mut ok = true;
-    for (i, spec) in specs.iter().enumerate() {
-        if let Some(first) = seen.get(&spec.path.to_ascii_lowercase()) {
-            let kind = LoadErrorKind::DuplicateInclude {
-                path: spec.path.clone(),
-                first: first.place.clone(),
-            };
-            let at = spec.place.location();
-            cx.within(Segment::Index(i), |cx| cx.error(at, kind));
-            ok = false;
-        } else {
-            seen.insert(spec.path.to_ascii_lowercase(), spec);
-        }
-    }
-    ok.then_some(specs)
 }
 
 #[cfg(test)]

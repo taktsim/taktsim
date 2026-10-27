@@ -3,11 +3,13 @@
 
 use taktsim_units::{Ratio, SimDuration};
 
-use crate::component::{Catalog, Component, ComponentRef, read_component, read_id};
-use crate::decode::{Decode, Decoder, Fields};
+use crate::component::{
+    Catalog, Component, ComponentEntry, ComponentRef, ID_PATTERN, read_component, read_id,
+};
+use crate::decode::{Decode, Decoder, Fields, Record, Schemas};
 use crate::error::{FieldPath, LoadErrorKind, Location, Place, Segment};
 use crate::expr::Expr;
-use crate::include::{IncludeSpec, read_includes};
+use crate::include::{IncludeSpec, Includes};
 use crate::json::{Encode, Json};
 use crate::syntax::{Node, Value};
 
@@ -326,28 +328,43 @@ impl Decode for TimeUnit {
         let options = Self::ALL.map(|u| (u.as_str(), u));
         one_of(node, cx, "time unit", &options)
     }
+
+    fn schema(_: &mut Schemas) -> Json {
+        let units = Self::ALL.iter().map(|u| Json::from(u.as_str())).collect();
+        Json::object([("enum", Json::Array(units))])
+    }
 }
 
-impl Decode for ModelInfo {
-    const EXPECTED: &'static str = "the model section: a mapping with `name`";
-    const EXAMPLE: &'static str = "{name: line-a, time_unit: s, seed: 42}";
+/// The model name.
+struct Name(String);
+
+impl Decode for Name {
+    const EXPECTED: &'static str = "a name such as `line-a`";
+    const EXAMPLE: &'static str = "line-a";
 
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-        /// The model name.
-        struct Name(String);
-        impl Decode for Name {
-            const EXPECTED: &'static str = "a name such as `line-a`";
-            const EXAMPLE: &'static str = "line-a";
-            fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-                read_id(node, cx, "model name").map(Self)
-            }
-        }
+        read_id(node, cx, "model name").map(Self)
+    }
 
-        let mut fields = cx.fields::<Self>(node)?;
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("string")),
+            ("pattern", Json::from(ID_PATTERN)),
+            ("examples", Json::Array(vec![Json::from("line-a")])),
+        ])
+    }
+}
+
+impl Record for ModelInfo {
+    const EXPECTED: &'static str = "the model section: a mapping with `name`";
+    const EXAMPLE: &'static str = "{name: line-a, time_unit: s, seed: 42}";
+    const SCHEMA_NAME: Option<&'static str> = Some("Model");
+    const DESCRIPTION: Option<&'static str> = Some("The model's name and defaults.");
+
+    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
         let name = fields.required::<Name>("name");
         let time_unit = fields.optional("time_unit");
         let seed = fields.optional("seed");
-        fields.finish();
         Some(Self {
             name: name?.0,
             time_unit: time_unit?,
@@ -404,6 +421,10 @@ impl Decode for ExperimentKind {
             "experiment type",
             &[("terminating", Self::Terminating)],
         )
+    }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([("const", Json::from(Self::Terminating.as_str()))])
     }
 }
 
@@ -686,101 +707,163 @@ impl Precision {
     }
 }
 
-impl Decode for RawExperiment {
-    const EXPECTED: &'static str = "the experiment section: a mapping with `type` and `horizon`";
-    const EXAMPLE: &'static str = "{type: terminating, horizon: 8h}";
+/// The horizon: a duration longer than zero.
+struct Horizon(SimDuration);
+
+impl Decode for Horizon {
+    const EXPECTED: &'static str = SimDuration::EXPECTED;
+    const EXAMPLE: &'static str = "8h";
 
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-        /// The horizon: a duration longer than zero.
-        struct Horizon(SimDuration);
-        impl Decode for Horizon {
-            const EXPECTED: &'static str = SimDuration::EXPECTED;
-            const EXAMPLE: &'static str = "8h";
-            fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-                let horizon = SimDuration::decode(node, cx)?;
-                if horizon == SimDuration::ZERO {
-                    cx.not_allowed(node, horizon.to_string(), "a duration longer than 0s", "8h");
-                    return None;
-                }
-                Some(Self(horizon))
-            }
+        let horizon = SimDuration::decode(node, cx)?;
+        if horizon == SimDuration::ZERO {
+            cx.not_allowed(node, horizon.to_string(), "a duration longer than 0s", "8h");
+            return None;
         }
+        Some(Self(horizon))
+    }
 
-        let mut fields = cx.fields::<Self>(node)?;
+    fn schema(schemas: &mut Schemas) -> Json {
+        schemas.of::<SimDuration>()
+    }
+}
+
+impl Record for RawExperiment {
+    const EXPECTED: &'static str = "the experiment section: a mapping with `type` and `horizon`";
+    const EXAMPLE: &'static str = "{type: terminating, horizon: 8h}";
+    const SCHEMA_NAME: Option<&'static str> = Some("Experiment");
+    const DESCRIPTION: Option<&'static str> = Some(
+        "How the model is run: a terminating experiment over `horizon`, with optional \
+         relative precision targets per observable (ADR-0014).",
+    );
+
+    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
         let kind = fields.required::<ExperimentKind>("type");
         let horizon = fields.required::<Horizon>("horizon");
-        let precision = match fields.take("precision") {
-            None => Some(Vec::new()),
-            Some(node) => fields
-                .decoder()
-                .within(Segment::Key("precision".to_owned()), |cx| {
-                    read_precision(node, cx)
-                }),
-        };
-        fields.finish();
+        let precision = fields.optional::<Targets>("precision");
         Some(Self {
             kind: kind?,
             horizon: horizon?.0,
-            precision: precision?,
+            precision: precision?.map(|t| t.0).unwrap_or_default(),
         })
     }
 }
 
-/// Reads `precision: {observable: ratio, …}`.
-fn read_precision(node: &Node, cx: &mut Decoder) -> Option<Vec<RawPrecision>> {
-    /// For the error when the section is not a mapping.
-    struct Targets;
-    impl Decode for Targets {
-        const EXPECTED: &'static str = "a mapping from observable to relative precision";
-        const EXAMPLE: &'static str = "{throughput(sink): 2%}";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
+/// A relative precision: above 0 %, at most 100 %.
+struct Target(Ratio);
+
+impl Decode for Target {
+    const EXPECTED: &'static str = Ratio::EXPECTED;
+    const EXAMPLE: &'static str = "2%";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let ratio = Ratio::decode(node, cx)?;
+        if !(ratio.as_percent() > 0.0 && ratio.as_percent() <= 100.0) {
+            cx.not_allowed(
+                node,
+                ratio.to_string(),
+                "a percentage above 0% and at most 100%",
+                "2%",
+            );
+            return None;
         }
-    }
-    /// A relative precision: above 0 %, at most 100 %.
-    struct Target(Ratio);
-    impl Decode for Target {
-        const EXPECTED: &'static str = Ratio::EXPECTED;
-        const EXAMPLE: &'static str = "2%";
-        fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-            let ratio = Ratio::decode(node, cx)?;
-            if !(ratio.as_percent() > 0.0 && ratio.as_percent() <= 100.0) {
-                cx.not_allowed(
-                    node,
-                    ratio.to_string(),
-                    "a percentage above 0% and at most 100%",
-                    "2%",
-                );
-                return None;
-            }
-            Some(Self(ratio))
-        }
+        Some(Self(ratio))
     }
 
-    let Value::Map(entries) = node.value() else {
-        cx.wrong_type::<Targets>(node);
-        return None;
-    };
-    let mut targets = Vec::with_capacity(entries.len());
-    let mut ok = true;
-    for entry in entries {
-        let read = cx.within(Segment::Key(entry.key().to_owned()), |cx| {
-            let target = Target::decode(entry.value(), cx)?;
-            Some(RawPrecision {
-                observable: RawExpr {
-                    text: entry.key().to_owned(),
-                    place: Place::new(cx.file().map(str::to_owned), entry.key_start()),
-                    path: cx.path().clone(),
-                },
-                target: target.0,
-            })
-        });
-        match read {
-            Some(target) => targets.push(target),
-            None => ok = false,
-        }
+    fn schema(schemas: &mut Schemas) -> Json {
+        schemas.of::<Ratio>()
     }
-    ok.then_some(targets)
+}
+
+/// `precision: {observable: ratio, …}`.
+struct Targets(Vec<RawPrecision>);
+
+impl Decode for Targets {
+    const EXPECTED: &'static str = "a mapping from observable to relative precision";
+    const EXAMPLE: &'static str = "{throughput(sink): 2%}";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let Value::Map(entries) = node.value() else {
+            cx.wrong_type::<Self>(node);
+            return None;
+        };
+        let mut targets = Vec::with_capacity(entries.len());
+        let mut ok = true;
+        for entry in entries {
+            let read = cx.within(Segment::Key(entry.key().to_owned()), |cx| {
+                let target = Target::decode(entry.value(), cx)?;
+                Some(RawPrecision {
+                    observable: RawExpr {
+                        text: entry.key().to_owned(),
+                        place: Place::new(cx.file().map(str::to_owned), entry.key_start()),
+                        path: cx.path().clone(),
+                    },
+                    target: target.0,
+                })
+            });
+            match read {
+                Some(target) => targets.push(target),
+                None => ok = false,
+            }
+        }
+        ok.then_some(Self(targets))
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("object")),
+            ("propertyNames", schemas.of::<ObservableText>()),
+            ("additionalProperties", schemas.of::<Target>()),
+        ])
+    }
+}
+
+/// An observable as written in `observe`.
+struct ObservableText(RawExpr);
+
+impl Decode for ObservableText {
+    const EXPECTED: &'static str = String::EXPECTED;
+    const EXAMPLE: &'static str = "throughput(sink)";
+    const SCHEMA_NAME: Option<&'static str> = Some("Observable");
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let text = String::decode(node, cx)?;
+        Some(Self(RawExpr {
+            text,
+            place: Place::new(cx.file().map(str::to_owned), node.start()),
+            path: cx.path().clone(),
+        }))
+    }
+
+    /// A call of one of the catalog's observables; nothing if it declares
+    /// none. The loader checks the arguments and the type.
+    fn schema(schemas: &mut Schemas) -> Json {
+        let functions = schemas.observables();
+        let Some(first) = functions.first() else {
+            return Json::object([
+                (
+                    "description",
+                    Json::from("An observable; this catalog declares none, so none is valid."),
+                ),
+                ("not", Json::object([])),
+            ]);
+        };
+        Json::object([
+            ("type", Json::from("string")),
+            (
+                "description",
+                Json::from(format!(
+                    "An observable: a call of {} on component ids, e.g. `{first}(sink)` \
+                     (ADR-0009, ADR-0015). The loader checks its arguments and type.",
+                    functions.join(", "),
+                )),
+            ),
+            (
+                "pattern",
+                Json::from(format!(r"^[ \t]*({})[ \t]*\(", functions.join("|"))),
+            ),
+        ])
+    }
 }
 
 /// The sections a file may contribute to the model's lists.
@@ -815,30 +898,35 @@ pub(crate) struct MainFile {
 /// at all (not a mapping, or a format version this engine does not read).
 pub(crate) fn read_main(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<MainFile> {
     let mut fields = cx.fields::<MainFile>(node)?;
-    if !read_format(&mut fields) {
+    let Some(main) = read_main_fields(&mut fields, catalog) else {
         // Another format version: its sections may mean something else, so
         // reporting errors in them would mislead.
         fields.ignore_rest();
         return None;
+    };
+    fields.finish();
+    Some(MainFile {
+        start: node.start(),
+        ..main
+    })
+}
+
+/// The keys of the model file; `None` for another format version. Also
+/// run to describe the model file in its schema.
+pub(crate) fn read_main_fields(fields: &mut Fields<'_, '_>, catalog: &Catalog) -> Option<MainFile> {
+    if !read_format(fields) {
+        return None;
     }
     let model = fields.required::<ModelInfo>("model");
     let experiment = fields.required::<RawExperiment>("experiment");
-    let includes = match fields.take("include") {
-        None => Some(Vec::new()),
-        Some(node) => fields
-            .decoder()
-            .within(Segment::Key("include".to_owned()), |cx| {
-                read_includes(node, cx)
-            }),
-    };
-    let parts = read_parts(&mut fields, catalog);
-    fields.finish();
+    let includes = fields.optional::<Includes>("include");
+    let parts = read_parts(fields, catalog);
     Some(MainFile {
         model,
         experiment,
-        includes: includes.unwrap_or_default(),
+        includes: includes.flatten().map(|i| i.0).unwrap_or_default(),
         parts,
-        start: node.start(),
+        start: Location::new(1, 1),
     })
 }
 
@@ -849,8 +937,14 @@ impl Decode for MainFile {
 
     /// Not used: the model file is read with [`read_main`], which needs
     /// the catalog.
-    fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        cx.wrong_type::<Self>(node);
         None
+    }
+
+    /// Not used: the schema describes [`read_main_fields`].
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([("type", Json::from("object"))])
     }
 }
 
@@ -863,6 +957,15 @@ fn read_format(fields: &mut Fields<'_, '_>) -> bool {
     impl Decode for Version {
         const EXPECTED: &'static str = "the format version as text: \"1.0\" (quoted)";
         const EXAMPLE: &'static str = "\"1.0\"";
+        fn schema(_: &mut Schemas) -> Json {
+            Json::object([
+                ("const", Json::from(FORMAT_VERSION)),
+                (
+                    "description",
+                    Json::from("The format version (ADR-0008); quote it."),
+                ),
+            ])
+        }
         fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
             let version = String::decode(node, cx)?;
             if version != FORMAT_VERSION {
@@ -886,158 +989,201 @@ fn read_format(fields: &mut Fields<'_, '_>) -> bool {
     !other_version
 }
 
+/// The `components` section: a list of entries.
+struct ComponentList;
+
+impl Decode for ComponentList {
+    const EXPECTED: &'static str = "a list of components";
+    const EXAMPLE: &'static str = "[{id: cut, type: Machine, cycle_time: 42s}]";
+
+    /// Not used: the entries are read with the catalog.
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        cx.wrong_type::<Self>(node);
+        None
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("array")),
+            ("items", schemas.of::<ComponentEntry>()),
+        ])
+    }
+}
+
+/// The `flow` section: chains and edges.
+struct FlowList(Vec<(Edge, EdgePlaces)>);
+
+impl Decode for FlowList {
+    const EXPECTED: &'static str = "a list of chains and edges";
+    const EXAMPLE: &'static str = "[[source, cut, sink]]";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        if !matches!(node.value(), Value::List(_)) {
+            cx.wrong_type::<Self>(node);
+            return None;
+        }
+        let entries = cx.list(node, FlowEntry::decode)?;
+        Some(Self(entries.into_iter().flat_map(|e| e.0).collect()))
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("array")),
+            ("items", schemas.of::<FlowEntry>()),
+        ])
+    }
+}
+
+/// The `observe` section.
+struct ObserveList(Vec<RawExpr>);
+
+impl Decode for ObserveList {
+    const EXPECTED: &'static str = "a list of observables";
+    const EXAMPLE: &'static str = "[throughput(sink)]";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        if !matches!(node.value(), Value::List(_)) {
+            cx.wrong_type::<Self>(node);
+            return None;
+        }
+        let items = cx.list(node, ObservableText::decode)?;
+        Some(Self(items.into_iter().map(|o| o.0).collect()))
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("array")),
+            ("items", schemas.of::<ObservableText>()),
+        ])
+    }
+}
+
 /// Reads the list sections (`components`, `flow`, `observe`), which the
 /// model file and included files share.
 pub(crate) fn read_parts(fields: &mut Fields<'_, '_>, catalog: &Catalog) -> Parts {
-    /// For the error when a section is not a list.
-    struct Components;
-    impl Decode for Components {
-        const EXPECTED: &'static str = "a list of components";
-        const EXAMPLE: &'static str = "[{id: cut, type: Machine, cycle_time: 42s}]";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
+    let has_components = fields.entry("components").is_some();
+    let has_flow = fields.entry("flow").is_some();
+    let components = fields.optional_with::<ComponentList, _>("components", |node, cx| {
+        if !matches!(node.value(), Value::List(_)) {
+            cx.wrong_type::<ComponentList>(node);
+            return None;
         }
-    }
-    /// For the error when a section is not a list.
-    struct Flow;
-    impl Decode for Flow {
-        const EXPECTED: &'static str = "a list of chains and edges";
-        const EXAMPLE: &'static str = "[[source, cut, sink]]";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
+        cx.list(node, |item, cx| read_component(item, cx, catalog))
+    });
+    let flow = fields.optional::<FlowList>("flow");
+    let observe = fields.optional::<ObserveList>("observe");
+    let complete = components.is_some() && flow.is_some() && observe.is_some();
+    let (flow, flow_places) = match flow.flatten() {
+        Some(FlowList(entries)) => {
+            let (edges, places): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
+            (Some(edges), places)
         }
-    }
-    /// For the error when a section is not a list.
-    struct Observe;
-    impl Decode for Observe {
-        const EXPECTED: &'static str = "a list of observables";
-        const EXAMPLE: &'static str = "[throughput(sink)]";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
-        }
-    }
-
-    let mut parts = Parts {
-        components: None,
-        flow: None,
-        flow_places: Vec::new(),
-        observe: None,
-        has_components: fields.entry("components").is_some(),
-        has_flow: fields.entry("flow").is_some(),
-        complete: true,
+        None => (None, Vec::new()),
     };
-    if let Some(node) = fields.take("components") {
-        parts.components = fields
-            .decoder()
-            .within(Segment::Key("components".to_owned()), |cx| {
-                if !matches!(node.value(), Value::List(_)) {
-                    cx.wrong_type::<Components>(node);
-                    return None;
-                }
-                cx.list(node, |item, cx| read_component(item, cx, catalog))
-            });
-        parts.complete &= parts.components.is_some();
+    Parts {
+        components: components.flatten(),
+        flow,
+        flow_places,
+        observe: observe.flatten().map(|o| o.0),
+        has_components,
+        has_flow,
+        complete,
     }
-    if let Some(node) = fields.take("flow") {
-        let read = fields
-            .decoder()
-            .within(Segment::Key("flow".to_owned()), |cx| {
-                if !matches!(node.value(), Value::List(_)) {
-                    cx.wrong_type::<Flow>(node);
-                    return None;
-                }
-                cx.list(node, read_flow_entry)
-            });
-        if let Some(entries) = read {
-            let (edges, places): (Vec<_>, Vec<_>) = entries.into_iter().flatten().unzip();
-            parts.flow = Some(edges);
-            parts.flow_places = places;
-        } else {
-            parts.complete = false;
-        }
-    }
-    if let Some(node) = fields.take("observe") {
-        parts.observe = fields
-            .decoder()
-            .within(Segment::Key("observe".to_owned()), |cx| {
-                if !matches!(node.value(), Value::List(_)) {
-                    cx.wrong_type::<Observe>(node);
-                    return None;
-                }
-                cx.list(node, |item, cx| {
-                    let text = String::decode(item, cx)?;
-                    Some(RawExpr {
-                        text,
-                        place: Place::new(cx.file().map(str::to_owned), item.start()),
-                        path: cx.path().clone(),
-                    })
-                })
-            });
-        parts.complete &= parts.observe.is_some();
-    }
-    parts
 }
 
 /// The places of an edge's parts: the entry, then each `to` reference.
 pub(crate) type EdgePlaces = Vec<(Place, FieldPath)>;
 
-/// Reads one flow entry: a chain (a list of ids) or an edge (a mapping
-/// with `from` and `to`), as edges.
-fn read_flow_entry(node: &Node, cx: &mut Decoder) -> Option<Vec<(Edge, EdgePlaces)>> {
-    /// For the error when the entry is neither.
-    struct Entry;
-    impl Decode for Entry {
-        const EXPECTED: &'static str = "a chain such as `[source, cut, sink]` or an edge such as `{from: cut, to: [weld-1, weld-2]}`";
-        const EXAMPLE: &'static str = "[source, cut, sink]";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
+/// An edge as a mapping: `{from, to}`.
+struct EdgeMap {
+    from: IdList,
+    to: IdList,
+}
+
+impl Record for EdgeMap {
+    const EXPECTED: &'static str = FlowEntry::EXPECTED;
+    const EXAMPLE: &'static str = "{from: cut, to: [weld-1, weld-2]}";
+
+    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+        let from = fields.required("from");
+        let to = fields.required("to");
+        Some(Self {
+            from: from?,
+            to: to?,
+        })
+    }
+}
+
+/// One flow entry: a chain (a list of ids) or an edge (a mapping with
+/// `from` and `to`), as edges.
+struct FlowEntry(Vec<(Edge, EdgePlaces)>);
+
+impl Decode for FlowEntry {
+    const EXPECTED: &'static str = "a chain such as `[source, cut, sink]` or an edge such as `{from: cut, to: [weld-1, weld-2]}`";
+    const EXAMPLE: &'static str = "[source, cut, sink]";
+    const SCHEMA_NAME: Option<&'static str> = Some("FlowEntry");
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let place = Place::new(cx.file().map(str::to_owned), node.start());
+        match node.value() {
+            Value::List(items) => {
+                let ids = cx.list(node, ComponentRef::decode)?;
+                if ids.len() < 2 {
+                    let kind = LoadErrorKind::TooFew {
+                        what: "a chain",
+                        min: 2,
+                        found: items.len(),
+                        example: "[source, cut, sink]",
+                    };
+                    cx.error(node.start(), kind);
+                    return None;
+                }
+                let edges = ids
+                    .windows(2)
+                    .map(|pair| {
+                        let places = vec![
+                            (place.clone(), cx.path().clone()),
+                            (pair[1].place().clone(), pair[1].path().clone()),
+                        ];
+                        let edge = Edge {
+                            from: vec![pair[0].clone()],
+                            to: vec![pair[1].clone()],
+                        };
+                        (edge, places)
+                    })
+                    .collect();
+                Some(Self(edges))
+            }
+            Value::Map(_) => {
+                let EdgeMap { from, to } = EdgeMap::decode(node, cx)?;
+                let (from, to) = (from.0, to.0);
+                let mut places = vec![(place, cx.path().clone())];
+                places.extend(to.iter().map(|r| (r.place().clone(), r.path().clone())));
+                Some(Self(vec![(Edge { from, to }, places)]))
+            }
+            Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Str(_) => {
+                cx.wrong_type::<Self>(node);
+                None
+            }
         }
     }
 
-    let place = Place::new(cx.file().map(str::to_owned), node.start());
-    match node.value() {
-        Value::List(items) => {
-            let ids = cx.list(node, ComponentRef::decode)?;
-            if ids.len() < 2 {
-                let kind = LoadErrorKind::TooFew {
-                    what: "a chain",
-                    min: 2,
-                    found: items.len(),
-                    example: "[source, cut, sink]",
-                };
-                cx.error(node.start(), kind);
-                return None;
-            }
-            let edges = ids
-                .windows(2)
-                .map(|pair| {
-                    let places = vec![
-                        (place.clone(), cx.path().clone()),
-                        (pair[1].place().clone(), pair[1].path().clone()),
-                    ];
-                    let edge = Edge {
-                        from: vec![pair[0].clone()],
-                        to: vec![pair[1].clone()],
-                    };
-                    (edge, places)
-                })
-                .collect();
-            Some(edges)
-        }
-        Value::Map(_) => {
-            let mut fields = cx.fields::<Entry>(node)?;
-            let from = fields.required::<IdList>("from");
-            let to = fields.required::<IdList>("to");
-            fields.finish();
-            let (from, to) = (from?.0, to?.0);
-            let mut places = vec![(place, cx.path().clone())];
-            places.extend(to.iter().map(|r| (r.place().clone(), r.path().clone())));
-            Some(vec![(Edge { from, to }, places)])
-        }
-        Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Str(_) => {
-            cx.wrong_type::<Entry>(node);
-            None
-        }
+    fn schema(schemas: &mut Schemas) -> Json {
+        let chain = Json::object([
+            ("type", Json::from("array")),
+            ("items", schemas.of::<ComponentRef>()),
+            ("minItems", Json::from(2)),
+        ]);
+        Json::object([
+            (
+                "description",
+                Json::from(
+                    "A chain of at least two components, or an edge from one or several components \
+                     to one or several components (branch, merge, loop-back).",
+                ),
+            ),
+            ("oneOf", Json::Array(vec![chain, schemas.of::<EdgeMap>()])),
+        ])
     }
 }
 
@@ -1047,6 +1193,24 @@ struct IdList(Vec<ComponentRef>);
 impl Decode for IdList {
     const EXPECTED: &'static str = "a component id or a list of them";
     const EXAMPLE: &'static str = "[weld-1, weld-2]";
+    const SCHEMA_NAME: Option<&'static str> = Some("EdgeEnd");
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        let id = schemas.of::<ComponentRef>();
+        let list = Json::object([
+            ("type", Json::from("array")),
+            ("items", id.clone()),
+            ("minItems", Json::from(1)),
+            ("uniqueItems", Json::from(true)),
+        ]);
+        Json::object([
+            (
+                "description",
+                Json::from("A component id, or a list of different ones."),
+            ),
+            ("oneOf", Json::Array(vec![id, list])),
+        ])
+    }
 
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
         match node.value() {

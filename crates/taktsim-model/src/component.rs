@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 
-use crate::decode::{Decode, Decoder, Fields};
+use crate::decode::{Decode, Decoder, Fields, Schemas};
 use crate::error::{FieldPath, LoadErrorKind, Place};
 use crate::expr::{ComponentId, Signature, TypeEnv};
 use crate::json::{Encode, Json};
@@ -107,9 +107,31 @@ pub(crate) fn read_id(node: &Node, cx: &mut Decoder, what: &'static str) -> Opti
     Some(text)
 }
 
+/// The pattern of a component id (ADR-0015).
+pub(crate) const ID_PATTERN: &str = "^[A-Za-z_][A-Za-z0-9_]*(-[A-Za-z0-9_]+)*$";
+
 impl Decode for ComponentRef {
     const EXPECTED: &'static str = "a component id";
     const EXAMPLE: &'static str = "weld-1";
+    const SCHEMA_NAME: Option<&'static str> = Some("ComponentId");
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("string")),
+            ("pattern", Json::from(ID_PATTERN)),
+            (
+                "description",
+                Json::from(
+                    "A component id: letters, digits and `_`, starting with a letter or `_`, \
+                     optionally joined by single `-` (ADR-0015).",
+                ),
+            ),
+            (
+                "examples",
+                Json::Array(vec![Json::from("cut"), Json::from("weld-1")]),
+            ),
+        ])
+    }
 
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
         let id = read_id(node, cx, "component id")?;
@@ -207,6 +229,7 @@ pub trait ComponentParams: Encode + fmt::Debug + Send + Sync + Sized + 'static {
 trait Kind: Send + Sync {
     fn example(&self) -> &'static str;
     fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Box<dyn Params>>;
+    fn schema(&self, schemas: &mut Schemas) -> Json;
 }
 
 struct KindOf<P>(PhantomData<fn() -> P>);
@@ -219,6 +242,36 @@ impl<P: ComponentParams> Kind for KindOf<P> {
     fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Box<dyn Params>> {
         P::decode(fields).map(|p| Box::new(p) as Box<dyn Params>)
     }
+
+    /// The entry: the keys `P::decode` reads, plus `id` and `type`.
+    fn schema(&self, schemas: &mut Schemas) -> Json {
+        let params = schemas.describe(|fields| {
+            let _ = P::decode(fields);
+        });
+        entry_schema(P::TYPE, params, schemas)
+    }
+}
+
+/// The schema of one component entry of type `name`: the parameters'
+/// object schema with `id` and `type` added (and required first).
+fn entry_schema(name: &str, params: Json, schemas: &mut Schemas) -> Json {
+    let id = schemas.of::<ComponentRef>();
+    let Json::Object(mut entry) = params else {
+        return params;
+    };
+    if let Some(Json::Object(properties)) = entry.get_mut("properties") {
+        properties.insert("id".to_owned(), id);
+        properties.insert(
+            "type".to_owned(),
+            Json::object([("const", Json::from(name))]),
+        );
+    }
+    let mut required = vec![Json::from("id"), Json::from("type")];
+    if let Some(Json::Array(own)) = entry.remove("required") {
+        required.extend(own);
+    }
+    entry.insert("required".to_owned(), Json::Array(required));
+    Json::Object(entry)
 }
 
 /// Parameters with their type erased.
@@ -446,6 +499,14 @@ impl Catalog {
         self.observables.keys().map(String::as_str)
     }
 
+    /// The schema of an entry of each component type, in sorted order.
+    pub(crate) fn entry_schemas(&self, schemas: &mut Schemas) -> Vec<Json> {
+        self.kinds
+            .values()
+            .map(|kind| kind.schema(schemas))
+            .collect()
+    }
+
     /// The observables as an expression environment.
     pub(crate) const fn environment(&self) -> &TypeEnv {
         &self.env
@@ -611,6 +672,10 @@ impl Decode for TypeName {
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
         String::decode(node, cx).map(Self)
     }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        String::schema(schemas)
+    }
 }
 
 /// An id read by `Fields::required`.
@@ -623,6 +688,50 @@ impl Decode for Id {
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
         read_id(node, cx, "component id").map(Self)
     }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        schemas.of::<ComponentRef>()
+    }
+}
+
+/// A component entry, for messages and the schema: entries are read with
+/// a catalog ([`read_component`]), which a `Decode` type does not have.
+pub(crate) struct ComponentEntry;
+
+impl Decode for ComponentEntry {
+    const EXPECTED: &'static str = "a component: a mapping with `id`, `type` and its parameters";
+    const EXAMPLE: &'static str = "{id: cut, type: Machine, cycle_time: 42s}";
+    const SCHEMA_NAME: Option<&'static str> = Some("Component");
+
+    /// Not used: entries are read with [`read_component`].
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        cx.wrong_type::<Self>(node);
+        None
+    }
+
+    /// One of the catalog's entries; nothing if it registers no type.
+    fn schema(schemas: &mut Schemas) -> Json {
+        let entries = schemas.components().to_vec();
+        if entries.is_empty() {
+            return Json::object([
+                (
+                    "description",
+                    Json::from(
+                        "A component: `id`, `type` and the parameters of that type. \
+                         No component type is registered in this catalog, so none is valid.",
+                    ),
+                ),
+                ("not", Json::object([])),
+            ]);
+        }
+        Json::object([
+            (
+                "description",
+                Json::from("A component: `id`, `type` and the parameters of that type."),
+            ),
+            ("oneOf", Json::Array(entries)),
+        ])
+    }
 }
 
 /// Reads one component entry with the types of `catalog`.
@@ -631,18 +740,7 @@ pub(crate) fn read_component(
     cx: &mut Decoder,
     catalog: &Catalog,
 ) -> Option<Component> {
-    /// For the error when the entry is not a mapping.
-    struct Entry;
-    impl Decode for Entry {
-        const EXPECTED: &'static str =
-            "a component: a mapping with `id`, `type` and its parameters";
-        const EXAMPLE: &'static str = "{id: cut, type: Machine, cycle_time: 42s}";
-        fn decode(_: &Node, _: &mut Decoder) -> Option<Self> {
-            None
-        }
-    }
-
-    let mut fields = cx.fields::<Entry>(node)?;
+    let mut fields = cx.fields::<ComponentEntry>(node)?;
     let id = fields.required::<Id>("id");
     let type_name = fields.required::<TypeName>("type");
     let Some(TypeName(type_name)) = type_name else {
@@ -672,7 +770,7 @@ pub(crate) fn read_component(
     let params = kind.decode(&mut fields);
     if params.is_none() && fields.decoder().error_count() == before {
         // A component type must record why it rejects its parameters.
-        let found = fields.node().found().to_string();
+        let found = node.found().to_string();
         let example = kind.example();
         let cx = fields.decoder();
         cx.not_allowed(
