@@ -2,6 +2,8 @@
 # Order follows spec §10: rustfmt → clippy → cargo-deny → tests → coverage →
 # Python → docs. Steps for crates that do not exist yet (WebAssembly, viewer,
 # benchmarks) are added with the milestone that creates them.
+# The gates run only when a change can affect them (job changes,
+# ci/changes.sh): a pull request that touches only documentation skips them.
 # Changing this file needs the `gate-change` label (ci/check-gates.sh).
 name: ci
 
@@ -26,8 +28,30 @@ env:
   MSRV: "1.97"
 
 jobs:
+  # Can this change affect the gates below? Skipped jobs count as passed for
+  # the required checks of main; if this job fails, the test and python
+  # checks are never reported, so the pull request cannot be merged.
+  changes:
+    name: changes (do the Rust and Python gates apply?)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.decide.outputs.rust }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: ci/changes-test.sh
+      - id: decide
+        run: ci/changes.sh "$BASE" "$HEAD" >>"$GITHUB_OUTPUT"
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
   lint:
     name: lint (rustfmt, clippy, cargo-deny, crate rules)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -68,6 +92,28 @@ jobs:
       # The Python binding crate is tested by pytest (job python).
       - run: cargo nextest run --workspace --exclude taktsim-python --all-features --locked
       - run: cargo test --workspace --exclude taktsim-python --all-features --doc --locked
+
+  # main requires one check per target. A matrix job that is skipped as a
+  # whole reports none of those names, so the pull request would wait for
+  # them forever; when the change cannot affect the tests, this job reports
+  # them instead, on one small runner. Keep the targets in step with test.
+  test-not-needed:
+    name: test (${{ matrix.target }})
+    needs: changes
+    if: needs.changes.outputs.rust == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+          - aarch64-apple-darwin
+    steps:
+      - run: echo "Not run on $TARGET; only files no test reads changed (see the changes job)." | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          TARGET: ${{ matrix.target }}
 
   msrv:
     name: msrv
@@ -128,6 +174,22 @@ jobs:
       - run: .venv/bin/ruff format --check .
       - run: .venv/bin/pyright --warnings --pythonpath .venv/bin/python
       - run: .venv/bin/pytest -q
+
+  # As test-not-needed, for the required check of each Python version. Keep
+  # the versions in step with python.
+  python-not-needed:
+    name: python (${{ matrix.python }}; pytest, ruff, pyright strict)
+    needs: changes
+    if: needs.changes.outputs.rust == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python: ["3.13", "3.14", "3.15"]
+    steps:
+      - run: echo "Not run on Python $PYTHON; only files no test reads changed (see the changes job)." | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          PYTHON: ${{ matrix.python }}
 
   docs:
     name: docs (every public item documented, with an example)
