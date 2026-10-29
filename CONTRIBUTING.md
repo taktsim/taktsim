@@ -55,6 +55,13 @@ CI runs these gates; all must be green:
 | benchmarks | instruction counts of `taktsim-bench` against the base branch; a rise above 10 % or an unlisted removed benchmark fails (ADR-0016) |
 | mutants | mutation testing of changed core code; advisory until v1.0. Timeouts count as caught; known equivalent mutants are listed with reasons in `.cargo/mutants.toml` (adding one is a gate change) |
 
+A pull request that changes only files no build or test reads (`docs/`,
+`website/`, the top-level Markdown files, licences, the site and PR
+workflows) skips lint, test, msrv, coverage, python, docs, mutants and
+benchmarks; the `changes` job says why, and the skipped checks count as
+passed. Any other file runs them all. The list is in `ci/changes.sh`, its
+tests in `ci/changes-test.sh`.
+
 Run the same checks locally before pushing:
 
 ```sh
@@ -152,7 +159,8 @@ change both together.
   `ci/bench-compare.sh --removed ci/bench-removed.txt target/ic-before target/ic-after`.
   On macOS and Windows, rely on the CI job. The gate's own tests run
   anywhere with bash and jq: `ci/bench-test.sh`.
-- **In CI:** the `bench` workflow runs on every pull request. Its job
+- **In CI:** the `bench` workflow runs on every pull request that can
+  change an instruction count (see "Every pull request"). Its job
   summary has the table; a regression above 10 % or an unlisted removal
   fails the check. The `instruction-counts` artifact has every
   `summary.json`.

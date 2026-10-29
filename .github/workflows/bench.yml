@@ -31,8 +31,30 @@ env:
   VALGRIND: "1:3.22.0-0ubuntu3"
 
 jobs:
+  # A pull request that touches only documentation cannot change an
+  # instruction count (ci/changes.sh, as in ci.yml).
+  changes:
+    name: changes (does the benchmark gate apply?)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.decide.outputs.rust }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: ci/changes-test.sh
+      - id: decide
+        run: ci/changes.sh "$BASE" "$HEAD" >>"$GITHUB_OUTPUT"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+
   instructions:
     name: benchmarks (instruction counts, > 10 % regression fails)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     # The CI proxy runner of ADR-0010 (x86-64 Linux); Callgrind needs Linux.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
