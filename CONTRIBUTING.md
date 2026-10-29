@@ -96,7 +96,7 @@ styles and scripts. The pages and their order are listed in
 Install the tools once, in the versions `.github/workflows/site.yml` uses:
 
 ```sh
-cargo install --locked mdbook@0.5.4 mdbook-mermaid@0.17.1 lychee@0.24.2
+cargo install --locked mdbook@0.5.4 mdbook-mermaid@0.17.1 mdbook-katex@0.10.0 lychee@0.24.2
 mdbook-mermaid install website   # writes the Mermaid scripts, not committed
 ```
 
@@ -112,6 +112,13 @@ lychee --offline --include-fragments --exclude-path website/book/404.html websit
 Link between pages with relative paths to the `.md` files, and to a folder
 (`adr/`) rather than its `README.md`. A broken link or anchor fails the
 build. The site is deployed to GitHub Pages on every push to `main`.
+
+Write formulas in LaTeX: `$c_s$` inline, `$$...$$` on a line of its own for
+a block. mdbook-katex renders them to HTML when the site is built, so a
+page loads no math script; a formula that does not render fails CI. A
+literal dollar sign outside code needs a backslash (`\$`). KaTeX's
+stylesheet and fonts are served from `website/theme/`, in the version
+mdbook-katex bundles; update them together with mdbook-katex.
 
 The concept pages (`docs/concepts/`) never contain a typed-in number: each
 page has a script in `docs/concepts/scripts/` (Python 3.13+, standard library

@@ -47,8 +47,22 @@ jobs:
       - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: mdbook@0.5.4,mdbook-mermaid@0.17.1,lychee@0.24.2
+      # mdbook-katex publishes no binaries for this version: build it from
+      # its lockfile; the cache keeps the binary in ~/.cargo/bin.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: site-tools
+          cache-targets: false
+      - run: cargo install --locked mdbook-katex --version 0.10.0
       - run: mdbook-mermaid install website
-      - run: mdbook build website
+      # mdbook-katex only warns when a formula does not render and leaves
+      # its source on the page; fail the build instead.
+      - run: |
+          mdbook build website 2>&1 | tee "$RUNNER_TEMP/mdbook.log"
+          if grep -E "Rendering failed|ERROR" "$RUNNER_TEMP/mdbook.log"; then
+            echo "a formula or page did not render; see the lines above"
+            exit 1
+          fi
       # A broken link or anchor between pages fails the build. External links
       # are not checked here, so the build does not depend on other sites.
       # 404.html links to the site root on purpose, which exists only online.

@@ -282,6 +282,32 @@ blockquote {
   line-height: 1.45;
 }
 
+/* Formulas (KaTeX, rendered at build time). Symbols keep KaTeX's math
+   italic; words in \text{} are set in Inter like the prose around them. */
+.katex {
+  font-size: 1.1em;
+}
+
+.katex .mord.text {
+  font-family: var(--ts-sans);
+}
+
+/* A long formula scrolls on a phone instead of widening the page. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+}
+
+/* In a panel, a formula sits flush left under the label, like text. */
+.ts-panel .katex-display {
+  margin: 0.4em 0;
+}
+
+.ts-panel .katex-display > .katex {
+  text-align: left;
+}
+
 /* Figures: a takeaway title, the SVG, a one-sentence caption. */
 .ts-figure {
   border: 1px solid var(--ts-line);
