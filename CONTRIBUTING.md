@@ -130,15 +130,17 @@ mdbook-katex bundles; update them together with mdbook-katex.
 The concept pages (`docs/concepts/`) never contain a typed-in number: each
 page has a script in `docs/concepts/scripts/` (Python 3.13+, standard library
 only) that writes its tables, figures and data files, which the pages
-include. After changing a script, `svgkit.py`, `linesim.py` or
-`website/theme/tokens.json`, regenerate everything (about two minutes) and
-commit the result; CI fails if a generated file is stale. Then run the tests
-of the in-browser simulator (Node, version in `.nvmrc`), which check that it
-agrees with the scripts:
+include. CI does not run these scripts, so the check is yours: after
+changing a script, `svgkit.py`, `linesim.py`, `website/theme/tokens.json` or
+`website/components/sim.js`, regenerate everything (about two minutes), run
+the tests of the in-browser simulator (Node, version in `.nvmrc`), which
+check that it agrees with the scripts, and commit what changed. Running
+`build_all.py` again must leave `git status` clean.
 
 ```sh
 python3 docs/concepts/scripts/build_all.py
 node --test website/components/sim.test.js
+git status --short docs website   # empty once everything is committed
 ```
 
 `website/components/sim.js` is a port of `docs/concepts/scripts/linesim.py`:

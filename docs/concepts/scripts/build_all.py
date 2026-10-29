@@ -1,5 +1,6 @@
 """Regenerate every table, figure and data file of the concept pages,
-and website/theme/tokens.css. CI runs this and fails if anything changed.
+and website/theme/tokens.css. Not run in CI: run it after changing a script
+and commit the result (CONTRIBUTING.md, Working on the docs).
 
 Usage: python3 docs/concepts/scripts/build_all.py
 """
