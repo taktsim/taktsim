@@ -49,8 +49,9 @@ The running example is welding. 300 measured welding times have a mean of
 45.2 s and a CV of 0.61. (The data here are made up: they were drawn from a
 lognormal with mean 45 s and sigma 0.6, so that we know the right answer.)
 
-The simplest fit uses those two numbers, the method of moments: a
-distribution family with the same mean and CV. Three candidates:
+The simplest fit, the method of moments, uses just those two numbers: pick a
+distribution and give it the same mean and, where it can, the same CV.
+Three candidates:
 
 - **Constant**: 45.2 s every time. Ignores variability.
 - **Exponential** with mean 45.2 s. Its CV is always 1.
@@ -66,24 +67,27 @@ distribution family with the same mean and CV. Three candidates:
 <figcaption>Histogram of the 300 measured welding times with the fitted lognormal (dashed) and exponential (dotted) curves; the highlighted line is the mean.</figcaption>
 </figure>
 
-A number for how well a distribution fits is the Kolmogorov–Smirnov
-distance: the largest gap between the share of measured times below some
-value and the share the distribution predicts. 0 is a perfect fit.
+One number for how well a distribution fits is the Kolmogorov–Smirnov
+distance. For every value, compare the share of measured times below it
+with the share the distribution predicts; the distance is the largest gap.
+0 is a perfect fit.
 
 ## Validating the model
 
-Fitting is not the test. The test is whether the model, with the fitted
-times, behaves like the real line. Here the "real" line is line A with the
-true welding times, watched for 20 shifts; each model is simulated 30 times:
+A good fit is not yet the test. The test is whether the model, with the
+fitted times, behaves like the real line. Here the "real" line is line A
+with the true welding times, watched for 20 shifts, and each model is
+simulated 30 times:
 
 {{#include tables/14-validation.md}}
 
-The constant model is too optimistic by 7 parts per shift: without
-variability, welding never starves. The exponential model is too
+The constant model is too optimistic by 7 parts per shift: it leaves out
+welding's variability, so the two stations wait for each other less than
+they really do. The exponential model is too
 pessimistic by 29: it invents far more variability than there is. Only the
 lognormal model agrees with the observed output within the confidence
-intervals. A model can only be judged with intervals on both sides: the 20
-observed shifts are a sample too.
+intervals. Both sides need intervals, because the 20 observed shifts are a
+sample too.
 
 Agreement on one number is necessary, not sufficient. Check several:
 output, but also how often each station is starved or blocked, and how full
@@ -93,13 +97,13 @@ the buffers are. And check on data the model was not fitted to.
 
 Fitting each input by hand works for a two-station line. For a real plant,
 taktsim's calibration (spec §6, the v0.3 tier) will close the loop
-automatically: replay the observed period with many seeds, score the gap
-per metric, adjust the parameters declared free within their bounds, and
-stop when every metric is within its threshold or the budget is spent. The
-result is a report with the fitted parameters, the error before and after,
-the runs and seeds, a check against held-out data, and a verdict:
-calibrated, partially calibrated, or rejected. A model is never silently
-changed; calibration returns a new version.
+automatically. It replays the observed period with many seeds and scores
+the gap for each metric. It then adjusts the parameters you declared free,
+within their bounds, and stops when every metric is within its threshold or
+the budget is spent. The result is a report: the fitted parameters, the
+error before and after, the runs and seeds, a check against held-out data,
+and a verdict of calibrated, partially calibrated or rejected. The model
+itself is never silently changed; calibration returns a new version.
 
 ## Rule of thumb
 

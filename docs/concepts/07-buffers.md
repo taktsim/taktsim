@@ -29,9 +29,9 @@ instead of being blocked.
 
 ## The running example
 
-Line A, variable (sigma 0.5 at both stations), now with buffers from none at
-all to 30 places. With no buffer, a finished cut can only move on when
-welding is free.
+Line A again, with sigma 0.5 at both stations, now with buffers from none
+at all up to 30 places. With no buffer, a finished cut can move on only
+when welding is free.
 
 ## The numbers
 
@@ -50,13 +50,13 @@ welding is free.
 Without a buffer the variable line makes 517 parts per shift. One place gets
 it to 576, two to 600, five to 624. After that the curve flattens: ten places
 give 633, thirty give 635, and no buffer reaches the 640 that welding could
-make. Each extra place catches only the rarer, longer slow spells, and those
-are rare by definition.
+make. Each extra place helps only in a longer slow spell than the places
+before it could absorb, and the longer a spell, the rarer it is.
 
-The cost grows the other way. By [Little's Law](03-littles-law.md), parts
-that sit in a buffer add to lead time: with 5 places a part needs about
-4 minutes through the line, with 20 places about 12, and with 30 about 15,
-for 2 % more output than with five.
+Meanwhile the cost keeps growing. By [Little's Law](03-littles-law.md),
+parts that sit in a buffer add to lead time. With 5 places a part needs
+about 4 minutes to get through the line, with 20 places about 12, and with
+30 about 15: almost four times the lead time for 2 % more output.
 
 ## The README's example
 
@@ -77,12 +77,14 @@ variability: cutting lognormal with sigma 0.08, welding a fixed 45 s.
 - With a single place it makes the same 638.7. Even with no buffer at all it
   makes 633.
 
-Cutting is 3 s faster than welding on average and varies only by about 3 s,
-so it is rarely slower than welding at all, and never for long. Welding has
-no variability, so it never needs a stock to draw from. A buffer protects
-against variability relative to the slack between stations; this line has
-little of the first and enough of the second. That is the
-[bottleneck rule](02-bottleneck.md) holding almost exactly.
+Cutting is 3 s faster than welding on average and varies by only about
+3 s. When a cut is slower than a weld, it is slower by a second or two, and
+the next cut usually makes up for it. Welding never varies, so it never has
+a slow spell that cutting would need room to work through. How much buffer
+a line needs depends on how its
+variability compares with the slack between its stations. This line has
+little variability and enough slack, so the
+[bottleneck rule](02-bottleneck.md) holds almost exactly.
 
 ## Rule of thumb
 
@@ -123,8 +125,8 @@ In the model, the buffer is one number:
 
 - Stanley B. Gershwin, *Manufacturing Systems Engineering*, chapter 3, on
   two-machine lines with a finite buffer.
-- Hopp and Spearman, *Factory Physics*, chapter 8, on buffering against
-  variability with inventory, capacity or time.
+- Hopp and Spearman, *Factory Physics*, chapter 9, section 9.2, "Variability
+  Laws": buffering against variability with inventory, capacity or time.
 
 **Next:** [8. Unreliable machines](08-unreliable-machines.md): variability
 that comes in big pieces.

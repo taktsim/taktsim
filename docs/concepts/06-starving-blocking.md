@@ -18,9 +18,9 @@
 
 Two people pack boxes at a table, one folding, one filling, with room for a
 single folded box between them. When the folder struggles with a stiff
-sheet, the filler stands with empty hands. When the filler takes long with a
-box, the space between them fills up, and the folder has to hold the next box
-instead of starting another.
+sheet, the filler stands with empty hands. When the filler is slow with a
+box, the space between them fills up, and the folder has to hold the next
+box instead of starting another.
 
 The filler with nothing to do is [starved](glossary.md#starved): ready to
 work, but no part has arrived. The folder holding a finished box is
@@ -30,8 +30,8 @@ They are waiting for each other.
 
 ## The running example
 
-Line A with variable cycle times at both stations (sigma 0.5, CV 0.53, from
-[page 4](04-variability.md)), and a buffer of just one place:
+Line A again, with variable cycle times at both stations (sigma 0.5,
+CV 0.53, from [page 4](04-variability.md)) and a buffer of just one place:
 
 <figure class="ts-figure">
 <div class="ts-label">Figure 6.1</div>
@@ -58,14 +58,14 @@ observe:
 </div>
 
 `state_shares` asks for the share of time each station spends working,
-starved, blocked and so on (spec §4, KPIs).
+starved, blocked and so on.
 
 ## Reading a state timeline
 
 A state timeline has one row per station and shows what the station did
 over time. Here each step is 30 seconds, drawn in the state the station
 spent most of it in: solid when working, an empty outline when starved,
-hatched when blocked. Below the rows, the buffer's fill level.
+hatched when blocked. Below the rows is the buffer's fill level.
 
 <figure class="ts-figure ts-widget" data-widget="timeline" data-config='{"sigma": 0.5, "buffer": 1, "seed": 2}'>
 <div class="ts-label">Figure 6.2 · interactive · teaching simulator, not the taktsim engine</div>
@@ -86,12 +86,12 @@ some and more variability:
 
 Without variability, cutting is blocked 7 % of the time: it is faster than
 welding and has to wait for space. That costs nothing, because welding never
-stops. With sigma 0.5, welding is starved 10 % of the time, and the line makes
-576 parts instead of 639, 10 % fewer. The two numbers are the same thing:
+stops. With sigma 0.5, welding is starved 10 % of the time, and the line
+makes 576 parts instead of 639, also 10 % fewer. That is no coincidence:
 welding is the bottleneck, so every minute it waits is a minute of output
-the line never gets back. Cutting's blocking, now 15 %, is the other side of
-the same coin: while cutting is blocked it cannot build up a stock for the
-moments when it is slow.
+the line never gets back. Cutting is now blocked 15 % of the time. Each of
+those minutes is one in which it could have worked ahead, building a stock
+for its own next slow cut.
 
 ## Rule of thumb
 

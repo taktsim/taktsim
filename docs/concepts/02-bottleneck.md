@@ -29,12 +29,13 @@ faster only makes the pile in front of the bottleneck grow faster.
 
 A station's [capacity](glossary.md#capacity) is the most it can make per
 unit of time when it never waits. With a cycle time of 45 s, that is
-3600 / 45 = 80 parts per hour. Cutting in line A, at 42 s, could do about 86.
+3600 / 45 = 80 parts per hour. Cutting in line A, at 42 s, could make about
+86.
 
 A station's [utilization](glossary.md#utilization) is the share of time it
-spends working. If line A makes 80 parts per hour, cutting works
-80 × 42 s = 56 minutes of every hour, so its utilization is 93 %. Welding
-works all 60 minutes: 100 %.
+spends working. When line A makes 80 parts per hour, cutting works
+80 × 42 s = 56 minutes of every hour, a utilization of 93 %. Welding works
+all 60 minutes: 100 %.
 
 ## The running example
 
@@ -65,8 +66,8 @@ line:
 
 ## The numbers
 
-Simulate one shift for cutting times from 30 to 60 s, with welding fixed at
-45 s:
+One simulated shift for each cutting time from 30 to 60 s, with welding
+fixed at 45 s:
 
 {{#include tables/02-sweep.md}}
 
@@ -79,35 +80,42 @@ Simulate one shift for cutting times from 30 to 60 s, with welding fixed at
 <figcaption>Parts per shift against the cutting time; the simulated points lie on the dashed formula line, flat while welding is slower and falling once cutting is.</figcaption>
 </figure>
 
-While cutting is faster than welding, output stays at 639 parts: welding
-decides. Making cutting faster, from 42 s down to 30 s, gains nothing; it
-only lowers cutting's utilization from 96 % to 69 %. Once cutting is slower
-than 45 s, it becomes the bottleneck, welding starts to wait, and output
-falls to 28,800 s divided by the cutting time. The simulation is one part
-below the formula in every case: the first part needs both stations before
-anything comes out.
+As long as cutting is faster than welding, output stays at 639 parts, and
+welding decides. Making cutting faster, from 42 s down to 30 s, gains
+nothing. It only gives cutting more time to wait: its utilization falls
+from 96 % to 69 %. (The table shows 96 % rather than the 93 % above because
+a shift that starts empty also has cutting fill the buffer.)
+
+Once cutting is slower than 45 s, the roles swap. Cutting becomes the
+bottleneck, welding starts to wait, and output falls to 28,800 s divided by
+the cutting time. The simulation stays one or two parts below that formula,
+because the first part has to pass both stations before anything comes out.
 
 ## Rule of thumb
 
 <div class="ts-panel ts-rule">
 <span class="ts-label">Rule of thumb</span>
 
-Output = 1 / (the largest cycle time). To make more, make the bottleneck
-faster; time saved anywhere else is time spent waiting.
+$$\text{output} = \frac{1}{\text{largest cycle time}}$$
+
+To make more, make the bottleneck faster; time saved anywhere else is time
+spent waiting.
 
 </div>
 
-This holds exactly only without randomness. The next pages show what
-randomness takes away from it, and why a station that is not the bottleneck
-on average can still hold the line back.
+The rule is exact only when nothing is random. The next pages show what
+randomness takes away, and why a station that is not the bottleneck on
+average can still hold the line back.
 
 ## Try it yourself
 
-- Set cutting to `45s`, the same as welding. Both are now bottlenecks, both
-  are busy 100 % of the time, and the buffer stays empty.
+- Set cutting to `45s`, the same as welding. Which station is the
+  bottleneck? (Both are. Both are busy 100 % of the time, and the buffer
+  stays empty.)
 - Set welding to `40s` and leave cutting at `42s`. Which station is the
-  bottleneck now, and how many parts does a shift make? (Cutting, and 684:
-  28,800 / 42 ≈ 686, less about two for the first part's way through.)
+  bottleneck now, and how many parts does a shift make? (Cutting. The
+  formula gives 28,800 / 42 ≈ 686; the simulation makes 684, because the
+  first part takes a while to get through.)
 
 ## Further reading
 

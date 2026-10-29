@@ -22,9 +22,9 @@ bought it. How many bottles are in your cellar? About 200: fifty a year,
 each staying four years. You did not need to know which bottle came when,
 or in what order you drank them.
 
-A production line is the cellar. Parts go in at some rate, each stays for a
-while, and the number inside at any moment is, on average, the rate times
-the stay. That is [Little's Law](glossary.md#littles-law), after John Little,
+A production line works like the cellar. Parts go in at some rate and each
+stays for a while; on average, the number inside is the rate times the
+stay. That is [Little's Law](glossary.md#littles-law), after John Little,
 who proved it in 1961.
 
 ## The law
@@ -32,26 +32,31 @@ who proved it in 1961.
 <div class="ts-panel ts-rule">
 <span class="ts-label">Little's Law</span>
 
-**WIP = throughput × lead time**, as long-run averages.
+$$\text{WIP} = \text{throughput} \times \text{lead time}$$
+
+All three are long-run averages.
 
 </div>
 
-The units have to match: with throughput in parts per hour, lead time goes in
-hours. Line A in [page 1](01-production-systems.md) ended the shift with 22
-parts inside and 80 parts per hour coming out, so a part needs
+The units have to match: with throughput in parts per hour, lead time comes
+out in hours. Line A on [page 1](01-production-systems.md) ended the shift
+with 22 parts inside and 80 parts per hour coming out, so a part needs
 22 / 80 h = 16.5 minutes to get through. Nobody had to follow a part with a
 stopwatch.
 
-The law needs almost nothing: no particular distribution, no order of
-service, any number of stations and buffers. It needs only that parts are
-not created or lost inside, and that you compare averages over a period long
-enough that the start and the end do not matter.
+The law asks for almost nothing. Times can follow any distribution, parts
+can be served in any order, and the line can have any number of stations
+and buffers. Only two things are needed: no parts are created or lost
+inside, and the averages cover a period long enough that its start and end
+do not matter.
 
 ## The running example
 
-Figure 3.1 is line A with variable process times and a buffer of five; the
-[next page](04-variability.md) is about where such variability comes from.
-WIP now moves all the time. Little's Law speaks about its average.
+So far every time in line A was fixed. Figure 3.1 is a first look at a line
+whose cutting and welding times vary from part to part, with a buffer of
+five places; the [next page](04-variability.md) explains where such
+variability comes from. WIP now rises and falls all the time, and Little's
+Law is about its average.
 
 <figure class="ts-figure">
 <div class="ts-label">Figure 3.1</div>
@@ -64,16 +69,15 @@ WIP now moves all the time. Little's Law speaks about its average.
 
 ## The numbers
 
-Three different systems, each run for five days with the first day
-discarded, and WIP, throughput and lead time measured separately:
+Three different systems, each simulated for five days. The first day is
+discarded, and WIP, throughput and lead time are measured separately:
 
 {{#include tables/03-little.md}}
 
-In each row the last column is the product of throughput and lead time,
-which matches the measured WIP within the simulation's noise. The first row
-has no randomness at all, the second has variable stations and a small
-buffer, the third has random arrivals in front of a single station. The law
-does not care.
+In every row, throughput × lead time matches the measured WIP within the
+simulation's noise. The first system has no randomness at all, the second
+has variable stations and a small buffer, and the third has random arrivals
+in front of a single station. The law holds for all three.
 
 ## Using it
 
@@ -81,9 +85,9 @@ does not care.
   the output counter: lead time = WIP / throughput. This works for a real
   line as well as for a model.
 - **See what extra WIP costs.** On page 1, the buffer of 20 did not add a
-  single part of output; welding was the limit. By Little's Law, the 20
-  extra parts inside added 20 × 45 s = 15 minutes to every part's lead time.
-  At the same throughput, more WIP always means more lead time.
+  single part of output, because welding was the limit. By Little's Law, the
+  20 extra parts inside added 20 × 45 s = 15 minutes to every part's lead
+  time. At the same throughput, more WIP always means more lead time.
 - **Check a model.** If a simulation's WIP, throughput and lead time do not
   satisfy the law over a long run, something in the model or in the
   measurement is wrong.
@@ -100,13 +104,14 @@ through faster without losing output, hold fewer of them.
 
 ## Try it yourself
 
-- In line A from page 1, set the buffer to `5 parts`. WIP settles at 7,
-  throughput stays at 80 per hour, so lead time drops to 7 / 80 h, about
-  5 minutes.
-- Over a single short shift that starts empty, compare WIP with throughput
-  times the lead time of the parts that left. They differ, because parts
-  still inside at the end count in WIP but not in the lead times. Little's
-  Law is about long runs.
+- On a real shop floor you count 120 parts between the first station and
+  the last, and the output counter says 30 parts per hour. How long does a
+  part take to get through? (120 / 30 = 4 hours, without following a single
+  part.)
+- Take a single short shift that starts empty, and compare its WIP with
+  throughput × the lead time of the parts that left. Why do they differ?
+  (Parts still inside at the end count in WIP but have no lead time yet.
+  Little's Law is about long runs.)
 
 ## Further reading
 

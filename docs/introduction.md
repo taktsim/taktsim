@@ -8,10 +8,11 @@
 
 taktsim is a deterministic discrete-event simulation engine for production
 systems: lines, cells, warehouses and logistics loops. You describe a line in
-a text file, its machines, how long each step takes and how much can wait
-between them, and taktsim plays out a shift, a week or a year. It reports
-what comes out and where work piles up, every number with a confidence
-interval. People and AI agents use it through the same command line.
+a text file: its machines, how long each step takes, and how many parts can
+wait between them. taktsim then plays out a shift, a week or a year and
+reports what comes out and where work piles up, every number with a
+confidence interval. People and AI agents use it through the same command
+line.
 
 ## Start here
 
@@ -58,11 +59,11 @@ observe:
 
 </div>
 
-Arithmetic says welding sets the pace: 640 parts per shift. Played out event
-by event, the line makes about 635, because each machine sometimes runs slow
-and the other has to wait. With a shelf of one place instead of 20 it would
-make about 576. [Buffers](concepts/07-buffers.md), page 7 of the concepts,
-explains why.
+On paper, welding sets the pace at 640 parts per shift. Played out part by
+part, the line makes about 635: now and then one machine runs slow and the
+other has to wait for it. With room for one part on the shelf instead of 20,
+it would make about 576. Page 7 of the concepts,
+[Buffers](concepts/07-buffers.md), explains why.
 
 ## Where it stands
 

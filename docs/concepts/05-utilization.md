@@ -32,15 +32,15 @@ on its own: parts arrive at random, on average every *a* seconds, and
 welding needs 45 s per part. Its [utilization](glossary.md#utilization) is
 45 / *a*: arrivals every 50 s make it 90 % busy.
 
-The model needs a source that creates parts at random intervals. The spec
-lists an arrival distribution as a parameter of the Source component (spec
-§4), but does not yet show its syntax, so the model is described here in
-words rather than as a file; it depends on the v0.1 component library (M5).
+> **In taktsim.** This model needs a source that creates parts at random
+> intervals. The spec gives the Source component an arrival distribution
+> (§4) but does not show its syntax yet, so this page describes the model in
+> words. It arrives with the v0.1 component library (M5).
 
 ## The numbers
 
-Simulated wait in the queue in front of welding, with arrivals at random
-(exponential intervals, CV 1), for two process-time variabilities:
+The simulated wait in the queue in front of welding, with random arrivals
+(exponential intervals, CV 1) and two levels of process-time variability:
 
 {{#include tables/05-waiting.md}}
 
@@ -56,8 +56,8 @@ Simulated wait in the queue in front of welding, with arrivals at random
 
 From 50 % to 80 % utilization the wait grows from under one minute to three.
 From 80 % to 90 % it more than doubles, and from 90 % to 95 % it doubles
-again. The confidence intervals also widen near 95 %: a station that busy
-has long, rare queues, and even long runs see only a few of them.
+again. The confidence intervals widen too: a station that busy has rare but
+very long queues, and even a long run sees only a few of them.
 
 ## Kingman's formula
 
@@ -68,18 +68,20 @@ mean wait in queue at a single station:
 <div class="ts-panel ts-rule">
 <span class="ts-label">Kingman's formula</span>
 
-**wait in queue ≈ (cₐ² + cₛ²) / 2 × u / (1 − u) × t**
+$$W \approx \frac{c_a^2 + c_s^2}{2} \times \frac{u}{1 - u} \times t$$
 
 </div>
 
-Here cₐ is the CV of the time between arrivals, cₛ the CV of the
-process time, *u* the utilization and *t* the mean process time. It is
+Here $W$ is the mean wait in queue, $c_a$ the CV of the time between
+arrivals, $c_s$ the CV of the
+process time, $u$ the utilization and $t$ the mean process time. It is
 three factors multiplied together, which is why Hopp and Spearman call it
 the VUT equation:
 
-- **V, variability:** (cₐ² + cₛ²) / 2. No variability, no waiting. Halving
-  the process-time CV from 1 to 0.5 lowers the wait by more than a third.
-- **U, utilization:** u / (1 − u). This is the hockey stick. At 50 % it is
+- **V, variability:** $(c_a^2 + c_s^2) / 2$. No variability, no waiting.
+  Halving the process-time CV from 1 to 0.5 lowers the wait by more than a
+  third.
+- **U, utilization:** $u / (1 - u)$. This is the hockey stick. At 50 % it is
   1, at 90 % it is 9, at 95 % it is 19.
 - **T, time:** the process time itself. A slow station makes parts wait
   longer in absolute terms.
@@ -94,9 +96,9 @@ good at high utilization, which is where it matters.
 <div class="ts-panel ts-rule">
 <span class="ts-label">Rule of thumb</span>
 
-Do not plan any station close to 100 % busy. The last few percent of
-utilization cost most of the waiting, and a bottleneck, the busiest
-station, always has the longest queue in front of it.
+Do not plan any station close to 100 % busy: the last few percent of
+utilization cause most of the waiting. And since the bottleneck is the
+busiest station, it always has the longest queue in front of it.
 
 </div>
 
@@ -104,8 +106,8 @@ station, always has the longest queue in front of it.
 
 In figure 5.1, move the utilization slider from 80 % to 95 % and watch the
 simulated point climb; then lower the CV and see the whole curve flatten.
-Without JavaScript, try the table: at which utilization does welding's
-queue first exceed ten process times?
+Or use the table: at which utilization does the wait in front of welding
+first exceed ten process times?
 
 ## Further reading
 
