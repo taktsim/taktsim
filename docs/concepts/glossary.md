@@ -4,7 +4,8 @@
 
 ### Availability
 
-The share of time a station is able to work: MTBF / (MTBF + MTTR). Says
+The share of time a station is able to work:
+$\text{MTBF} / (\text{MTBF} + \text{MTTR})$. Says
 nothing about how long the outages are.
 [Page 8](08-unreliable-machines.md).
 
@@ -34,7 +35,7 @@ wait. Decouples the stations. [Page 1](01-production-systems.md),
 ### Capacity
 
 The most a station can make per unit of time when it never waits:
-1 / cycle time. [Page 2](02-bottleneck.md).
+$1 / \text{cycle time}$. [Page 2](02-bottleneck.md).
 
 ### Coefficient of variation
 
@@ -57,7 +58,7 @@ line only when a finished part leaves, so WIP never exceeds a cap.
 ### Critical WIP
 
 The WIP at which a line without variability reaches its bottleneck rate:
-bottleneck rate × raw process time. [Page 10](10-takt-pull.md).
+$\text{bottleneck rate} \times \text{raw process time}$. [Page 10](10-takt-pull.md).
 
 ### Cycle time
 
@@ -68,7 +69,7 @@ time; these pages and taktsim's model files do not.
 ### Effective cycle time
 
 A station's cycle time with its losses included, for example
-cycle time / availability. [Page 8](08-unreliable-machines.md).
+$\text{cycle time} / A$, with $A$ its availability. [Page 8](08-unreliable-machines.md).
 
 ### Inspection
 
@@ -84,7 +85,7 @@ station may only make a part when it holds a free card.
 ### Kingman's formula
 
 An approximation of the mean wait in queue at one station:
-(cₐ² + cₛ²) / 2 × u / (1 − u) × t. Exact for exponential times.
+$\frac{c_a^2 + c_s^2}{2} \times \frac{u}{1 - u} \times t$. Exact for exponential times.
 [Page 5](05-utilization.md).
 
 ### Lead time
@@ -94,7 +95,8 @@ included. [Page 1](01-production-systems.md).
 
 ### Little's Law
 
-WIP = throughput × lead time, for long-run averages of almost any system.
+$\text{WIP} = \text{throughput} \times \text{lead time}$, for long-run averages
+of almost any system.
 [Page 3](03-littles-law.md).
 
 ### MTBF
@@ -162,7 +164,7 @@ discarded. [Page 13](13-trustworthy-results.md).
 
 ### Takt time
 
-The pace demand sets: available time / demand. Every station's effective
+The pace demand sets: $\text{available time} / \text{demand}$. Every station's effective
 cycle time must stay below it. [Page 10](10-takt-pull.md).
 
 ### Terminating

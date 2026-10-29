@@ -49,8 +49,8 @@ waiting. A line that looks good on throughput can be bad on the other two.
 
 ## The running example
 
-The same line, called line A, runs through every page and grows a little
-each time. It makes steel brackets. A cutting station cuts a blank in
+One line, called line A, runs through every page and grows a little on each
+one. It makes steel brackets. A cutting station cuts a blank in
 42 seconds, a welding station welds it in 45 seconds, and a buffer with 20
 places sits between them. For now nothing is random: every cut takes exactly
 42 s, every weld exactly 45 s, and raw material never runs out.
@@ -97,8 +97,10 @@ observe:
 
 </div>
 
-`experiment` says what to simulate: one 8-hour shift (`horizon: 8h`) that
-starts empty (`terminating`). `observe` names the numbers to report.
+`components` lists the stations and the buffer, and `flow` gives the order
+in which parts pass through them. `experiment` says what to simulate: one
+8-hour shift (`horizon: 8h`) that starts empty (`terminating`). `observe`
+names the numbers to report.
 
 ## The numbers
 
@@ -106,10 +108,11 @@ One simulated shift of line A, hour by hour:
 
 {{#include tables/01-shift.md}}
 
-The first part leaves after 87 s (42 s cutting plus 45 s welding). From then
-on one part leaves every 45 s: 80 per hour, 639 in the shift. But WIP keeps
-growing. Cutting finishes a part every 42 s, welding takes one every 45 s,
-so the buffer gains a part every few minutes until it is full.
+The first part leaves after 87 s: 42 s of cutting plus 45 s of welding.
+After that, one part leaves every 45 s, which makes 80 per hour and 639 in
+the shift. Meanwhile, WIP keeps growing. Cutting finishes a part every 42 s,
+but welding takes one only every 45 s, so the buffer gains a part about
+every ten minutes until it is full.
 
 <figure class="ts-figure">
 <div class="ts-label">Figure 1.2</div>
@@ -121,9 +124,10 @@ so the buffer gains a part every few minutes until it is full.
 </figure>
 
 Once the buffer is full, cutting has to wait for space, and WIP stays at
-22: 20 in the buffer and one in each station. Throughput did not change at
-all. Lead time did: the first part needed 87 s, a part that enters a full
-line waits behind 21 others and needs 16.5 minutes.
+22: 20 parts in the buffer and one in each station. The extra parts did not
+raise throughput at all, but they did raise lead time. The first part
+needed 87 s; a part that enters the full line waits behind 21 others and
+needs 16.5 minutes.
 
 ## Rule of thumb
 
@@ -137,14 +141,14 @@ up inside, and those cost floor space, money and lead time.
 
 ## Try it yourself
 
-Change the model and predict the result before you look it up on the next
-pages:
+Change the model and predict the result before you read the answer:
 
-- Set the cutting time to `45s`. Both stations now work at the same pace,
-  so the buffer never fills: WIP stays at 2 and every part needs 90 s.
-- Set the buffer to `5 parts`. Output stays at 639; WIP stops growing at 7
-  and lead time at about 5 minutes. The extra 15 places in the original line
-  only stored parts.
+- Set the cutting time to `45s`. What happens to the buffer? (Nothing:
+  both stations now work at the same pace, so no part ever waits. WIP stays
+  at 2, and every part needs 90 s.)
+- Set the buffer to `5 parts`. Does the line make fewer parts? (No, it
+  still makes 639. WIP stops growing at 7 and lead time at about 5 minutes:
+  the other 15 places in the original line only stored parts.)
 
 ## Further reading
 

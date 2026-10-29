@@ -31,7 +31,7 @@ available time divided by the number of parts customers want in it.
 <div class="ts-panel ts-rule">
 <span class="ts-label">Takt time</span>
 
-**takt time = available time / demand**
+$$\text{takt time} = \frac{\text{available time}}{\text{demand}}$$
 
 </div>
 
@@ -40,9 +40,9 @@ If customers want 600 parts per 8-hour shift, the takt time is
 Cycle time is what a station needs; takt time is what the customer needs.
 Every station's effective cycle time must stay below the takt time, with
 some margin for variability. In line B, welding at 45 s fits. Painting with
-its failures, at an effective 48.4 s ([page 9](09-longer-lines.md)), does
-not: line B with those failures cannot meet this demand however it is run.
-This page therefore uses line B without failures.
+its failures does not: at an effective 48.4 s
+([page 9](09-longer-lines.md)), it cannot meet this demand however the line
+is run. This page therefore uses line B without failures.
 
 ## Push and pull
 
@@ -50,13 +50,13 @@ This page therefore uses line B without failures.
   here, raw parts arrive on average every 48 s, at random.
 - **Pull** releases work only when something leaves.
   [Kanban](glossary.md#kanban) does that between each pair of stations: a
-  fixed number of cards, each allowing one part, circulates in each loop.
-  [CONWIP](glossary.md#conwip) ("constant work in process") does it for the
-  whole line: a new part enters only when a finished part leaves, so the
-  WIP never exceeds a fixed cap.
+  fixed number of cards circulates in each loop, and each card allows one
+  part. [CONWIP](glossary.md#conwip) ("constant work in process") does it
+  for the whole line: a new part enters only when a finished part leaves,
+  so the WIP never exceeds a fixed cap.
 
-Both pull systems are WIP limits. The spec (§4) gives CONWIP a syntax; Kanban
-card counts are named but their syntax is not yet specified.
+Both pull systems are WIP limits. In taktsim, a CONWIP cap is one line of
+the model:
 
 <div class="ts-panel">
 <span class="ts-label">Model change · planned for v0.2</span>
@@ -68,7 +68,8 @@ control:
 
 </div>
 
-Release control is part of the v0.2 tier (spec §11).
+> **In taktsim.** Release control comes with the v0.2 tier (spec §11). The
+> spec (§4) names Kanban card counts but does not give them a syntax yet.
 
 ## The numbers
 
@@ -87,17 +88,18 @@ Line B with unlimited buffers and a CONWIP cap from 1 to 40 parts:
 </figure>
 
 With one part in the line, output is low: each part walks through five empty
-stations alone. Each extra part adds output, until about 12, where the line
+stations alone. Each extra part adds output, up to about 12, where the line
 meets the demand of 600. Beyond that, output creeps towards the
 bottleneck's 640 while lead time keeps growing, as
 [Little's Law](03-littles-law.md) says it must: lead time = WIP / throughput.
 
 The dashed and dotted curves are two reference cases from *Factory Physics*.
-The best case is a line without variability: output grows by one part per
-raw process time T₀ = 208 s (the sum of the cycle times) until it reaches
-the bottleneck rate. The two meet at the critical WIP, here 208 / 45 = 4.6
-parts. The practical worst case is a balanced line with exponential times.
-A real line lies between the two; line B lies closer to the best case.
+The best case is a line without variability. Its output rises in a straight
+line, by one part per raw process time $T_0$ = 208 s (the sum of the cycle
+times), until it reaches the bottleneck rate. The two meet at the
+[critical WIP](glossary.md#critical-wip), here 208 / 45 = 4.6 parts. The
+practical worst case is a balanced line with exponential times. A real line
+lies between the two cases; line B lies closer to the best one.
 
 Now push and pull, both meeting the demand:
 
@@ -134,7 +136,8 @@ output.
 ## Try it yourself
 
 In figure 10.1, lower the cap from 12 to 8 and watch output drop below the
-demand; raise it to 30 and watch lead time more than double for about 30 parts more.
+demand. Then raise it to 30: lead time more than doubles for about 30 more
+parts per shift.
 
 ## Further reading
 

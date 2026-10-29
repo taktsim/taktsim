@@ -5,10 +5,10 @@ from the ground up.
 
 ## Who this is for
 
-Developers who know code and some statistics, but have never worked in a
-factory. You do not need to know what a buffer, a
-bottleneck or takt time is; every term is defined where it first appears and
-collected in the glossary.
+Developers who know code and some statistics but have never worked in a
+factory. You do not need to know what a buffer, a bottleneck or takt time
+is: every term is explained where it first appears and collected in the
+glossary.
 
 ## What you will be able to do afterwards
 
@@ -28,13 +28,13 @@ A production line turns raw material into products by sending it through a
 sequence of stations, with storage in between. Its performance comes down to
 a few quantities: how much it produces per hour (throughput), how much
 unfinished work sits in it (work in progress) and how long one part takes to
-get through (lead time). A handful of laws tie these together. The slowest
-station limits the output, and the three quantities are linked by Little's
-Law. What makes real lines hard is variability: process times that vary,
-machines that fail, setups and scrap. Variability makes stations wait for
-each other, and buffers and work-in-progress limits are the tools to manage
-that. Queueing theory gives exact answers for small, simple cases;
-simulation covers the rest, and its answers need confidence intervals.
+get through (lead time). Two simple laws tie these together: the slowest
+station limits the output, and Little's Law links the three quantities. What
+makes real lines hard is variability: process times that vary, machines that
+fail, setups and scrap. Variability makes stations wait for each other;
+buffers and limits on work in progress are the tools to manage it. Queueing
+theory gives exact answers for small, simple cases. Simulation covers the
+rest, and its answers need confidence intervals.
 
 ## The learning path
 
@@ -74,8 +74,8 @@ them: it starts with two stations and grows a little on each page.
 The [glossary](glossary.md) collects every term, with the page that
 introduces it.
 
-Every number on these pages comes from a small simulation script in
-`docs/concepts/scripts/`, written for teaching and independent of taktsim,
-which cannot run models yet. The interactive figures run a port of the same
-simulator in your browser. Model snippets show taktsim's planned model
-format (spec §4); none of them runs yet.
+Every number on these pages comes from a small teaching simulator in
+`docs/concepts/scripts/`. It is separate from taktsim, which cannot run
+models yet. The interactive figures run a port of the same simulator in
+your browser. The model snippets show taktsim's planned model format
+(spec §4); none of them runs yet.

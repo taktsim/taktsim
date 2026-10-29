@@ -35,12 +35,15 @@ one after the other.
 ## The running example
 
 Welding in line A now makes several variants of the bracket, and changing
-from one variant to the next takes a 4-minute setup. Orders for single parts
-arrive on average every 60 s, at random. Welding collects parts of a variant
-until it has a batch, sets up, and welds the batch; the parts leave together.
-Every batch is a change of variant, so every batch costs one setup.
+from one variant to the next takes a 4-minute setup. As on
+[page 5](05-utilization.md), welding is studied on its own: orders for
+single parts arrive at random, on average every 60 s. To keep the example
+simple, orders come in runs of one variant. Welding collects orders until
+it has a full batch, sets up for that variant, and welds the batch, and the
+parts leave together. The next batch is always a different variant, so
+every batch costs one setup.
 
-The spec gives the setup a syntax:
+In the model, the setup is one line:
 
 <div class="ts-panel">
 <span class="ts-label">Model change · planned for v0.1</span>
@@ -54,17 +57,20 @@ The spec gives the setup a syntax:
 
 </div>
 
-The batch size and the mix of variants belong to the Source component (spec
-§4, "variant mix, batch size"), whose syntax is not yet specified; this page
-describes them in words. Variants and setups by variant come with the v0.1
-component library (M5).
+> **In taktsim.** The batch size and the mix of variants belong to the
+> Source component (spec §4), whose syntax is not specified yet, so this
+> page describes them in words. Variants and setups come with the v0.1
+> component library (M5).
 
 ## Capacity: the smallest batch that keeps up
 
-Welding needs 45 s per part plus 240 s per batch. With batches of *b* parts,
-its utilization is (45 + 240 / *b*) / 60. That has to stay below 1, so *b*
-must be larger than 240 / (60 − 45) = 16. Below that, the queue grows
-without limit.
+Welding needs 45 s per part plus 240 s per batch, and a part arrives every
+60 s. With batches of $b$ parts, its utilization is
+
+$$u = \frac{45 + 240 / b}{60}$$
+
+That has to stay below 1, so $b$ must be larger than 240 / (60 − 45) = 16.
+Below that, the queue grows without limit.
 
 ## The numbers
 
@@ -81,12 +87,13 @@ without limit.
 </figure>
 
 At 17 parts per batch, welding is busy 99 % of the time and parts need over
-an hour; the confidence interval is wide, because at that utilization the
-queue swings a lot (page 5). The lead time is shortest, about 37 minutes,
-around 20 to 22 parts. From there it rises in a straight line: each extra
-part in a batch adds half an arrival interval of waiting for the batch to
-fill and 45 s of welding the batch. The dashed line in the figure is that
-part alone, without any queueing; on the right the simulation runs along it.
+an hour. The confidence interval is wide, because at that utilization the
+queue swings a lot ([page 5](05-utilization.md)). Lead time is shortest,
+about 37 minutes, at 20 to 22 parts per batch. From there it rises in a
+straight line: each extra part in a batch adds half an arrival interval of
+waiting for the batch to fill, and 45 s of welding the batch. The dashed
+line in the figure is that waiting and welding alone, without any queue;
+on the right, the simulation runs along it.
 
 ## Rule of thumb
 
@@ -100,13 +107,14 @@ saved lowers the minimum batch, and with it the whole curve.
 </div>
 
 Shortening setups is a Lean discipline of its own, SMED ("single-minute
-exchange of die"), developed by Shigeo Shingo at Toyota.
+exchange of die"), developed by Shigeo Shingo, largely at Toyota.
 
 ## Try it yourself
 
-In figure 11.1, move the batch size from 17 to 80 and watch the U. Then
-think through the effect of a 2-minute setup: the minimum batch falls from
-16 to 8, and the lowest lead time with it.
+In figure 11.1, move the batch size from 17 to 80 and watch the lead time
+fall steeply, then rise in a straight line. Then think through a 2-minute
+setup: how large must a batch be now? (Larger than 120 / 15 = 8 parts
+instead of 16, and the shortest lead time falls with it.)
 
 ## Further reading
 

@@ -25,10 +25,10 @@ one of them stops.
 
 ## The running example
 
-Line A grows into line B: after cutting comes deburring, after welding comes
-painting, and packing at the end. Every station varies (sigma 0.5), there
-are five buffer places between each pair, and painting fails now and then:
-on average every two hours, for fifteen minutes.
+Line A grows into line B. Deburring follows cutting, painting follows
+welding, and packing comes at the end. Every station varies (sigma 0.5),
+each pair of stations has five buffer places between them, and painting
+fails now and then: on average every two hours, for fifteen minutes.
 
 <figure class="ts-figure">
 <div class="ts-label">Figure 9.1</div>
@@ -63,19 +63,20 @@ pages; `flow` lists them in order.
 <figcaption>Ninety minutes of line B in 90-second steps. From the highlighted moment, painting is down; the hatched blocking spreads upstream, welding first and cutting last, while packing runs dry.</figcaption>
 </figure>
 
-Within minutes of painting's failure, welding fills the buffer in front of
-painting and is blocked. Deburring follows, then cutting. Packing, behind
-painting, is starved the whole time. When painting is repaired, the line
-restarts from painting outwards. A single stop has idled all five stations.
+Within minutes of painting's failure, welding has filled the buffer in front
+of painting and is blocked. Deburring is blocked next, then cutting.
+Packing, after painting, is starved the whole time. When painting is
+repaired, the line restarts from painting outwards. A single stop has idled
+all five stations.
 
 ## The bottleneck moves
 
 On [page 2](02-bottleneck.md) the bottleneck was simply the station with the
-longest cycle time. Line B's longest is welding, at 45 s. Painting's is
+longest cycle time. In line B that is welding, at 45 s. Painting needs only
 43 s, but with an availability of 88.9 % its effective cycle time is
-43 / 0.889 = 48.4 s. The table shows, for each station, the share of time it
-is neither starved nor blocked, that is, working or down. The busiest station
-is the bottleneck:
+43 / 0.889 = 48.4 s. The table shows how busy each station is: the share of
+time it is neither starved nor blocked, so either working or down. The
+busiest station is the bottleneck:
 
 {{#include tables/09-bottleneck.md}}
 
@@ -87,13 +88,14 @@ welding now would gain almost nothing.
 
 {{#include tables/09-options.md}}
 
-Doubling every buffer, 20 more places, gains 17 parts per shift and adds
-9 minutes to every part's lead time. Four times the buffer gains 29 parts and
-triples the lead time. Moving the 20 places around painting sounds right,
-but the other stations vary too and now starve and block each other: the
-line loses another 34 parts. Halving painting's repair time, with the
-buffers as they are, gains 33 parts and even shortens the lead time.
-Spreading the same downtime over shorter outages helps too, as on page 8.
+Doubling every buffer, 20 more places in all, gains 17 parts per shift and
+adds 9 minutes to every part's lead time. Four times the buffer gains 29
+parts and triples the lead time. Moving all 20 places next to painting
+sounds right, but the other stations vary too, and with one place between
+them they starve and block each other: the line loses another 34 parts.
+Halving painting's repair time, with the buffers as they are, gains 33
+parts and even shortens the lead time. Spreading the same downtime over
+shorter outages helps too, as on page 8.
 
 ## Rule of thumb
 
@@ -106,9 +108,9 @@ output at a high price in lead time.
 
 </div>
 
-For two stations, buffer effects can be computed exactly. For five stations
-with failures there is no closed formula; this is where simulation earns its
-keep.
+For two stations, the effect of a buffer can be computed exactly. For five
+stations with failures there is no closed formula, and this is where
+simulation earns its keep.
 
 ## Try it yourself
 
@@ -120,9 +122,9 @@ keep.
 
 ## Further reading
 
-- Gershwin, *Manufacturing Systems Engineering*, chapters 4 and 5, on long
-  lines and their approximate analysis by decomposition.
-- Hopp and Spearman, *Factory Physics*, chapter 9, on flow lines.
+- Gershwin, *Manufacturing Systems Engineering*, chapter 4, "Decomposition
+  of Long Transfer Lines": their approximate analysis.
+- Hopp and Spearman, *Factory Physics*, section 8.7, "Effects of Blocking".
 
 **Next:** [10. Takt time and pull](10-takt-pull.md): how much should the line
 make, and how much should it hold?

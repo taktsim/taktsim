@@ -16,13 +16,13 @@
 
 ## Intuition
 
-Your commute takes 30 minutes on average. Some days it is 25, some days 60.
-If you plan with 30 you are late about half the time, and the 60-minute days
+Your commute takes 30 minutes on average. Most days it is 25, some days 60.
+If you leave 30 minutes, you are late now and then, and the 60-minute days
 are the ones people remember. The average was never the whole story; the
 spread around it decides how much slack you need.
 
-A station's cycle time works the same way. Pages 1 to 3 assumed every cut
-takes exactly 42 s. On a real line, one cut takes 35 s and the next 70,
+A station's cycle time works the same way. Pages 1 and 2 assumed that every
+cut takes exactly 42 s. On a real line, one cut takes 35 s and the next 70,
 because an operator loads the part by hand, the material varies, or a tool
 needs adjusting.
 
@@ -51,11 +51,11 @@ hour-long one. Dividing by the mean fixes that. The result is the
 <div class="ts-panel ts-rule">
 <span class="ts-label">Coefficient of variation</span>
 
-**CV = standard deviation / mean**
+$$\text{CV} = \frac{\text{standard deviation}}{\text{mean}}$$
 
 </div>
 
-A CV of 0 means no variability. Hopp and Spearman call a CV below 0.75 low,
+A CV of 0 means no variability. *Factory Physics* calls a CV below 0.75 low,
 0.75 to 1.33 moderate, and above 1.33 high. An exponential distribution, the
 textbook model of "completely random", has a CV of exactly 1.
 
@@ -65,22 +65,22 @@ textbook model of "completely random", has a CV of exactly 1.
 <div class="ts-plot">
 {{#include img/04-histograms.svg}}
 </div>
-<figcaption>4,000 cutting times with a mean of 42 s each; the highlighted line is welding's 45 s, which about a third of the widely spread cuts exceed.</figcaption>
+<figcaption>4,000 cutting times per distribution, all with a mean of 42 s. The highlighted line marks welding's 45 s; about a third of the widely spread cuts take longer than that.</figcaption>
 </figure>
 
 {{#include tables/04-cv.md}}
 
 The cutting times here follow a lognormal distribution, a common choice for
 process times: always positive, with a long tail of slow cases. Its shape
-parameter sigma sets the spread; for small values the CV is about equal to
-sigma, and in general CV = √(e^(sigma²) − 1).
+parameter sigma ($\sigma$) sets the spread. For small values the CV is about
+equal to sigma; in general, $\text{CV} = \sqrt{e^{\sigma^2} - 1}$.
 
 ## The running example
 
-From now on, both stations of line A have variable cycle times: lognormal,
-with the same means as before and sigma 0.5 (CV 0.53), as for manual
-loading. In taktsim's model format a random time is a named distribution
-with explicit parameters:
+From now on, both stations of line A have variable cycle times. Both are
+lognormal, with the same means as before and sigma 0.5 (CV 0.53), typical
+of manual loading. In taktsim's model format, a random time is a named
+distribution with explicit parameters:
 
 <div class="ts-panel">
 <span class="ts-label">Model change · planned for v0.1</span>
@@ -100,11 +100,12 @@ components:
 
 </div>
 
-With sigma 0.08, 18 % of the cuts in the table are slower than welding's
-45 s, yet as [page 7](07-buffers.md) shows, a line with such cuts and a
-fixed welding time loses almost nothing. Whether
-variability costs output depends on where it is and what protects against
-it. The next three pages work that out.
+Variability alone does not tell you how much output a line loses. Take the
+narrow distribution in the table, sigma 0.08: 18 % of those cuts are slower
+than welding's 45 s, yet [page 7](07-buffers.md) shows that a line with
+such cuts and a fixed welding time loses almost nothing. What matters is
+where the variability sits and what protects the line against it. The next
+three pages work that out.
 
 ## Rule of thumb
 
@@ -121,8 +122,9 @@ decides the bottleneck; the CV decides how much waiting the line will see.
 - Take 20 measured cycle times of any repeated task, your own included:
   divide the standard deviation by the mean. Most manual tasks land between
   0.2 and 0.6.
-- In the model, replace `sigma: 0.5` with `{ dist: exponential, mean: 42s }`.
-  The CV goes from 0.53 to 1; the next pages show what that does.
+- In the model, set cutting's `cycle_time` to
+  `{ dist: exponential, mean: 42s }`. The CV goes from 0.53 to 1; the next
+  pages show what that does.
 
 ## Further reading
 
