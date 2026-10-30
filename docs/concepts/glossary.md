@@ -153,7 +153,8 @@ standard deviation of the times. [Page 4](04-variability.md).
 
 ### Median
 
-The middle value when the values are sorted. [Page 13](13-trustworthy-results.md).
+The middle value when the values are sorted. With an even number of
+values there are two middle ones; usually their average is taken. [Page 13](13-trustworthy-results.md).
 
 ### Method of moments
 
@@ -233,7 +234,8 @@ Where parts enter the line. [Page 1](01-production-systems.md).
 ### Standard deviation
 
 Roughly the typical distance of a single value from the mean; precisely,
-the square root of the average squared distance.
+the square root of the average squared distance (for a sample, dividing by
+one less than the number of values, as STDEV does).
 [Page 4](04-variability.md).
 
 ### Starved

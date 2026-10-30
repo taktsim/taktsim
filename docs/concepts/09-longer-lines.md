@@ -109,8 +109,8 @@ Keeping the availability and spreading the same downtime over shorter
 outages gains about 8 parts. The ranges 553.5 ± 12.8 and 561.8 ± 6.8
 overlap, but compared run by run on the same seeds
 ([page 13](13-trustworthy-results.md#comparing-two-designs)), the gain is
-just clear of chance: real, but small, and uncertain in size, as on
-[page 8](08-unreliable-machines.md) shorter outages help.
+just clear of chance: real, but small, and uncertain in size. As on
+[page 8](08-unreliable-machines.md), shorter outages help.
 
 ## Rule of thumb
 

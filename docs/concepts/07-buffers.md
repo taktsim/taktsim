@@ -69,7 +69,8 @@ about 4 minutes to get through the line, with 20 places about 12, and with
 30 about 15: almost four times the lead time for 2 % more output. These are
 averages over one shift that starts empty, while the buffer is still
 filling. A line that keeps running fills its buffer, because cutting is
-faster on average, and its lead time climbs well above these figures.
+faster on average. With a large buffer, its lead time then climbs well
+above these figures.
 
 ## The README's example
 

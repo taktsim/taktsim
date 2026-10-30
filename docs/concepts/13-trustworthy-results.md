@@ -123,8 +123,9 @@ the precision was met (spec §5).
 Pages 7 to 12 compare designs, such as two buffer sizes. Is a difference
 real, or chance? Every design on these pages runs with the same seeds,
 1 to n. Both designs then see the same slow cuts and the same failures, so
-their results move up and down together. Their difference varies far less
-than either result. This is called common random numbers.
+their results move up and down together. Their difference then often
+varies much less than either result, though not always: it depends on how
+alike the two designs are. This is called common random numbers.
 
 It is not rigging. Each design still meets the same kind of variability,
 just the same instances of it, as two machines tested on the same batch of
@@ -166,8 +167,8 @@ MSER-5, taktsim's default warm-up detector (spec §6), first averages the
 data in batches of 5 observations, here five 10-minute averages, so 50
 minutes. Then it looks for the cut-off point after which the remaining
 batches vary least around their mean. Here it ends the warm-up after 1.7
-hours in the median run (the middle one of the 20 runs, sorted by
-warm-up), before the curve has settled, and in one run only after 13
+hours in the median run (the middle of the 20 runs, sorted by warm-up;
+with an even number, the 11th), before the curve has settled, and in one run only after 13
 hours. That is a known weakness: ADR-0014 measured that MSER-5 often
 misses on output that changes slowly from one moment to the next, such as
 WIP. Look at the curve yourself, and when in doubt, discard more.
