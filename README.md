@@ -29,8 +29,10 @@ on average, welding 45 s, and both vary from part to part. Arithmetic says
 welding sets the pace: 80 parts an hour, 640 per shift. In practice each
 machine sometimes runs slow and the other has to wait. taktsim plays the
 shift event by event, many times over, and reports the throughput you
-would really get, with an error bar: about 635 parts with a shelf of 20,
-about 576 with a shelf of one. The
+would really get, with an error bar. With a shelf of one, the waiting costs
+a lot: about 576 parts. With a shelf of 20, the line makes about 635; most
+of the last few parts are lost at the start of the shift, while the shelf
+is still filling. The
 [concepts guide](https://taktsim.github.io/taktsim/concepts/07-buffers.html)
 explains why.
 
