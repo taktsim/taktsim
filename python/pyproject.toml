@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "taktsim"
-description = "Simulation as code for production systems"
+description = "Simulate a factory from a text file, before you change the real one"
 readme = "../README.md"
 license = "MIT OR Apache-2.0"
 requires-python = ">=3.13"

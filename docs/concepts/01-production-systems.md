@@ -1,4 +1,4 @@
-# 1. What a production system is
+# 1. What a production line is
 
 <p class="ts-lede">A production line is a chain of stations with storage in between. Four numbers tell you how well it works.</p>
 
