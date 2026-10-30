@@ -110,9 +110,10 @@ numbers need a few words of explanation, and every later table uses them.
   different. If they overlap, the gap may be chance; page 13 shows a
   sharper test for that case.
 - **Which runs.** Some pages simulate one shift that starts empty, as a real
-  shift would. Others, like this one, simulate days or several shifts in a
-  row and drop the start, the [warm-up](glossary.md#warm-up), to measure the
-  long run. The two can differ a little for the same line; each table says
+  shift would. Others, like this one, simulate days and drop the start, the
+  [warm-up](glossary.md#warm-up), to measure the long run. A few simulate
+  five shifts in a row from empty, so the empty start weighs on one shift in
+  five. The three can differ a little for the same line; each table says
   which it uses.
 
 [Page 13](13-trustworthy-results.md) goes deeper: how the interval is

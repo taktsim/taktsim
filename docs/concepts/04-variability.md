@@ -46,8 +46,9 @@ needs adjusting.
 
 The [standard deviation](glossary.md#standard-deviation) is roughly the
 typical distance of a single time from the mean. (Precisely, it is the
-square root of the average squared distance; spreadsheets compute it with
-STDEV.) It says how far times spread, but it depends on the scale: a spread of 5 s is a lot for a 10-second step and nothing for an
+square root of the average squared distance. For a sample, the sum of the
+squared distances is divided by one less than the number of times, as the
+spreadsheet function STDEV does.) It says how far times spread, but it depends on the scale: a spread of 5 s is a lot for a 10-second step and nothing for an
 hour-long one. Dividing by the mean fixes that. The result is the
 [coefficient of variation](glossary.md#coefficient-of-variation):
 

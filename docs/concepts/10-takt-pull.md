@@ -46,8 +46,9 @@ is run. This page therefore uses line B without failures.
 
 ## Push and pull
 
-Apart from [page 5](05-utilization.md), the lines so far never ran out of
-raw parts: cutting could always start a new one. That is neither push nor
+Apart from the examples with random arrivals on
+[pages 3](03-littles-law.md) and [5](05-utilization.md), the lines so far
+never ran out of raw parts: cutting could always start a new one. That is neither push nor
 pull.
 
 - **Push** releases work by a plan, whatever is inside. Here the plan is one
@@ -133,8 +134,9 @@ Now push and pull, both meeting the demand:
 
 {{#include tables/10-push-pull.md}}
 
-Same output: push cannot make more than it releases, and the cap was chosen
-to meet the demand. But pull needs half the WIP and half the lead time.
+Same output: push makes what it releases, and the cap was chosen to meet
+the demand. (Push's 604.9 ± 5.1 is not more than the plan of 600 per shift:
+random arrivals vary around the plan, and the range includes 600.) But pull needs half the WIP and half the lead time.
 Push lets WIP drift up whenever arrivals bunch; the CONWIP cap holds it.
 
 The cap of 12 is a ceiling, not the actual WIP. A place freed at the end of

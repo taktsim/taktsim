@@ -79,9 +79,13 @@ with the share the distribution predicts; the distance is the largest gap.
 0 is a perfect fit. Such a number is called a goodness-of-fit measure.
 
 Even the true distribution does not reach 0 on a sample, so how large is
-too large? With 300 measurements, chance alone rarely produces a distance
-above about $1.36 / \sqrt{300} \approx 0.08$. The lognormal, at 0.05,
-passes; the exponential, at 0.23, and the constant, at 0.63, do not.
+too large? For a distribution chosen in advance, with 300 measurements,
+chance alone rarely produces a distance above about
+$1.36 / \sqrt{300} \approx 0.08$. But here the mean and CV were fitted to
+the same 300 times, which pulls the distribution towards them, so the
+honest threshold is lower, roughly 0.05. The exponential, at 0.23, and the
+constant, at 0.63, clearly fail. The lognormal, at 0.05, is borderline by
+this number alone, which is one more reason for the next step.
 
 ## Validating the model
 
