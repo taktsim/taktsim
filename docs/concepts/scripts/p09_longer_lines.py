@@ -25,9 +25,13 @@ def busy(rs: list, k: int) -> float:
 
 
 def build() -> None:
+    a = PAINT_FAILS[0] / (PAINT_FAILS[0] + PAINT_FAILS[1])
     nodes = [Node("source")]
     for i, (name, mean) in enumerate(zip(NAMES, MEANS, strict=True)):
-        nodes.append(Node("station", name, f"{mean:g} s", highlight=name == "paint", fails=name == "paint"))
+        # Paint shows why it is the bottleneck: its failures make it slower
+        # on average than welding.
+        sub = f"{mean:g} s\n{a:.1%} available\n= {mean / a:.1f} s" if name == "paint" else f"{mean:g} s"
+        nodes.append(Node("station", name, sub, highlight=name == "paint", fails=name == "paint"))
         if i < len(NAMES) - 1:
             nodes.append(Node("buffer", capacity=5, name="5"))
     nodes.append(Node("sink"))
@@ -36,7 +40,7 @@ def build() -> None:
         line_diagram(
             "f09a",
             "Line B: five stations",
-            "Line B: cut 42 s, deburr 40 s, weld 45 s, paint 43 s with failures, pack 38 s, all variable, with five buffer places between each pair.",
+            f"Line B: cut 42 s, deburr 40 s, weld 45 s, paint 43 s with failures (available {a:.1%} of the time, so {MEANS[3] / a:.1f} s per part on average), pack 38 s, all variable, with five buffer places between each pair.",
             nodes,
         ),
     )

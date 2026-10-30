@@ -148,6 +148,16 @@
     const height = top + o.rows.length * rowH + (o.levels || []).length * (lvlH + 16) + 40;
     const svg = new Svg(height, o.title);
     const slice = (o.t1 - o.t0) / cells;
+    if (o.mark) {
+      // Drawn first, so the cells cover it and the marked step stays visible.
+      const i = Math.min(cells - 1, Math.floor((o.mark.t - o.t0) / slice));
+      const x = left + i * pitch;
+      const bottom = top + o.rows.length * rowH + (o.levels || []).length * (lvlH + 16);
+      svg.rect(x, top - 10, cell, 6, "ts-acid");
+      svg.line(x + cell / 2, top - 4, x + cell / 2, bottom, "ts-acid-line");
+      if (x < W * 0.6) svg.text(x + cell + 6, top - 4, o.mark.label, "start", "ts-strong");
+      else svg.text(x - 6, top - 4, o.mark.label, "end", "ts-strong");
+    }
     let lx = left;
     for (const st of S.STATES) {
       if (o.rows.some((r) => r[1].some((e) => e[1] === st))) {
@@ -175,14 +185,6 @@
         if (h > 0.5) svg.rect(left + i * pitch, base - h, cell, h, "ts-muted-fill");
       }
       y += lvlH;
-    }
-    if (o.mark) {
-      const i = Math.min(cells - 1, Math.floor((o.mark.t - o.t0) / slice));
-      const x = left + i * pitch;
-      svg.rect(x, top - 10, cell, 6, "ts-acid");
-      svg.line(x + cell / 2, top - 4, x + cell / 2, y, "ts-acid-line");
-      if (x < W * 0.6) svg.text(x + cell + 6, top - 4, o.mark.label, "start", "ts-strong");
-      else svg.text(x - 6, top - 4, o.mark.label, "end", "ts-strong");
     }
     const ty = y + 4;
     for (const f of [0, 0.25, 0.5, 0.75, 1]) {

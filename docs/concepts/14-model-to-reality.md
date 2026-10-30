@@ -64,7 +64,7 @@ Three candidates:
 <div class="ts-plot">
 {{#include img/14-fit.svg}}
 </div>
-<figcaption>Histogram of the 300 measured welding times with the fitted lognormal (dashed) and exponential (dotted) curves; the highlighted line is the mean.</figcaption>
+<figcaption>Histogram of the 300 measured welding times with the fitted lognormal (dashed) and exponential (dotted) curves. Both curves have the data's mean (the highlighted line), so the mean cannot tell them apart; the shape can. The exponential expects the most welds near 0 s, where there are almost none.</figcaption>
 </figure>
 
 One number for how well a distribution fits is the Kolmogorov–Smirnov

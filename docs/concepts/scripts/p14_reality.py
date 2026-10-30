@@ -85,7 +85,7 @@ def build() -> None:
             bins,
             "welding time (s)",
             curves=[("lognormal fit", counts(ln_cdf), "ref"), ("exponential fit", counts(exp_cdf), "ref2")],
-            mean=(m, f"mean {m:.1f} s"),
+            mean=(m, f"mean of the data and of both fits: {m:.1f} s"),
         ),
     )
 

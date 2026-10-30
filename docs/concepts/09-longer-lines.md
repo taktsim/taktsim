@@ -36,7 +36,7 @@ fails now and then: on average every two hours, for fifteen minutes.
 <div class="ts-plot">
 {{#include img/09-line.svg}}
 </div>
-<figcaption>Cycle times under each station; the numbers above the buffers are their places. Painting, marked for its failures, is highlighted because it turns out to be the bottleneck.</figcaption>
+<figcaption>Cycle times under each station; the numbers above the buffers are their places. Painting, marked for its failures, is highlighted because it is the bottleneck: it is up only 88.9 % of the time, so on average it needs 48.4 s per part, more than welding's 45 s.</figcaption>
 </figure>
 
 <div class="ts-panel">

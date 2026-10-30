@@ -43,5 +43,5 @@
 <text x="520" y="234" text-anchor="middle">150</text>
 <text x="328" y="254" text-anchor="middle">WELDING TIME (S)</text>
 <line x1="184.8" y1="28" x2="184.8" y2="216" class="ts-acid-line"/>
-<text x="192.8" y="38" text-anchor="start" class="ts-strong">mean 45.2 s</text>
+<text x="192.8" y="38" text-anchor="start" class="ts-strong">mean of the data and of both fits: 45.2 s</text>
 </svg>

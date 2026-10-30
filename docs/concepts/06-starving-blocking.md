@@ -65,7 +65,9 @@ starved, blocked and so on.
 A state timeline has one row per station and shows what the station did
 over time. Here each step is 30 seconds, drawn in the state the station
 spent most of it in: solid when working, an empty outline when starved,
-hatched when blocked. Below the rows is the buffer's fill level.
+hatched when blocked. Below the rows is the buffer's fill level, averaged
+over each step: a bar at half height means the buffer held a part for half
+of those 30 seconds.
 
 <figure class="ts-figure ts-widget" data-widget="timeline" data-config='{"sigma": 0.5, "buffer": 1, "seed": 2}'>
 <div class="ts-label">Figure 6.2 · interactive · teaching simulator, not the taktsim engine</div>
@@ -74,7 +76,7 @@ hatched when blocked. Below the rows is the buffer's fill level.
 {{#include img/06-timeline.svg}}
 </div>
 <div class="ts-live"></div>
-<figcaption>The first 30 minutes of a shift. The highlighted step is a moment when a long cut has emptied the buffer and welding is starved; the hatched steps in the cutting row are times when welding was slow and the full buffer blocked cutting.</figcaption>
+<figcaption>The first 30 minutes of a shift. At the highlighted step, welding has taken the last part from the buffer and finished it, while a long cut has not yet delivered the next one: welding is starved. The hatched steps in the cutting row are times when welding was slow and the full buffer blocked cutting.</figcaption>
 </figure>
 
 ## The numbers

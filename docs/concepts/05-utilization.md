@@ -51,7 +51,7 @@ The simulated wait in the queue in front of welding, with random arrivals
 {{#include img/05-hockey.svg}}
 </div>
 <div class="ts-live"></div>
-<figcaption>Mean wait in queue against utilization. Dashed: Kingman's formula, for process-time CV 1 (upper) and 0.5 (lower) or, interactively, for the CV you choose. Squares: simulated means with their 95 % confidence intervals.</figcaption>
+<figcaption>Mean wait in queue against utilization, for a 45 s process time. Dashed: Kingman's formula, for process-time CV 1 and 0.5 (labelled on the curves) or, interactively, for the CV you choose. Squares: simulated means with their 95 % confidence intervals. The highlighted point: at 90 % busy and CV 1, a part waits nine times its process time.</figcaption>
 </figure>
 
 From 50 % to 80 % utilization the wait grows from under one minute to three.
