@@ -39,7 +39,3 @@ additional-js = ["mermaid.min.js", "mermaid-init.js", "components/sim.js", "comp
 no-section-label = true
 # Keep file names as written: fonts/fonts.css refers to the font files by name.
 hash-files = false
-
-# Pages that moved: the old address forwards to the new one.
-[output.html.redirect]
-"/concepts/01-production-systems.html" = "01-production-line.html"
