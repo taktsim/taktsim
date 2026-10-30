@@ -13,7 +13,7 @@
 
 </div>
 
-**Builds on:** [1. What a production line is](01-production-systems.md)
+**Builds on:** [1. What a production line is](01-production-line.md)
 (the four numbers), [2. Capacity and the bottleneck](02-bottleneck.md)
 
 ## Intuition
@@ -41,7 +41,7 @@ All three are long-run averages.
 
 The units have to match: with throughput in parts per hour, lead time comes
 out in hours. In the last four hours of line A's shift on
-[page 1](01-production-systems.md), the line held 22 parts and 80 parts per
+[page 1](01-production-line.md), the line held 22 parts and 80 parts per
 hour came out, hour after hour. Those steady hours behave like a long run,
 so a part needs 22 / 80 h = 16.5 minutes to get through. Nobody had to follow a part with a
 stopwatch.

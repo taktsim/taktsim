@@ -11,7 +11,7 @@
 
 </div>
 
-**Builds on:** [1. What a production line is](01-production-systems.md)
+**Builds on:** [1. What a production line is](01-production-line.md)
 
 ## Intuition
 
@@ -39,7 +39,7 @@ all 60 minutes: 100 %.
 
 ## The running example
 
-Line A from [page 1](01-production-systems.md), still without randomness:
+Line A from [page 1](01-production-line.md), still without randomness:
 
 <figure class="ts-figure">
 <div class="ts-label">Figure 2.1</div>

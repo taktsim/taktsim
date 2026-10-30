@@ -42,7 +42,7 @@ rest, and its answers need confidence intervals.
 Each page builds on the ones before it. One example line runs through all of
 them: it starts with two stations and grows a little on each page.
 
-1. **[What a production line is](01-production-systems.md):** stations, buffers and flow, and the
+1. **[What a production line is](01-production-line.md):** stations, buffers and flow, and the
    four numbers that describe a line: throughput, work in progress, cycle
    time and lead time.
 2. **[Capacity and the bottleneck](02-bottleneck.md):** why, in a line without randomness, the

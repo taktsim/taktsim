@@ -29,7 +29,7 @@ counted; it limits the output of the whole line. Found by how little it waits, n
 ### Buffer
 
 Storage between two stations with a limited number of places, where parts
-wait. Decouples the stations. [Page 1](01-production-systems.md),
+wait. Decouples the stations. [Page 1](01-production-line.md),
 [page 7](07-buffers.md).
 
 ### Calibration
@@ -79,7 +79,7 @@ where the raw process time is the sum of all stations' cycle times. [Page 10](10
 
 The time a station needs per part. Some textbooks use the word for lead
 time; these pages and taktsim's model files do not.
-[Page 1](01-production-systems.md).
+[Page 1](01-production-line.md).
 
 ### Distribution
 
@@ -137,7 +137,7 @@ predicts. 0 is a perfect fit. [Page 14](14-model-to-reality.md).
 ### Lead time
 
 The time a part spends in the line, from entering to leaving, waiting
-included. [Page 1](01-production-systems.md).
+included. [Page 1](01-production-line.md).
 
 ### Little's Law
 
@@ -225,11 +225,11 @@ which it makes nothing. [Page 11](11-batching-setups.md).
 
 ### Sink
 
-Where finished parts leave the line. [Page 1](01-production-systems.md).
+Where finished parts leave the line. [Page 1](01-production-line.md).
 
 ### Source
 
-Where parts enter the line. [Page 1](01-production-systems.md).
+Where parts enter the line. [Page 1](01-production-line.md).
 
 ### Standard deviation
 
@@ -246,7 +246,7 @@ buffer or station before it is empty. [Page 6](06-starving-blocking.md).
 ### Station
 
 A place where work is done to one part (or one batch) at a time: a machine,
-a workstation, an operator. [Page 1](01-production-systems.md).
+a workstation, an operator. [Page 1](01-production-line.md).
 
 ### Steady-state
 
@@ -266,7 +266,7 @@ defined state. [Page 13](13-trustworthy-results.md).
 ### Throughput
 
 The number of parts that leave the line per unit of time.
-[Page 1](01-production-systems.md).
+[Page 1](01-production-line.md).
 
 ### Utilization
 
@@ -292,7 +292,7 @@ left out of the statistics. [Page 3](03-littles-law.md#reading-simulated-numbers
 ### Work in progress
 
 The parts inside the line, started but not finished (WIP).
-[Page 1](01-production-systems.md).
+[Page 1](01-production-line.md).
 
 ### Yield
 
