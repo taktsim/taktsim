@@ -74,6 +74,10 @@ Below that, the queue grows without limit.
 
 ## The numbers
 
+Each run covers 20 days and drops the first two as warm-up;
+[page 3](03-littles-law.md#reading-simulated-numbers) explains the warm-up
+and the ±.
+
 {{#include tables/11-batching.md}}
 
 <figure class="ts-figure ts-widget" data-widget="batching" data-config='{"batch": 22}'>
@@ -89,11 +93,22 @@ Below that, the queue grows without limit.
 At 17 parts per batch, welding is busy 99 % of the time and parts need over
 an hour. The confidence interval is wide, because at that utilization the
 queue swings a lot ([page 5](05-utilization.md)). Lead time is shortest,
-about 37 minutes, at 20 to 22 parts per batch. From there it rises in a
-straight line: each extra part in a batch adds half an arrival interval of
-waiting for the batch to fill, and 45 s of welding the batch. The dashed
-line in the figure is that waiting and welding alone, without any queue;
-on the right, the simulation runs along it.
+about 37 minutes, at 20 to 22 parts per batch.
+
+A part's lead time has four pieces:
+
+- waiting for its batch to fill, on average $(b - 1)/2$ arrival intervals;
+- queueing while welding finishes earlier batches;
+- the 4-minute setup;
+- welding the whole batch, $b \times 45$ s.
+
+The table's last column, and the dashed line in the figure, add up all
+but the queueing. At 17 parts per batch that is 8 × 60 s + 240 s +
+17 × 45 s, about 25 minutes, so about 40 of the 65 minutes are queueing.
+With larger batches the queueing almost vanishes, and the simulation runs
+along the dashed line. There lead time rises in a straight line: each extra
+part in a batch adds half an arrival interval of waiting for the batch to
+fill, and 45 s of welding the batch.
 
 ## Rule of thumb
 

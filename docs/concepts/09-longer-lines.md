@@ -75,14 +75,23 @@ On [page 2](02-bottleneck.md) the bottleneck was simply the station with the
 longest cycle time. In line B that is welding, at 45 s. Painting needs only
 43 s, but with an availability of 88.9 % its effective cycle time is
 43 / 0.889 = 48.4 s. The table shows how busy each station is: the share of
-time it is neither starved nor blocked, so either working or down. The
-busiest station is the bottleneck:
+time it is neither starved nor blocked, so either working or down. Unlike
+utilization on [page 2](02-bottleneck.md), which counts only working time,
+this share counts downtime as busy: a broken station is not waiting for its
+neighbours, it makes them wait. The busiest station is the bottleneck:
 
 {{#include tables/09-bottleneck.md}}
 
 Without failures, welding is the busiest. With painting's failures,
 painting is, and the line loses another 64 parts per shift. Improving
 welding now would gain almost nothing.
+
+Page 2's rule, shift time divided by the bottleneck's cycle time, turns
+these effective cycle times into limits. Without failures, welding allows
+28,800 s / 45 s = 640 parts per shift. With them, painting allows about
+28,800 / 48.4 ≈ 595. The line makes 617 and 554: starving and
+blocking between variable stations ([pages 6](06-starving-blocking.md) and
+[7](07-buffers.md)) take the rest of the gap.
 
 ## Where to spend the effort
 
@@ -94,8 +103,14 @@ parts and triples the lead time. Moving all 20 places next to painting
 sounds right, but the other stations vary too, and with one place between
 them they starve and block each other: the line loses another 34 parts.
 Halving painting's repair time, with the buffers as they are, gains 33
-parts and even shortens the lead time. Spreading the same downtime over
-shorter outages helps too, as on page 8.
+parts and even shortens the lead time. Most of that gain is less downtime:
+shorter repairs also raise painting's availability from 88.9 % to 94.1 %.
+Keeping the availability and spreading the same downtime over shorter
+outages gains about 8 parts. The ranges 553.5 ± 12.8 and 561.8 ± 6.8
+overlap, but compared run by run on the same seeds
+([page 13](13-trustworthy-results.md#comparing-two-designs)), the gain is
+just clear of chance: real, but small, and uncertain in size, as on
+[page 8](08-unreliable-machines.md) shorter outages help.
 
 ## Rule of thumb
 

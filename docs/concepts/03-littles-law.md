@@ -9,6 +9,7 @@
 - Why it holds for almost any line, random or not.
 - How to use it: to estimate lead time by counting parts, and to see why
   extra WIP only costs time.
+- How to read the numbers from random runs, with their ±.
 
 </div>
 
@@ -39,12 +40,13 @@ All three are long-run averages.
 </div>
 
 The units have to match: with throughput in parts per hour, lead time comes
-out in hours. Line A on [page 1](01-production-systems.md) ended the shift
-with 22 parts inside and 80 parts per hour coming out, so a part needs
-22 / 80 h = 16.5 minutes to get through. Nobody had to follow a part with a
+out in hours. In the last four hours of line A's shift on
+[page 1](01-production-systems.md), the line held 22 parts and 80 parts per
+hour came out, hour after hour. Those steady hours behave like a long run,
+so a part needs 22 / 80 h = 16.5 minutes to get through. Nobody had to follow a part with a
 stopwatch.
 
-The law asks for almost nothing. Times can follow any distribution, parts
+The law asks for almost nothing. Times can vary in any way, parts
 can be served in any order, and the line can have any number of stations
 and buffers. Only two things are needed: no parts are created or lost
 inside, and the averages cover a period long enough that its start and end
@@ -69,15 +71,52 @@ Law is about its average.
 
 ## The numbers
 
-Three different systems, each simulated for five days. The first day is
-discarded, and WIP, throughput and lead time are measured separately:
+Three different systems, each simulated for five days of nonstop running,
+ten times over. The first day is discarded: a line that starts empty is not
+yet typical, which is the "start" the law's condition warns about. WIP,
+throughput and lead time are measured separately:
 
 {{#include tables/03-little.md}}
 
-In every row, throughput × lead time matches the measured WIP within the
-simulation's noise. The first system has no randomness at all, the second
-has variable stations and a small buffer, and the third has random arrivals
-in front of a single station. The law holds for all three.
+In every row, throughput × lead time matches the measured WIP to within a
+fraction of a percent. The first system has no randomness at all. The
+second has stations whose times vary from part to part, and a small buffer;
+[page 4](04-variability.md) explains the CV in its name. The third is
+welding alone, fed from outside at random moments, on average one part
+every 54 s. That is about 67 parts per hour, fewer than welding's 80, so
+here the arrivals set the throughput, not welding. The law holds for all
+three.
+
+## Reading simulated numbers
+
+This table is the first on these pages with results from random runs. Such
+numbers need a few words of explanation, and every later table uses them.
+
+- **A run** is one simulation of the model over a stated time, here five
+  days.
+- **Replications.** When times vary, each run draws different times and
+  gives a slightly different answer. So a random model is run several
+  times, here ten. Each run starts its random numbers from a different
+  [seed](glossary.md#seed), a starting number: the same seed gives exactly
+  the same run again.
+- **The ±.** A table shows the average over the runs, then ± and a second
+  number. Together they give the 95 %
+  [confidence interval](glossary.md#confidence-interval): how precisely the
+  runs pin down the long-run average, the value endless runs would give. It
+  is not the spread of single runs; one shift can land well outside it. More
+  runs make it narrower. A line without randomness gives the same answer in
+  every run, hence ± 0.00.
+- **Comparing.** Two results whose ranges do not overlap are clearly
+  different. If they overlap, the gap may be chance; page 13 shows a
+  sharper test for that case.
+- **Which runs.** Some pages simulate one shift that starts empty, as a real
+  shift would. Others, like this one, simulate days or several shifts in a
+  row and drop the start, the [warm-up](glossary.md#warm-up), to measure the
+  long run. The two can differ a little for the same line; each table says
+  which it uses.
+
+[Page 13](13-trustworthy-results.md) goes deeper: how the interval is
+computed, how many runs are enough, and how long a warm-up is.
 
 ## Using it
 

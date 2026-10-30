@@ -7,7 +7,7 @@
 
 - Why waiting grows slowly at first and then very fast as utilization rises.
 - Kingman's formula, which says how long parts wait in front of a station.
-- Why a busy bottleneck always has a queue in front of it.
+- Why a busy bottleneck tends to have a queue in front of it.
 
 </div>
 
@@ -27,10 +27,18 @@ an hour.
 ## The running example
 
 Zoom in on welding. Parts come from cutting at irregular intervals and wait
-in the buffer in front of welding. To study this one effect, treat welding
-on its own: parts arrive at random, on average every *a* seconds, and
+in the buffer in front of welding. To study this one effect, take welding
+on its own and feed it a new stream of parts: they arrive at random, on average every *a* seconds, and
 welding needs 45 s per part. Its [utilization](glossary.md#utilization) is
 45 / *a*: arrivals every 50 s make it 90 % busy.
+
+This is no longer line A. There, cutting delivers a part every 42 s on
+average, more than welding can take: $u = 45 / 42$, about 107 %.
+The formula on this page assumes that $u$ is below 100 % and that the queue
+has unlimited room. At 100 % or more, the queue grows without end. So here
+parts arrive less often than welding can handle them. "At random" means
+exponential gaps between arrivals (CV 1), the most irregular common case.
+Parts that come from a station like cutting arrive more steadily.
 
 > **In taktsim.** This model needs a source that creates parts at random
 > intervals. The spec gives the Source component an arrival distribution
@@ -40,7 +48,16 @@ welding needs 45 s per part. Its [utilization](glossary.md#utilization) is
 ## The numbers
 
 The simulated wait in the queue in front of welding, with random arrivals
-(exponential intervals, CV 1) and two levels of process-time variability:
+(exponential intervals, CV 1) and two levels of process-time variability.
+Each simulated value is the average of 10 runs; the ± after it is a 95 %
+confidence interval, which says how precisely the runs pin down the
+long-run average (see
+[Reading simulated numbers](03-littles-law.md#reading-simulated-numbers)).
+Kingman's formula is about the long run, so each run lasts 11.6 days and
+drops its start, the warm-up. Pages 6 and 7, by contrast, simulate one shift
+from an empty line. The last two columns are formulas explained below. The
+exact M/M/1 result covers only the fully random case, CV 1, hence the
+dashes.
 
 {{#include tables/05-waiting.md}}
 
@@ -80,7 +97,9 @@ the VUT equation:
 
 - **V, variability:** $(c_a^2 + c_s^2) / 2$. No variability, no waiting.
   Halving the process-time CV from 1 to 0.5 lowers the wait by more than a
-  third.
+  third. CVs enter squared, so V falls from $(1 + 1) / 2 = 1$ to
+  $(1 + 0.25) / 2 = 0.625$. It does not halve, because the arrival CV stays
+  at 1.
 - **U, utilization:** $u / (1 - u)$. This is the hockey stick. At 50 % it is
   1, at 90 % it is 9, at 95 % it is 19.
 - **T, time:** the process time itself. A slow station makes parts wait
@@ -88,8 +107,12 @@ the VUT equation:
 
 For exponential arrivals and process times (the "M/M/1" queue of queueing
 theory), the formula is exact; the simulation reproduces it in the first
-seven rows of the table. For other cases it is an approximation that is
-good at high utilization, which is where it matters.
+seven rows of the table. At 70 %, for example, the exact value is 1.75 and
+the simulation gives 1.72 ± 0.07. That is no disagreement: ten runs of finite
+length miss the long-run average a little by chance, and the exact value lies
+inside the ± range, as it does in all seven rows. For other cases the
+formula is an approximation that is good at high utilization, which is
+where it matters.
 
 ## Rule of thumb
 
@@ -98,7 +121,9 @@ good at high utilization, which is where it matters.
 
 Do not plan any station close to 100 % busy: the last few percent of
 utilization cause most of the waiting. And since the bottleneck is the
-busiest station, it always has the longest queue in front of it.
+busiest station, it tends to have a long queue in front of it. A less busy
+station can still have a longer one if it is more variable or slower per
+part: all three factors count.
 
 </div>
 

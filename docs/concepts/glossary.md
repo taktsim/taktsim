@@ -22,8 +22,8 @@ because the buffer or station after it is full.
 
 ### Bottleneck
 
-The station with the least effective capacity; it limits the output of the
-whole line. Found by how little it waits, not only by its cycle time.
+The station with the least capacity once its losses, such as failures, are
+counted; it limits the output of the whole line. Found by how little it waits, not only by its cycle time.
 [Page 2](02-bottleneck.md), [page 9](09-longer-lines.md).
 
 ### Buffer
@@ -31,6 +31,11 @@ whole line. Found by how little it waits, not only by its cycle time.
 Storage between two stations with a limited number of places, where parts
 wait. Decouples the stations. [Page 1](01-production-systems.md),
 [page 7](07-buffers.md).
+
+### Calibration
+
+Adjusting a model's parameters until its results match observed data, then
+checking it on data it was not fitted to. [Page 14](14-model-to-reality.md).
 
 ### Capacity
 
@@ -43,11 +48,20 @@ The standard deviation of a time divided by its mean (CV). 0 means no
 variability; an exponential distribution has 1.
 [Page 4](04-variability.md).
 
+### Common random numbers
+
+Giving two designs the same seeds, so they meet the same slow parts and
+failures and their difference is not just chance.
+[Page 13](13-trustworthy-results.md).
+
 ### Confidence interval
 
-A range around an estimated mean, computed from replications, that contains
-the true mean with a stated probability, usually 95 %. Written as
-mean ± half-width. [Page 13](13-trustworthy-results.md).
+A range around a mean estimated from replications, written as
+mean ± half-width. It says how precisely the runs pin down the long-run
+(true) mean, not how much single runs vary. "95 %" describes the method: of
+many such experiments, about 95 in 100 give a range that contains the true
+mean. [Page 3](03-littles-law.md#reading-simulated-numbers),
+[page 13](13-trustworthy-results.md).
 
 ### CONWIP
 
@@ -57,8 +71,9 @@ line only when a finished part leaves, so WIP never exceeds a cap.
 
 ### Critical WIP
 
-The WIP at which a line without variability reaches its bottleneck rate:
-$\text{bottleneck rate} \times \text{raw process time}$. [Page 10](10-takt-pull.md).
+The WIP at which a line without variability reaches its bottleneck rate
+(the bottleneck's capacity): $\text{bottleneck rate} \times \text{raw process time}$,
+where the raw process time is the sum of all stations' cycle times. [Page 10](10-takt-pull.md).
 
 ### Cycle time
 
@@ -66,10 +81,32 @@ The time a station needs per part. Some textbooks use the word for lead
 time; these pages and taktsim's model files do not.
 [Page 1](01-production-systems.md).
 
+### Distribution
+
+The rule for how a time varies: which values are possible and how often
+each comes up. Part of a model; its mean and CV are exact numbers. Compare
+sample. [Page 4](04-variability.md#a-distribution-and-a-sample).
+
 ### Effective cycle time
 
 A station's cycle time with its losses included, for example
 $\text{cycle time} / A$, with $A$ its availability. [Page 8](08-unreliable-machines.md).
+
+### Exponential distribution
+
+The textbook model of "completely random" times: short times are the most
+common, long ones rare, CV exactly 1. [Page 4](04-variability.md),
+[page 5](05-utilization.md).
+
+### Half-width
+
+The number after ± in a confidence interval: the interval runs from
+mean − half-width to mean + half-width. [Page 13](13-trustworthy-results.md).
+
+### Histogram
+
+A chart of a sample: each bar counts the values that fell into one range.
+[Page 4](04-variability.md).
 
 ### Inspection
 
@@ -85,8 +122,17 @@ station may only make a part when it holds a free card.
 ### Kingman's formula
 
 An approximation of the mean wait in queue at one station:
-$\frac{c_a^2 + c_s^2}{2} \times \frac{u}{1 - u} \times t$. Exact for exponential times.
+$\frac{c_a^2 + c_s^2}{2} \times \frac{u}{1 - u} \times t$, with $c_a$ the CV
+of the times between arrivals, $c_s$ the CV of the process time, $u$ the
+utilization and $t$ the mean process time. Needs $u$ below 1. Exact when both
+arrivals and process times are exponential (M/M/1).
 [Page 5](05-utilization.md).
+
+### Kolmogorov–Smirnov distance
+
+A measure of how well a distribution fits measured times: the largest gap
+between the share of times below a value and the share the distribution
+predicts. 0 is a perfect fit. [Page 14](14-model-to-reality.md).
 
 ### Lead time
 
@@ -99,10 +145,31 @@ $\text{WIP} = \text{throughput} \times \text{lead time}$, for long-run averages
 of almost any system.
 [Page 3](03-littles-law.md).
 
+### Lognormal distribution
+
+A common model for process times: always positive, with a long tail of slow
+cases. Given by its mean and a shape parameter sigma, which is not the
+standard deviation of the times. [Page 4](04-variability.md).
+
+### Median
+
+The middle value when the values are sorted. [Page 13](13-trustworthy-results.md).
+
+### Method of moments
+
+Fitting a distribution by giving it the same mean and, where it can, the
+same CV as the measured times. [Page 14](14-model-to-reality.md).
+
+### MSER-5
+
+A rule that finds where a run's warm-up ends: it averages the output in
+groups of five and picks the cut-off after which the rest varies least.
+[Page 13](13-trustworthy-results.md).
+
 ### MTBF
 
-Mean time between failures: how long a station runs, on average, before it
-fails. [Page 8](08-unreliable-machines.md).
+Mean time between failures: how long a station is up (working or waiting),
+on average, before it fails. [Page 8](08-unreliable-machines.md).
 
 ### MTTR
 
@@ -121,8 +188,10 @@ Releasing work into a line by a schedule, whatever is inside.
 
 ### Replication
 
-One independent run of a model with its own random seed. Results are means
-over replications. [Page 13](13-trustworthy-results.md).
+One run of a model with its own seed, so its random numbers behave as if
+unrelated to those of the other runs (independent). Results are means over
+replications. [Page 3](03-littles-law.md#reading-simulated-numbers),
+[page 13](13-trustworthy-results.md).
 
 ### Rework
 
@@ -133,6 +202,20 @@ capacity a second time. [Page 12](12-scrap-rework.md).
 
 A faulty part that cannot be saved and leaves the line.
 [Page 12](12-scrap-rework.md).
+
+### Sample
+
+A set of times you actually have: drawn from a distribution in a
+simulation, or measured on a line. Its mean and CV estimate the
+distribution's and miss them by chance.
+[Page 4](04-variability.md#a-distribution-and-a-sample).
+
+### Seed
+
+The starting number of a simulation's random numbers. The same seed gives
+exactly the same run again; different seeds give runs that behave as if
+unrelated. [Page 3](03-littles-law.md#reading-simulated-numbers),
+[page 13](13-trustworthy-results.md).
 
 ### Setup
 
@@ -146,6 +229,12 @@ Where finished parts leave the line. [Page 1](01-production-systems.md).
 ### Source
 
 Where parts enter the line. [Page 1](01-production-systems.md).
+
+### Standard deviation
+
+Roughly the typical distance of a single value from the mean; precisely,
+the square root of the average squared distance.
+[Page 4](04-variability.md).
 
 ### Starved
 
@@ -182,6 +271,11 @@ The number of parts that leave the line per unit of time.
 The share of time a station is working. [Page 2](02-bottleneck.md),
 [page 5](05-utilization.md).
 
+### Validation
+
+Checking that a model, with its fitted inputs, behaves like the real line.
+[Page 14](14-model-to-reality.md).
+
 ### Variability
 
 How much times differ from one part, arrival or failure to the next;
@@ -190,7 +284,8 @@ measured by the coefficient of variation. [Page 4](04-variability.md).
 ### Warm-up
 
 The start of a steady-state run, when the line is not yet typical; it is
-left out of the statistics. [Page 13](13-trustworthy-results.md).
+left out of the statistics. [Page 3](03-littles-law.md#reading-simulated-numbers),
+[page 13](13-trustworthy-results.md).
 
 ### Work in progress
 

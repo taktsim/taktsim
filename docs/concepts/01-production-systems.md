@@ -43,9 +43,12 @@ costs: money tied up in half-finished parts, floor space, and customers
 waiting. A line that looks good on throughput can be bad on the other two.
 
 > **A word on "cycle time".** In this guide and in taktsim's model files,
-> cycle time is the time a station needs per part. Some textbooks, such as
-> *Factory Physics*, use "cycle time" for the whole time a part spends in
-> the line; we call that lead time.
+> cycle time is the time a station needs per part: a setting you give the
+> model, not a result. Some textbooks, such as *Factory Physics*, use
+> "cycle time" for the whole time a part spends in the line; we call that
+> lead time. On many shop floors it also means the time between two parts
+> leaving the line, which here follows from the slowest station
+> ([page 2](02-bottleneck.md)).
 
 ## The running example
 
@@ -99,12 +102,17 @@ observe:
 
 `components` lists the stations and the buffer, and `flow` gives the order
 in which parts pass through them. `experiment` says what to simulate: one
-8-hour shift (`horizon: 8h`) that starts empty (`terminating`). `observe`
-names the numbers to report.
+8-hour shift (`horizon: 8h`). `terminating` means the run has a natural end,
+here the end of the shift, and starts from a defined state, here an empty
+line. `seed` fixes the random numbers, which matter from
+[page 3](03-littles-law.md#reading-simulated-numbers) on. `observe` names
+the numbers to report: here the output and the parts in the buffer.
 
 ## The numbers
 
-One simulated shift of line A, hour by hour:
+One simulated shift of line A, hour by hour. The WIP column counts every
+part in the line, the buffer's plus the one in each station, so it can
+reach 22 with 20 buffer places:
 
 {{#include tables/01-shift.md}}
 
