@@ -36,7 +36,7 @@ def build() -> None:
             [
                 Node("source"),
                 Node("station", "cut", f"42 s · cv 0.53\navailability {a:.1%}", fails=True),
-                Node("buffer", capacity=20, sub="5 to 50 places"),
+                Node("buffer", name="buffer", capacity=20, sub="5 to 50 places"),
                 Node("station", "weld", "45 s · cv 0.53"),
                 Node("sink"),
             ],

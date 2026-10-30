@@ -77,7 +77,7 @@ waits in a queue of its own that welding serves before new parts.
 <div class="ts-plot">
 {{#include img/12-bars.svg}}
 </div>
-<figcaption>What welding's 640 possible operations per shift turn into, for each case: good parts, rework passes, scrapped parts and time spent waiting. The highlighted row is 2 % scrap and 5 % rework.</figcaption>
+<figcaption>What welding's 640 possible operations per shift turn into, for each case: good parts, rework passes, scrapped parts and waiting (time welding is starved or blocked, so it does nothing). The highlighted row is 2 % scrap and 5 % rework.</figcaption>
 </figure>
 
 Welding is the bottleneck and works 98 to 99 % of the time in every case.

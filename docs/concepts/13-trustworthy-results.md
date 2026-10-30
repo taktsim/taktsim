@@ -99,7 +99,7 @@ the statistics must leave it out.
 <div class="ts-plot">
 {{#include img/13-warmup.svg}}
 </div>
-<figcaption>Average WIP of 20 runs of the variable line A with 20 buffer places, starting empty. The highlighted point is where MSER-5 ends the warm-up in the median run; the dashed line is where the curve visibly settles.</figcaption>
+<figcaption>Average WIP of 20 runs of the variable line A with 20 buffer places, starting empty. The shaded stretch is what to discard: up to the dashed line, where the curve visibly settles. The highlighted point is where MSER-5 ends the warm-up in the median run, while WIP is still climbing.</figcaption>
 </figure>
 
 {{#include tables/13-warmup.md}}

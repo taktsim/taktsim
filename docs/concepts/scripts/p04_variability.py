@@ -43,13 +43,13 @@ def build() -> None:
         histograms(
             "f04a",
             "Same mean, very different spread",
-            "Histograms of 4000 cutting times with a mean of 42 seconds: with sigma 0.08 they all fall between about 33 and 54 seconds; with sigma 0.5 they spread from under 15 to over 120 seconds.",
+            "Histograms of 4000 cutting times with a mean of 42 seconds: with sigma 0.08 they all fall between about 33 and 54 seconds; with sigma 0.5 they spread from under 15 to over 120 seconds. A line in each panel marks welding's 45 seconds.",
             [("cv 0.08", data[0]), ("cv 0.53", data[1])],
             0,
             150,
             50,
             "cut time (s)",
-            mark=(1, WELD, "45 s: weld"),
+            mark=(WELD, "welding: 45 s"),
         ),
     )
 

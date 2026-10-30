@@ -66,7 +66,10 @@ def build() -> None:
             "wait in queue (min)",
             (0.3, 1.0),
             (0, 16),
-            highlight=(0.9, kingman(0.9, 1, 1) / 60, "90 % busy: wait = 9 × process time"),
+            highlight=(0.9, kingman(0.9, 1, 1) / 60,
+                       f"CV 1, 90 % busy: {kingman(0.9, 1, 1) / 60:.1f} min = 9 × {WELD:g} s"),
+            notes=[(0.79, kingman(0.79, 1, 1) / 60 + 0.8, "CV 1", "end"),
+                   (0.81, kingman(0.81, 1, 0.5) / 60 - 1.0, "CV 0.5", "start")],
             xticks=[0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         ),
     )

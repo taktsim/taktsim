@@ -38,19 +38,19 @@ def build() -> None:
     # One shift of the variable line: WIP over time.
     r = simulate(line_a(sigma=SIGMA, buffer=5), 3 * 3600.0, seed=3, trace=True)
     wip = time_average(r.wip_trace, 0.0, 3 * 3600.0, 36)
-    peak = max(range(len(wip)), key=lambda i: wip[i])
+    mean = sum(wip) / len(wip)
     write(
         IMG / "03-wip.svg",
         matrix_chart(
             "f03a",
             "WIP moves; its average is what Little's Law is about",
-            "Work in progress of the variable line A with a buffer of 5 over three hours, averaged over 5 minutes: it moves between 2 and 7 parts.",
+            "Work in progress of the variable line A with a buffer of 5 over three hours, averaged over 5 minutes: it moves between 2 and 7 parts. A line marks its average over the three hours.",
             wip,
             8,
             "hours",
             "parts in the line",
             [(0, "0"), (12, "1"), (24, "2"), (35, "3")],
-            mark=(peak, "busiest 5 minutes"),
+            average=(mean, f"average over the 3 hours: {mean:.1f} parts"),
         ),
     )
     _ = CUT

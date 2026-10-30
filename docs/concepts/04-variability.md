@@ -65,7 +65,7 @@ textbook model of "completely random", has a CV of exactly 1.
 <div class="ts-plot">
 {{#include img/04-histograms.svg}}
 </div>
-<figcaption>4,000 cutting times per distribution, all with a mean of 42 s. The highlighted line marks welding's 45 s; about a third of the widely spread cuts take longer than that.</figcaption>
+<figcaption>4,000 cutting times per distribution, all with a mean of 42 s. The highlighted line marks welding's 45 s. A cut to its right takes longer than welding, so the welder would have to wait for that part; the table below counts how often that happens.</figcaption>
 </figure>
 
 {{#include tables/04-cv.md}}

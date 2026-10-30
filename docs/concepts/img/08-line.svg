@@ -14,7 +14,7 @@
 <rect x="315.5" y="69.5" width="9" height="9" class="ts-unlit-fill"/>
 <rect x="327.5" y="69.5" width="9" height="9" class="ts-unlit-fill"/>
 <rect x="339.5" y="69.5" width="9" height="9" class="ts-unlit-fill"/>
-<text x="320" y="60" text-anchor="middle" font-size="10">BUF 20</text>
+<text x="320" y="60" text-anchor="middle" font-size="10">BUFFER</text>
 <text x="320" y="96" text-anchor="middle" font-size="10">5 to 50 places</text>
 <line x1="356" y1="74" x2="386" y2="74" class="ts-axis"/>
 <path d="M381 70 L386 74 L381 78" class="ts-axis"/>

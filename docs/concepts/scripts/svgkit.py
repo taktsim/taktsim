@@ -208,11 +208,17 @@ def xy_chart(
     label_below: bool = False,
     hlines: Iterable[tuple[float, str] | tuple[float, str, float]] = (),
     vlines: Iterable[tuple[float, str]] = (),
+    spans: Iterable[tuple[float, float, str]] = (),
+    notes: Iterable[tuple[float, float, str, str]] = (),
     height: float = 300,
     xticks: Sequence[float] | None = None,
     yticks: Sequence[float] | None = None,
 ) -> str:
-    """A line chart with hairline axes; `highlight` puts the one acid mark."""
+    """A line chart with hairline axes; `highlight` puts the one acid mark.
+
+    `spans` shade an x interval (from, to, label at its top), `notes` put a
+    muted label at a point (x, y, text, anchor), e.g. to name a curve.
+    """
     svg = Svg(uid, height, title, desc)
     left, right, top, bottom = 64, 24, 20, 48
     sx = Scale(xr[0], xr[1], left, W - right)
@@ -232,6 +238,9 @@ def xy_chart(
         f'<text x="14" y="{num((top + height - bottom) / 2)}" text-anchor="middle"'
         f' transform="rotate(-90 14 {num((top + height - bottom) / 2)})">{escape(ylabel.upper())}</text>'
     )
+    for a, b, label in spans:
+        svg.rect(sx(a), top, sx(b) - sx(a), height - bottom - top, "ts-ci")
+        svg.text((sx(a) + sx(b)) / 2, top + 30, label, "middle")
     for h in hlines:
         v, label = h[0], h[1]
         svg.line(left, sy(v), W - right, sy(v), "ts-muted-line")
@@ -254,6 +263,8 @@ def xy_chart(
         if s.markers and s.style == "ink":
             for a, b in pts:
                 svg.rect(a - 3, b - 3, 6, 6, "ts-ink-fill")
+    for x, y, label, anchor in notes:
+        svg.text(sx(x), sy(y), label, anchor)
     if highlight is not None:
         hx, hy, label = highlight
         x, y = sx(hx), sy(hy)
@@ -297,6 +308,18 @@ def timeline(
     height = top + len(rows) * row_h + len(levels) * (lvl_h + 16) + 52
     svg = Svg(uid, height, title, desc)
     slice_ = (t1 - t0) / cells
+    if mark is not None:
+        # Drawn first, so the cells cover it and the marked step stays visible.
+        mt, label = mark
+        i = min(cells - 1, int((mt - t0) / slice_))
+        x = left + i * pitch
+        bottom = top + len(rows) * row_h + len(levels) * (lvl_h + 16)
+        svg.rect(x, top - 10, cell, 6, "ts-acid")
+        svg.line(x + cell / 2, top - 4, x + cell / 2, bottom, "ts-acid-line")
+        if x < W * 0.6:
+            svg.text(x + cell + 6, top - 4, label, "start", "ts-strong")
+        else:
+            svg.text(x - 6, top - 4, label, "end", "ts-strong")
     y = top
     # Legend.
     lx = left
@@ -325,16 +348,6 @@ def timeline(
             if h > 0.5:
                 svg.rect(left + i * pitch, base - h, cell, h, "ts-muted-fill")
         y += lvl_h
-    if mark is not None:
-        mt, label = mark
-        i = min(cells - 1, int((mt - t0) / slice_))
-        x = left + i * pitch
-        svg.rect(x, top - 10, cell, 6, "ts-acid")
-        svg.line(x + cell / 2, top - 4, x + cell / 2, y, "ts-acid-line")
-        if x < W * 0.6:
-            svg.text(x + cell + 6, top - 4, label, "start", "ts-strong")
-        else:
-            svg.text(x - 6, top - 4, label, "end", "ts-strong")
     # Time axis.
     ty = y + 4
     for frac in (0, 0.25, 0.5, 0.75, 1):
@@ -374,10 +387,13 @@ def histograms(
     hi: float,
     bins: int,
     xlabel: str,
-    mark: tuple[int, float, str] | None = None,
+    mark: tuple[float, str] | None = None,
     height: float = 220,
 ) -> str:
-    """Side-by-side histograms on one x scale, bars as square-cornered steps."""
+    """Side-by-side histograms on one x scale, bars as square-cornered steps.
+
+    `mark` draws the same reference line (value, label) in every panel.
+    """
     svg = Svg(uid, height, title, desc)
     gap = 32
     pw = (W - 24 - gap * (len(panels) - 1)) / len(panels)
@@ -405,10 +421,10 @@ def histograms(
             svg.line(x, base, x, base + 4, "ts-axis")
             svg.text(x, base + 18, fmt_tick(t), "middle")
         svg.text(x0 + pw / 2, height - 6, xlabel.upper(), "middle")
-        if mark is not None and mark[0] == p:
-            mx = x0 + (mark[1] - lo) / (hi - lo) * pw
+        if mark is not None:
+            mx = x0 + (mark[0] - lo) / (hi - lo) * pw
             svg.line(mx, top - 6, mx, base, "ts-acid-line")
-            svg.text(mx + 6, top + 4, mark[2], "start", "ts-strong")
+            svg.text(mx + 6, top + 4, mark[1], "start", "ts-strong")
     return svg.render()
 
 
@@ -454,7 +470,8 @@ def line_diagram(
     total = sum(width(n) for n in nodes)
     arrow = max(10, min(36, (W - 16 - total) / max(gaps, 1)))
     x = (W - total - arrow * gaps) / 2
-    height = 150 + (24 if loops else 0) + (26 if exits else 0)
+    sub_lines = max((len(n.sub.split("\n")) for n in nodes if n.kind == "station" and n.sub), default=1)
+    height = 150 + 14 * max(0, sub_lines - 2) + (24 if loops else 0) + (26 if exits else 0)
     mid = 74 + (24 if loops else 0)
     svg = Svg(uid, height, title, desc)
     xs: list[tuple[float, float]] = []
@@ -538,14 +555,16 @@ def matrix_chart(
     xticks: Sequence[tuple[int, str]],
     mark: tuple[int, str] | None = None,
     unit: float = 1.0,
+    average: tuple[float, str] | None = None,
 ) -> str:
     """Columns of square steps, lit up to each value: the brand's dot matrix.
 
     One column per slice; a cell is lit when the value reaches it (each
     cell stands for `unit`). `mark` lights the one acid cell, at the top
-    of the given column.
+    of the given column; `average` instead draws the acid line at a level
+    (value, label) across all columns.
     """
-    left, right, top, bottom = 64, 16, 16, 48
+    left, right, top, bottom = 64, 16, 16 + (24 if average is not None else 0), 48
     cols = len(values)
     pitch_x = (W - left - right) / cols
     height = 300
@@ -571,6 +590,13 @@ def matrix_chart(
     svg.text((left + W - right) / 2, height - 8, xlabel.upper(), "middle")
     my = (top + base) / 2
     svg.add(f'<text x="14" y="{num(my)}" text-anchor="middle" transform="rotate(-90 14 {num(my)})">{escape(ylabel.upper())}</text>')
+    if average is not None:
+        v, label = average
+        ay = base - v / unit * pitch
+        svg.line(left, ay, W - right, ay, "ts-acid-line")
+        # Labelled in a legend above the chart: on the cells it would not read.
+        svg.line(left, 12, left + 14, 12, "ts-acid-line")
+        svg.text(left + 20, 16, label, "start", "ts-strong")
     if mark is not None:
         c, label = mark
         lit = round(values[c] / unit)

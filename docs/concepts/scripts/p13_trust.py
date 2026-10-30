@@ -91,9 +91,10 @@ def build() -> None:
             "parts in the line",
             (0, 8),
             (0, 25),
-            highlight=(median, mean_wip[min(show - 1, int(median * 6))], f"MSER-5, median run: {median:.1f} h"),
+            highlight=(median, mean_wip[min(show - 1, int(median * 6))], f"MSER-5: {median:.1f} h, too early"),
             label_below=True,
             vlines=[(4.0, "settled by eye: about 4 h")],
+            spans=[(0.0, 4.0, "discard")],
             xticks=[0, 1, 2, 3, 4, 5, 6, 7, 8],
         ),
     )

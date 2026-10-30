@@ -64,7 +64,7 @@ Law is about its average.
 <div class="ts-plot">
 {{#include img/03-wip.svg}}
 </div>
-<figcaption>Each column is the average number of parts in the line over 5 minutes; the highlighted step is the busiest stretch.</figcaption>
+<figcaption>Each column is the average number of parts in the line over 5 minutes. The highlighted line is the average over all three hours: the one number Little's Law works with.</figcaption>
 </figure>
 
 ## The numbers
