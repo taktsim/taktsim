@@ -58,6 +58,12 @@ Three candidates:
 - **Lognormal** with mean 45.2 s and sigma 0.56, the value that gives a CV
   of 0.61.
 
+The fit finds sigma 0.56, not the true 0.6, whose CV is 0.66. That is no
+error in the method. The 300 measurements are a
+[sample](04-variability.md#a-distribution-and-a-sample), and a sample's CV
+differs from its distribution's by chance. Every fit carries this
+uncertainty; more measurements make it smaller.
+
 <figure class="ts-figure">
 <div class="ts-label">Figure 14.1</div>
 <div class="ts-figure-title">The lognormal follows the data; the exponential does not</div>
@@ -70,7 +76,12 @@ Three candidates:
 One number for how well a distribution fits is the Kolmogorov–Smirnov
 distance. For every value, compare the share of measured times below it
 with the share the distribution predicts; the distance is the largest gap.
-0 is a perfect fit.
+0 is a perfect fit. Such a number is called a goodness-of-fit measure.
+
+Even the true distribution does not reach 0 on a sample, so how large is
+too large? With 300 measurements, chance alone rarely produces a distance
+above about $1.36 / \sqrt{300} \approx 0.08$. The lognormal, at 0.05,
+passes; the exponential, at 0.23, and the constant, at 0.63, do not.
 
 ## Validating the model
 
@@ -88,6 +99,18 @@ pessimistic by 29: it invents far more variability than there is. Only the
 lognormal model agrees with the observed output within the confidence
 intervals. Both sides need intervals, because the 20 observed shifts are a
 sample too.
+
+The rule behind "agrees" and "differs": the uncertainty of a difference
+combines both ± values, as
+
+$$\sqrt{h_\text{model}^2 + h_\text{observed}^2}$$
+
+where each $h$ is a half-width. A gap within that is what chance alone
+could explain. For the lognormal, $\sqrt{4.8^2 + 5.7^2} \approx 7.5$, more
+than its gap of 5.3: it agrees. For the constant model,
+$\sqrt{1.2^2 + 5.7^2} \approx 5.8$, less than its gap of 7.4: it differs.
+"Differs" means the gap is larger than chance explains, not merely that
+the numbers are not equal.
 
 Agreement on one number is necessary, not sufficient. Check several:
 output, but also how often each station is starved or blocked, and how full
@@ -122,8 +145,9 @@ interval, before you use it to decide anything.
   mean and CV. Which of the three candidates would you choose?
 - In the table, the constant model is closer to the observed output than
   the exponential one, yet both fail. Which would mislead you more if you
-  used it to size a buffer? (The constant model: it says no buffer is
-  needed.)
+  used it to size a buffer? (The constant model. It sees too little
+  variability and overestimates output, 630.8 against 623.4 parts per
+  shift, so it suggests a smaller buffer than the real line needs.)
 
 ## Further reading
 

@@ -69,6 +69,9 @@ waits in a queue of its own that welding serves before new parts.
 
 ## The numbers
 
+Each run is a week of five shifts; the table gives results per shift, with
+the ± explained on [page 3](03-littles-law.md#reading-simulated-numbers).
+
 {{#include tables/12-quality.md}}
 
 <figure class="ts-figure">
@@ -101,7 +104,12 @@ Here $C$ is the bottleneck's capacity, $s$ the scrap rate and $r$ the rework
 rate.
 
 The simulation stays a little below the formula, because variability alone
-costs about 14 parts per shift, as the first row shows.
+costs about 14 parts per shift, as the first row shows. Scrap leaves that
+gap as it is, but rework narrows it: to about 8 parts at 5 % rework, and 6
+at 10 %. Reworked parts wait in their own queue right in front of welding.
+When cutting falls behind, welding would otherwise stand idle; now a
+reworked part is often there to fill the moment. Weld working rises from
+98 % to 99 %.
 
 ## Rule of thumb
 

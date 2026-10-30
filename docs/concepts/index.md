@@ -5,10 +5,11 @@ from the ground up.
 
 ## Who this is for
 
-Developers who know code and some statistics but have never worked in a
-factory. You do not need to know what a buffer, a bottleneck or takt time
-is: every term is explained where it first appears and collected in the
-glossary.
+Developers, engineers and managers who have never worked in a factory or
+studied statistics. If you know what an average is, that is enough. You do
+not need to know what a buffer, a bottleneck or takt time is, nor what a
+distribution or a confidence interval is: every term is explained where it
+first appears and collected in the glossary.
 
 ## What you will be able to do afterwards
 

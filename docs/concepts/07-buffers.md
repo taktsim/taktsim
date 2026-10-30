@@ -49,22 +49,36 @@ when welding is free.
 
 Without a buffer the variable line makes 517 parts per shift. One place gets
 it to 576, two to 600, five to 624. After that the curve flattens: ten places
-give 633, thirty give 635, and no buffer reaches the 640 that welding could
-make. Each extra place helps only in a longer slow spell than the places
-before it could absorb, and the longer a spell, the rarer it is.
+give 633, fifteen 635, thirty 635.5. Each of these has a ± of about 5
+parts, and the ranges overlap. Compared run by run on the same seeds
+([page 13](13-trustworthy-results.md#comparing-two-designs)), fifteen
+places still beat ten by a part or two; beyond fifteen, the runs cannot
+tell the sizes apart.
+Each extra place helps only in a longer slow spell than the places before it
+could absorb, and the longer a spell, the rarer it is.
+
+In one shift that starts with an empty line, no buffer reaches the 640 that
+welding could make: early in the shift the buffer is still nearly empty and
+cannot yet protect welding. This does not contradict
+[page 8](08-unreliable-machines.md), which simulates five shifts in a row
+and, without failures, does reach 640.
 
 Meanwhile the cost keeps growing. By [Little's Law](03-littles-law.md),
 parts that sit in a buffer add to lead time. With 5 places a part needs
 about 4 minutes to get through the line, with 20 places about 12, and with
-30 about 15: almost four times the lead time for 2 % more output.
+30 about 15: almost four times the lead time for 2 % more output. These are
+averages over one shift that starts empty, while the buffer is still
+filling. A line that keeps running fills its buffer, because cutting is
+faster on average, and its lead time climbs well above these figures.
 
 ## The README's example
 
 The [README](https://github.com/taktsim/taktsim#readme)'s example is this
 line with a buffer of 20 places. Arithmetic says welding allows 640 parts
 per shift; the line makes 635. With a single place it would make 576, and
-without a buffer 517. The buffer earns its place, but even 20 places cannot
-give back everything that variability takes.
+without a buffer 517. The buffer earns its place. The last 5 parts are lost
+partly to variability and partly to the empty start of the shift, while the
+buffer is still filling.
 
 ## When a buffer hardly matters
 

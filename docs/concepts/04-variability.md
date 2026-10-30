@@ -7,6 +7,7 @@
 
 - Where variability in a line comes from.
 - How to measure it with one number, the coefficient of variation.
+- The difference between a distribution and a sample of times.
 - How the running example changes from here on.
 
 </div>
@@ -43,8 +44,10 @@ needs adjusting.
 
 ## Measuring it
 
-The standard deviation says how far times spread, but it depends on the
-scale: a spread of 5 s is a lot for a 10-second step and nothing for an
+The [standard deviation](glossary.md#standard-deviation) is roughly the
+typical distance of a single time from the mean. (Precisely, it is the
+square root of the average squared distance; spreadsheets compute it with
+STDEV.) It says how far times spread, but it depends on the scale: a spread of 5 s is a lot for a 10-second step and nothing for an
 hour-long one. Dividing by the mean fixes that. The result is the
 [coefficient of variation](glossary.md#coefficient-of-variation):
 
@@ -56,8 +59,29 @@ $$\text{CV} = \frac{\text{standard deviation}}{\text{mean}}$$
 </div>
 
 A CV of 0 means no variability. *Factory Physics* calls a CV below 0.75 low,
-0.75 to 1.33 moderate, and above 1.33 high. An exponential distribution, the
-textbook model of "completely random", has a CV of exactly 1.
+0.75 to 1.33 moderate, and above 1.33 high. "Low" is only a label: the next
+pages show a CV of 0.5 costing real output and lead time. An exponential
+distribution, the textbook model of "completely random", has a CV of
+exactly 1.
+
+## A distribution and a sample
+
+Two different things hide behind the word "times". A
+[distribution](glossary.md#distribution) is the rule for how a time varies:
+which values are possible, and how often each comes up. It belongs to the
+model, and its mean, standard deviation and CV are exact numbers. A
+[sample](glossary.md#sample) is a set of times you actually have: drawn from
+a distribution in a simulation, or measured on a real line with a
+stopwatch.
+
+The mean, standard deviation and CV of a sample are estimates of the
+distribution's values. They miss them by chance: a little with many times,
+more with few. Figure 4.1 and the table below show both. Each draws 4,000
+cutting times from a distribution; the table gives the distribution's exact
+CV next to the sample's, and they differ slightly.
+[Page 13](13-trustworthy-results.md) puts a number on how far an estimate
+can miss, and [page 14](14-model-to-reality.md) goes the other way, from
+measured times to a distribution.
 
 <figure class="ts-figure">
 <div class="ts-label">Figure 4.1</div>
@@ -65,15 +89,18 @@ textbook model of "completely random", has a CV of exactly 1.
 <div class="ts-plot">
 {{#include img/04-histograms.svg}}
 </div>
-<figcaption>4,000 cutting times per distribution, all with a mean of 42 s. The highlighted line marks welding's 45 s. A cut to its right takes longer than welding, so the welder would have to wait for that part; the table below counts how often that happens.</figcaption>
+<figcaption>A sample of 4,000 cutting times from each of two distributions, both with a mean of 42 s. Each bar counts the cuts that fell into a 3-second range: the higher the bar, the more common such times. The highlighted line marks welding's 45 s. A cut to its right takes longer than welding; if the buffer happens to be empty, the welder has to wait for that part. The table below counts how often a cut is that slow.</figcaption>
 </figure>
 
 {{#include tables/04-cv.md}}
 
 The cutting times here follow a lognormal distribution, a common choice for
 process times: always positive, with a long tail of slow cases. Its shape
-parameter sigma ($\sigma$) sets the spread. For small values the CV is about
-equal to sigma; in general, $\text{CV} = \sqrt{e^{\sigma^2} - 1}$.
+parameter sigma ($\sigma$) sets the spread. Careful: despite its name, sigma
+is not the standard deviation of the times. It is the standard deviation of
+their logarithms, a pure number without a unit. With sigma 0.5, the times
+themselves have a standard deviation of about 22 s. For small values the CV
+is about equal to sigma; in general, $\text{CV} = \sqrt{e^{\sigma^2} - 1}$.
 
 ## The running example
 
@@ -100,9 +127,13 @@ components:
 
 </div>
 
+`mean` is the distribution's mean; `sigma` is the shape parameter from
+above, not a standard deviation.
+
 Variability alone does not tell you how much output a line loses. Take the
-narrow distribution in the table, sigma 0.08: 18 % of those cuts are slower
-than welding's 45 s, yet [page 7](07-buffers.md) shows that a line with
+narrow distribution in the table, sigma 0.08: 18 % of its 4,000 drawn cuts
+are slower than welding's 45 s, so any one cut has a chance of about 18 % to
+be that slow. Yet [page 7](07-buffers.md) shows that a line with
 such cuts and a fixed welding time loses almost nothing. What matters is
 where the variability sits and what protects the line against it. The next
 three pages work that out.

@@ -46,14 +46,23 @@ is run. This page therefore uses line B without failures.
 
 ## Push and pull
 
-- **Push** releases work into the line by a schedule, whatever is inside:
-  here, raw parts arrive on average every 48 s, at random.
+Apart from [page 5](05-utilization.md), the lines so far never ran out of
+raw parts: cutting could always start a new one. That is neither push nor
+pull.
+
+- **Push** releases work by a plan, whatever is inside. Here the plan is one
+  part every 48 s on average, with random deviations as in real deliveries,
+  like the arrivals on [page 5](05-utilization.md). The line cannot make
+  more than it is given.
 - **Pull** releases work only when something leaves.
-  [Kanban](glossary.md#kanban) does that between each pair of stations: a
-  fixed number of cards circulates in each loop, and each card allows one
-  part. [CONWIP](glossary.md#conwip) ("constant work in process") does it
-  for the whole line: a new part enters only when a finished part leaves,
-  so the WIP never exceeds a fixed cap.
+  [Kanban](glossary.md#kanban) does that between each pair of stations. A
+  card travels with each part. When the downstream station takes the part,
+  the card goes back upstream and allows one new part. With N cards in this
+  loop, at most N parts sit between the two stations, much like a buffer
+  with N places: line B's finite buffers on [page 9](09-longer-lines.md)
+  already behaved this way. [CONWIP](glossary.md#conwip) ("constant work in
+  process") does it for the whole line: a new part enters only when a
+  finished part leaves, so the WIP never exceeds a fixed cap.
 
 Both pull systems are WIP limits. In taktsim, a CONWIP cap is one line of
 the model:
@@ -89,24 +98,52 @@ Line B with unlimited buffers and a CONWIP cap from 1 to 40 parts:
 
 With one part in the line, output is low: each part walks through five empty
 stations alone. Each extra part adds output, up to about 12, where the line
-meets the demand of 600. Beyond that, output creeps towards the
-bottleneck's 640 while lead time keeps growing, as
+meets the demand of 600. These are averages over many shifts. Single shifts
+vary more than the ± suggests, so at a cap of 12 some shifts will fall
+short of 600
+([reading simulated numbers](03-littles-law.md#reading-simulated-numbers)).
+Beyond that cap, output creeps towards the bottleneck's 640 while lead time
+keeps growing, as
 [Little's Law](03-littles-law.md) says it must: lead time = WIP / throughput.
 
 The dashed and dotted curves are two reference cases from *Factory Physics*.
-The best case is a line without variability. Its output rises in a straight
-line, by one part per raw process time $T_0$ = 208 s (the sum of the cycle
-times), until it reaches the bottleneck rate. The two meet at the
-[critical WIP](glossary.md#critical-wip), here 208 / 45 = 4.6 parts. The
-practical worst case is a balanced line with exponential times. A real line
-lies between the two cases; line B lies closer to the best one.
+The best case is a line without variability. A part alone needs the raw
+process time $T_0$ = 208 s, the sum of the cycle times, to get through, so
+one part in the line gives one part every 208 s: 28,800 / 208 ≈ 138 per
+shift. Each extra part adds another $1/T_0$, until the bottleneck rate
+$r_b$, one part per 45 s, caps the output. The two meet at the
+[critical WIP](glossary.md#critical-wip) $W_0$. Little's Law gives it:
+WIP = throughput × lead time, so
+
+$$W_0 = r_b \times T_0 = \frac{1 \text{ part}}{45 \text{ s}} \times 208 \text{ s} = 4.6 \text{ parts}$$
+
+The seconds cancel, and parts remain.
+
+The practical worst case is a balanced line, one whose stations are all
+equally fast, with exponential times. With $w$ parts in the line its
+throughput is
+
+$$\text{TH} = \frac{w}{W_0 + w - 1} \times r_b$$
+
+At a cap of 12, with $r_b$ = 640 parts per shift, that is
+12 / 15.6 × 640 ≈ 492 parts per shift. A real line lies between the two
+cases; line B lies closer to the best one.
 
 Now push and pull, both meeting the demand:
 
 {{#include tables/10-push-pull.md}}
 
-Same output, half the WIP and half the lead time. Push lets WIP drift up
-whenever arrivals bunch; the CONWIP cap holds it.
+Same output: push cannot make more than it releases, and the cap was chosen
+to meet the demand. But pull needs half the WIP and half the lead time.
+Push lets WIP drift up whenever arrivals bunch; the CONWIP cap holds it.
+
+The cap of 12 is a ceiling, not the actual WIP. A place freed at the end of
+the line is used only when cutting is free to start a new part; while
+cutting is still working, the place stays empty. So the line holds 10.5
+parts on average, and Little's Law must use that number. At 606.8 parts per
+shift, one part leaves every 28,800 / 606.8 ≈ 47.5 s, so the lead time is
+10.5 × 47.5 s ≈ 8.3 minutes, as the table shows. The cap of 12 would give
+9.5.
 
 ## What a model should answer
 
@@ -119,8 +156,9 @@ People who run lines the Lean way tend to ask a simulation these questions:
 - Which improvement, such as shorter setups ([page 11](11-batching-setups.md)),
   faster repairs or less scrap ([page 12](12-scrap-rework.md)), pays off
   most?
-- How do the standard KPIs, such as overall equipment effectiveness (OEE),
-  change?
+- How do the standard KPIs change, such as overall equipment
+  effectiveness (OEE), the product of availability, performance (speed
+  against the ideal cycle time) and quality (share of good parts)?
 
 ## Rule of thumb
 

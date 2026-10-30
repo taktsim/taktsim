@@ -30,8 +30,15 @@ They are waiting for each other.
 
 ## The running example
 
+On [page 5](05-utilization.md), the queue in front of welding had unlimited
+room: it could grow as long as it needed to. In a real line the room is limited. Here it
+is a buffer of just one place. When that place is full, cutting has to stop:
+it is blocked. When cutting falls behind, welding has nothing to work on: it
+is starved. A small buffer turns waiting into lost output: even the
+bottleneck can no longer count on a queue in front of it.
+
 Line A again, with variable cycle times at both stations (sigma 0.5,
-CV 0.53, from [page 4](04-variability.md)) and a buffer of just one place:
+CV 0.53, from [page 4](04-variability.md)) and that one-place buffer:
 
 <figure class="ts-figure">
 <div class="ts-label">Figure 6.1</div>

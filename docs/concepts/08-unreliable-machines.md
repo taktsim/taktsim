@@ -30,7 +30,7 @@ A failure is a stop that nobody planned: a jam, a broken tool, an electrical
 fault. Two averages describe a station's failures:
 
 - [MTBF](glossary.md#mtbf), the mean time between failures: how long the
-  station runs, on average, before it fails.
+  station is up (working or waiting), on average, before it fails.
 - [MTTR](glossary.md#mttr), the mean time to repair: how long, on average,
   it is down once it has failed.
 
@@ -88,15 +88,36 @@ faster than welding on average, but only just.
 ## The numbers
 
 Both failure patterns, each with 5, 20 and 50 buffer places, simulated five
-shifts at a time:
+shifts at a time. The column "Cut effective CV" is explained
+[below](#why-long-outages-hurt-more).
 
 {{#include tables/08-failures.md}}
 
 With frequent, short stops, 20 places recover almost everything: 630 parts
-per shift against 640 without any failures. With rare, long stops, the same
-20 places leave the line at 618, and even 50 places do not catch up. During
-a 30-minute outage, welding empties a full buffer of 20 in 15 minutes and is
-then starved for the rest of the repair.
+per shift against 640 without any failures. Page 7 found 635 for the same
+line. It simulated one shift from an empty line; this page simulates five
+shifts in a row, so the empty start, while the buffer slowly fills, counts
+once in five shifts instead of in every shift
+([reading simulated numbers](03-littles-law.md#reading-simulated-numbers)).
+
+With rare, long stops, the same 20 places leave the line at 618, and even
+50 places do not catch up. During a 30-minute outage, welding empties a full
+buffer of 20 in 15 minutes and is then starved for the rest of the repair.
+
+Two things make it worse:
+
+- The buffer is often not full when cutting fails. Cutting refills it only
+  with its small lead over welding: 3600 / 42 − 3600 / 45 ≈ 5.7 parts per
+  hour. Twenty places take about 3.5 hours to refill, fifty about 9 hours,
+  nearly the 10 hours between long stops. A 3-minute stop, by contrast,
+  takes only 4 parts out of the buffer, back in about 40 minutes.
+- Repairs vary. Their times are exponential
+  ([page 4](04-variability.md)): most are short, but some last far longer
+  than the mean. With a mean of 30 minutes, about 29 % of repairs last
+  longer than the 37.5 minutes a full buffer of 50 covers, and about 14 %
+  last longer than an hour.
+
+That is why 50 places still lose parts against long stops.
 
 <figure class="ts-figure ts-widget" data-widget="failures" data-config='{"mtbf": 10, "buffer": 20, "seed": 1}'>
 <div class="ts-label">Figure 8.2 · interactive · teaching simulator, not the taktsim engine</div>
@@ -121,11 +142,12 @@ $$c_e^2 = c_0^2 + 2A(1 - A)\,\frac{\text{MTTR}}{t_0}$$
 </div>
 
 Here $c_e$ is the effective CV, $c_0$ the CV without failures and $t_0$ the
-cycle time. At the same
-availability, the added term grows with the repair time. Three-minute
-repairs raise cutting's CV from 0.53 to 0.82; thirty-minute repairs raise
-it to 2.04. [Page 5](05-utilization.md) showed what higher variability
-costs.
+cycle time, with MTTR and $t_0$ in the same unit: for the short stops,
+MTTR / $t_0$ = 180 s / 42 s ≈ 4.3. At the same availability, the added
+term grows with the repair time. Three-minute repairs raise cutting's CV
+from 0.53 to 0.82; thirty-minute repairs raise it to 2.04. A more variable
+cutting station leaves welding starved more often. Welding is the
+bottleneck, so every starved minute is output the line never gets back ([page 6](06-starving-blocking.md)).
 
 ## Rule of thumb
 
@@ -133,8 +155,9 @@ costs.
 <span class="ts-label">Rule of thumb</span>
 
 Availability is not enough: ask how long the outages are. A buffer covers
-an outage only if the next station needs longer to empty it than the
-repair takes. For longer outages, shorten the repairs.
+an outage only if it is full when the outage starts and the next station
+needs longer to empty it than the repair takes. Against rare, long outages,
+shorten the repairs.
 
 </div>
 
