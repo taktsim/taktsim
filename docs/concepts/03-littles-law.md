@@ -13,7 +13,7 @@
 
 </div>
 
-**Builds on:** [1. What a production system is](01-production-systems.md)
+**Builds on:** [1. What a production line is](01-production-systems.md)
 (the four numbers), [2. Capacity and the bottleneck](02-bottleneck.md)
 
 ## Intuition

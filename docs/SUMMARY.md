@@ -5,7 +5,7 @@
 # Concepts
 
 - [Learning path](concepts/index.md)
-  - [1. What a production system is](concepts/01-production-systems.md)
+  - [1. What a production line is](concepts/01-production-systems.md)
   - [2. Capacity and the bottleneck](concepts/02-bottleneck.md)
   - [3. Little's Law](concepts/03-littles-law.md)
   - [4. Variability](concepts/04-variability.md)
