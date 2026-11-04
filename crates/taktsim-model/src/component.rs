@@ -7,6 +7,10 @@
 //! types are registered in a [`Catalog`] that the caller gives the loader,
 //! so this crate knows no component type: Source, Machine, Buffer and Sink
 //! arrive with M5, without a change to the document format or the hash.
+//!
+//! Some keys of an entry belong to the entry itself, not to its type
+//! ([`is_reserved_key`]): the envelope that every domain shares. No
+//! component type may use them as parameter names.
 
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -14,10 +18,46 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use crate::decode::{Decode, Decoder, Fields};
-use crate::error::{FieldPath, LoadErrorKind, Place};
+use crate::error::{FieldPath, LoadErrorKind, Location, NormalizeProblem, Place};
 use crate::expr::{ComponentId, Signature, TypeEnv};
 use crate::json::{Encode, Json};
-use crate::syntax::Node;
+use crate::syntax::{Node, Value};
+
+/// The keys of a component entry that belong to the entry itself, the
+/// envelope every domain shares, and not to its component type (owner's
+/// decision, 2026-11-04; ADR-0020 §6). The loader reads `id` and `type`;
+/// `description` is reserved so the envelope can add it later without
+/// breaking a component package that would otherwise have used the name.
+///
+/// ```
+/// assert_eq!(taktsim_model::RESERVED_KEYS, ["id", "type", "description"]);
+/// ```
+pub const RESERVED_KEYS: [&str; 3] = ["id", "type", "description"];
+
+/// The prefix of the keys of a component entry reserved for annotations by
+/// tools (a viewer's layout, an agent's note), such as `x-position`. No
+/// component type may use such a key; the loader does not accept them yet.
+///
+/// ```
+/// assert_eq!(taktsim_model::RESERVED_PREFIX, "x-");
+/// ```
+pub const RESERVED_PREFIX: &str = "x-";
+
+/// Whether `key` is reserved for the component entry itself: one of
+/// [`RESERVED_KEYS`], or a key starting with [`RESERVED_PREFIX`].
+///
+/// ```
+/// use taktsim_model::is_reserved_key;
+///
+/// assert!(is_reserved_key("id"));
+/// assert!(is_reserved_key("description"));
+/// assert!(is_reserved_key("x-position"));
+/// assert!(!is_reserved_key("cycle_time"));
+/// ```
+#[must_use]
+pub fn is_reserved_key(key: &str) -> bool {
+    RESERVED_KEYS.contains(&key) || key.starts_with(RESERVED_PREFIX)
+}
 
 /// A reference to a component by its id, e.g. `rework_to: asm`. The loader
 /// checks that the component exists.
@@ -125,7 +165,8 @@ impl Decode for ComponentRef {
 ///
 /// A component type reads its parameters with [`Fields`]: the loader has
 /// already read `id` and `type`, and reports every key the type did not
-/// read as unknown. Its normalized form is its [`Encode`] output, which
+/// read as unknown. A parameter may not have a name the entry reserves
+/// ([`is_reserved_key`]); the catalog refuses such a type. Its normalized form is its [`Encode`] output, which
 /// must be an object that leaves out absent optional parameters (so adding
 /// an optional parameter later does not change the hash of any existing
 /// model) and writes each value with its own `Encode` (quantities and
@@ -291,6 +332,21 @@ pub enum CatalogError {
         /// Why.
         error: crate::expr::EnvError,
     },
+    /// A component type that reads a parameter whose name is reserved for
+    /// the component entry itself ([`is_reserved_key`]).
+    #[error(
+        "component type `{type_name}` reads the parameter `{key}`, but `id`, `type`, \
+         `description` and every key starting with `x-` belong to the component entry \
+         itself; rename the parameter, e.g. `{key}` → `{type_name_lower}_{key_suffix}`",
+        type_name_lower = type_name.to_lowercase(),
+        key_suffix = key.trim_start_matches(RESERVED_PREFIX)
+    )]
+    ReservedParameter {
+        /// The component type.
+        type_name: String,
+        /// The reserved key it reads.
+        key: String,
+    },
 }
 
 /// The component types and observables a model may use.
@@ -345,7 +401,12 @@ impl Catalog {
     /// # Errors
     ///
     /// [`CatalogError::Duplicate`] if a type of that name is registered,
-    /// [`CatalogError::InvalidTypeName`] if `P::TYPE` is not an identifier.
+    /// [`CatalogError::InvalidTypeName`] if `P::TYPE` is not an identifier,
+    /// [`CatalogError::ReservedParameter`] if `P` reads a parameter whose
+    /// name is reserved for the entry itself ([`is_reserved_key`]). The
+    /// check runs `P`'s reader on an empty entry, so it sees every key the
+    /// reader asks for before it gives up; the loader checks again on every
+    /// entry it reads.
     ///
     /// ```
     /// use taktsim_model::{Catalog, ComponentParams, Fields};
@@ -384,6 +445,12 @@ impl Catalog {
         if self.kinds.contains_key(name) {
             return Err(CatalogError::Duplicate {
                 name: name.to_owned(),
+            });
+        }
+        if let Some(key) = asked_keys::<P>().into_iter().find(|k| is_reserved_key(k)) {
+            return Err(CatalogError::ReservedParameter {
+                type_name: name.to_owned(),
+                key: key.to_owned(),
             });
         }
         self.kinds.insert(name, Box::new(KindOf::<P>(PhantomData)));
@@ -592,13 +659,25 @@ impl Component {
             ("type", Json::from(self.type_name)),
         ]);
         for (key, value) in params {
-            if matches!(key.as_str(), "id" | "type") {
-                return Err(problem(crate::error::NormalizeProblem::ReservedKey(key)));
+            if is_reserved_key(&key) {
+                return Err(problem(NormalizeProblem::ReservedKey(key)));
             }
             entry = entry.with(&key, &value);
         }
         Ok(entry)
     }
+}
+
+/// The keys a component type asks for when it reads an empty entry.
+fn asked_keys<P: ComponentParams>() -> Vec<&'static str> {
+    let start = Location::new(1, 1);
+    let node = Node::new(Value::Map(Vec::new()), start, start);
+    let mut cx = Decoder::new(None);
+    let Some(mut fields) = cx.fields::<TypeName>(&node) else {
+        return Vec::new();
+    };
+    let _ = P::decode(&mut fields);
+    fields.asked().to_vec()
 }
 
 /// The `type` value of an entry.
@@ -670,6 +749,21 @@ pub(crate) fn read_component(
     };
     let before = fields.decoder().error_count();
     let params = kind.decode(&mut fields);
+    // The catalog refused types that ask for a reserved key on an empty
+    // entry; one that asks only after other keys is caught here. The loader
+    // itself asked for `id` and `type`.
+    let reserved = fields
+        .asked()
+        .iter()
+        .find(|&&k| !matches!(k, "id" | "type") && is_reserved_key(k))
+        .copied();
+    if let Some(key) = reserved {
+        let kind = LoadErrorKind::Normalize {
+            type_name: type_name.to_owned(),
+            problem: NormalizeProblem::ReservedKey(key.to_owned()),
+        };
+        fields.decoder().error(node.start(), kind);
+    }
     if params.is_none() && fields.decoder().error_count() == before {
         // A component type must record why it rejects its parameters.
         let found = fields.node().found().to_string();

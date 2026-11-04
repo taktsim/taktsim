@@ -293,6 +293,11 @@ impl<'n> Fields<'n, '_> {
         Some(self.entries[i].value())
     }
 
+    /// Every key asked for so far, present or not, in the order asked.
+    pub(crate) fn asked(&self) -> &[&'static str] {
+        &self.known
+    }
+
     /// Where the value of `key` was read from, if it is present.
     pub(crate) fn entry(&self, key: &str) -> Option<&'n Entry> {
         self.entries.iter().find(|e| e.key() == key)

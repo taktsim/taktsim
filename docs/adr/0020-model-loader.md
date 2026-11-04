@@ -143,6 +143,16 @@ named in an expression; ids are unique, also ignoring case (run outputs per
 component must not collide on case-insensitive file systems). `type`
 selects the component type; every other key is a parameter of that type.
 
+**Reserved keys** (owner's decision, 2026-11-04). `id`, `type`,
+`description` and every key starting with `x-` belong to the entry itself,
+the envelope every domain shares, and never to a component type
+(`RESERVED_KEYS`, `RESERVED_PREFIX`, `is_reserved_key`). The loader accepts
+only `id` and `type` today; `description` and `x-` keys are rejected as
+unknown keys, so accepting them later (a note for people and agents, tool
+annotations such as a viewer's layout) is additive and breaks no
+component package. Reserving them costs nothing while no component package
+exists; reserving them after one has used the name would break it.
+
 **Rust.** A component type's parameters are its own Rust struct (ADR-0018
 deviation 5) implementing `ComponentParams`: `TYPE`, an `EXAMPLE` entry,
 `decode(&mut Fields)` and `references()` (ids it names, checked by the
@@ -154,13 +164,19 @@ observables of `observe` and `experiment.precision` are declared in the
 same catalog with their signatures, whose result types M8 decides
 (ADR-0015, answer 5).
 
-**Checks.** An unknown `type` is an error listing the registered types.
+**Checks.** A component type that reads a reserved key is refused when it
+registers (`CatalogError::ReservedParameter`): the catalog runs its reader
+on an empty entry and looks at every key it asks for. A reader that asks
+for a reserved key only after another parameter is caught by the loader on
+every entry it reads, and a type whose normalized form writes a reserved
+key gets an error too. An unknown `type` is an error listing the
+registered types.
 Hence no model with components loads in M4 alone: by design, the tests use
 stand-in types. A type that rejects its parameters without recording why
 still produces an error.
 
 **Normalized form.** `{id, type}` plus the type's `Serialize` output, which
-must be a mapping without `id` or `type` keys and must leave out absent
+must be a mapping without reserved keys and must leave out absent
 optional parameters; quantities and distributions serialize in canonical
 form. A type that breaks this gets an error, not a panic.
 
@@ -442,3 +458,8 @@ envelope around domain models), the owner decided in their own words:
 `format`, `components` and `flow` only (section 8). The new seal got its
 own name because ADR-0002, ADR-0004 and the spec already use "model hash"
 for the whole normalized model.
+
+Second, "reserve them": `description` and every key starting with `x-` are
+reserved in a component entry beside `id` and `type`, so the envelope can
+add per-component keys later without breaking a component package
+(section 6). The flat entry format of spec §4 stays.
