@@ -176,39 +176,45 @@ impl Json {
     #[must_use]
     pub fn to_pretty(&self) -> String {
         let mut out = String::new();
-        self.write_pretty(&mut out, 0);
+        self.write(&mut out, Some(0));
         out
     }
 
-    fn write_pretty(&self, out: &mut String, depth: usize) {
-        let indent = |out: &mut String, depth: usize| out.extend(std::iter::repeat_n("  ", depth));
+    /// Writes the text, indented at `depth` levels, or on one line without
+    /// spaces if `depth` is `None`.
+    fn write(&self, out: &mut String, depth: Option<usize>) {
+        let newline = |out: &mut String, depth: Option<usize>| {
+            if let Some(depth) = depth {
+                out.push('\n');
+                out.extend(std::iter::repeat_n("  ", depth));
+            }
+        };
+        let inner = depth.map(|d| d + 1);
         match self {
             Self::Array(items) if !items.is_empty() => {
-                out.push_str("[\n");
+                out.push('[');
                 for (i, item) in items.iter().enumerate() {
                     if i > 0 {
-                        out.push_str(",\n");
+                        out.push(',');
                     }
-                    indent(out, depth + 1);
-                    item.write_pretty(out, depth + 1);
+                    newline(out, inner);
+                    item.write(out, inner);
                 }
-                out.push('\n');
-                indent(out, depth);
+                newline(out, depth);
                 out.push(']');
             }
             Self::Object(map) if !map.is_empty() => {
-                out.push_str("{\n");
+                out.push('{');
                 for (i, (key, value)) in map.iter().enumerate() {
                     if i > 0 {
-                        out.push_str(",\n");
+                        out.push(',');
                     }
-                    indent(out, depth + 1);
+                    newline(out, inner);
                     crate::jcs::write_string(out, key);
-                    out.push_str(": ");
-                    value.write_pretty(out, depth + 1);
+                    out.push_str(if depth.is_some() { ": " } else { ":" });
+                    value.write(out, inner);
                 }
-                out.push('\n');
-                indent(out, depth);
+                newline(out, depth);
                 out.push('}');
             }
             Self::Array(_) => out.push_str("[]"),
@@ -221,6 +227,15 @@ impl Json {
             Self::Float(x) => out.push_str(&crate::jcs::number_to_string(*x)),
             Self::String(s) => crate::jcs::write_string(out, s),
         }
+    }
+}
+
+impl std::fmt::Display for Json {
+    /// The text on one line, keys in sorted order.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut out = String::new();
+        self.write(&mut out, None);
+        f.write_str(&out)
     }
 }
 
@@ -484,6 +499,11 @@ mod tests {
             value.to_pretty(),
             "{\n  \"b\": false,\n  \"e\": [],\n  \"f\": 0.5,\n  \"i\": -3,\n  \"n\": null,\n  \"o\": {},\n  \
              \"s\": \"a\\\"\\\\\\u0001§\",\n  \"x\": {\n    \"y\": true\n  }\n}"
+        );
+        assert_eq!(
+            value.to_string(),
+            "{\"b\":false,\"e\":[],\"f\":0.5,\"i\":-3,\"n\":null,\"o\":{},\
+             \"s\":\"a\\\"\\\\\\u0001§\",\"x\":{\"y\":true}}"
         );
     }
 }

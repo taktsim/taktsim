@@ -928,6 +928,7 @@ name = "taktsim-model"
 version = "0.0.0"
 dependencies = [
  "proptest",
+ "regex",
  "saphyr-parser",
  "sha2",
  "taktsim-core",

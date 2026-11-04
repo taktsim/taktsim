@@ -74,7 +74,7 @@ impl fmt::Display for Format {
 /// [`Decode`](crate::Decode); nothing else in a node can be changed.
 ///
 /// ```
-/// use taktsim_model::{Decode, Decoder, Node, Value};
+/// use taktsim_model::{Decode, Decoder, Json, Node, Schemas, Value};
 ///
 /// // A component type's own value type, read from a node.
 /// struct Even(i64);
@@ -91,6 +91,10 @@ impl fmt::Display for Format {
 ///                 None
 ///             }
 ///         }
+///     }
+///
+///     fn schema(_: &mut Schemas) -> Json {
+///         Json::object([("type", Json::from("integer")), ("multipleOf", Json::from(2))])
 ///     }
 /// }
 /// ```
@@ -147,6 +151,36 @@ impl Node {
     #[must_use]
     pub const fn end(&self) -> Location {
         self.end
+    }
+
+    /// The value as JSON, without locations.
+    ///
+    /// ```
+    /// use taktsim_model::{Format, Json, parse};
+    ///
+    /// let node = parse("[1, 2.5, x, true, null]", Format::Yaml)?;
+    /// let json = node.to_json();
+    /// assert_eq!(json[0], Json::Integer(1));
+    /// assert_eq!(json[2], "x");
+    /// # Ok::<(), taktsim_model::LoadErrors>(())
+    /// ```
+    #[must_use]
+    pub fn to_json(&self) -> crate::json::Json {
+        use crate::json::Json;
+        match &self.value {
+            Value::Null => Json::Null,
+            Value::Bool(b) => Json::Bool(*b),
+            Value::Int(n) => Json::Integer((*n).into()),
+            Value::Float(x) => Json::Float(*x),
+            Value::Str(s) => Json::String(s.clone()),
+            Value::List(items) => Json::Array(items.iter().map(Self::to_json).collect()),
+            Value::Map(entries) => Json::Object(
+                entries
+                    .iter()
+                    .map(|e| (e.key().to_owned(), e.value().to_json()))
+                    .collect(),
+            ),
+        }
     }
 
     /// What the value is, for error messages.
