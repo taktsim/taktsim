@@ -389,6 +389,14 @@ fn without_component_types_or_observables_nothing_is_a_component_or_observable()
     ]);
     assert!(!checker.valid(&schema["$defs"]["Component"], &component));
     assert!(!checker.valid(&schema["$defs"]["Observable"], &"throughput(sink)".into()));
+    // A precision key is opaque to the schema: the experiment section is
+    // part of the envelope and must not depend on the catalog. The loader
+    // rejects an unknown function (see the malformed corpus).
+    let reference = &schema["$defs"]["ObservableRef"];
+    assert!(checker.valid(reference, &"throughput(sink)".into()));
+    assert!(checker.valid(reference, &"thruput(sink)".into()));
+    assert!(!checker.valid(reference, &"1 + 2".into()));
+    assert!(!checker.valid(reference, &"throughput".into()));
 }
 
 /// Whether the parser's error is about the text's form, which the

@@ -342,6 +342,20 @@ include:
 - `null` is never valid: an optional parameter is left out, not written as
   null, as the decoder requires.
 - No `$id` until the owner chooses one (question 9).
+- **Envelope and model apart** (owner's decision, 2026-11-04). The
+  document has two kinds of sections: the envelope, which every engine
+  shares (`format`, `model`, `experiment`, `include`), and the model,
+  whose shape belongs to the queue engine (`flow`, `observe`) and whose
+  vocabulary belongs to the factory package (`components`). An envelope
+  definition must not depend on a catalog: so a precision key is an
+  `ObservableRef`, a string with the shape of a call, and the loader
+  checks that the catalog declares the function (as it does for
+  `observe`, whose `Observable` definition stays catalog-driven, since
+  `observe` is model-side). M5 keeps the two kinds apart in `$defs` when
+  it fills the catalog; M7, where results and precision reports become
+  public API, keeps the same line in the result types. Consequence for
+  this schema: an unknown function in a precision key is no longer a
+  schema error, only a loader error, like any other unknown reference.
 
 ## Consequences
 

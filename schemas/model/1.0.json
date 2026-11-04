@@ -243,7 +243,7 @@
             "$ref": "#/$defs/Ratio"
           },
           "propertyNames": {
-            "$ref": "#/$defs/Observable"
+            "$ref": "#/$defs/ObservableRef"
           },
           "type": "object"
         },
@@ -378,6 +378,11 @@
     "Observable": {
       "description": "An observable; this catalog declares none, so none is valid.",
       "not": {}
+    },
+    "ObservableRef": {
+      "description": "A reference to an observable: a call on component ids, e.g. `throughput(sink)`. The schema only requires the shape of a call; the loader checks that the catalog declares the function, and its arguments and type.",
+      "pattern": "^[ \\t]*[A-Za-z_][A-Za-z0-9_]*[ \\t]*\\(",
+      "type": "string"
     },
     "Ratio": {
       "description": "A percentage.",

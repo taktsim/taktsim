@@ -811,8 +811,46 @@ impl Decode for Targets {
     fn schema(schemas: &mut Schemas) -> Json {
         Json::object([
             ("type", Json::from("object")),
-            ("propertyNames", schemas.of::<ObservableText>()),
+            ("propertyNames", schemas.of::<ObservableRef>()),
             ("additionalProperties", schemas.of::<Target>()),
+        ])
+    }
+}
+
+/// A precision key: a reference to an observable, opaque to the schema.
+///
+/// The experiment section belongs to the envelope, which every engine
+/// shares, so its schema must not depend on a domain's catalog (owner's
+/// decision, 2026-11-04; ADR-0020 §11). The schema only requires the
+/// shape of a call; the loader checks that the catalog declares the
+/// function, and its arguments and type, as for `observe`.
+struct ObservableRef;
+
+impl Decode for ObservableRef {
+    const EXPECTED: &'static str = String::EXPECTED;
+    const EXAMPLE: &'static str = "throughput(sink)";
+    const SCHEMA_NAME: Option<&'static str> = Some("ObservableRef");
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        String::decode(node, cx).map(|_| Self)
+    }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("string")),
+            (
+                "description",
+                Json::from(
+                    "A reference to an observable: a call on component ids, e.g. \
+                     `throughput(sink)`. The schema only requires the shape of a \
+                     call; the loader checks that the catalog declares the function, \
+                     and its arguments and type.",
+                ),
+            ),
+            (
+                "pattern",
+                Json::from(r"^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*\("),
+            ),
         ])
     }
 }
