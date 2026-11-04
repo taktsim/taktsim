@@ -3,7 +3,7 @@
 use taktsim_core::random::{DistributionError, DurationDistribution};
 use taktsim_units::SimDuration;
 
-use crate::decode::{Decode, Decoder};
+use crate::decode::{Decode, Decoder, Schemas};
 use crate::error::{LoadErrorKind, Segment};
 use crate::json::{Encode, Json};
 use crate::syntax::{Node, Value};
@@ -248,6 +248,13 @@ impl Decode for Name {
         cx.error(node.start(), kind);
         None
     }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([(
+            "enum",
+            Json::Array(DISTRIBUTIONS.iter().map(|&n| Json::from(n)).collect()),
+        )])
+    }
 }
 
 /// The parameter a distribution error is about.
@@ -269,6 +276,28 @@ impl Decode for Distribution {
     const EXPECTED: &'static str =
         "a duration (a constant), or a distribution such as `{dist: exponential, mean: 12min}`";
     const EXAMPLE: &'static str = "{dist: lognormal, mean: 42s, sigma: 0.08}";
+    const SCHEMA_NAME: Option<&'static str> = Some("Distribution");
+
+    /// A constant duration, or one object per distribution with the keys
+    /// its decoder reads.
+    fn schema(schemas: &mut Schemas) -> Json {
+        let constant = schemas
+            .of::<SimDuration>()
+            .with("description", &"A constant duration.");
+        let mut one_of = vec![constant];
+        for (name, description) in DESCRIPTIONS {
+            one_of.push(object_schema(name, description, schemas));
+        }
+        Json::object([
+            (
+                "description",
+                Json::from(
+                    "A duration (a constant), or a distribution named by `dist` with named parameters (ADR-0003).",
+                ),
+            ),
+            ("oneOf", Json::Array(one_of)),
+        ])
+    }
 
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
         match node.value() {
@@ -314,6 +343,91 @@ impl Decode for Distribution {
     }
 }
 
+/// A shape parameter (`sigma`, `cv`, `shape`): read as any number, so the
+/// sampler's constructor reports a non-positive one with its own typed
+/// error; the schema states the rule.
+struct Positive(f64);
+
+impl Decode for Positive {
+    const EXPECTED: &'static str = f64::EXPECTED;
+    const EXAMPLE: &'static str = "0.5";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        f64::decode(node, cx).map(Self)
+    }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("number")),
+            ("exclusiveMinimum", Json::from(0)),
+        ])
+    }
+}
+
+/// Erlang's `k`: read as any whole number, so the constructor reports 0;
+/// the schema states the rule.
+struct Phases(u32);
+
+impl Decode for Phases {
+    const EXPECTED: &'static str = u32::EXPECTED;
+    const EXAMPLE: &'static str = u32::EXAMPLE;
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        u32::decode(node, cx).map(Self)
+    }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("integer")),
+            ("minimum", Json::from(1)),
+            ("maximum", Json::from(u32::MAX)),
+        ])
+    }
+}
+
+/// What each distribution is, for the schema.
+const DESCRIPTIONS: [(&str, &str); 8] = [
+    ("exponential", "Exponential with the given mean."),
+    (
+        "normal",
+        "Normal, truncated at zero by rejection (ADR-0013).",
+    ),
+    (
+        "lognormal",
+        "Lognormal: `mean` is the distribution's mean, `sigma` the standard deviation of its logarithm.",
+    ),
+    ("uniform", "Uniform between `min` and `max`."),
+    ("triangular", "Triangular with `min <= mode <= max`."),
+    (
+        "gamma",
+        "Gamma with the given mean and coefficient of variation.",
+    ),
+    ("erlang", "Erlang: the sum of `k` exponential phases."),
+    ("weibull", "Weibull."),
+];
+
+/// The schema of distribution `name`: its parameters as `read` asks for
+/// them, with `dist` first.
+fn object_schema(name: &str, description: &str, schemas: &mut Schemas) -> Json {
+    let schema = schemas.describe(|f| {
+        let _ = read(name, f);
+    });
+    let Json::Object(mut map) = schema else {
+        return schema;
+    };
+    if let Some(Json::Object(properties)) = map.get_mut("properties") {
+        properties.insert(
+            "dist".to_owned(),
+            Json::object([("const", Json::from(name))]),
+        );
+    }
+    if let Some(Json::Array(required)) = map.get_mut("required") {
+        required.insert(0, Json::from("dist"));
+    }
+    map.insert("description".to_owned(), Json::from(description));
+    Json::Object(map)
+}
+
 /// Reads the parameters of the distribution `name`.
 fn read(name: &str, f: &mut crate::decode::Fields<'_, '_>) -> Option<Distribution> {
     Some(match name {
@@ -328,10 +442,10 @@ fn read(name: &str, f: &mut crate::decode::Fields<'_, '_>) -> Option<Distributio
             }
         }
         "lognormal" => {
-            let (mean, sigma) = (f.required("mean"), f.required("sigma"));
+            let (mean, sigma) = (f.required("mean"), f.required::<Positive>("sigma"));
             Distribution::LogNormal {
                 mean: mean?,
-                sigma: sigma?,
+                sigma: sigma?.0,
             }
         }
         "uniform" => {
@@ -350,21 +464,24 @@ fn read(name: &str, f: &mut crate::decode::Fields<'_, '_>) -> Option<Distributio
             }
         }
         "gamma" => {
-            let (mean, cv) = (f.required("mean"), f.required("cv"));
+            let (mean, cv) = (f.required("mean"), f.required::<Positive>("cv"));
             Distribution::Gamma {
                 mean: mean?,
-                cv: cv?,
+                cv: cv?.0,
             }
         }
         "erlang" => {
-            let (mean, k) = (f.required("mean"), f.required("k"));
-            Distribution::Erlang { mean: mean?, k: k? }
+            let (mean, k) = (f.required("mean"), f.required::<Phases>("k"));
+            Distribution::Erlang {
+                mean: mean?,
+                k: k?.0,
+            }
         }
         "weibull" => {
-            let (scale, shape) = (f.required("scale"), f.required("shape"));
+            let (scale, shape) = (f.required("scale"), f.required::<Positive>("shape"));
             Distribution::Weibull {
                 scale: scale?,
-                shape: shape?,
+                shape: shape?.0,
             }
         }
         _ => return None,

@@ -81,13 +81,14 @@ mod include;
 pub mod jcs;
 mod json;
 mod load;
+mod schema;
 mod syntax;
 
 pub use component::{
     Catalog, CatalogError, Component, ComponentParams, ComponentRef, RESERVED_KEYS,
     RESERVED_PREFIX, is_reserved_key,
 };
-pub use decode::{Decode, Decoder, Fields};
+pub use decode::{Decode, Decoder, Fields, Record, Schemas};
 pub use distribution::{DISTRIBUTIONS, Distribution};
 pub use document::{
     Document, Edge, Experiment, ExperimentKind, FORMAT_VERSION, ModelInfo, Observable, Precision,
@@ -100,5 +101,6 @@ pub use error::{
 pub use hash::{ModelHash, ParseHashError, SYSTEM_SECTIONS, SystemHash};
 pub use include::{DirResolver, Included, Resolver};
 pub use json::{Encode, Json};
-pub use load::{Loader, Model, decode_str};
+pub use load::{Loader, Model, decode_str, parse};
+pub use schema::model_schema;
 pub use syntax::{Entry, Format, MAX_NESTING, Node, Value};
