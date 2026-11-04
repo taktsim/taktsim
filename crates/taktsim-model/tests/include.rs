@@ -36,6 +36,7 @@ fn a_map_resolves_includes_for_models_given_as_text() {
         .load_str(&inline, Format::Yaml)
         .unwrap();
     assert_eq!(single.hash(), model.hash());
+    assert_eq!(single.system_hash(), model.system_hash());
     assert_eq!(single.includes(), []);
 }
 

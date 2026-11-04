@@ -648,11 +648,13 @@ proptest! {
         for other in &spellings[1..] {
             prop_assert_eq!(other.canonical_json(), first.canonical_json());
             prop_assert_eq!(other.hash(), first.hash());
+            prop_assert_eq!(other.system_hash(), first.system_hash());
         }
         // Normalizing is idempotent: the canonical form loads to itself.
         let again = load(first.canonical_json(), Format::Json);
         prop_assert_eq!(again.canonical_json(), first.canonical_json());
         prop_assert_eq!(again.hash(), first.hash());
+        prop_assert_eq!(again.system_hash(), first.system_hash());
     }
 
     #[test]

@@ -94,7 +94,7 @@ pub use error::{
     Ambiguity, FieldPath, Found, IncludePathProblem, JsonProblem, LoadError, LoadErrorKind,
     LoadErrors, Location, MAX_INTEGER, NormalizeProblem, Place, Segment,
 };
-pub use hash::{ModelHash, ParseHashError};
+pub use hash::{ModelHash, ParseHashError, SYSTEM_SECTIONS, SystemHash};
 pub use include::{DirResolver, Included, Resolver};
 pub use json::{Encode, Json};
 pub use load::{Loader, Model, decode_str};
