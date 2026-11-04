@@ -8,7 +8,8 @@
 //! 3. Resolve `include:`: read, hash and decode each file.
 //! 4. Check what spans the document: ids unique, every reference names a
 //!    component, the flow graph, the observables.
-//! 5. Normalize, canonicalize (RFC 8785) and hash (SHA-256).
+//! 5. Normalize, canonicalize (RFC 8785) and hash (SHA-256): the whole
+//!    model for the model hash, its system sections for the system hash.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -22,12 +23,13 @@ use crate::error::{
     FieldPath, LoadError, LoadErrorKind, LoadErrors, Location, Place, Segment, suggest,
 };
 use crate::expr::{Expected, ExprKind, TypeEnv, check, parse};
-use crate::hash::ModelHash;
+use crate::hash::{ModelHash, SYSTEM_SECTIONS, SystemHash};
 use crate::include::{DirResolver, Included, Resolver};
 use crate::jcs::canonicalize;
+use crate::json::Json;
 use crate::syntax::{self, Format, Node};
 
-/// A model that loaded: its typed document, canonical form and hash.
+/// A model that loaded: its typed document, canonical form and hashes.
 ///
 /// ```
 /// use taktsim_model::{Catalog, ComponentParams, Encode, Fields, Format, Json, Loader};
@@ -59,6 +61,7 @@ use crate::syntax::{self, Format, Node};
 /// let a = loader.load_str(yaml, Format::Yaml)?;
 /// let b = loader.load_str(json, Format::Json)?;
 /// assert_eq!(a.hash(), b.hash());
+/// assert_eq!(a.system_hash(), b.system_hash());
 /// assert!(a.canonical_json().starts_with(r#"{"components":[{"id":"a","type":"Station"}"#));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -67,6 +70,7 @@ pub struct Model {
     document: Document,
     canonical: String,
     hash: ModelHash,
+    system_hash: SystemHash,
     includes: Vec<Included>,
 }
 
@@ -83,7 +87,9 @@ impl Model {
         &self.document
     }
 
-    /// The model hash: SHA-256 of [`canonical_json`](Self::canonical_json).
+    /// The model hash: SHA-256 of [`canonical_json`](Self::canonical_json),
+    /// the whole model. It identifies everything a run needs to be redone
+    /// exactly (spec §4, §8).
     ///
     /// ```
     /// fn hash(model: &taktsim_model::Model) -> String {
@@ -93,6 +99,22 @@ impl Model {
     #[must_use]
     pub const fn hash(&self) -> ModelHash {
         self.hash
+    }
+
+    /// The system hash: SHA-256 of the canonical JSON of only the
+    /// [`SYSTEM_SECTIONS`](crate::SYSTEM_SECTIONS) (`format`, `components`,
+    /// `flow`). It identifies the system, and stays the same when the
+    /// model's name, seed, time unit, experiment or observables change
+    /// (ADR-0020 §8).
+    ///
+    /// ```
+    /// fn same_system(a: &taktsim_model::Model, b: &taktsim_model::Model) -> bool {
+    ///     a.system_hash() == b.system_hash()
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn system_hash(&self) -> SystemHash {
+        self.system_hash
     }
 
     /// The normalized model as canonical JSON (RFC 8785): includes
@@ -438,7 +460,9 @@ impl Run<'_> {
         self.hash(document, included, &main_place)
     }
 
-    /// Normalizes, canonicalizes and hashes a checked document.
+    /// Normalizes, canonicalizes and hashes a checked document: the whole
+    /// normalized form for the model hash, and the object of only its
+    /// system sections for the system hash.
     fn hash(
         &mut self,
         document: Document,
@@ -452,23 +476,32 @@ impl Run<'_> {
                 return None;
             }
         };
-        let canonical = match canonicalize(&json) {
-            Ok(text) => text,
+        let canonical = self.canonical(&json, main_place)?;
+        let system = Json::object(SYSTEM_SECTIONS.map(|key| (key, json[key].clone())));
+        let system_canonical = self.canonical(&system, main_place)?;
+        Some(Model {
+            hash: ModelHash::of(canonical.as_bytes()),
+            system_hash: SystemHash::of(system_canonical.as_bytes()),
+            canonical,
+            document,
+            includes: included,
+        })
+    }
+
+    /// The canonical JSON of a normalized value, or an error at the model
+    /// file if a number has no canonical form.
+    fn canonical(&mut self, json: &Json, main_place: &Place) -> Option<String> {
+        match canonicalize(json) {
+            Ok(text) => Some(text),
             Err(e) => {
                 let kind = LoadErrorKind::Normalize {
                     type_name: "(document)".to_owned(),
                     problem: crate::error::NormalizeProblem::Number(e.to_string()),
                 };
                 self.error(main_place, FieldPath::default(), kind);
-                return None;
+                None
             }
-        };
-        Some(Model {
-            hash: ModelHash::of(canonical.as_bytes()),
-            canonical,
-            document,
-            includes: included,
-        })
+        }
     }
 
     /// Reads, hashes and decodes one included file.

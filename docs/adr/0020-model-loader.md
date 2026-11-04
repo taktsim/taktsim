@@ -164,12 +164,12 @@ must be a mapping without `id` or `type` keys and must leave out absent
 optional parameters; quantities and distributions serialize in canonical
 form. A type that breaks this gets an error, not a panic.
 
-**Why M5 changes neither format nor hash.** The entry syntax and the hash
-function are fixed here; M5 adds types to a catalog. A model's hash exists
-only once its types do (before, it does not load), and it is the hash this
-ADR defines. Because absent optional values are never written into the
-normalized form, adding an optional parameter later leaves every existing
-model's hash unchanged.
+**Why M5 changes neither format nor hashes.** The entry syntax and the
+hash functions are fixed here; M5 adds types to a catalog. A model's
+hashes exist only once its types do (before, it does not load), and they
+are the hashes this ADR defines. Because absent optional values are never
+written into the normalized form, adding an optional parameter later
+leaves every existing model's hashes unchanged.
 
 ### 7. Normalization (reading of ADR-0002)
 
@@ -216,6 +216,28 @@ as 64 lowercase hex digits. The canonical form and hash of spec §4's
 example are pinned in a test that runs on every tier-1 target, and were
 checked independently with `sha256sum` and Python.
 
+**Two hashes** (owner's decision, 2026-11-04). A model has two
+fingerprints, because two questions need different answers:
+
+| | Model hash (`ModelHash`) | System hash (`SystemHash`) |
+| --- | --- | --- |
+| Answers | "is this exactly the run I can redo?" | "is this the same system?" |
+| Covers | the whole normalized model | only `format`, `components`, `flow` (`SYSTEM_SECTIONS`) |
+| Computed as | SHA-256 of the canonical JSON of the normalized model (ADR-0002, unchanged) | SHA-256 of the canonical JSON of the object holding only those three keys, with their normalized values |
+| Used by | run ids, run provenance, trace headers, exact replay (spec §4, §5, §8, §9; ADR-0004) | from v0.3, calibration certificates (spec §6), so a calibration stays valid when only what is asked of the system changes |
+
+The rule behind the split: the system hash covers what the system is;
+`model` (name, seed, time unit), `experiment` (type, horizon, precision)
+and `observe` are what is asked of it, and only the model hash covers
+them. So changing a horizon from 8 h to 24 h changes the model hash and
+keeps the system hash; changing a cycle time or an edge changes both.
+Anyone can recompute the system hash from `canonical_json` in any
+language: keep the keys `components`, `flow` and `format`, write the
+object as canonical JSON, hash it. The system hash of spec §4's example is
+pinned next to its model hash and was computed independently, in Python,
+from the pinned canonical form. The name "model hash" keeps the meaning
+ADR-0002 gave it, so no accepted ADR and no line of the spec changes.
+
 ### 9. `include:` (detail of spec §4 and ADR-0002)
 
 ```yaml
@@ -235,8 +257,8 @@ include:
 - Every included file is hashed (SHA-256 of its bytes); the hashes are
   returned with the model (`Model::includes`) for provenance. A `sha256`
   pin makes a changed file an error that shows the actual hash.
-- The model hash covers the resolved content, not file names: moving
-  entries into an included file (and keeping their order) keeps the hash.
+- Both hashes cover the resolved content, not file names: moving entries
+  into an included file (and keeping their order) keeps both.
 - Files are read through a `Resolver`: the model's directory for
   `Loader::load_file`, or a map of path to text for models held in memory
   (tests, the browser viewer).
@@ -309,12 +331,15 @@ include:
 
 - `validate` (M7) gets every error of a model in one run, each with file,
   line, column, path, what was found, what is allowed and an example.
-- A model's hash is the same for every spelling and on every platform:
+- A model's hashes are the same for every spelling and on every platform:
   property tests write generated models in YAML block and flow style and in
   JSON, with any key order, quoting, quantity spelling, chain or edge form
-  and spacing inside expressions, and compare hashes.
+  and spacing inside expressions, and compare both hashes.
+- A test edits spec §4's example one line at a time: the name, seed, time
+  unit, horizon, precision and observables change only the model hash; a
+  cycle time, a capacity and an edge change both.
 - M5 implements `ComponentParams` for Source, Machine, Buffer and Sink and
-  fills a catalog; it changes neither the document format nor the hash.
+  fills a catalog; it changes neither the document format nor the hashes.
 - New dependencies of `taktsim-model`: `saphyr-parser` (with `arraydeque`),
   MIT OR Apache-2.0; `sha2` and its family only until
   `taktsim_core::digest` is merged. `taktsim-model` now depends on
@@ -407,3 +432,13 @@ The owner explicitly accepted every recommendation:
 
 The status line is unchanged: merging the M4 pull requests accepts this
 ADR, now with the owner's explicit answers.
+
+## Owner's decision (2026-11-04)
+
+In the walkthrough session on this pull request, after the vision of
+2026-11-01 (a tool for agents to reason about reality, with a shared
+envelope around domain models), the owner decided in their own words:
+"two seals". A model has a model hash, unchanged, and a system hash over
+`format`, `components` and `flow` only (section 8). The new seal got its
+own name because ADR-0002, ADR-0004 and the spec already use "model hash"
+for the whole normalized model.

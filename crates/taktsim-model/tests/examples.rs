@@ -76,6 +76,7 @@ fn every_valid_fixture_loads() {
                 .load_str(model.canonical_json(), Format::Json)
                 .unwrap();
             assert_eq!(again.hash(), model.hash(), "{}", path.display());
+            assert_eq!(again.system_hash(), model.system_hash());
             assert_eq!(again.canonical_json(), model.canonical_json());
             loaded += 1;
         }
@@ -91,6 +92,8 @@ fn yaml_json_and_included_spellings_have_one_hash() {
     assert_eq!(json.canonical_json(), yaml.canonical_json());
     assert_eq!(json.hash(), yaml.hash());
     assert_eq!(included.hash(), yaml.hash());
+    assert_eq!(json.system_hash(), yaml.system_hash());
+    assert_eq!(included.system_hash(), yaml.system_hash());
     let files: Vec<(&str, &str)> = included
         .includes()
         .iter()
@@ -106,18 +109,75 @@ fn yaml_json_and_included_spellings_have_one_hash() {
     );
 }
 
-/// The canonical form and hash of the spec's example, fixed: the same on
-/// every platform (CI runs this on every tier-1 target), and changed only
-/// with an intended change of the normalized form.
+/// The pinned model hash of the spec's example.
+const MODEL_HASH: &str = "56d63bb349f4eef8da1e437c48f4e01206eaee6315c97c5913637f56ff462dae";
+
+/// The pinned system hash of the spec's example, computed independently of
+/// this crate: Python's `json.dumps(sort_keys=True, separators=(",", ":"),
+/// ensure_ascii=False)` reproduces `spec-line-a.canonical.json` byte for
+/// byte, and SHA-256 of its dump of `{format, components, flow}` is this.
+const SYSTEM_HASH: &str = "18c3cbaad4e836fd4c29a17ba0a88ff553dfb516a69886db10ed2efb09d89904";
+
+/// The canonical form and both hashes of the spec's example, fixed: the
+/// same on every platform (CI runs this on every tier-1 target), and
+/// changed only with an intended change of the normalized form.
 #[test]
-fn the_canonical_form_and_hash_are_fixed() {
+fn the_canonical_form_and_hashes_are_fixed() {
     let model = load(&data("valid").join("spec-line-a.yaml"));
     let expected = std::fs::read_to_string(data("spec-line-a.canonical.json")).unwrap();
     assert_eq!(model.canonical_json(), expected.trim_end());
-    assert_eq!(
-        model.hash().to_string(),
-        "56d63bb349f4eef8da1e437c48f4e01206eaee6315c97c5913637f56ff462dae"
-    );
+    assert_eq!(model.hash().to_string(), MODEL_HASH);
+    assert_eq!(model.system_hash().to_string(), SYSTEM_HASH);
+}
+
+#[allow(clippy::panic)] // Test helper: a model that does not load fails the test.
+fn load_yaml(text: &str) -> Model {
+    let catalog = catalog();
+    match Loader::new(&catalog).load_str(text, Format::Yaml) {
+        Ok(model) => model,
+        Err(errors) => panic!("{errors}"),
+    }
+}
+
+/// `text` with the one occurrence of `from` replaced by `to`.
+fn edit(text: &str, from: &str, to: &str) -> String {
+    assert_eq!(text.matches(from).count(), 1, "{from:?}");
+    text.replacen(from, to, 1)
+}
+
+/// The system hash covers what the system is (`format`, `components`,
+/// `flow`); what is asked of it (name, seed, time unit, experiment,
+/// observables) changes only the model hash (ADR-0020 §8).
+#[test]
+fn the_system_hash_changes_only_with_the_system() {
+    let text = std::fs::read_to_string(data("valid").join("spec-line-a.yaml")).unwrap();
+    let base = load_yaml(&text);
+    let asked_of_it = [
+        ("name: line-a", "name: line-b"),
+        ("seed: 42", "seed: 7"),
+        ("time_unit: s", "time_unit: min"),
+        ("horizon: 8h", "horizon: 24h"),
+        ("throughput(sink): 2%", "throughput(sink): 5%"),
+        ("  - wip(buf1)\n", ""),
+    ];
+    for (from, to) in asked_of_it {
+        let changed = load_yaml(&edit(&text, from, to));
+        assert_ne!(changed.hash(), base.hash(), "{from:?}");
+        assert_eq!(changed.system_hash(), base.system_hash(), "{from:?}");
+    }
+    let the_system = [
+        ("cycle_time: 45s", "cycle_time: 46s"),
+        ("capacity: 20 parts", "capacity: 21 parts"),
+        (
+            "[source, cut, buf1, weld, sink]",
+            "[source, cut, buf1, weld, sink]\n  - {from: cut, to: sink}",
+        ),
+    ];
+    for (from, to) in the_system {
+        let changed = load_yaml(&edit(&text, from, to));
+        assert_ne!(changed.hash(), base.hash(), "{from:?}");
+        assert_ne!(changed.system_hash(), base.system_hash(), "{from:?}");
+    }
 }
 
 /// The spec's YAML block that starts with `first_line`.
@@ -144,10 +204,8 @@ fn the_spec_v0_1_model_document_loads() {
         Ok(model) => model,
         Err(errors) => panic!("{errors}"),
     };
-    assert_eq!(
-        model.hash().to_string(),
-        "56d63bb349f4eef8da1e437c48f4e01206eaee6315c97c5913637f56ff462dae"
-    );
+    assert_eq!(model.hash().to_string(), MODEL_HASH);
+    assert_eq!(model.system_hash().to_string(), SYSTEM_HASH);
 }
 
 #[test]
