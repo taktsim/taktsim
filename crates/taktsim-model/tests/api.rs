@@ -11,8 +11,9 @@ use support::summary;
 use taktsim_core::random::DistributionError;
 use taktsim_model::expr::parse;
 use taktsim_model::{
-    Ambiguity, Catalog, ComponentParams, Encode, Fields, Format, Found, IncludePathProblem, Json,
-    JsonProblem, LoadErrorKind, Loader, Location, NormalizeProblem, Place, Resolver,
+    Ambiguity, Catalog, CatalogError, ComponentParams, Encode, Fields, Format, Found,
+    IncludePathProblem, Json, JsonProblem, LoadErrorKind, Loader, Location, NormalizeProblem,
+    Place, Resolver,
 };
 use taktsim_units::UnitError;
 
@@ -130,6 +131,157 @@ impl ComponentParams for Silent {
     }
 }
 
+/// Writes an annotation key, which the entry reserves.
+#[derive(Debug)]
+struct WritesAnnotation;
+
+impl Encode for WritesAnnotation {
+    fn encode(&self) -> Json {
+        Json::object([]).with("x-layout", &1_u32)
+    }
+}
+
+impl ComponentParams for WritesAnnotation {
+    const TYPE: &'static str = "Odd";
+    const EXAMPLE: &'static str = "{id: a, type: Odd}";
+    fn decode(_: &mut Fields<'_, '_>) -> Option<Self> {
+        Some(Self)
+    }
+}
+
+/// A component type that reads the optional parameter `KEY`.
+#[derive(Debug)]
+struct Reads<const KEY: u8>;
+
+impl<const KEY: u8> Reads<KEY> {
+    const NAMES: [&'static str; 4] = ["id", "type", "description", "x-position"];
+}
+
+impl<const KEY: u8> Encode for Reads<KEY> {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
+
+impl<const KEY: u8> ComponentParams for Reads<KEY> {
+    const TYPE: &'static str = "Odd";
+    const EXAMPLE: &'static str = "{id: a, type: Odd}";
+    fn decode(fields: &mut Fields<'_, '_>) -> Option<Self> {
+        let _ = fields.optional::<String>(Self::NAMES[usize::from(KEY)])?;
+        Some(Self)
+    }
+}
+
+/// Asks for `description` only after a required parameter, so reading an
+/// empty entry gives up before it: the loader has to catch it.
+#[derive(Debug)]
+struct LateReserved;
+
+impl Encode for LateReserved {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
+
+impl ComponentParams for LateReserved {
+    const TYPE: &'static str = "Odd";
+    const EXAMPLE: &'static str = "{id: a, type: Odd, size: big}";
+    fn decode(fields: &mut Fields<'_, '_>) -> Option<Self> {
+        let _ = fields.required::<String>("size")?;
+        let _ = fields.optional::<String>("description")?;
+        Some(Self)
+    }
+}
+
+/// Reads nothing: a valid component type.
+#[derive(Debug)]
+struct Plain;
+
+impl Encode for Plain {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
+
+impl ComponentParams for Plain {
+    const TYPE: &'static str = "Odd";
+    const EXAMPLE: &'static str = "{id: a, type: Odd}";
+    fn decode(_: &mut Fields<'_, '_>) -> Option<Self> {
+        Some(Self)
+    }
+}
+
+/// The keys of the entry itself (`id`, `type`, `description`, `x-…`) are
+/// refused as parameter names when a component type registers (ADR-0020
+/// §6; owner's decision, 2026-11-04).
+#[test]
+fn a_component_type_cannot_read_a_key_the_entry_reserves() {
+    let refused = [
+        (Catalog::new().with::<Reads<0>>().map(|_| ()), "id"),
+        (Catalog::new().with::<Reads<1>>().map(|_| ()), "type"),
+        (Catalog::new().with::<Reads<2>>().map(|_| ()), "description"),
+        (Catalog::new().with::<Reads<3>>().map(|_| ()), "x-position"),
+    ];
+    for (result, key) in refused {
+        let expected = CatalogError::ReservedParameter {
+            type_name: "Odd".to_owned(),
+            key: key.to_owned(),
+        };
+        assert_eq!(result.unwrap_err().to_string(), expected.to_string());
+    }
+    assert_eq!(
+        Catalog::new().with::<Reads<3>>().unwrap_err().to_string(),
+        "component type `Odd` reads the parameter `x-position`, but `id`, `type`, \
+         `description` and every key starting with `x-` belong to the component entry \
+         itself; rename the parameter, e.g. `x-position` → `odd_position`"
+    );
+}
+
+/// A type that asks for a reserved key only after another parameter passes
+/// registration, and is caught on every entry the loader reads.
+#[test]
+fn a_reserved_key_asked_late_is_caught_when_loading() {
+    let catalog = Catalog::new().with::<LateReserved>().unwrap();
+    let model = MODEL.replace("type: Odd}", "type: Odd, size: big}");
+    let errors = Loader::new(&catalog)
+        .load_str(&model, Format::Yaml)
+        .unwrap_err();
+    let texts: Vec<String> = errors
+        .iter()
+        .map(|e| format!("{} {}", summary_one(e), e.kind()))
+        .collect();
+    assert_eq!(texts.len(), 2, "{texts:?}");
+    assert_eq!(
+        texts[0],
+        "components[0] @ 4:14 the parameters of component type `Odd` cannot be normalized: \
+         the parameters use the reserved key `description`"
+    );
+    assert!(texts[1].starts_with("components[1] @ "), "{texts:?}");
+}
+
+/// The envelope does not accept `description` or `x-` keys yet: a model
+/// writer gets the unknown-key error, so accepting them later is additive.
+#[test]
+fn a_model_cannot_use_a_reserved_key_yet() {
+    let catalog = Catalog::new().with::<Plain>().unwrap();
+    for key in ["description", "x-position"] {
+        let model = MODEL.replacen("type: Odd}", &format!("type: Odd, {key}: hi}}"), 1);
+        let errors = Loader::new(&catalog)
+            .load_str(&model, Format::Yaml)
+            .unwrap_err();
+        let first = errors.first();
+        assert_eq!(
+            first.path().to_string(),
+            format!("components[0].{key}").replace(".x-position", "[\"x-position\"]")
+        );
+        assert!(
+            matches!(first.kind(), LoadErrorKind::UnknownField { .. }),
+            "{key}: {}",
+            first.kind()
+        );
+    }
+}
+
 #[test]
 fn parameters_without_a_normalized_form_are_errors_not_panics() {
     assert_eq!(
@@ -143,7 +295,14 @@ fn parameters_without_a_normalized_form_are_errors_not_panics() {
         errors_with::<Reserved>(),
         [
             "components[0] @ 4:14 the parameters of component type `Odd` cannot be normalized: \
-          the parameters serialize the reserved key `id`"
+          the parameters use the reserved key `id`"
+        ]
+    );
+    assert_eq!(
+        errors_with::<WritesAnnotation>(),
+        [
+            "components[0] @ 4:14 the parameters of component type `Odd` cannot be normalized: \
+          the parameters use the reserved key `x-layout`"
         ]
     );
     let not_finite = errors_with::<NotFinite>();

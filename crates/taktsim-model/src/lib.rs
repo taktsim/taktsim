@@ -83,7 +83,10 @@ mod json;
 mod load;
 mod syntax;
 
-pub use component::{Catalog, CatalogError, Component, ComponentParams, ComponentRef};
+pub use component::{
+    Catalog, CatalogError, Component, ComponentParams, ComponentRef, RESERVED_KEYS,
+    RESERVED_PREFIX, is_reserved_key,
+};
 pub use decode::{Decode, Decoder, Fields};
 pub use distribution::{DISTRIBUTIONS, Distribution};
 pub use document::{

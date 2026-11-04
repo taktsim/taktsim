@@ -448,8 +448,9 @@ impl fmt::Display for IncludePathProblem {
 pub enum NormalizeProblem {
     /// The parameters did not serialize to a mapping.
     NotAMapping,
-    /// The parameters serialized a key the entry itself uses (`id`,
-    /// `type`).
+    /// The component type reads or writes a key reserved for the entry
+    /// itself ([`is_reserved_key`](crate::is_reserved_key)): `id`, `type`,
+    /// `description`, or one starting with `x-`.
     ReservedKey(String),
     /// A number canonical JSON cannot represent: an integer beyond ±2^53,
     /// or one that is not finite.
@@ -461,7 +462,7 @@ impl fmt::Display for NormalizeProblem {
         match self {
             Self::NotAMapping => f.write_str("the parameters did not serialize to a mapping"),
             Self::ReservedKey(key) => {
-                write!(f, "the parameters serialize the reserved key `{key}`")
+                write!(f, "the parameters use the reserved key `{key}`")
             }
             Self::Number(n) => write!(f, "the number {n} has no exact canonical JSON form"),
         }
