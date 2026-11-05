@@ -491,3 +491,14 @@ stale. The scratch change was not committed.
    one condition in `ci/bench-compare.sh` and its tests.
 3. The cap of +1000 % is a judgement; a lower cap (say +100 %) would make
    larger acceptances a deliberate rename instead.
+
+**Owner's answers (2026-11-05).**
+
+1. `bench` becomes a required check on `main` together with `schema
+   freshness` and `trace hashes (identical on every target)`, and
+   `CODEOWNERS` review is enforced, in one ruleset change by the owner.
+2. Stale entries keep failing only a pull request that changes the list:
+   failing unrelated pull requests would punish the wrong author.
+3. The cap stays at +1000 %: a larger change is a different workload, and
+   the gate's own rule already says so (a new benchmark, the old one
+   listed as removed).
