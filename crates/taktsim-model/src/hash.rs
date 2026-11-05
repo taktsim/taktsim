@@ -5,7 +5,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use taktsim_core::digest::sha256;
+use sha2::{Digest, Sha256};
 
 /// The SHA-256 of a model's canonical form: the same for every spelling of
 /// the same model (YAML or JSON, any key order, comments, shorthands,
@@ -39,7 +39,7 @@ impl ModelHash {
     /// ```
     #[must_use]
     pub fn of(bytes: &[u8]) -> Self {
-        Self(sha256(bytes))
+        Self(Sha256::digest(bytes).into())
     }
 
     /// The 32 bytes of the hash.

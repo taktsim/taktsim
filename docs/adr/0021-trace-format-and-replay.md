@@ -214,65 +214,39 @@ Three small changes, none with a branch:
   every kind, and with the attribute a new kind would compile and be
   dropped by a wildcard arm (CLAUDE.md: no wildcard arms).
 
-And one module, `taktsim_core::digest` (below).
 
-### Hashes and checksums in our own code
+### Hashes and checksums: `sha2` and `crc32fast`
 
-The first version of this PR used `sha2` 0.11.1 (with `digest`,
-`block-buffer`, `crypto-common`, `hybrid-array`, `typenum`) and
-`crc32fast` 1.5.3. The owner decided on 2026-10-27 to keep shipped
-dependencies slim and replace both with our own code. It lives in
-`taktsim_core::digest`: pure computation, which core may contain (no I/O,
-no new dependency), and the model hash of M4 (ADR-0002) uses it too.
+SHA-256 (stream hash, file hash, and the model and system hashes of M4)
+comes from `sha2` 0.11.1 (RustCrypto, MIT OR Apache-2.0, default
+features off, with `digest`, `block-buffer`, `crypto-common`,
+`hybrid-array`, `typenum`, and `cpufeatures` on x86-64), CRC-32/ISO-HDLC from `crc32fast` 1.5.4 (MIT
+OR Apache-2.0, default features off). Both are the standard
+implementations in the Rust ecosystem (cargo, rustup and `flate2` use
+them) and have hardware paths with runtime detection that give the same
+bytes as the scalar ones.
 
-```rust
-pub struct Sha256;           // Default, Clone, Debug
-impl Sha256 {
-    pub const fn new() -> Self;
-    pub fn update(&mut self, bytes: &[u8]);
-    pub fn finalize(self) -> [u8; 32];
-}
-pub fn sha256(bytes: &[u8]) -> [u8; 32];
-
-pub struct Crc32;            // Default, Clone, Debug
-impl Crc32 {
-    pub const fn new() -> Self;
-    pub fn update(&mut self, bytes: &[u8]);
-    pub const fn finalize(self) -> u32;
-}
-pub fn crc32(bytes: &[u8]) -> u32;
-```
-
-- **SHA-256** follows FIPS 180-4: arithmetic modulo 2^32 with wrapping
-  operations, the message length counted in a `u64` of bits, padding per
-  5.1.1. Portable scalar code, no CPU-specific paths. It is checked
-  against all 65 NIST CAVP short-message vectors (every length from 0 to
-  64 bytes, `SHA256ShortMsg.rsp`), the first 8 long-message vectors
-  (`SHA256LongMsg.rsp`), the FIPS 180-4 examples including one million
-  `a`, padding edge cases at 55, 56, 63, 64, 65, 119, 120, 127 and 128
-  bytes, and a property test that any split across `update` calls gives
-  the one-shot digest.
-- **CRC32** is CRC-32/ISO-HDLC (reflected polynomial `0xEDB88320`,
-  initial value and final XOR `0xFFFFFFFF`), byte-wise with a table built
-  by a `const fn`. Checked against the check value
-  `crc32(b"123456789") == 0xCBF43926`, zlib values and the same split
-  property.
-- **Same bytes as before.** These are the functions `sha2` and
-  `crc32fast` computed, so every trace, snapshot and hash is unchanged. A
-  test in `tests/golden.rs` rebuilds the golden traces and compares their
-  stream and file hashes with the values CI recorded on all four targets
-  with the replaced crates.
-- **Cost.** The table-driven CRC and scalar SHA-256 are slower than the
-  replaced crates' hardware paths; the wall times below were measured
-  with each (orientation only).
+**History.** On 2026-10-27 the owner had both replaced by own code in
+`taktsim_core::digest`, tested against the NIST CAVP vectors, to keep
+shipped dependencies slim. On 2026-11-05 the owner reversed this and set
+the rule: **well-known low-level crates are allowed; what the project
+avoids is a dependency that grows the software bill of materials
+substantially.** The own code is gone; core hashes nothing. The pinned
+stream and file hashes in `tests/golden.rs` are unchanged by the switch,
+as they were by the earlier one: both implementations compute the same
+functions.
 
 ### Dependencies
 
 | Crate | Version | License | Why |
 | --- | --- | --- | --- |
+| `sha2` | 0.11.1 | MIT OR Apache-2.0 | SHA-256 of the record stream, the file, the model and the system; with `digest`, `block-buffer`, `crypto-common`, `hybrid-array`, `typenum` |
+| `crc32fast` | 1.5.4 | MIT OR Apache-2.0 | the CRC32 of every block; with `cfg-if` |
 | `insta` (dev) | 1.49.0 | Apache-2.0 | snapshots in tests; pulls in `similar` (Apache-2.0) |
 
-No new crate is linked into a shipped binary or library.
+Shipped crates outside the workspace after this: `libm`, `thiserror` and
+its macro crates, `saphyr-parser`, `arraydeque`, `sha2` and its family,
+`crc32fast`.
 
 ## Measurements
 
@@ -285,8 +259,10 @@ high-water mark (`VmHWM`); median of 10 runs per mode.
 
 Two runs on GitHub-hosted `ubuntu-24.04` (x86-64, 4 CPUs, 15.6 GiB): the
 first with `sha2` and `crc32fast` (2026-10-26, PR #21 head `47430a8`,
-workflow run 40393351697), the second with `taktsim_core::digest`, as
-shipped (2026-10-27, head `655ead5`, workflow run 40468566195).
+workflow run 40393351697), as shipped; the second with the own
+`taktsim_core::digest` of the interim version (2026-10-27, head
+`655ead5`, workflow run 40468566195), kept for comparison. Both predate
+the record prefix of 2026-11-05, which adds 2 bytes to item records.
 
 | Mode | Peak memory, median (min–max), `digest` | Same, `sha2`/`crc32fast` |
 | --- | --- | --- |
@@ -349,6 +325,10 @@ envelope; the ecosystem vision in the owner's notes).
    2026-11-04): a trace alone says which run and which system it came
    from. Both cost nothing before v0.1 ships a trace; afterwards each
    would be a new format version.
+5. **Hashes and checksums come from `sha2` and `crc32fast`,** reversing
+   the own-code decision of 2026-10-27, with the dependency rule above:
+   well-known low-level crates are fine, a dependency that grows the
+   bill of materials substantially is not. The hash values are the same.
 
 The golden snapshots and the pinned hashes changed with the layout, for
 this stated reason; every record line in the snapshots is unchanged.

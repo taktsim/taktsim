@@ -73,7 +73,10 @@ exception explicitly in its description.
 - `taktsim-core` has no I/O, and the only taktsim crate it depends on is
   `taktsim-units`. External crates that do pure computation (`libm`,
   `thiserror`) are allowed; name each new one in the PR that adds it
-  (ADR-0013). Every other crate depends on core, never the reverse.
+  (ADR-0013). Well-known low-level crates are fine (`sha2`, `crc32fast`;
+  owner, 2026-11-05, ADR-0021); a dependency that grows the software
+  bill of materials substantially is not. Every other crate depends on
+  core, never the reverse.
 - The Python bindings and the CLI are thin layers over the same public
   Rust API. No logic lives only in one client. The CLI is also the agent
   interface (ADR-0019): there is no MCP server.

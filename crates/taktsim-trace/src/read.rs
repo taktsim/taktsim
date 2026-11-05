@@ -5,7 +5,7 @@ use std::io::{self, Read};
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use taktsim_core::digest::{Crc32, Sha256, crc32};
+use sha2::{Digest, Sha256};
 
 use crate::codec::{DecodeError, TraceMessage};
 use crate::header::{
@@ -372,7 +372,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         let read = self.read_exact(&mut chunk, start);
         self.chunk = chunk;
         read?;
-        let mut crc = Crc32::new();
+        let mut crc = crc32fast::Hasher::new();
         crc.update(&head[..CHUNK_CRC_OVER]);
         crc.update(&self.chunk);
         let computed = crc.finalize();
@@ -408,7 +408,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         end[0] = END_TAG;
         self.read_exact(&mut end[1..], start)?;
         let stored = le_u32(&end[57..61]);
-        let computed = crc32(&end[..57]);
+        let computed = crc32fast::hash(&end[..57]);
         if computed != stored {
             return Err(ReadError::Checksum {
                 block: Block::End,
@@ -420,7 +420,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         let mut hash = [0; 32];
         hash.copy_from_slice(&end[25..57]);
         let hash = TraceHash::from_bytes(hash);
-        let counted = TraceHash::from_bytes(self.hasher.clone().finalize());
+        let counted = TraceHash::from_bytes(self.hasher.clone().finalize().into());
         let checks = [
             ("records", le_u64(&end[1..9]), self.records),
             ("events", le_u64(&end[9..17]), self.events),
@@ -501,7 +501,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
             components.push(self.header_text(&mut bytes)?);
         }
         let stored = u32::from_le_bytes(self.header_bytes::<4>(&mut Vec::new())?);
-        let computed = crc32(&bytes);
+        let computed = crc32fast::hash(&bytes);
         if computed != stored {
             return Err(ReadError::Checksum {
                 block: Block::Header,
