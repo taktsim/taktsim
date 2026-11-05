@@ -1,0 +1,16 @@
+# An included file with a nested include and a misspelled key: the nested
+# include is an error, and the unknown key's allowed list does not offer it.
+format: "1.0"
+model: {name: m}
+include: [parts/typo.yaml]
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, sink]
+observe:
+  - throughput(sink)
+# expect: parts/typo.yaml: include @ 1:1 NestedInclude
+# expect: parts/typo.yaml: flo @ 2:1 UnknownField

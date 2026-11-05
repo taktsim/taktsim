@@ -40,6 +40,36 @@ fn a_map_resolves_includes_for_models_given_as_text() {
     assert_eq!(single.includes(), []);
 }
 
+/// A fragment's `include` is an error where it stands and is not offered
+/// as an allowed key beside it.
+#[test]
+fn a_fragment_does_not_offer_include_as_allowed() {
+    let files = BTreeMap::from([(
+        "lib/line.yaml".to_owned(),
+        format!("include: [other.yaml]\nflo: [[source, sink]]\n{LINE}"),
+    )]);
+    let catalog = catalog();
+    let errors = Loader::new(&catalog)
+        .with_resolver(&files)
+        .load_str(MODEL, Format::Yaml)
+        .unwrap_err();
+    assert_eq!(
+        summary(&errors),
+        ["include @ 1:1 NestedInclude", "flo @ 2:1 UnknownField",]
+    );
+    let unknown = &errors.iter().nth(1).unwrap();
+    let LoadErrorKind::UnknownField {
+        allowed,
+        suggestion,
+        ..
+    } = unknown.kind()
+    else {
+        panic!("{unknown}");
+    };
+    assert_eq!(allowed, &["components", "flow", "observe"]);
+    assert_eq!(suggestion.as_deref(), Some("flow"));
+}
+
 #[test]
 fn text_without_a_resolver_cannot_include() {
     let catalog = catalog();

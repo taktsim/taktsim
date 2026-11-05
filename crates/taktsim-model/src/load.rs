@@ -383,9 +383,12 @@ impl Run<'_> {
         self.errors.extend(cx.into_errors());
         let main = main?;
 
+        // If `include:` could not be read, the checks across files would
+        // report what its files may hold as missing.
+        let specs = main.includes.as_ref()?;
         let mut parts = Vec::new();
         let mut included = Vec::new();
-        for spec in &main.includes {
+        for spec in specs {
             if resolver.is_none() {
                 self.error(
                     &spec.place,
@@ -394,7 +397,9 @@ impl Run<'_> {
                 );
                 continue;
             }
-            if own_name == Some(spec.path.as_str()) {
+            // Ignoring case, like the list's own duplicate check: tier-1
+            // targets include case-insensitive file systems.
+            if own_name.is_some_and(|name| name.eq_ignore_ascii_case(&spec.path)) {
                 let kind = LoadErrorKind::IncludeSelf {
                     path: spec.path.clone(),
                 };
@@ -409,7 +414,7 @@ impl Run<'_> {
         }
         // If a file could not be included, the checks across files would
         // report what it may have held as missing.
-        if included.len() != main.includes.len() {
+        if included.len() != specs.len() {
             return None;
         }
         let MainFile {
@@ -851,7 +856,7 @@ fn read_fragment(node: &Node, cx: &mut Decoder, catalog: &Catalog) -> Option<Par
 pub(crate) fn read_fragment_fields(fields: &mut Fields<'_, '_>, catalog: &Catalog) -> Parts {
     if let Some(entry) = fields.entry("include") {
         let at = entry.key_start();
-        fields.take("include");
+        fields.skip("include");
         fields
             .decoder()
             .within(Segment::Key("include".to_owned()), |cx| {

@@ -531,6 +531,17 @@ impl<'n> Fields<'n, '_> {
         Some(entries[i].value())
     }
 
+    /// Marks `key` read without allowing it: for a key that is reported as
+    /// an error where it stands, so `finish` neither reports it as unknown
+    /// nor lists it as allowed. Nothing when describing.
+    pub(crate) fn skip(&mut self, key: &str) {
+        if let Mode::Read { entries, used, .. } = &mut self.mode
+            && let Some(i) = entries.iter().position(|e| e.key() == key)
+        {
+            used[i] = true;
+        }
+    }
+
     /// Every key asked for so far, present or not, in the order asked;
     /// empty when describing (the catalog checks reserved keys by reading).
     pub(crate) fn asked(&self) -> &[&'static str] {

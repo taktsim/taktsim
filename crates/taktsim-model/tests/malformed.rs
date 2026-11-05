@@ -60,7 +60,7 @@ fn every_malformed_model_fails_with_the_expected_errors() {
         paths.len(),
         failures.join("\n\n")
     );
-    assert_eq!(paths.len(), 103);
+    assert_eq!(paths.len(), 106);
 }
 
 /// Every error carries what was found, what is allowed and, for a value

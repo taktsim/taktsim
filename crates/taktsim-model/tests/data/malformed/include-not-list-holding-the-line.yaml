@@ -1,0 +1,9 @@
+# Include as text, with the components and flow in the included file: only
+# the include is reported, not the sections it may hold.
+format: "1.0"
+model: {name: m}
+include: parts/line.yaml
+experiment: {type: terminating, horizon: 8h}
+observe:
+  - throughput(sink)
+# expect: include @ 5:10 WrongType

@@ -1,0 +1,4 @@
+include: [ok.yaml]
+flo: [[a, b]]
+components:
+  - {id: extra, type: Buffer, capacity: 5 parts}

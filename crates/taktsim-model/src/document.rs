@@ -925,7 +925,9 @@ pub(crate) struct Parts {
 pub(crate) struct MainFile {
     pub(crate) model: Option<ModelInfo>,
     pub(crate) experiment: Option<RawExperiment>,
-    pub(crate) includes: Vec<IncludeSpec>,
+    /// `None` if `include:` could not be read: the files it names may hold
+    /// the sections the checks across files would report as missing.
+    pub(crate) includes: Option<Vec<IncludeSpec>>,
     pub(crate) parts: Parts,
     /// Where the document starts, for errors about missing sections.
     pub(crate) start: Location,
@@ -961,7 +963,7 @@ pub(crate) fn read_main_fields(fields: &mut Fields<'_, '_>, catalog: &Catalog) -
     Some(MainFile {
         model,
         experiment,
-        includes: includes.flatten().map(|i| i.0).unwrap_or_default(),
+        includes: includes.map(|read| read.map(|i| i.0).unwrap_or_default()),
         parts,
         start: Location::new(1, 1),
     })
