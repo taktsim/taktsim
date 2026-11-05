@@ -53,9 +53,10 @@ pub(super) fn plain(text: &str) -> Result<Value, LoadErrorKind> {
 pub(crate) fn number(text: &str) -> Result<Value, LoadErrorKind> {
     if !text.contains(['.', 'e', 'E']) {
         // Digits only (after an optional minus), so the only parse failure
-        // is a value too large for i64, which is out of range anyway.
+        // is a value too large for i64, which is out of range anyway. The
+        // range is checked without `abs`, which overflows on `i64::MIN`.
         return match text.parse::<i64>() {
-            Ok(n) if n.abs() <= MAX_INTEGER => Ok(Value::Int(n)),
+            Ok(n) if (-MAX_INTEGER..=MAX_INTEGER).contains(&n) => Ok(Value::Int(n)),
             Ok(_) | Err(_) => Err(LoadErrorKind::IntegerRange {
                 text: text.to_owned(),
             }),
@@ -216,6 +217,18 @@ mod tests {
         assert_eq!(plain("42"), Ok(Value::Int(42)));
         assert_eq!(plain("9007199254740991"), Ok(Value::Int(MAX_INTEGER)));
         assert_eq!(plain("-9007199254740991"), Ok(Value::Int(-MAX_INTEGER)));
+        // The extremes of i64 are out of range and must not overflow.
+        for text in [
+            "-9223372036854775808",
+            "9223372036854775807",
+            "-9007199254740992",
+            "9007199254740992",
+        ] {
+            assert!(
+                matches!(plain(text), Err(LoadErrorKind::IntegerRange { .. })),
+                "{text}"
+            );
+        }
         assert_eq!(plain("0.08"), Ok(Value::Float(0.08)));
         assert_eq!(plain("1e3"), Ok(Value::Float(1000.0)));
         assert_eq!(plain("-2.5E-3"), Ok(Value::Float(-0.0025)));

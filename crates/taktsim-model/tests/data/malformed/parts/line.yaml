@@ -1,0 +1,6 @@
+# A valid included file holding a whole line.
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: sink, type: Sink}
+flow:
+  - [source, sink]
