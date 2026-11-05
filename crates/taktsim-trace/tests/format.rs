@@ -11,8 +11,8 @@ use support::Toy;
 use taktsim_core::{ComponentId, Disposal, EventId, ItemId, RunLimits, TraceSink};
 use taktsim_trace::{
     Block, CHUNK_CAPACITY, DecodeError, Decoder, EncodeError, Encoder, FORMAT_VERSION, Header,
-    MAGIC, ModelHash, ReadError, Record, TraceHash, TraceMessage, TraceReader, TraceWriter,
-    WriteError,
+    MAGIC, ModelHash, ReadError, Record, SystemHash, TraceHash, TraceMessage, TraceReader,
+    TraceWriter, WriteError,
 };
 use taktsim_units::SimTime;
 
@@ -21,7 +21,12 @@ const COMPONENTS: usize = 4;
 
 fn header(seed: u64) -> Header {
     let names = (0..COMPONENTS).map(|i| format!("c{i}")).collect();
-    Header::new::<Toy>(ModelHash::sha256(b"format tests"), seed, names)
+    Header::new::<Toy>(
+        ModelHash::sha256(b"format tests"),
+        SystemHash::sha256(b"format system"),
+        seed,
+        names,
+    )
 }
 
 #[allow(clippy::unwrap_used)] // test helper
@@ -109,7 +114,10 @@ fn blocks(bytes: &[u8]) -> Vec<usize> {
         + 2
         + h.engine_version.len()
         + 2
+        + h.record_format.len()
+        + 2
         + h.message_format.len()
+        + 32
         + 32
         + 8
         + 4
@@ -120,7 +128,7 @@ fn blocks(bytes: &[u8]) -> Vec<usize> {
     let mut at = header_len;
     while bytes[at] == b'C' {
         let len = u32::from_le_bytes(bytes[at + 1..at + 5].try_into().unwrap()) as usize;
-        at += 1 + 20 + len;
+        at += 1 + 28 + len;
         starts.push(at);
     }
     assert_eq!(bytes[at], b'E');
@@ -269,7 +277,7 @@ fn a_trace_spans_chunks_and_the_records_of_complete_chunks_survive_a_cut() {
     assert!(summary.chunks >= 3, "{summary:?}");
     assert_eq!(starts.len() as u64, summary.chunks + 1);
     for chunk in starts.windows(2) {
-        assert!(chunk[1] - chunk[0] <= 1 + 20 + CHUNK_CAPACITY);
+        assert!(chunk[1] - chunk[0] <= 1 + 28 + CHUNK_CAPACITY);
     }
     // Cut inside the third chunk: the first two chunks' records are read.
     let (read, error) = read_all(&bytes[..starts[2] + 30]);
@@ -646,7 +654,11 @@ fn header_values_that_do_not_fit_are_rejected() {
 #[test]
 fn an_engine_run_streams_into_the_writer() {
     let mut engine = support::single_server(3).unwrap();
-    let header = Header::for_engine(&engine, ModelHash::sha256(b"single server"));
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"single server"),
+        SystemHash::sha256(b"single server"),
+    );
     assert_eq!(header.components, ["source", "station", "sink"]);
     let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
     engine

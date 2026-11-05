@@ -24,6 +24,18 @@ pub const MAGIC: [u8; 8] = *b"TAKT\r\n\x1a\n";
 /// ```
 pub const FORMAT_VERSION: u16 = 1;
 
+/// The name and version of the record layout this build writes and reads:
+/// the kinds of records and their fields after the common prefix (kind,
+/// length, time). It names the engine's vocabulary, as
+/// [`TraceMessage::FORMAT`] names a component package's; a reader refuses
+/// a trace whose records are of another format (ADR-0021, owner's
+/// decision 2026-11-05).
+///
+/// ```
+/// assert_eq!(taktsim_trace::RECORD_FORMAT, "taktsim-core/1");
+/// ```
+pub const RECORD_FORMAT: &str = "taktsim-core/1";
+
 /// The most record bytes in one chunk: 64 KiB (ADR-0004). A writer holds at
 /// most one chunk in memory, and a reader too.
 ///
@@ -37,8 +49,10 @@ pub(crate) const CHUNK_TAG: u8 = b'C';
 /// Starts the end marker.
 pub(crate) const END_TAG: u8 = b'E';
 /// A chunk's header after its tag: payload length u32, records u32, index
-/// of the first record u64, CRC32 u32.
-pub(crate) const CHUNK_HEADER: usize = 4 + 4 + 8 + 4;
+/// of the first record u64, time of the first record u64 (ns), CRC32 u32.
+pub(crate) const CHUNK_HEADER: usize = 4 + 4 + 8 + 8 + 4;
+/// The bytes of a chunk's header, tag included, that its CRC32 covers.
+pub(crate) const CHUNK_CRC_OVER: usize = 1 + CHUNK_HEADER - 4;
 /// The end marker after its tag: records u64, events u64, chunks u64, the
 /// stream hash, CRC32 u32.
 pub(crate) const END_SIZE: usize = 8 + 8 + 8 + 32 + 4;
@@ -95,6 +109,60 @@ impl ModelHash {
 }
 
 impl fmt::Display for ModelHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        hex(&self.0, f)
+    }
+}
+
+/// The hash of the system a trace was produced from (ADR-0020: SHA-256 of
+/// the canonical `format`, `components` and `flow` sections). It stays the
+/// same when only what is asked of the system changes (horizon, seed,
+/// precision), so a calibration certificate can be bound to it.
+///
+/// ```
+/// use taktsim_trace::SystemHash;
+///
+/// let hash = SystemHash::sha256(b"abc");
+/// assert_eq!(hash.to_string(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+/// assert_eq!(SystemHash::from_bytes(*hash.as_bytes()), hash);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct SystemHash([u8; 32]);
+
+impl SystemHash {
+    /// A hash computed elsewhere, e.g. by the model loader.
+    ///
+    /// ```
+    /// assert_eq!(taktsim_trace::SystemHash::from_bytes([0; 32]), Default::default());
+    /// ```
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// The SHA-256 of `data`, e.g. the canonical system sections.
+    ///
+    /// ```
+    /// let a = taktsim_trace::SystemHash::sha256(b"line: 1");
+    /// assert_ne!(a, taktsim_trace::SystemHash::sha256(b"line: 2"));
+    /// ```
+    #[must_use]
+    pub fn sha256(data: &[u8]) -> Self {
+        Self(sha256(data))
+    }
+
+    /// The 32 bytes.
+    ///
+    /// ```
+    /// assert_eq!(taktsim_trace::SystemHash::default().as_bytes(), &[0; 32]);
+    /// ```
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+impl fmt::Display for SystemHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         hex(&self.0, f)
     }
@@ -158,7 +226,7 @@ impl fmt::Display for TraceHash {
 ///
 /// ```
 /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message};
-/// use taktsim_trace::{DecodeError, Decoder, Encoder, Header, ModelHash, TraceMessage};
+/// use taktsim_trace::{DecodeError, Decoder, Encoder, Header, ModelHash, SystemHash, TraceMessage};
 ///
 /// #[derive(Debug)]
 /// struct Tick;
@@ -175,10 +243,11 @@ impl fmt::Display for TraceHash {
 ///
 /// let mut engine = Engine::new(EngineConfig::new(42));
 /// engine.add_component("m1", Box::new(Idle))?;
-/// let header = Header::for_engine(&engine, ModelHash::sha256(b"model"));
+/// let header = Header::for_engine(&engine, ModelHash::sha256(b"model"), SystemHash::sha256(b"system"));
 /// assert_eq!(header.seed, 42);
 /// assert_eq!(header.components, ["m1"]);
 /// assert_eq!(header.message_format, "tick/1");
+/// assert_eq!(header.record_format, taktsim_trace::RECORD_FORMAT);
 /// assert_eq!(header.engine_version, taktsim_core::ENGINE_VERSION);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -187,10 +256,16 @@ pub struct Header {
     /// The engine version that wrote the trace
     /// ([`ENGINE_VERSION`]).
     pub engine_version: String,
-    /// How messages are encoded ([`TraceMessage::FORMAT`]).
+    /// How records are laid out ([`RECORD_FORMAT`]): the engine's
+    /// vocabulary.
+    pub record_format: String,
+    /// How messages are encoded ([`TraceMessage::FORMAT`]): the component
+    /// package's vocabulary.
     pub message_format: String,
-    /// The model the run came from.
+    /// The model the run came from: the exact run, replayable.
     pub model_hash: ModelHash,
+    /// The system the run came from: the same across horizons and seeds.
+    pub system_hash: SystemHash,
     /// The run's seed.
     pub seed: u64,
     /// The components' model ids, in the order they were added: records
@@ -202,7 +277,7 @@ impl Header {
     /// A header for messages of type `M`, written by this engine version.
     ///
     /// ```
-    /// use taktsim_trace::{Header, ModelHash};
+    /// use taktsim_trace::{Header, ModelHash, SystemHash};
     /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
@@ -212,15 +287,22 @@ impl Header {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), 7, vec!["m1".into()]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 7, vec!["m1".into()]);
     /// assert_eq!(header.message_format, "tick/1");
     /// ```
     #[must_use]
-    pub fn new<M: TraceMessage>(model_hash: ModelHash, seed: u64, components: Vec<String>) -> Self {
+    pub fn new<M: TraceMessage>(
+        model_hash: ModelHash,
+        system_hash: SystemHash,
+        seed: u64,
+        components: Vec<String>,
+    ) -> Self {
         Self {
             engine_version: ENGINE_VERSION.to_owned(),
+            record_format: RECORD_FORMAT.to_owned(),
             message_format: M::FORMAT.to_owned(),
             model_hash,
+            system_hash,
             seed,
             components,
         }
@@ -231,7 +313,7 @@ impl Header {
     ///
     /// ```
     /// use taktsim_core::{Engine, EngineConfig};
-    /// use taktsim_trace::{Header, ModelHash};
+    /// use taktsim_trace::{Header, ModelHash, SystemHash};
     /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
@@ -242,12 +324,21 @@ impl Header {
     /// # }
     ///
     /// let engine: Engine<Tick> = Engine::new(EngineConfig::new(9));
-    /// let header = Header::for_engine(&engine, ModelHash::default());
+    /// let header = Header::for_engine(&engine, ModelHash::default(), SystemHash::default());
     /// assert_eq!((header.seed, header.components.len()), (9, 0));
     /// ```
     #[must_use]
-    pub fn for_engine<M: TraceMessage>(engine: &Engine<M>, model_hash: ModelHash) -> Self {
-        Self::new::<M>(model_hash, engine.config().seed, component_names(engine))
+    pub fn for_engine<M: TraceMessage>(
+        engine: &Engine<M>,
+        model_hash: ModelHash,
+        system_hash: SystemHash,
+    ) -> Self {
+        Self::new::<M>(
+            model_hash,
+            system_hash,
+            engine.config().seed,
+            component_names(engine),
+        )
     }
 
     /// The header's bytes, CRC included.
@@ -259,8 +350,12 @@ impl Header {
         }
         out.u16(FORMAT_VERSION);
         out.str(&self.engine_version);
+        out.str(&self.record_format);
         out.str(&self.message_format);
         for b in self.model_hash.as_bytes() {
+            out.u8(*b);
+        }
+        for b in self.system_hash.as_bytes() {
             out.u8(*b);
         }
         out.u64(self.seed);

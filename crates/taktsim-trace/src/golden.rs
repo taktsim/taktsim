@@ -16,7 +16,7 @@
 //!
 //! ```
 //! use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message};
-//! use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceMessage, golden};
+//! use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceMessage, golden};
 //!
 //! #[derive(Debug)]
 //! struct Tick;
@@ -40,7 +40,7 @@
 //!
 //! let case = golden::Case {
 //!     name: "doc_clock",
-//!     model_hash: ModelHash::sha256(b"clock"),
+//!     model_hash: ModelHash::sha256(b"clock"), system_hash: SystemHash::default(),
 //!     until: "3min".parse()?,
 //! };
 //! let golden = golden::record(&case, || {
@@ -62,7 +62,7 @@ use taktsim_core::{Engine, EngineError, RunError, RunLimits};
 use taktsim_units::SimTime;
 
 use crate::codec::TraceMessage;
-use crate::header::{Header, ModelHash, TraceHash};
+use crate::header::{Header, ModelHash, SystemHash, TraceHash};
 use crate::read::{ReadError, TraceReader};
 use crate::replay::{ReplayError, replay};
 use crate::write::{Summary, TraceWriter, WriteError};
@@ -85,6 +85,7 @@ const TAIL: usize = 100;
 /// let case = taktsim_trace::golden::Case {
 ///     name: "mm1_8h",
 ///     model_hash: taktsim_trace::ModelHash::default(),
+///     system_hash: taktsim_trace::SystemHash::default(),
 ///     until: "8h".parse()?,
 /// };
 /// assert_eq!(case.name, "mm1_8h");
@@ -97,6 +98,8 @@ pub struct Case<'a> {
     pub name: &'a str,
     /// The model's hash, written into the trace header.
     pub model_hash: ModelHash,
+    /// The system's hash, written into the trace header.
+    pub system_hash: SystemHash,
     /// The horizon.
     pub until: SimTime,
 }
@@ -105,7 +108,7 @@ pub struct Case<'a> {
 ///
 /// ```
 /// # use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message};
-/// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceMessage, golden};
+/// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceMessage, golden};
 /// # #[derive(Debug)] struct Tick;
 /// # impl Message for Tick {}
 /// # impl TraceMessage for Tick {
@@ -113,7 +116,7 @@ pub struct Case<'a> {
 /// #     fn encode(&self, _: &mut Encoder<'_>) {}
 /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
 /// # }
-/// let case = golden::Case { name: "doc_empty", model_hash: ModelHash::default(), until: "1h".parse()? };
+/// let case = golden::Case { name: "doc_empty", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
 /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
 /// assert_eq!(golden.summary().records, 0);
 /// assert_eq!(golden.header().seed, 5);
@@ -135,7 +138,7 @@ impl Golden {
     ///
     /// ```
     /// # use taktsim_core::{Engine, EngineConfig};
-    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceMessage, golden};
+    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceMessage, golden};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
     /// # impl TraceMessage for Tick {
@@ -143,7 +146,7 @@ impl Golden {
     /// #     fn encode(&self, _: &mut Encoder<'_>) {}
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
-    /// let case = golden::Case { name: "doc_header", model_hash: ModelHash::sha256(b"m"), until: "1h".parse()? };
+    /// let case = golden::Case { name: "doc_header", model_hash: ModelHash::sha256(b"m"), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
     /// assert_eq!(golden.header().model_hash, ModelHash::sha256(b"m"));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -157,7 +160,7 @@ impl Golden {
     ///
     /// ```
     /// # use taktsim_core::{Engine, EngineConfig};
-    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceHash, TraceMessage, golden};
+    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceHash, TraceMessage, golden};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
     /// # impl TraceMessage for Tick {
@@ -165,7 +168,7 @@ impl Golden {
     /// #     fn encode(&self, _: &mut Encoder<'_>) {}
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
-    /// let case = golden::Case { name: "doc_summary", model_hash: ModelHash::default(), until: "1h".parse()? };
+    /// let case = golden::Case { name: "doc_summary", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
     /// // No records: the hash of nothing.
     /// assert_eq!(golden.summary().hash, TraceHash::sha256(b""));
@@ -181,7 +184,7 @@ impl Golden {
     ///
     /// ```
     /// # use taktsim_core::{Engine, EngineConfig};
-    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceMessage, golden};
+    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceMessage, golden};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
     /// # impl TraceMessage for Tick {
@@ -189,7 +192,7 @@ impl Golden {
     /// #     fn encode(&self, _: &mut Encoder<'_>) {}
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
-    /// let case = golden::Case { name: "doc_file_hash", model_hash: ModelHash::default(), until: "1h".parse()? };
+    /// let case = golden::Case { name: "doc_file_hash", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let a = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
     /// let b = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(6))))?;
     /// // The seed is in the header, not in the records.
@@ -203,12 +206,13 @@ impl Golden {
     }
 
     /// The text compared with the committed snapshot: provenance without
-    /// the engine version, counts, the stream hash, then one line per
+    /// the engine version (record and message formats, model and system
+    /// hashes, seed, components), counts, the stream hash, then one line per
     /// record (the first 400 and the last 100 of a longer trace).
     ///
     /// ```
     /// # use taktsim_core::{Engine, EngineConfig};
-    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceMessage, golden};
+    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceMessage, golden};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
     /// # impl TraceMessage for Tick {
@@ -216,9 +220,9 @@ impl Golden {
     /// #     fn encode(&self, _: &mut Encoder<'_>) {}
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
-    /// let case = golden::Case { name: "doc_snapshot", model_hash: ModelHash::default(), until: "1h".parse()? };
+    /// let case = golden::Case { name: "doc_snapshot", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
-    /// assert!(golden.snapshot().starts_with("case: doc_snapshot\nmessages: tick/1\n"));
+    /// assert!(golden.snapshot().starts_with("case: doc_snapshot\nrecords: taktsim-core/1\nmessages: tick/1\n"));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[must_use]
@@ -229,11 +233,13 @@ impl Golden {
         // Writing to a String cannot fail.
         let _ = write!(
             text,
-            "case: {}\nmessages: {}\nmodel hash: {}\nseed: {}\ncomponents: {}\n\
-             records: {} ({} events) in {} chunks\nstream sha256: {}\n---\n",
+            "case: {}\nrecords: {}\nmessages: {}\nmodel hash: {}\nsystem hash: {}\nseed: {}\n\
+             components: {}\nrecords: {} ({} events) in {} chunks\nstream sha256: {}\n---\n",
             self.name,
+            h.record_format,
             h.message_format,
             h.model_hash,
+            h.system_hash,
             h.seed,
             h.components.join(", "),
             s.records,
@@ -261,7 +267,7 @@ impl Golden {
     ///
     /// ```
     /// # use taktsim_core::{Engine, EngineConfig};
-    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceMessage, golden};
+    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceMessage, golden};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
     /// # impl TraceMessage for Tick {
@@ -269,7 +275,7 @@ impl Golden {
     /// #     fn encode(&self, _: &mut Encoder<'_>) {}
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
-    /// let case = golden::Case { name: "doc_line", model_hash: ModelHash::default(), until: "1h".parse()? };
+    /// let case = golden::Case { name: "doc_line", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
     /// assert!(golden.hash_line().starts_with("doc_line records=0 stream="));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -292,7 +298,7 @@ impl Golden {
     ///
     /// ```
     /// # use taktsim_core::{Engine, EngineConfig};
-    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, TraceMessage, golden};
+    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, ModelHash, SystemHash, TraceMessage, golden};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
     /// # impl TraceMessage for Tick {
@@ -300,7 +306,7 @@ impl Golden {
     /// #     fn encode(&self, _: &mut Encoder<'_>) {}
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
-    /// let case = golden::Case { name: "doc_write", model_hash: ModelHash::default(), until: "1h".parse()? };
+    /// let case = golden::Case { name: "doc_write", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
     /// let dir = std::env::temp_dir().join(format!("taktsim-doc-{}", std::process::id()));
     /// golden.write_hashes(&dir)?;
@@ -328,7 +334,7 @@ impl Golden {
 ///
 /// ```
 /// use taktsim_core::{Engine, EngineConfig};
-/// use taktsim_trace::{golden, golden::GoldenError, ModelHash};
+/// use taktsim_trace::{golden, golden::GoldenError, ModelHash, SystemHash};
 /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
 /// # #[derive(Debug)] struct Tick;
 /// # impl taktsim_core::Message for Tick {}
@@ -338,7 +344,7 @@ impl Golden {
 /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
 /// # }
 ///
-/// let case = golden::Case { name: "Not/Allowed", model_hash: ModelHash::default(), until: "1h".parse()? };
+/// let case = golden::Case { name: "Not/Allowed", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
 /// let result = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(1))));
 /// assert!(matches!(result, Err(GoldenError::Name { .. })));
 /// # Ok::<(), taktsim_units::UnitError>(())
@@ -354,7 +360,7 @@ pub fn record<M: TraceMessage>(
         });
     }
     let mut engine = build()?;
-    let header = Header::for_engine(&engine, case.model_hash);
+    let header = Header::for_engine(&engine, case.model_hash, case.system_hash);
     let mut writer = TraceWriter::new(Vec::new(), &header)?;
     engine
         .run(RunLimits::until(case.until), &mut writer)

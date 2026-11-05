@@ -26,7 +26,7 @@ use std::time::Instant;
 
 use support::Toy;
 use taktsim_core::{Engine, EngineError, NoTrace, RunLimits};
-use taktsim_trace::{Header, ModelHash, TraceReader, TraceWriter, replay};
+use taktsim_trace::{Header, ModelHash, SystemHash, TraceReader, TraceWriter, replay};
 use taktsim_units::SimTime;
 
 const SEED: u64 = 2026;
@@ -52,7 +52,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     {
         ["write", events, path] => {
             let mut engine = model()?;
-            let header = Header::for_engine(&engine, ModelHash::sha256(b"trace_memory line"));
+            let header = Header::for_engine(
+                &engine,
+                ModelHash::sha256(b"trace_memory line"),
+                SystemHash::sha256(b"trace_memory system"),
+            );
             let mut writer = TraceWriter::new(File::create(path)?, &header)?;
             let limits =
                 RunLimits::until(SimTime::from_nanos(u64::MAX)).max_events(events.parse()?);

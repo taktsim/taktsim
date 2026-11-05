@@ -9,8 +9,8 @@ use taktsim_core::digest::{Crc32, Sha256, crc32};
 
 use crate::codec::{DecodeError, TraceMessage};
 use crate::header::{
-    CHUNK_CAPACITY, CHUNK_HEADER, CHUNK_TAG, END_SIZE, END_TAG, FORMAT_VERSION, Header, MAGIC,
-    ModelHash, TraceHash,
+    CHUNK_CAPACITY, CHUNK_CRC_OVER, CHUNK_HEADER, CHUNK_TAG, END_SIZE, END_TAG, FORMAT_VERSION,
+    Header, MAGIC, ModelHash, RECORD_FORMAT, SystemHash, TraceHash,
 };
 use crate::record::{self, EVENT, Record};
 use crate::write::Summary;
@@ -29,7 +29,7 @@ use crate::write::Summary;
 ///
 /// ```
 /// use taktsim_core::{ComponentId, ItemId, TraceRecord, TraceSink};
-/// use taktsim_trace::{Header, ModelHash, Record, TraceReader, TraceWriter};
+/// use taktsim_trace::{Header, ModelHash, Record, SystemHash, TraceReader, TraceWriter};
 /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
 /// # #[derive(Debug, PartialEq)] struct Tick;
 /// # impl taktsim_core::Message for Tick {}
@@ -39,7 +39,7 @@ use crate::write::Summary;
 /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
 /// # }
 ///
-/// let header = Header::new::<Tick>(ModelHash::default(), 1, vec!["source".into()]);
+/// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec!["source".into()]);
 /// let mut writer = TraceWriter::new(Vec::new(), &header)?;
 /// let source = ComponentId::from_index(0);
 /// writer.record(&TraceRecord::<Tick>::ItemCreated { time: "1s".parse()?, item: ItemId::from_raw(0), by: source });
@@ -62,6 +62,8 @@ pub struct TraceReader<R: Read, M> {
     pos: usize,
     /// Records of the current chunk not read yet.
     chunk_left: u32,
+    /// The time the current chunk's header gives its first record, in ns.
+    chunk_first_time: u64,
     /// The next record, read but not returned yet.
     peeked: Option<Raw>,
     records: u64,
@@ -95,6 +97,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// # Errors
     ///
     /// [`ReadError::NotATrace`], [`ReadError::UnsupportedVersion`],
+    /// [`ReadError::RecordFormat`] if the records are of another layout,
     /// [`ReadError::MessageFormat`] if the trace's messages are not `M`'s,
     /// [`ReadError::Checksum`], [`ReadError::Invalid`],
     /// [`ReadError::Truncated`] or [`ReadError::Io`].
@@ -118,14 +121,17 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
             source,
             header: Header {
                 engine_version: String::new(),
+                record_format: String::new(),
                 message_format: String::new(),
                 model_hash: ModelHash::default(),
+                system_hash: SystemHash::default(),
                 seed: 0,
                 components: Vec::new(),
             },
             chunk: Vec::new(),
             pos: 0,
             chunk_left: 0,
+            chunk_first_time: 0,
             peeked: None,
             records: 0,
             events: 0,
@@ -136,6 +142,12 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
             _message: PhantomData,
         };
         reader.header = reader.read_header()?;
+        if reader.header.record_format != RECORD_FORMAT {
+            return Err(ReadError::RecordFormat {
+                found: reader.header.record_format,
+                expected: RECORD_FORMAT,
+            });
+        }
         if reader.header.message_format != M::FORMAT {
             return Err(ReadError::MessageFormat {
                 found: reader.header.message_format,
@@ -149,7 +161,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// The trace's header.
     ///
     /// ```
-    /// use taktsim_trace::{Header, ModelHash, TraceReader, TraceWriter};
+    /// use taktsim_trace::{Header, ModelHash, SystemHash, TraceReader, TraceWriter};
     /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
@@ -159,7 +171,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::sha256(b"m"), 42, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::sha256(b"m"), SystemHash::default(), 42, vec![]);
     /// let (bytes, _) = TraceWriter::<_, Tick>::new(Vec::new(), &header)?.finish()?;
     /// assert_eq!(TraceReader::<_, Tick>::new(bytes.as_slice())?.header().seed, 42);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -172,7 +184,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// The trace's summary, once the end marker has been read and checked.
     ///
     /// ```
-    /// use taktsim_trace::{Header, ModelHash, TraceReader, TraceWriter};
+    /// use taktsim_trace::{Header, ModelHash, SystemHash, TraceReader, TraceWriter};
     /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
@@ -182,7 +194,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), 1, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
     /// let (bytes, written) = TraceWriter::<_, Tick>::new(Vec::new(), &header)?.finish()?;
     /// let mut reader = TraceReader::<_, Tick>::new(bytes.as_slice())?;
     /// assert_eq!(reader.summary(), None);
@@ -208,7 +220,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// [`ReadError::AlreadyFailed`].
     ///
     /// ```
-    /// use taktsim_trace::{Header, ModelHash, ReadError, TraceReader, TraceWriter};
+    /// use taktsim_trace::{Header, ModelHash, ReadError, SystemHash, TraceReader, TraceWriter};
     /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
@@ -218,7 +230,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), 1, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
     /// let (bytes, _) = TraceWriter::<_, Tick>::new(Vec::new(), &header)?.finish()?;
     /// // Cut off the end marker.
     /// let cut = &bytes[..bytes.len() - 10];
@@ -283,6 +295,20 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
                 source,
             })?;
         let range = self.pos..self.pos + len;
+        if self.pos == 0 {
+            let first = record::time(&self.chunk[range.clone()]).as_nanos();
+            if first != self.chunk_first_time {
+                return Err(ReadError::Invalid {
+                    offset: self.offset,
+                    what: "chunk first time",
+                    found: format!(
+                        "{} ns in the header, {first} ns in its first record",
+                        self.chunk_first_time
+                    ),
+                    allowed: "the same time in both".to_owned(),
+                });
+            }
+        }
         self.pos += len;
         self.chunk_left -= 1;
         let ends = self.pos == self.chunk.len();
@@ -329,7 +355,8 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         let len = le_u32(&head[1..5]);
         let records = le_u32(&head[5..9]);
         let first = le_u64(&head[9..17]);
-        let stored = le_u32(&head[17..21]);
+        let first_time = le_u64(&head[17..25]);
+        let stored = le_u32(&head[CHUNK_CRC_OVER..]);
         let len_usize = usize::try_from(len).unwrap_or(usize::MAX);
         if len_usize == 0 || len_usize > CHUNK_CAPACITY {
             return Err(ReadError::Invalid {
@@ -346,7 +373,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         self.chunk = chunk;
         read?;
         let mut crc = Crc32::new();
-        crc.update(&head[..17]);
+        crc.update(&head[..CHUNK_CRC_OVER]);
         crc.update(&self.chunk);
         let computed = crc.finalize();
         if computed != stored {
@@ -372,6 +399,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         self.chunks += 1;
         self.pos = 0;
         self.chunk_left = records;
+        self.chunk_first_time = first_time;
         Ok(())
     }
 
@@ -461,8 +489,10 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
             });
         }
         let engine_version = self.header_text(&mut bytes)?;
+        let record_format = self.header_text(&mut bytes)?;
         let message_format = self.header_text(&mut bytes)?;
         let model_hash = self.header_bytes::<32>(&mut bytes)?;
+        let system_hash = self.header_bytes::<32>(&mut bytes)?;
         let seed = u64::from_le_bytes(self.header_bytes::<8>(&mut bytes)?);
         let count = u32::from_le_bytes(self.header_bytes::<4>(&mut bytes)?);
         // Not `with_capacity(count)`: the count is not checked yet.
@@ -490,8 +520,10 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         };
         Ok(Header {
             engine_version: text(engine_version, "engine version")?,
+            record_format: text(record_format, "record format")?,
             message_format: text(message_format, "message format")?,
             model_hash: ModelHash::from_bytes(model_hash),
+            system_hash: SystemHash::from_bytes(system_hash),
             seed,
             components: components
                 .into_iter()
@@ -653,6 +685,18 @@ pub enum ReadError {
         found: u16,
         /// The version this build reads.
         supported: u16,
+    },
+    /// The trace's records are laid out in another format: written by
+    /// another engine, or another version of this one.
+    #[error(
+        "the trace's records are laid out as `{found}`, but this build reads `{expected}`; \
+         read it with the engine that wrote it"
+    )]
+    RecordFormat {
+        /// The format in the header.
+        found: String,
+        /// The reader's record format.
+        expected: &'static str,
     },
     /// The trace's messages are of another type.
     #[error(
