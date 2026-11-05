@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use taktsim_core::digest::{crc32, sha256};
+use sha2::{Digest, Sha256};
 use taktsim_core::{ComponentId, ENGINE_VERSION, Engine};
 
 use crate::codec::{EncodeError, Encoder, TraceMessage};
@@ -94,7 +94,7 @@ impl ModelHash {
     /// ```
     #[must_use]
     pub fn sha256(data: &[u8]) -> Self {
-        Self(sha256(data))
+        Self(Sha256::digest(data).into())
     }
 
     /// The 32 bytes.
@@ -148,7 +148,7 @@ impl SystemHash {
     /// ```
     #[must_use]
     pub fn sha256(data: &[u8]) -> Self {
-        Self(sha256(data))
+        Self(Sha256::digest(data).into())
     }
 
     /// The 32 bytes.
@@ -201,7 +201,7 @@ impl TraceHash {
     /// ```
     #[must_use]
     pub fn sha256(data: &[u8]) -> Self {
-        Self(sha256(data))
+        Self(Sha256::digest(data).into())
     }
 
     /// The 32 bytes.
@@ -365,7 +365,7 @@ impl Header {
             out.str(name);
         }
         out.finish()?;
-        let crc = crc32(&bytes);
+        let crc = crc32fast::hash(&bytes);
         bytes.extend_from_slice(&crc.to_le_bytes());
         Ok(bytes)
     }

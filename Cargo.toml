@@ -36,8 +36,13 @@ proptest = "1.12.0"
 # parsers. Already in the lockfile through the benchmarks.
 regex = "1.13.1"
 # Model loader (M4, ADR-0020): the YAML event parser (wrapped in one
-# module). SHA-256 comes from taktsim_core::digest (ADR-0021).
+# module) and SHA-256 for the model and system hashes.
 saphyr-parser = "0.3.2"
+sha2 = { version = "0.11.1", default-features = false }
+# Trace (M3, ADR-0021): the stream hash and the per-block checksums.
+# Well-known low-level crates are allowed (owner, 2026-11-05); what is
+# not is a dependency that grows the bill of materials substantially.
+crc32fast = { version = "1.5.4", default-features = false }
 # Benchmarks, in taktsim-bench only (ADR-0016): wall-clock locally, without
 # the plotting and rayon defaults; instruction counts in CI. The
 # gungraun-runner binary must have exactly the version Cargo.lock resolves

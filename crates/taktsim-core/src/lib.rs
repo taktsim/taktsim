@@ -56,7 +56,6 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-pub mod digest;
 mod engine;
 mod error;
 mod queue;
