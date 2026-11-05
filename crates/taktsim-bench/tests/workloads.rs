@@ -653,10 +653,10 @@ mod queue {
     /// clock with rate 1/10 per minute is won by the failure with
     /// probability (1/10) / (1/10 + 1) = 1/11, independently for each race.
     /// With R races (cycle ends plus failures) the failures are binomial:
-    /// sd sqrt(R p (1 - p)); the bound is 6 of them, plus the number of
-    /// machines for races cut off by the event limit. A machine has at most
-    /// one repair pending, so repairs <= failures <= repairs + machines.
-    /// Every race end cancels one timer.
+    /// sd sqrt(R p (1 - p)); the bound is 6 of them. A race cut off by the
+    /// event limit is in neither count, so it needs no allowance. A machine
+    /// has at most one repair pending, so repairs <= failures <= repairs +
+    /// machines. Every race end cancels one timer.
     #[test]
     #[allow(clippy::cast_precision_loss)] // counts far below 2^53
     fn the_line_fails_one_race_in_eleven() {
@@ -670,7 +670,7 @@ mod queue {
             assert!(tally.failures <= tally.repairs + u64::from(machines));
             let races = (tally.cycles + tally.failures) as f64;
             let p = 1.0 / 11.0;
-            let bound = 6.0 * (races * p * (1.0 - p)).sqrt() + f64::from(machines);
+            let bound = 6.0 * (races * p * (1.0 - p)).sqrt();
             assert!(
                 (tally.failures as f64 - races * p).abs() <= bound,
                 "{machines} machines: {} failures in {races} races, expected {} ± {bound}",

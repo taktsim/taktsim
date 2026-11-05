@@ -174,7 +174,7 @@ failure timer pending, and about 1 race in 11 ends in a failure (the other
   an event also draws two exponential samples (a logarithm each) and
   schedules two timers where a hold event draws one number and schedules
   one. The 1 000-machine run has 466 thousand last-level cache hits against
-  144 for the 20-machine run, so the larger queue, with its stale entries (compaction keeps them below
+  144 thousand for the 20-machine run, so the larger queue, with its stale entries (compaction keeps them below
   half of the heap), does cost cache misses: 5,062 estimated cycles per
   event against 3,515.
 - *Allowing for the per-event budget.* Spec §9's initial target of 1 M
