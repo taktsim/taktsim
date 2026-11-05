@@ -3,12 +3,14 @@ source: crates/taktsim-trace/tests/golden.rs
 expression: golden.snapshot()
 ---
 case: toy_line_20
+records: taktsim-core/1
 messages: taktsim-trace.toy/1
 model hash: cda1f729e07790fddb2b71d07f5db052af875ceb23ed61e54a227ac3d7f68e00
+system hash: 5df3dd02721a867ae9b37ef5570522b8bed97a46a02e8b44daddb51f4ea231e1
 seed: 2026
 components: source, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, sink
 records: 22394 (21429 events) in 14 chunks
-stream sha256: ea72b70a24c61ddb15b0fc153dd666b6b08391dde3991e7edcbece5fd84ea655
+stream sha256: 1e4383e4188daeeb3fc7ca8f44a34b45c348c52d621f0039a40742399bd251f3
 ---
 144.874300362s event #0 source -> source Next
 144.874300362s item 0 created by source

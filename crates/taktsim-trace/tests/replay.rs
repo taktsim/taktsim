@@ -8,7 +8,9 @@ use support::{Sink, Source, Station, Toy};
 use taktsim_core::{
     Component, ComponentError, Context, Delivery, Engine, EngineConfig, EngineError, RunLimits,
 };
-use taktsim_trace::{Header, ModelHash, ReadError, ReplayError, TraceReader, TraceWriter, replay};
+use taktsim_trace::{
+    Header, ModelHash, ReadError, ReplayError, SystemHash, TraceReader, TraceWriter, replay,
+};
 use taktsim_units::SimTime;
 
 #[allow(clippy::unwrap_used)] // test helper
@@ -19,7 +21,11 @@ fn t(text: &str) -> SimTime {
 /// Runs `engine` to `until` into an in-memory trace.
 #[allow(clippy::unwrap_used)] // test helper
 fn trace_of(mut engine: Engine<Toy>, until: &str) -> Vec<u8> {
-    let header = Header::for_engine(&engine, ModelHash::sha256(b"replay tests"));
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
     let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
     engine.run(RunLimits::until(t(until)), &mut writer).unwrap();
     writer.finish().unwrap().0
@@ -246,7 +252,7 @@ fn the_header_must_match_the_engine() {
 #[test]
 fn a_trace_of_another_engine_version_is_not_replayed() {
     let engine = support::single_server(1).unwrap();
-    let mut header = Header::for_engine(&engine, ModelHash::default());
+    let mut header = Header::for_engine(&engine, ModelHash::default(), SystemHash::default());
     header.engine_version = "0.0.0-other".to_owned();
     let (trace, _) = TraceWriter::<_, Toy>::new(Vec::new(), &header)
         .unwrap()
@@ -310,7 +316,7 @@ fn a_run_that_fails_fails_its_replay() {
         Ok(engine)
     };
     let mut engine = build().unwrap();
-    let header = Header::for_engine(&engine, ModelHash::default());
+    let header = Header::for_engine(&engine, ModelHash::default(), SystemHash::default());
     let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
     assert!(
         engine

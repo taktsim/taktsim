@@ -8,14 +8,15 @@
 
 mod support;
 
-use taktsim_trace::ModelHash;
 use taktsim_trace::golden::{self, Case};
+use taktsim_trace::{ModelHash, SystemHash};
 
 #[test]
 fn single_server() {
     let case = Case {
         name: "toy_single_server",
         model_hash: ModelHash::sha256(b"toy single server: source 1min, station 45s, sink"),
+        system_hash: SystemHash::sha256(b"toy single server"),
         until: "1h".parse().unwrap(),
     };
     let golden = golden::record(&case, || support::single_server(42)).unwrap();
@@ -29,6 +30,7 @@ fn tandem_with_breakdowns_and_scrap() {
         model_hash: ModelHash::sha256(
             b"toy tandem: source 1min, cut 40s mtbf 20min mttr 3min, weld 50s scrap 1/7, sink",
         ),
+        system_hash: SystemHash::sha256(b"toy tandem"),
         until: "4h".parse().unwrap(),
     };
     let golden = golden::record(&case, || support::tandem(7)).unwrap();
@@ -41,6 +43,7 @@ fn long_line() {
     let case = Case {
         name: "toy_line_20",
         model_hash: ModelHash::sha256(b"toy line: source 1min, 20 stations 40s, sink"),
+        system_hash: SystemHash::sha256(b"toy line 20"),
         until: "8h".parse().unwrap(),
     };
     let golden = golden::record(&case, || support::line(2026, 20)).unwrap();
@@ -53,6 +56,7 @@ fn the_harness_checks_names_and_writes_hash_files() {
     let bad = Case {
         name: "Toy-Line",
         model_hash: ModelHash::default(),
+        system_hash: SystemHash::default(),
         until: "1h".parse().unwrap(),
     };
     let Err(e) = golden::record(&bad, || support::single_server(1)) else {
@@ -65,6 +69,7 @@ fn the_harness_checks_names_and_writes_hash_files() {
     let case = Case {
         name: "harness_check",
         model_hash: ModelHash::sha256(b"harness"),
+        system_hash: SystemHash::sha256(b"harness"),
         until: "30min".parse().unwrap(),
     };
     let golden = golden::record(&case, || support::single_server(9)).unwrap();
@@ -91,42 +96,47 @@ fn the_harness_checks_names_and_writes_hash_files() {
     assert!(matches!(result, Err(golden::GoldenError::Hashes { .. })));
 }
 
-/// The hashes CI recorded on all four tier-1 targets when traces were
-/// hashed with `sha2` 0.11.1 and checksummed with `crc32fast` 1.5.3 (PR #21,
-/// workflow run 40393351617, engine version 0.0.0). The `taktsim_core::digest`
-/// implementations that replaced them must give the same bytes: the stream
-/// hash covers the records, the file hash also every CRC32 and the header.
-/// The header's engine version is set to 0.0.0, so a release does not
-/// change these values.
+/// The stream and file hashes of the three cases, pinned for the layout of
+/// ADR-0021 as decided on 2026-11-05 (record prefix, chunk first time,
+/// record format and system hash in the header), recorded on Linux
+/// x86-64. The cross-platform job compares the same hashes from every
+/// tier-1 target, so this test pins the bytes and that job proves they are
+/// the same everywhere. The header's engine version is set to 0.0.0, so a
+/// release does not change these values; a change to any record, the
+/// framing or the header does, and the commit must say why.
 #[test]
-fn hashes_are_those_of_the_replaced_implementations() {
+fn hashes_are_pinned_for_this_layout() {
     type Build = fn() -> Result<taktsim_core::Engine<support::Toy>, taktsim_core::EngineError>;
     let cases: [(Build, &str, &[u8], &str, &str); 3] = [
         (
             || support::single_server(42),
             "1h",
             b"toy single server: source 1min, station 45s, sink",
-            "c86ca63bf7f7872c94dad43b55172f708429a3e8cd0f4d782b40e6cbcf1011fc",
-            "c50bc48124633c669b4cba5d42c01d7d1235552aa245ac86005741f378d63386",
+            "208cda594606f9c0962eaf11b248a4aeb5b50ae09093fba036f434c93c01adad",
+            "687281944974272df607b4417f104e95a7cff27a05323c9cd7503d7ac1dcabb5",
         ),
         (
             || support::tandem(7),
             "4h",
             b"toy tandem: source 1min, cut 40s mtbf 20min mttr 3min, weld 50s scrap 1/7, sink",
-            "e1ce08bd264dd183ae810a4cbe84200525dced7c477463ea0f53549bcf87148c",
-            "ff2ddaa9478deaac2fce455e024431c912827ce0d2ffa3eb2965125982972ed7",
+            "744ef2b5754faccc360ca0bef9f3300a49163501a3fd7d3db34cc92ddd46d4f9",
+            "23404259c347b06ab62a938edfb13a5e590ac870a09e1234fcc697b696fee71e",
         ),
         (
             || support::line(2026, 20),
             "8h",
             b"toy line: source 1min, 20 stations 40s, sink",
-            "ea72b70a24c61ddb15b0fc153dd666b6b08391dde3991e7edcbece5fd84ea655",
-            "51c94cad52d0a86d9a95639cedf4563b013d6d0089115454f3a2ba2cd54383ed",
+            "1e4383e4188daeeb3fc7ca8f44a34b45c348c52d621f0039a40742399bd251f3",
+            "04b3bba31f85f7ad14f30b974bb53fb111950d0788c6193a9930486627fd8b6d",
         ),
     ];
     for (build, until, model, stream, file) in cases {
         let mut engine = build().unwrap();
-        let mut header = taktsim_trace::Header::for_engine(&engine, ModelHash::sha256(model));
+        let mut header = taktsim_trace::Header::for_engine(
+            &engine,
+            ModelHash::sha256(model),
+            SystemHash::sha256(model),
+        );
         header.engine_version = "0.0.0".to_owned();
         let mut writer = taktsim_trace::TraceWriter::new(Vec::new(), &header).unwrap();
         engine

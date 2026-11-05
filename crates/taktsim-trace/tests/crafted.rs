@@ -10,14 +10,19 @@ use support::Toy;
 use taktsim_core::Message;
 use taktsim_core::digest::{Crc32, crc32, sha256};
 use taktsim_trace::{
-    Block, DecodeError, Decoder, Encoder, Header, ModelHash, ReadError, Record, TraceMessage,
-    TraceReader, TraceWriter, decode_message, encode_message,
+    Block, DecodeError, Decoder, Encoder, Header, ModelHash, ReadError, Record, SystemHash,
+    TraceMessage, TraceReader, TraceWriter, decode_message, encode_message,
 };
 
 /// The header of a trace with components `a` and `b`.
 #[allow(clippy::unwrap_used)] // test helper
 fn header_bytes() -> Vec<u8> {
-    let header = Header::new::<Toy>(ModelHash::default(), 1, vec!["a".into(), "b".into()]);
+    let header = Header::new::<Toy>(
+        ModelHash::default(),
+        SystemHash::default(),
+        1,
+        vec!["a".into(), "b".into()],
+    );
     let (bytes, _) = TraceWriter::<_, Toy>::new(Vec::new(), &header)
         .unwrap()
         .finish()
@@ -26,13 +31,20 @@ fn header_bytes() -> Vec<u8> {
     bytes[..bytes.len() - 61].to_vec()
 }
 
-/// A chunk with a correct CRC.
+/// A chunk with a correct CRC; its first time is that of the first record
+/// in `payload` (7 ns in every hand-made record here), or 0 if empty.
 #[allow(clippy::unwrap_used)] // test helper
 fn chunk(payload: &[u8], records: u32, first: u64) -> Vec<u8> {
     let mut head = vec![b'C'];
     head.extend_from_slice(&u32::try_from(payload.len()).unwrap().to_le_bytes());
     head.extend_from_slice(&records.to_le_bytes());
     head.extend_from_slice(&first.to_le_bytes());
+    let first_time: u64 = if payload.len() >= 11 {
+        u64::from_le_bytes(payload[3..11].try_into().unwrap())
+    } else {
+        0
+    };
+    head.extend_from_slice(&first_time.to_le_bytes());
     let mut crc = Crc32::new();
     crc.update(&head);
     crc.update(payload);
@@ -53,28 +65,37 @@ fn end(records: u64, events: u64, chunks: u64, hash: [u8; 32]) -> Vec<u8> {
     end
 }
 
-/// An item-created record by component `by`.
-fn created(by: u32) -> Vec<u8> {
-    let mut r = vec![2];
-    r.extend_from_slice(&7_u64.to_le_bytes());
-    r.extend_from_slice(&3_u64.to_le_bytes());
-    r.extend_from_slice(&by.to_le_bytes());
+/// Prefixes `body` with its kind and length: the record prefix every
+/// kind shares (the time is the first field of `body`).
+#[allow(clippy::unwrap_used)] // test helper
+fn framed(kind: u8, body: &[u8]) -> Vec<u8> {
+    let mut r = vec![kind];
+    r.extend_from_slice(&u16::try_from(body.len()).unwrap().to_le_bytes());
+    r.extend_from_slice(body);
     r
 }
 
-/// An event record from `a` to `b` with `message` and the raw item fields.
-#[allow(clippy::unwrap_used)] // test helper
+/// An item-created record by component `by`, at 7 ns.
+fn created(by: u32) -> Vec<u8> {
+    let mut body = Vec::new();
+    body.extend_from_slice(&7_u64.to_le_bytes());
+    body.extend_from_slice(&3_u64.to_le_bytes());
+    body.extend_from_slice(&by.to_le_bytes());
+    framed(2, &body)
+}
+
+/// An event record from `a` to `b` at 7 ns with `message` and the raw item
+/// fields.
 fn event(has_item: u8, item: u64, message: &[u8]) -> Vec<u8> {
-    let mut r = vec![1];
-    r.extend_from_slice(&0_u64.to_le_bytes());
-    r.extend_from_slice(&5_u64.to_le_bytes());
-    r.extend_from_slice(&1_u32.to_le_bytes());
-    r.extend_from_slice(&0_u32.to_le_bytes());
-    r.push(has_item);
-    r.extend_from_slice(&item.to_le_bytes());
-    r.extend_from_slice(&u16::try_from(message.len()).unwrap().to_le_bytes());
-    r.extend_from_slice(message);
-    r
+    let mut body = Vec::new();
+    body.extend_from_slice(&7_u64.to_le_bytes());
+    body.extend_from_slice(&0_u64.to_le_bytes());
+    body.extend_from_slice(&1_u32.to_le_bytes());
+    body.extend_from_slice(&0_u32.to_le_bytes());
+    body.push(has_item);
+    body.extend_from_slice(&item.to_le_bytes());
+    body.extend_from_slice(message);
+    framed(1, &body)
 }
 
 /// A whole trace of one chunk holding `payload`.
@@ -114,30 +135,33 @@ fn a_hand_made_trace_reads() {
 
 #[test]
 fn invalid_records_in_an_intact_chunk_are_named() {
-    let bad_kind = vec![9; 10];
+    // A kind this build does not know, framed correctly: its end is found,
+    // its decoding refused.
+    let bad_kind = framed(9, &[7, 0, 0, 0, 0, 0, 0, 0, 1, 2]);
     let mut bad_disposal = created(0);
     bad_disposal[0] = 3;
     bad_disposal.push(7);
+    bad_disposal[1..3].copy_from_slice(&21_u16.to_le_bytes());
     let cases: [(Vec<u8>, &str); 7] = [
         (
             bad_kind,
-            "invalid record kind before byte 1: found 9, allowed 1, 2 or 3",
+            "invalid record kind before byte 1: found 9, allowed 1, 2 or 3 (taktsim-core/1)",
         ),
         (
             created(2),
-            "invalid component before byte 21: found 2, allowed below 2, the number of components in the header",
+            "invalid component before byte 23: found 2, allowed below 2, the number of components in the header",
         ),
         (
             bad_disposal,
-            "invalid disposal before byte 22: found 7, allowed 0 (delivered), 1 (scrapped) or 2 (consumed)",
+            "invalid disposal before byte 24: found 7, allowed 0 (delivered), 1 (scrapped) or 2 (consumed)",
         ),
         (
             event(0, 4, &[0]),
-            "invalid item number of an event without an item before byte 34: found 4, allowed 0",
+            "invalid item number of an event without an item before byte 36: found 4, allowed 0",
         ),
         (
             event(2, 0, &[0]),
-            "invalid bool before byte 26: found 2, allowed 0 or 1",
+            "invalid bool before byte 28: found 2, allowed 0 or 1",
         ),
         (
             event(0, 0, &[9]),
@@ -156,7 +180,8 @@ fn invalid_records_in_an_intact_chunk_are_named() {
         assert_eq!(source.to_string(), expected);
         assert!(e.to_string().starts_with("record 0 is invalid: "));
     }
-    // A record cut off by the end of its chunk.
+    // A record whose length runs past the end of its chunk, and one whose
+    // length stops short of it: the chunk does not add up.
     let e = first_error(&trace(&created(0)[..10], 1));
     assert!(
         matches!(
@@ -197,7 +222,7 @@ fn a_chunk_must_hold_exactly_the_records_it_counts() {
 fn chunk_lengths_and_block_tags_are_checked() {
     let header = header_bytes();
     let mut empty = chunk(&[], 1, 0);
-    empty.truncate(21);
+    empty.truncate(29);
     let e = first_error(&[header.clone(), empty].concat());
     assert_eq!(
         e.to_string(),

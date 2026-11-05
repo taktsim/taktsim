@@ -59,35 +59,53 @@ bits.
 
 ### Layout, chunks and integrity
 
-ADR-0004 says both "length-prefixed records" (option S2) and "fixed-width
-little-endian encoding" (recommendation). *Reading:* every field has a
-fixed width; each record starts with its kind, and an event's message,
-the only variable part, has a `u16` length prefix, so a record's end is
-found without decoding the message (needed by a reader that does not know
-`M`, such as a future `trace query` index).
+ADR-0004 says "length-prefixed records" (option S2) and "fixed-width
+little-endian encoding" (recommendation). *Reading (owner's decision,
+2026-11-05):* both, literally. Every record starts with the same prefix,
+its kind (u8), the length of the rest (u16) and its time (u64), so a
+reader finds any record's end and time without knowing its kind; after
+the prefix, every field has a fixed width, and an event's message, the
+only variable part, fills the rest of the record. The prefix is the part
+of the layout every engine shares (the envelope); the kinds and their
+fields are this engine's, named by the record format in the header.
 
 All integers little-endian; no field has a platform-dependent size.
 
 | Block | Bytes |
 | --- | --- |
-| Header | magic `TAKT\r\n\x1a\n` (8; catches line-ending conversion, as PNG does), format version u16 = 1, engine version (u16 length + UTF-8), message format (same), model hash (32), seed u64, component count u32, each component id (u16 length + UTF-8), CRC32 u32 of all before it |
-| Chunk | tag `C`, payload length u32 (1 to 65,536), records u32 (≥ 1), index of its first record u64, CRC32 u32 of the 17 bytes before it and the payload, payload (whole records) |
+| Header | magic `TAKT\r\n\x1a\n` (8; catches line-ending conversion, as PNG does), format version u16 = 1, engine version (u16 length + UTF-8), record format (same, `taktsim-core/1`), message format (same), model hash (32), system hash (32), seed u64, component count u32, each component id (u16 length + UTF-8), CRC32 u32 of all before it |
+| Chunk | tag `C`, payload length u32 (1 to 65,536), records u32 (≥ 1), index of its first record u64, time of its first record u64 (ns), CRC32 u32 of the 25 bytes before it and the payload, payload (whole records) |
 | End marker | tag `E`, records u64, events u64, chunks u64, stream SHA-256 (32), CRC32 u32 of all before it; nothing may follow |
 
-| Record | Kind | Fields after the kind byte |
+| Record | Kind | Fields after the prefix (kind u8, length u16, time u64) |
 | --- | --- | --- |
-| event | 1 | seq u64, time u64 (ns), target u32, from u32, has item u8, item u64 (0 if none), message length u16, message |
-| item created | 2 | time u64, item u64, by u32 |
-| item disposed | 3 | time u64, item u64, by u32, how u8 (0 delivered, 1 scrapped, 2 consumed) |
+| event | 1 | seq u64, target u32, from u32, has item u8, item u64 (0 if none), message (the rest) |
+| item created | 2 | item u64, by u32 |
+| item disposed | 3 | item u64, by u32, how u8 (0 delivered, 1 scrapped, 2 consumed) |
 
-An event takes 36 bytes plus its message; the toy line of the
-measurement below averages 40 bytes per record.
+An event takes 36 bytes plus its message, an item record 23 or 24; the
+toy line of the measurement below averages 40 bytes per record (the
+measurement predates the prefix: it adds 2 bytes to item records and
+none to events, whose own message length it replaces).
 
 - **Header additions.** Besides ADR-0004's four fields, the header holds
-  the message format (so the right message type reads it) and the
-  component ids (records refer to components by number; with the ids a
-  trace is readable on its own, and readers and replay check every number
-  against the list).
+  the record format (so a reader refuses records laid out by another
+  engine, as it refuses another message format), the message format (so
+  the right message type reads it), the system hash (ADR-0020: the same
+  across horizons and seeds, so a calibration certificate can be bound
+  to a trace) and the component ids (records refer to components by
+  number; with the ids a trace is readable on its own, and readers and
+  replay check every number against the list).
+- **Unknown record kinds.** A kind this build does not know is framed
+  (its length and time are read) but not decoded: `TraceReader` reports
+  it as an invalid record, so replay refuses a trace it cannot verify. A
+  reader that only frames, such as `trace query` or an export (v0.2),
+  can skip it. Adding a record kind (control decisions in M6, state
+  snapshots in v0.4) therefore changes the record format, not the file
+  format version.
+- **Chunk first time.** A reader looking for a time skips whole chunks
+  by their header instead of decoding them; the reader checks it against
+  the first record.
 - **Chunks.** A record never spans chunks; the writer closes a chunk when
   the next record would pass 64 KiB, so a record is at most 64 KiB
   (`RecordTooLarge` otherwise). Writer and reader each hold one chunk.
@@ -109,8 +127,12 @@ measurement below averages 40 bytes per record.
 
 - **Format version.** A reader accepts exactly `FORMAT_VERSION`; the
   error says which version was found and which this build reads. A new
-  layout is a new version, and readers of older versions are added only
-  when needed.
+  framing (header, chunks, end marker, record prefix) is a new version,
+  and readers of older versions are added only when needed. A new record
+  kind or field is a new record format (below), not a new version.
+- **Record format.** `RECORD_FORMAT` (`taktsim-core/1`) names the record
+  kinds and their fields after the prefix. A reader refuses a trace with
+  another record format, as it refuses another message format.
 - **Engine version.** `taktsim_core::ENGINE_VERSION` (the core crate's
   version) is written into the header. Replay refuses a trace of another
   engine version: the spec promises identical traces only for the same
@@ -304,6 +326,32 @@ shipped (2026-10-27, head `655ead5`, workflow run 40468566195).
 - Golden snapshots survive releases that change no record.
 - Replay checks events, item bookkeeping and invariants, not a direct
   comparison of component state (question 1).
+
+## Owner's decisions (2026-11-05, session on this pull request)
+
+The layout was checked against every consumer the spec, ADR-0004 and the
+roadmap promise (replay, golden traces, partial traces, CSV and Parquet
+export, the WebAssembly reader, `trace query`, control decisions in M6,
+viewer scrubbing and state, charts from traces, calibration certificates).
+Four changes followed, all for one reason: the parts of a trace that every
+engine shares must be readable without this engine's vocabulary (the
+envelope; the ecosystem vision in the owner's notes).
+
+1. **Every record carries a length prefix,** so a reader that does not
+   know a record kind can skip it. Record kinds can then be added without
+   a new format version. Replay refuses what it cannot verify; framing
+   readers skip.
+2. **Every chunk header carries the time of its first record,** so a
+   reader can reach a time without decoding the chunks before it.
+3. **The header names the record format** beside the message format, so a
+   second engine can share the file format at version 1.
+4. **The header carries both hashes,** model and system (ADR-0020,
+   2026-11-04): a trace alone says which run and which system it came
+   from. Both cost nothing before v0.1 ships a trace; afterwards each
+   would be a new format version.
+
+The golden snapshots and the pinned hashes changed with the layout, for
+this stated reason; every record line in the snapshots is unchanged.
 
 ## Questions for the owner
 

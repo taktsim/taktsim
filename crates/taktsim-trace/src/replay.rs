@@ -57,7 +57,7 @@ pub struct ReplayReport {
 ///
 /// ```
 /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message, RunLimits};
-/// use taktsim_trace::{replay, DecodeError, Decoder, Encoder, Header, ModelHash, ReplayError, TraceMessage, TraceReader, TraceWriter};
+/// use taktsim_trace::{replay, DecodeError, Decoder, Encoder, Header, ModelHash, ReplayError, SystemHash, TraceMessage, TraceReader, TraceWriter};
 ///
 /// #[derive(Debug)]
 /// struct Tick(u64);
@@ -90,7 +90,7 @@ pub struct ReplayReport {
 /// }
 ///
 /// let mut engine = build(7)?;
-/// let mut writer = TraceWriter::new(Vec::new(), &Header::for_engine(&engine, ModelHash::default()))?;
+/// let mut writer = TraceWriter::new(Vec::new(), &Header::for_engine(&engine, ModelHash::default(), SystemHash::default()))?;
 /// engine.run(RunLimits::until("1min".parse()?), &mut writer)?;
 /// let (trace, _) = writer.finish()?;
 ///
@@ -151,7 +151,7 @@ pub fn replay<R: Read, M: TraceMessage>(
                 found: "no further record before the engine's next event".to_owned(),
             });
         }
-        let time = record::event_time(bytes);
+        let time = record::time(bytes);
         let summary = run(engine, RunLimits::until(time).max_events(1), &mut sink)?;
         if summary.events == 0 {
             let bytes = sink.trace.bytes(&next);

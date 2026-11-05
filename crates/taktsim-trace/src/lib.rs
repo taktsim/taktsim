@@ -6,10 +6,11 @@
 //! an append-only binary stream that never has to fit in memory:
 //!
 //! - [`TraceWriter`] is the engine's trace sink. It writes a [`Header`]
-//!   (format version, engine version, message format, model hash, seed,
-//!   component ids), then the records in chunks of at most
-//!   [`CHUNK_CAPACITY`] bytes with a CRC32 each, then an end marker with the
-//!   record counts and the SHA-256 of the record stream ([`TraceHash`]).
+//!   (format version, engine version, record and message formats, model
+//!   and system hashes, seed, component ids), then the records in chunks
+//!   of at most [`CHUNK_CAPACITY`] bytes with a CRC32 each, then an end
+//!   marker with the record counts and the SHA-256 of the record stream
+//!   ([`TraceHash`]).
 //! - [`TraceReader`] reads it back record by record and detects damaged,
 //!   cut-off and foreign data with a typed [`ReadError`].
 //! - [`replay`] re-executes a run and checks it against its trace at every
@@ -22,7 +23,7 @@
 //!
 //! ```
 //! use taktsim_core::{Component, ComponentError, Context, Delivery, Disposal, Engine, EngineConfig, Message, RunLimits};
-//! use taktsim_trace::{replay, DecodeError, Decoder, Encoder, Header, ModelHash, TraceMessage, TraceReader, TraceWriter};
+//! use taktsim_trace::{replay, DecodeError, Decoder, Encoder, Header, ModelHash, SystemHash, TraceMessage, TraceReader, TraceWriter};
 //!
 //! #[derive(Debug)]
 //! struct Arrive;
@@ -69,7 +70,7 @@
 //!
 //! // Write: in practice to a `File`.
 //! let mut engine = line(42)?;
-//! let header = Header::for_engine(&engine, ModelHash::sha256(b"the model text"));
+//! let header = Header::for_engine(&engine, ModelHash::sha256(b"the model text"), SystemHash::sha256(b"its system"));
 //! let mut writer = TraceWriter::new(Vec::new(), &header)?;
 //! engine.run(RunLimits::until("1h".parse()?), &mut writer)?;
 //! let (trace, summary) = writer.finish()?;
@@ -106,7 +107,9 @@ mod write;
 pub use codec::{
     DecodeError, Decoder, EncodeError, Encoder, TraceMessage, decode_message, encode_message,
 };
-pub use header::{CHUNK_CAPACITY, FORMAT_VERSION, Header, MAGIC, ModelHash, TraceHash};
+pub use header::{
+    CHUNK_CAPACITY, FORMAT_VERSION, Header, MAGIC, ModelHash, RECORD_FORMAT, SystemHash, TraceHash,
+};
 pub use read::{Block, ReadError, TraceReader};
 pub use record::Record;
 pub use replay::{ReplayError, ReplayReport, replay};

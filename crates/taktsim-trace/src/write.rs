@@ -7,7 +7,7 @@ use taktsim_core::digest::{Crc32, Sha256, crc32};
 use taktsim_core::{TraceRecord, TraceSink};
 
 use crate::codec::{EncodeError, TraceMessage};
-use crate::header::{CHUNK_CAPACITY, CHUNK_TAG, END_TAG, Header, TraceHash};
+use crate::header::{CHUNK_CAPACITY, CHUNK_CRC_OVER, CHUNK_TAG, END_TAG, Header, TraceHash};
 use crate::record;
 
 /// What a finished trace holds, from the writer or from a reader that read
@@ -47,7 +47,7 @@ pub struct Summary {
 ///
 /// ```
 /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message, RunLimits};
-/// use taktsim_trace::{DecodeError, Decoder, Encoder, Header, ModelHash, TraceMessage, TraceWriter};
+/// use taktsim_trace::{DecodeError, Decoder, Encoder, Header, ModelHash, SystemHash, TraceMessage, TraceWriter};
 ///
 /// #[derive(Debug)]
 /// struct Tick;
@@ -72,7 +72,7 @@ pub struct Summary {
 ///
 /// let mut engine = Engine::new(EngineConfig::new(1));
 /// engine.add_component("clock", Box::new(Clock))?;
-/// let header = Header::for_engine(&engine, ModelHash::sha256(b"clock"));
+/// let header = Header::for_engine(&engine, ModelHash::sha256(b"clock"), SystemHash::sha256(b"clock"));
 /// // A `File` in practice; a `Vec` here.
 /// let mut writer = TraceWriter::new(Vec::new(), &header)?;
 /// engine.run(RunLimits::until("1min".parse()?), &mut writer)?;
@@ -87,6 +87,8 @@ pub struct TraceWriter<W: Write, M> {
     /// The records of the open chunk.
     chunk: Vec<u8>,
     chunk_records: u32,
+    /// The time of the open chunk's first record, in ns.
+    chunk_first_time: u64,
     /// Records in closed chunks.
     closed_records: u64,
     events: u64,
@@ -109,7 +111,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
     /// message format than `M`'s, [`WriteError::Io`] if `out` fails.
     ///
     /// ```
-    /// use taktsim_trace::{Header, ModelHash, TraceWriter, WriteError};
+    /// use taktsim_trace::{Header, ModelHash, SystemHash, TraceWriter, WriteError};
     /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
@@ -119,7 +121,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), 1, vec!["x".repeat(70_000)]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec!["x".repeat(70_000)]);
     /// let result = TraceWriter::<_, Tick>::new(Vec::new(), &header);
     /// assert!(matches!(result, Err(WriteError::Header(_))));
     /// ```
@@ -137,6 +139,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
             out,
             chunk: Vec::with_capacity(CHUNK_CAPACITY),
             chunk_records: 0,
+            chunk_first_time: 0,
             closed_records: 0,
             events: 0,
             chunks: 0,
@@ -157,7 +160,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
     /// end marker.
     ///
     /// ```
-    /// use taktsim_trace::{Header, ModelHash, TraceWriter};
+    /// use taktsim_trace::{Header, ModelHash, SystemHash, TraceWriter};
     /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
     /// # #[derive(Debug)] struct Tick;
     /// # impl taktsim_core::Message for Tick {}
@@ -167,7 +170,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), 1, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
     /// let writer = TraceWriter::<_, Tick>::new(Vec::new(), &header)?;
     /// let (bytes, summary) = writer.finish()?;
     /// assert_eq!((summary.records, summary.chunks), (0, 0));
@@ -206,8 +209,8 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
         Ok((self.out, summary))
     }
 
-    /// Writes the open chunk: tag, length, records, first record, CRC32,
-    /// then the records.
+    /// Writes the open chunk: tag, length, records, first record, its
+    /// time, CRC32, then the records.
     fn close_chunk(&mut self) {
         self.close_chunk_at(self.chunk.len());
     }
@@ -228,10 +231,11 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
         head[1..5].copy_from_slice(&len32.to_le_bytes());
         head[5..9].copy_from_slice(&records.to_le_bytes());
         head[9..17].copy_from_slice(&self.closed_records.to_le_bytes());
+        head[17..25].copy_from_slice(&self.chunk_first_time.to_le_bytes());
         let mut crc = Crc32::new();
-        crc.update(&head[..17]);
+        crc.update(&head[..CHUNK_CRC_OVER]);
         crc.update(payload);
-        head[17..21].copy_from_slice(&crc.finalize().to_le_bytes());
+        head[CHUNK_CRC_OVER..].copy_from_slice(&crc.finalize().to_le_bytes());
         self.hasher.update(payload);
         let offset = self.bytes;
         if let Err(source) = self
@@ -247,6 +251,10 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
         self.closed_records += u64::from(records);
         self.chunk.drain(..len);
         self.chunk_records -= records;
+        if !self.chunk.is_empty() {
+            // The record that did not fit starts the next chunk.
+            self.chunk_first_time = record::time(&self.chunk).as_nanos();
+        }
     }
 }
 
@@ -257,6 +265,9 @@ impl<W: Write, M: TraceMessage> TraceSink<M> for TraceWriter<W, M> {
         }
         let index = self.closed_records + u64::from(self.chunk_records);
         let start = self.chunk.len();
+        if start == 0 {
+            self.chunk_first_time = record_time(trace_record).as_nanos();
+        }
         if let Err(source) = record::encode(trace_record, &mut self.chunk) {
             self.error = Some(WriteError::Encode {
                 record: index,
@@ -288,6 +299,15 @@ impl<W: Write, M: TraceMessage> TraceSink<M> for TraceWriter<W, M> {
 
 // Chunk lengths are written as u32.
 const _: () = assert!(CHUNK_CAPACITY <= u32::MAX as usize);
+
+/// A record's time.
+fn record_time<M>(record: &TraceRecord<'_, M>) -> taktsim_units::SimTime {
+    match record {
+        TraceRecord::Event { time, .. }
+        | TraceRecord::ItemCreated { time, .. }
+        | TraceRecord::ItemDisposed { time, .. } => *time,
+    }
+}
 
 /// The highest-numbered component a record names.
 fn highest_component<M>(record: &TraceRecord<'_, M>) -> taktsim_core::ComponentId {

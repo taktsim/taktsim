@@ -1,15 +1,19 @@
 //! Records: the owned form a reader returns, and their byte layout
 //! (ADR-0021).
 //!
-//! Every record starts with a kind byte, then fixed-width little-endian
-//! fields. An event's message comes last, after its length (`u16`), so a
-//! record's end can be found without decoding the message.
+//! Every record starts with the same prefix: its kind (`u8`), the length
+//! of what follows (`u16`) and its time (`u64`, ns). So a reader that does
+//! not know a kind can still find the record's end and its time (the
+//! envelope every engine shares; owner's decision 2026-11-05). The fields
+//! after the prefix are the engine's ([`RECORD_FORMAT`](crate::RECORD_FORMAT)),
+//! fixed-width little-endian; an event's message comes last and fills the
+//! rest of the record.
 //!
-//! | Kind | Byte | Fields after the kind byte |
+//! | Kind | Byte | Fields after the prefix |
 //! | --- | --- | --- |
-//! | event | 1 | seq u64, time u64 (ns), target u32, from u32, has item u8 (0/1), item u64 (0 if none), message length u16, message |
-//! | item created | 2 | time u64, item u64, by u32 |
-//! | item disposed | 3 | time u64, item u64, by u32, how u8 (0 delivered, 1 scrapped, 2 consumed) |
+//! | event | 1 | seq u64, target u32, from u32, has item u8 (0/1), item u64 (0 if none), message |
+//! | item created | 2 | item u64, by u32 |
+//! | item disposed | 3 | item u64, by u32, how u8 (0 delivered, 1 scrapped, 2 consumed) |
 
 use std::fmt;
 
@@ -22,10 +26,8 @@ pub(crate) const EVENT: u8 = 1;
 pub(crate) const ITEM_CREATED: u8 = 2;
 pub(crate) const ITEM_DISPOSED: u8 = 3;
 
-/// Size of an event record without its message.
-pub(crate) const EVENT_FIXED: usize = 1 + 8 + 8 + 4 + 4 + 1 + 8 + 2;
-const ITEM_CREATED_SIZE: usize = 1 + 8 + 8 + 4;
-const ITEM_DISPOSED_SIZE: usize = ITEM_CREATED_SIZE + 1;
+/// The prefix every record starts with: kind u8, length u16, time u64.
+pub(crate) const PREFIX: usize = 1 + 2 + 8;
 
 /// One record read back from a trace: the owned form of
 /// [`TraceRecord`], with the message decoded.
@@ -269,40 +271,36 @@ pub(crate) fn encode<M: TraceMessage>(
 ) -> Result<(), EncodeError> {
     let start = out.len();
     let mut encoder = Encoder::new(out);
+    let (kind, time) = match record {
+        TraceRecord::Event { time, .. } => (EVENT, *time),
+        TraceRecord::ItemCreated { time, .. } => (ITEM_CREATED, *time),
+        TraceRecord::ItemDisposed { time, .. } => (ITEM_DISPOSED, *time),
+    };
+    encoder.u8(kind);
+    // The length, filled in below.
+    encoder.u16(0);
+    encoder.time(time);
     match record {
         TraceRecord::Event {
             seq,
-            time,
             target,
             from,
             message,
             item,
+            ..
         } => {
-            encoder.u8(EVENT);
             encoder.u64(*seq);
-            encoder.time(*time);
             encoder.component(*target);
             encoder.component(*from);
             encoder.bool(item.is_some());
             encoder.u64(item.map_or(0, ItemId::as_u64));
-            // The message length, filled in below.
-            encoder.u16(0);
             message.encode(&mut encoder);
         }
-        TraceRecord::ItemCreated { time, item, by } => {
-            encoder.u8(ITEM_CREATED);
-            encoder.time(*time);
+        TraceRecord::ItemCreated { item, by, .. } => {
             encoder.item(*item);
             encoder.component(*by);
         }
-        TraceRecord::ItemDisposed {
-            time,
-            item,
-            by,
-            how,
-        } => {
-            encoder.u8(ITEM_DISPOSED);
-            encoder.time(*time);
+        TraceRecord::ItemDisposed { item, by, how, .. } => {
             encoder.item(*item);
             encoder.component(*by);
             encoder.u8(match how {
@@ -321,12 +319,9 @@ pub(crate) fn encode<M: TraceMessage>(
         if bytes > MAX_RECORD {
             return Err(too_large);
         }
-        if out[start] == EVENT {
-            // At most MAX_RECORD - EVENT_FIXED, so it fits a u16.
-            let length = u16::try_from(bytes - EVENT_FIXED).map_err(|_| too_large)?;
-            out[start + EVENT_FIXED - 2..start + EVENT_FIXED]
-                .copy_from_slice(&length.to_le_bytes());
-        }
+        // At most MAX_RECORD - 3, so it fits a u16.
+        let length = u16::try_from(bytes - 3).map_err(|_| too_large)?;
+        out[start + 1..start + 3].copy_from_slice(&length.to_le_bytes());
         Ok(())
     });
     if result.is_err() {
@@ -335,46 +330,54 @@ pub(crate) fn encode<M: TraceMessage>(
     result
 }
 
-/// The kind and length of the record that starts `bytes`, found without
-/// decoding its message.
+/// The kind and total length of the record that starts `bytes`, found
+/// from its prefix alone, whatever its kind.
 pub(crate) fn frame(bytes: &[u8]) -> Result<(u8, usize), DecodeError> {
     let mut input = Decoder::new(bytes);
     let kind = input.u8()?;
-    let fixed = match kind {
-        EVENT => EVENT_FIXED,
-        ITEM_CREATED => ITEM_CREATED_SIZE,
-        ITEM_DISPOSED => ITEM_DISPOSED_SIZE,
-        kind => return Err(input.invalid("record kind", kind.into(), "1, 2 or 3")),
-    };
-    input.slice(fixed - 1)?;
-    let message = if kind == EVENT {
-        let length = u16::from_le_bytes([bytes[EVENT_FIXED - 2], bytes[EVENT_FIXED - 1]]);
-        input.slice(length.into())?;
-        usize::from(length)
-    } else {
-        0
-    };
-    Ok((kind, fixed + message))
+    let length = usize::from(input.u16()?);
+    input.slice(length)?;
+    if length < PREFIX - 3 {
+        return Err(input.invalid(
+            "record length",
+            length as u64,
+            format_args!("at least {}, the time it must hold", PREFIX - 3),
+        ));
+    }
+    Ok((kind, PREFIX - 8 + length))
 }
 
-/// The time of an event record, at a fixed offset.
-pub(crate) fn event_time(bytes: &[u8]) -> SimTime {
+/// The time of any record, at a fixed place in its prefix; `bytes` holds
+/// at least the prefix.
+pub(crate) fn time(bytes: &[u8]) -> SimTime {
     let mut time = [0; 8];
-    time.copy_from_slice(&bytes[9..17]);
+    time.copy_from_slice(&bytes[3..PREFIX]);
     SimTime::from_nanos(u64::from_le_bytes(time))
 }
 
 /// Decodes one record that fills `bytes`, checking that it names only the
-/// trace's `components`.
+/// trace's `components`. A kind this build does not know is an error: it
+/// can be skipped by a reader that only frames records, never read.
 pub(crate) fn decode<M: TraceMessage>(
     bytes: &[u8],
     components: usize,
 ) -> Result<Record<M>, DecodeError> {
     let mut input = Decoder::new(bytes);
-    let record = match input.u8()? {
+    let kind = input.u8()?;
+    if !matches!(kind, EVENT | ITEM_CREATED | ITEM_DISPOSED) {
+        return Err(input.invalid(
+            "record kind",
+            kind.into(),
+            format_args!("1, 2 or 3 ({})", crate::RECORD_FORMAT),
+        ));
+    }
+    // The length framed the record already ([`frame`]); the decoder's
+    // `finish` checks it against the fields.
+    let _length = input.u16()?;
+    let time = input.time()?;
+    let record = match kind {
         EVENT => {
             let seq = input.u64()?;
-            let time = input.time()?;
             let target = component(&mut input, components)?;
             let from = component(&mut input, components)?;
             let has_item = input.bool()?;
@@ -386,8 +389,7 @@ pub(crate) fn decode<M: TraceMessage>(
             } else {
                 return Err(input.invalid("item number of an event without an item", raw, 0));
             };
-            let length = input.u16()?;
-            let message = crate::codec::decode_message(input.slice(length.into())?)?;
+            let message = crate::codec::decode_message(input.slice(bytes.len() - input.offset())?)?;
             Record::Event {
                 seq,
                 time,
@@ -398,12 +400,12 @@ pub(crate) fn decode<M: TraceMessage>(
             }
         }
         ITEM_CREATED => Record::ItemCreated {
-            time: input.time()?,
+            time,
             item: input.item()?,
             by: component(&mut input, components)?,
         },
         ITEM_DISPOSED => Record::ItemDisposed {
-            time: input.time()?,
+            time,
             item: input.item()?,
             by: component(&mut input, components)?,
             how: match input.u8()? {
@@ -419,7 +421,8 @@ pub(crate) fn decode<M: TraceMessage>(
                 }
             },
         },
-        kind => return Err(input.invalid("record kind", kind.into(), "1, 2 or 3")),
+        // Refused above.
+        _ => return Err(input.invalid("record kind", kind.into(), "1, 2 or 3")),
     };
     input.finish()?;
     Ok(record)
