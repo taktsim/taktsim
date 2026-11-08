@@ -11,7 +11,7 @@ use taktsim_components::{
     VariantId, Wiring, standard,
 };
 use taktsim_core::random::Stream;
-use taktsim_core::{Component, ComponentError, Context, Delivery, Disposal, ItemId};
+use taktsim_core::{Component, ComponentError, Context, Delivery, Disposal, ItemId, Violation};
 use taktsim_model::{ComponentParams, Encode, Fields, Json};
 use taktsim_run::{Failure, RunRequest, RunResponse, Store};
 
@@ -114,6 +114,8 @@ pub fn test_registry() -> Registry<Flow> {
         .with::<Lonely>()
         .unwrap()
         .with::<Liar>()
+        .unwrap()
+        .with::<Faulty>()
         .unwrap()
 }
 
@@ -425,5 +427,99 @@ impl Component<FlowMessage> for LiarBehaviour {
         let to = ctx.lookup(&self.to)?;
         ctx.transfer(item, to, FlowMessage::Arrive(attrs()))?;
         self.next(ctx)
+    }
+}
+
+/// `type: Faulty`: after one minute, fails (`how: error`) or breaks an invariant
+/// (`how: invariant`), or leaves an item unreceived (`how: unreceived`) or lost
+/// (`how: lost`).
+#[derive(Debug)]
+pub struct Faulty {
+    how: String,
+}
+
+impl Encode for Faulty {
+    fn encode(&self) -> Json {
+        Json::object([]).with("how", &self.how)
+    }
+}
+
+impl ComponentParams for Faulty {
+    const TYPE: &'static str = "Faulty";
+    const EXAMPLE: &'static str = "{id: f, type: Faulty, how: error}";
+    fn decode(fields: &mut Fields<'_, '_>) -> Option<Self> {
+        Some(Self {
+            how: fields.required("how")?,
+        })
+    }
+}
+
+impl ComponentType<Flow> for Faulty {
+    const PORTS: Ports = Ports::None;
+
+    fn draws_random(&self) -> bool {
+        false
+    }
+
+    fn build(
+        &self,
+        _: &Wiring<'_, FlowShared>,
+    ) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
+        Ok(Box::new(FaultyBehaviour {
+            how: self.how.clone(),
+            broken: false,
+        }))
+    }
+}
+
+struct FaultyBehaviour {
+    how: String,
+    broken: bool,
+}
+
+impl Component<FlowMessage> for FaultyBehaviour {
+    fn start(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
+        ctx.schedule("1min".parse()?, FlowMessage::NextArrival)?;
+        Ok(())
+    }
+
+    fn handle(
+        &mut self,
+        _: Delivery<'_, FlowMessage>,
+        ctx: &mut Context<'_, FlowMessage>,
+    ) -> Result<(), ComponentError> {
+        match self.how.as_str() {
+            "error" => Err(ComponentError::Unexpected {
+                state: "faulty",
+                event: "NextArrival".to_owned(),
+            }),
+            "invariant" => {
+                self.broken = true;
+                Ok(())
+            }
+            "lost" => {
+                // Created and reported by nobody.
+                let _item = ctx.create_item();
+                Ok(())
+            }
+            "unreceived" => {
+                let me = ctx.lookup("faulty")?;
+                let item = ctx.create_item();
+                ctx.transfer(item, me, FlowMessage::NextArrival)?;
+                self.how.clear();
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn check_invariants(&self) -> Result<(), Violation> {
+        if self.broken {
+            return Err(Violation {
+                invariant: "it is not broken",
+                detail: "broken".to_owned(),
+            });
+        }
+        Ok(())
     }
 }

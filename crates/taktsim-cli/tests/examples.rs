@@ -144,7 +144,7 @@ fn the_readme_and_the_introduction_run() {
 }
 
 #[test]
-fn every_malformed_model_exits_1_with_a_path() {
+fn malformed_models_exit_1_with_a_path() {
     let corpus = repo(&["crates", "taktsim-components", "tests", "data", "malformed"]);
     let mut paths: Vec<PathBuf> = std::fs::read_dir(corpus)
         .unwrap()
