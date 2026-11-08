@@ -158,6 +158,10 @@
               "$ref": "#/$defs/Count",
               "description": "From 1 to 65535 parts."
             },
+            "due_in": {
+              "$ref": "#/$defs/Distribution",
+              "description": "The due date of its parts, from creation. Needs `interarrival`: an on-demand part is created when it is accepted, so a rule would rank it by a date it does not yet have. Absent: no due date."
+            },
             "id": {
               "$ref": "#/$defs/ComponentId"
             },
@@ -170,6 +174,30 @@
               "maximum": 255,
               "minimum": 0,
               "type": "integer"
+            },
+            "priority_mix": {
+              "description": "The share of each priority, instead of `priority`, each above 0 %, summing to 100 %. One priority per batch.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "priority": {
+                    "description": "The priority of its parts in a buffer with the `priority` discipline: higher goes first, default 0.",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "share": {
+                    "$ref": "#/$defs/Ratio"
+                  }
+                },
+                "required": [
+                  "priority",
+                  "share"
+                ],
+                "type": "object"
+              },
+              "minItems": 2,
+              "type": "array"
             },
             "type": {
               "const": "Source"

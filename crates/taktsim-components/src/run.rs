@@ -16,7 +16,7 @@ use taktsim_core::{
     Component as Behaviour, Engine, EngineConfig, EngineError, ItemCounts, RunError, RunLimits,
     RunSummary, TraceSink,
 };
-use taktsim_model::expr::Signature;
+use taktsim_model::expr::{EnvError, ExprError, Signature};
 use taktsim_model::{
     Catalog, CatalogError, Component as Entry, ComponentParams, Document, FieldPath, Findings,
     LoadErrors, Model, RoutingWords, Segment,
@@ -1046,6 +1046,26 @@ pub enum BuildError {
         /// The name.
         name: String,
     },
+    /// A condition that does not type-check. A check at load time finds every
+    /// such condition first.
+    #[error("{path}: in `{text}`: {source}")]
+    Condition {
+        /// Where it is written.
+        path: FieldPath,
+        /// As written.
+        text: String,
+        /// Why.
+        #[source]
+        source: Box<ExprError>,
+    },
+    /// The model's variant names cannot be compared in a condition. A check at load
+    /// time finds that first.
+    #[error("the model's variant names: {source}")]
+    Conditions {
+        /// Why.
+        #[source]
+        source: Box<EnvError>,
+    },
     /// The engine refuses the component.
     #[error("{path}: {source}")]
     Engine {
@@ -1076,7 +1096,9 @@ impl BuildError {
             | Self::WrongParameters { path, .. }
             | Self::Distribution { path, .. }
             | Self::UnknownVariant { path, .. }
+            | Self::Condition { path, .. }
             | Self::Engine { path, .. } => path,
+            Self::Conditions { .. } => return None,
         })
     }
 }

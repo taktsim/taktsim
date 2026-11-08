@@ -1,0 +1,14 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: a, type: Sink}
+  - {id: b, type: Sink}
+  - {id: c, type: Sink}
+flow:
+  - {from: source, to: a}
+  - {from: source, to: b, when: "priority > 0"}
+  - {from: source, to: c}
+# expect: flow[1].from @ 11:12 NotAllowed
+# expect: flow[2].from @ 12:12 NotAllowed

@@ -1,0 +1,11 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: a, type: Sink}
+flow:
+  - [source, a]
+control:
+  release: {policy: conwip, wip_cap: 40 parts}
+# expect: control.release @ 10:3 UnknownField

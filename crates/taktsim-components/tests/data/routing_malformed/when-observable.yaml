@@ -1,0 +1,11 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: a, type: Sink}
+  - {id: b, type: Sink}
+flow:
+  - {from: source, to: a, when: "throughput(a) > 1 parts/min"}
+  - {from: source, to: b}
+# expect: flow[0].when @ 9:33 Expression

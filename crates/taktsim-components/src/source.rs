@@ -6,7 +6,7 @@ use taktsim_core::random::{DurationDistribution, Stream};
 use taktsim_core::{Component, ComponentError, Context, Delivery, ItemId, Violation};
 use taktsim_model::{
     ComponentParams, Decode, Decoder, Distribution, Encode, Fields, Json, LoadErrorKind, Node,
-    Schemas, Segment, Value,
+    Record, Schemas, Segment, Value,
 };
 use taktsim_units::{Count, Ratio};
 
@@ -164,13 +164,164 @@ impl Encode for Priority {
     }
 }
 
+/// One entry of `priority_mix`.
+#[derive(Debug, Clone, Copy)]
+struct PriorityShare {
+    priority: Priority,
+    share: Ratio,
+}
+
+impl Record for PriorityShare {
+    const EXPECTED: &'static str = "a priority and its share, such as `{priority: 1, share: 20%}`";
+    const EXAMPLE: &'static str = "{priority: 1, share: 20%}";
+
+    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+        let priority = fields.required("priority");
+        let share = fields.required("share");
+        Some(Self {
+            priority: priority?,
+            share: share?,
+        })
+    }
+}
+
+impl Encode for PriorityShare {
+    fn encode(&self) -> Json {
+        Json::object([])
+            .with("priority", &self.priority)
+            .with("share", &self.share)
+    }
+}
+
+/// `priority_mix`: at least two entries, distinct priorities, shares above 0 %
+/// summing to 100 %, sorted by priority (ADR-0023 §7). A list, because the keys of a
+/// JSON mapping are text and a priority is a number.
+#[derive(Debug, Clone)]
+struct PriorityMix(Vec<PriorityShare>);
+
+impl Decode for PriorityMix {
+    const EXPECTED: &'static str = "a list of priorities with shares, such as `[{priority: 1, share: 20%}, {priority: 0, share: 80%}]`";
+    const EXAMPLE: &'static str = "[{priority: 1, share: 20%}, {priority: 0, share: 80%}]";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let Value::List(items) = node.value() else {
+            cx.wrong_type::<Self>(node);
+            return None;
+        };
+        if items.len() < 2 {
+            let kind = LoadErrorKind::TooFew {
+                what: "a priority_mix",
+                min: 2,
+                found: items.len(),
+                example: Self::EXAMPLE,
+            };
+            cx.error(node.start(), kind);
+            return None;
+        }
+        let mut entries = Vec::<PriorityShare>::decode(node, cx)?;
+        let mut ok = true;
+        for (i, entry) in entries.iter().enumerate() {
+            if entries[..i]
+                .iter()
+                .any(|e| e.priority.0 == entry.priority.0)
+            {
+                cx.within(Segment::Index(i), |cx| {
+                    cx.not_allowed(
+                        &items[i],
+                        format!("the priority {} twice", entry.priority.0),
+                        "each priority once",
+                        Self::EXAMPLE,
+                    );
+                });
+                ok = false;
+            }
+            if entry.share.as_percent() <= 0.0 {
+                cx.within(Segment::Index(i), |cx| {
+                    cx.not_allowed(
+                        &items[i],
+                        entry.share.to_string(),
+                        "a share above 0%; leave out a priority that never occurs",
+                        Self::EXAMPLE,
+                    );
+                });
+                ok = false;
+            }
+        }
+        if !ok {
+            return None;
+        }
+        let total: f64 = entries.iter().map(|e| e.share.as_percent()).sum();
+        if (total - 100.0).abs() > SHARE_TOLERANCE {
+            cx.not_allowed(
+                node,
+                format!("shares summing to {total}%"),
+                "shares summing to 100%",
+                Self::EXAMPLE,
+            );
+            return None;
+        }
+        entries.sort_by_key(|e| e.priority.0);
+        Some(Self(entries))
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("array")),
+            ("items", schemas.of::<PriorityShare>()),
+            ("minItems", Json::from(2)),
+            (
+                "description",
+                Json::from(
+                    "The share of each priority, instead of `priority`, each above 0 %, summing to \
+                     100 %. One priority per batch.",
+                ),
+            ),
+        ])
+    }
+}
+
+impl Encode for PriorityMix {
+    fn encode(&self) -> Json {
+        self.0.encode()
+    }
+}
+
+/// `due_in`: the time from a part's creation to its due date. Zero is allowed.
+#[derive(Debug, Clone, Copy)]
+struct DueIn(Distribution);
+
+impl Decode for DueIn {
+    const EXPECTED: &'static str = Distribution::EXPECTED;
+    const EXAMPLE: &'static str = "{dist: uniform, min: 2h, max: 8h}";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        Distribution::decode(node, cx).map(Self)
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        schemas.of::<Distribution>().with(
+            "description",
+            &"The due date of its parts, from creation. Needs `interarrival`: an on-demand part \
+              is created when it is accepted, so a rule would rank it by a date it does not yet \
+              have. Absent: no due date.",
+        )
+    }
+}
+
+impl Encode for DueIn {
+    fn encode(&self) -> Json {
+        self.0.encode()
+    }
+}
+
 /// `type: Source`: where parts come from.
 ///
 /// `interarrival` is the time between batches, counted from the last part of
 /// the batch leaving; absent, the Source makes a part whenever the next
 /// component takes one. `batch` (default `1 parts`) needs `interarrival`.
 /// `variants` gives the shares of each variant, `priority` (0 to 255, default
-/// 0) the priority of its parts.
+/// 0) the priority of its parts, or `priority_mix` the share of each priority.
+/// `due_in`, which needs `interarrival`, gives their due date from creation.
 ///
 /// ```
 /// use taktsim_components::Source;
@@ -196,6 +347,8 @@ pub struct Source {
     batch: Option<Count>,
     variants: Option<VariantMix>,
     priority: Option<Priority>,
+    priority_mix: Option<PriorityMix>,
+    due_in: Option<DueIn>,
 }
 
 impl Source {
@@ -236,6 +389,8 @@ impl Encode for Source {
             .with_optional("batch", self.batch.as_ref())
             .with_optional("variants", self.variants.as_ref())
             .with_optional("priority", self.priority.as_ref())
+            .with_optional("priority_mix", self.priority_mix.as_ref())
+            .with_optional("due_in", self.due_in.as_ref())
     }
 }
 
@@ -249,6 +404,8 @@ impl ComponentParams for Source {
         let batch = fields.optional::<Units>("batch");
         let variants = fields.optional("variants");
         let priority = fields.optional("priority");
+        let priority_mix = fields.optional("priority_mix");
+        let due_in = fields.optional("due_in");
         if let Some(entry) = fields.entry("batch")
             && fields.entry("interarrival").is_none()
         {
@@ -264,11 +421,43 @@ impl ComponentParams for Source {
             });
             return None;
         }
+        if let Some(entry) = fields.entry("due_in")
+            && fields.entry("interarrival").is_none()
+        {
+            let cx = fields.decoder();
+            cx.within(Segment::Key("due_in".to_owned()), |cx| {
+                cx.not_allowed(
+                    entry.value(),
+                    "a due date on a Source without `interarrival`",
+                    "`due_in` together with `interarrival`: an on-demand part is created when it \
+                     is accepted, so a rule would rank it by a date it does not yet have, and \
+                     counting from the offer would measure time blocked, not an order's age",
+                    "{id: source, type: Source, interarrival: 40s, due_in: 8h}",
+                );
+            });
+            return None;
+        }
+        if let Some(entry) = fields.entry("priority_mix")
+            && fields.entry("priority").is_some()
+        {
+            let cx = fields.decoder();
+            cx.within(Segment::Key("priority_mix".to_owned()), |cx| {
+                cx.not_allowed(
+                    entry.value(),
+                    "`priority_mix` together with `priority`",
+                    "one of them: one priority for every part, or the share of each",
+                    "{id: source, type: Source, priority_mix: [{priority: 1, share: 20%}, {priority: 0, share: 80%}]}",
+                );
+            });
+            return None;
+        }
         Some(Self {
             interarrival: interarrival?.map(|i| i.0),
             batch: batch?.map(|b| b.0),
             variants: variants?,
             priority: priority?,
+            priority_mix: priority_mix?,
+            due_in: due_in?,
         })
     }
 }

@@ -1,0 +1,12 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: b, type: Buffer, capacity: 2 parts}
+  - {id: a, type: Sink}
+flow:
+  - [source, b, a]
+control:
+  dispatch: {b: fifo}
+# expect: control.dispatch.b @ 11:14 NotAllowed
