@@ -579,3 +579,35 @@ fn a_station_told_of_a_unit_that_has_gone_picks_again() {
     );
     support::check_records(&r);
 }
+
+/// A repair with two places free and offers waiting: the second pick follows the first.
+#[test]
+fn minimum_setup_takes_one_place_at_a_time_and_a_buffer_ranks_by_the_right_unit() {
+    let text = format!(
+        "{}control:\n  dispatch: {{m: minimum_setup}}\n",
+        document(
+            "2min",
+            "  - {id: s1, type: Source, interarrival: 1s, variants: {red: 50%, blue: 50%}}\n  \
+             - {id: s2, type: Source, interarrival: 3s, variants: {red: 50%, blue: 50%}}\n  \
+             - {id: p, type: Buffer, capacity: 5 parts}\n  - {id: q, type: Buffer, capacity: 5 parts}\n  \
+             - {id: m, type: Machine, cycle_time: 1s, capacity: 2 parts, mtbf: 10s, mttr: 12s}\n  \
+             - {id: sink, type: Sink}",
+            "  - [s1, p]\n  - [s2, q]\n  - {from: [p, q], to: m}\n  - [m, sink]",
+        )
+    );
+    for seed in 1..20 {
+        let r = run(&text, seed);
+        support::check_records(&r);
+        // No second `Accept` from `m` goes out before the first one's reply has landed.
+        let mut open = 0;
+        for e in r.events() {
+            if e.from == "m" && matches!(e.message, FlowMessage::Accept) {
+                open += 1;
+            }
+            if e.to == "m" && matches!(e.message, FlowMessage::Arrive(_) | FlowMessage::Decline) {
+                open -= 1;
+            }
+            assert!(open <= 1, "{e:?}");
+        }
+    }
+}

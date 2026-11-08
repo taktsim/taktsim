@@ -1062,6 +1062,14 @@ impl Inlet {
         let Some(rule) = self.rule.as_deref_mut() else {
             return self.accept(free, ctx);
         };
+        // What a unit follows is known for the next pick only: a station upstream ranks
+        // by it when the `Accept` arrives, so `minimum_setup` takes one place at a time,
+        // and the next when this one's reply has landed, at this instant (ADR-0023,
+        // disagreement 17).
+        let one_at_a_time = rule.plan.rule == taktsim_model::DispatchRule::MinimumSetup;
+        if one_at_a_time && !rule.pending.is_empty() {
+            return Ok(());
+        }
         let mut follows = rule.pending.last().map_or(follows, |p| Some(p.variant));
         while free > 0 && !rule.offers.is_empty() {
             let mut ranked: Vec<(u64, SimTime, usize)> = rule
@@ -1103,8 +1111,19 @@ impl Inlet {
                 reporting.accepted.push(chosen.from);
             }
             ctx.send(chosen.from, FlowMessage::Accept)?;
+            if one_at_a_time {
+                break;
+            }
         }
         Ok(())
+    }
+
+    /// Whether a free place may wait beside a waiting offer: until the reply to a
+    /// `minimum_setup` pick lands, at this instant.
+    pub(crate) fn waits_for_a_reply(&self) -> bool {
+        self.rule.as_deref().is_some_and(|rule| {
+            rule.plan.rule == taktsim_model::DispatchRule::MinimumSetup && !rule.pending.is_empty()
+        })
     }
 
     /// The variant of the newest reserved place, as its offer described it.
