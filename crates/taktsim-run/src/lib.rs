@@ -540,6 +540,7 @@ pub fn run<D: Domain>(
     if request.reuse
         && let Some(stored) = store.read_result(&id)?
     {
+        check_filed_under(&stored.document, &id)?;
         return Ok(RunResponse {
             result: stored.document,
             text: stored.text,
@@ -633,6 +634,52 @@ fn options<'a>(request: &RunRequest<'a>, seed: Option<u64>) -> RunOptions<'a> {
     options
 }
 
+/// A failure of a stored run whose files disagree: exit code 2.
+fn stored_run_differs(what: String) -> Failure {
+    Failure::one(
+        FailureClass::RunFailed,
+        Diagnostic::error("run.stored_run_differs", what).at("--store"),
+    )
+}
+
+/// A run's id is computed from what it ran, so its result can be checked against the
+/// directory it is filed under (spec §5, ADR-0024 §6). A result that says or computes
+/// to another id is not this run's, and must not be returned as this run.
+fn check_filed_under(result: &ResultDocument, id: &RunId) -> Result<(), Failure> {
+    let disagrees = |what: &str| {
+        stored_run_differs(format!(
+            "the result filed under run {id} is not that run's: {what}"
+        ))
+    };
+    let provenance = &result.provenance;
+    let Some(run) = result.runs.first() else {
+        return Err(disagrees("it names no run"));
+    };
+    if run.run_id.as_ref() != Some(id) {
+        return Err(disagrees("it states another run id"));
+    }
+    if provenance.seeds.as_slice() != run.seed.as_slice() {
+        return Err(disagrees("its provenance states another seed than its run"));
+    }
+    let Some(trace) = &run.trace else {
+        return Err(disagrees("it names no trace"));
+    };
+    let inputs = RunIdInputs {
+        engine: &provenance.engine,
+        engine_version: &provenance.engine_version,
+        record_format: &trace.record_format,
+        package: &provenance.package,
+        package_version: &provenance.package_version,
+        message_format: &trace.message_format,
+        model_hash: provenance.model_hash,
+        seed: run.seed,
+    };
+    if RunId::of(&inputs).as_ref() != Ok(id) {
+        return Err(disagrees("what it states computes to another id"));
+    }
+    Ok(())
+}
+
 /// A run with this id is in the store already: its stream must be the same. A
 /// difference means the engine changed or determinism broke.
 fn compare_with_stored(
@@ -641,6 +688,9 @@ fn compare_with_stored(
     written: &Summary,
 ) -> Result<StoredResult, Failure> {
     let stored = store.read_result(id)?;
+    if let Some(stored) = &stored {
+        check_filed_under(&stored.document, id)?;
+    }
     let stored_hash = stored
         .iter()
         .flat_map(|stored| &stored.document.runs)
@@ -664,9 +714,11 @@ fn compare_with_stored(
 }
 
 /// Replays the stored run `id` against this registry, after checking the stored
-/// model against the trace's hashes and the running package against the result's
-/// provenance. A run with no seed is replayed under a different internal seed, so a
-/// false claim of drawing nothing diverges (ADR-0024 §1, §5).
+/// model against the trace's hashes, the running package against the result's
+/// provenance and the result against the id it is filed under; the replay's stream
+/// hash, records and events must then be what the result states. A run with no seed
+/// is replayed under a different internal seed, so a false claim of drawing nothing
+/// diverges (ADR-0024 §1, §5).
 ///
 /// # Errors
 ///
@@ -709,15 +761,9 @@ pub fn replay_stored<D: Domain>(
                 .example(<RunId as taktsim_model::Decode>::EXAMPLE),
         ));
     };
-    let differs = |what: String| {
-        Failure::one(
-            FailureClass::RunFailed,
-            Diagnostic::error("run.stored_run_differs", what).at("--store"),
-        )
-    };
     let provenance = &result.provenance;
     if provenance.package != D::PACKAGE || provenance.package_version != D::PACKAGE_VERSION {
-        return Err(differs(format!(
+        return Err(stored_run_differs(format!(
             "run {id} came from package {} {}, this is {} {}; replay it with the package that wrote it",
             provenance.package,
             provenance.package_version,
@@ -732,10 +778,11 @@ pub fn replay_stored<D: Domain>(
         .load_str(&text, Format::Json)
         .map_err(|errors| Failure::from_load(&errors))?;
     if model.hash() != provenance.model_hash || model.system_hash() != provenance.system_hash {
-        return Err(differs(format!(
+        return Err(stored_run_differs(format!(
             "the stored model of run {id} does not have the hashes its result states"
         )));
     }
+    check_filed_under(&result, id)?;
     let trace_path = store.run_file(id, TRACE_FILE);
     let file = File::open(&trace_path).map_err(|e| io_failure("store.read", &trace_path, &e))?;
     let seed = result.runs.first().and_then(|run| run.seed);
@@ -748,6 +795,15 @@ pub fn replay_stored<D: Domain>(
         .prepare(&model, options)
         .and_then(|prepared| prepared.replay(BufReader::new(file)))
         .map_err(|e| from_run_failure(e, document))?;
+    let stated = result.runs.first().and_then(|run| {
+        let trace = run.trace.as_ref()?;
+        Some((trace.stream_hash, run.records, run.events))
+    });
+    if stated != Some((replayed.hash, replayed.records, replayed.events)) {
+        return Err(stored_run_differs(format!(
+            "the result of run {id} does not state the stream hash, records and events of its trace"
+        )));
+    }
     Ok(ReplaySummary {
         records: replayed.records,
         events: replayed.events,
