@@ -44,7 +44,7 @@ pub struct ReplayReport {
 ///
 /// - every record the engine emits with the trace's next record, byte for
 ///   byte: the event's time, sequence number, target, sender, message and
-///   item, every item created or disposed of, and every note;
+///   item, every item created or disposed of, and every note and decision;
 /// - after starting and after every event, the engine's clock and item
 ///   counts with those the trace implies;
 /// - if the trace states how the run ended, that the engine reaches that end:
@@ -284,7 +284,8 @@ impl<R: Read, M: TraceMessage> Replayer<R, M> {
         }
         self.trace.consume();
         match emitted {
-            TraceRecord::Event { .. } | TraceRecord::Note { .. } => {}
+            TraceRecord::Event { .. } | TraceRecord::Note { .. } | TraceRecord::Decision { .. } => {
+            }
             TraceRecord::ItemCreated { .. } => self.counts.created += 1,
             TraceRecord::ItemDisposed { how, .. } => match how {
                 taktsim_core::Disposal::Delivered => self.counts.delivered += 1,

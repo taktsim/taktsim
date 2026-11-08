@@ -205,7 +205,8 @@ fn state_equals_what_the_machine_holds() {
                 }
                 taktsim_trace::Record::ItemCreated { .. }
                 | taktsim_trace::Record::ItemDisposed { .. }
-                | taktsim_trace::Record::Note { .. } => {}
+                | taktsim_trace::Record::Note { .. }
+                | taktsim_trace::Record::Decision { .. } => {}
             }
         }
     }

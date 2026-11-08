@@ -128,9 +128,10 @@ impl Run {
                     message: message.clone(),
                     item: *item,
                 }),
-                Record::ItemCreated { .. } | Record::ItemDisposed { .. } | Record::Note { .. } => {
-                    None
-                }
+                Record::ItemCreated { .. }
+                | Record::ItemDisposed { .. }
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -171,7 +172,8 @@ impl Run {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -190,7 +192,8 @@ impl Run {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -209,7 +212,8 @@ impl Run {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -238,7 +242,8 @@ impl Run {
             Record::Event { .. }
             | Record::ItemCreated { .. }
             | Record::ItemDisposed { .. }
-            | Record::Note { .. } => None,
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
     }
 }

@@ -118,7 +118,8 @@ fn created_equals_emitted_plus_held() {
             Record::Event { .. }
             | Record::ItemCreated { .. }
             | Record::ItemDisposed { .. }
-            | Record::Note { .. } => {}
+            | Record::Note { .. }
+            | Record::Decision { .. } => {}
         }
     }
     let last = r.source_notes("source").last().unwrap().1;
@@ -182,7 +183,10 @@ fn on_demand_source_reproduces_page_1() {
                 let start = released[item];
                 last_lead_time = Some(time.checked_duration_since(start).unwrap());
             }
-            Record::Event { .. } | Record::ItemCreated { .. } | Record::Note { .. } => {}
+            Record::Event { .. }
+            | Record::ItemCreated { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => {}
         }
     }
     assert_eq!(most, 22);

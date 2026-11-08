@@ -3,7 +3,7 @@ source: crates/taktsim-trace/tests/golden.rs
 expression: golden.snapshot()
 ---
 case: toy_line_20
-records: taktsim-core/2
+records: taktsim-core/3
 messages: taktsim-trace.toy/1
 model hash: cda1f729e07790fddb2b71d07f5db052af875ceb23ed61e54a227ac3d7f68e00
 system hash: 5df3dd02721a867ae9b37ef5570522b8bed97a46a02e8b44daddb51f4ea231e1

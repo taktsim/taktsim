@@ -178,13 +178,23 @@ fn record() -> impl Strategy<Value = Record<Toy>> {
                 by,
             }
         }),
-        (time, any::<u64>(), component, how).prop_map(|(time, item, by, how)| {
+        (time.clone(), any::<u64>(), component.clone(), how).prop_map(|(time, item, by, how)| {
             Record::ItemDisposed {
                 time,
                 item: ItemId::from_raw(item),
                 by,
                 how,
             }
+        }),
+        (time.clone(), component.clone(), toy()).prop_map(|(time, by, message)| Record::Note {
+            time,
+            by,
+            message
+        }),
+        (time, component, toy()).prop_map(|(time, by, message)| Record::Decision {
+            time,
+            by,
+            message
         }),
     ]
 }

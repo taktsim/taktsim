@@ -140,7 +140,10 @@ fn lead_times(r: &support::Run, source: &str) -> BTreeMap<u64, f64> {
             Record::ItemDisposed { time, item, .. } => {
                 lead.insert(item.as_u64(), s(*time) - released[&item.as_u64()]);
             }
-            Record::Event { .. } | Record::ItemCreated { .. } | Record::Note { .. } => {}
+            Record::Event { .. }
+            | Record::ItemCreated { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => {}
         }
     }
     lead
@@ -169,7 +172,10 @@ fn lead_time_starts_at_release() {
         .iter()
         .filter_map(|record| match record {
             Record::ItemCreated { time, .. } => Some(*time),
-            Record::Event { .. } | Record::ItemDisposed { .. } | Record::Note { .. } => None,
+            Record::Event { .. }
+            | Record::ItemDisposed { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
         .collect();
     assert_eq!(created[1], t("20s"));
@@ -252,7 +258,8 @@ fn an_interrupted_changeover_counts_once() {
             Record::Event { .. }
             | Record::ItemCreated { .. }
             | Record::ItemDisposed { .. }
-            | Record::Note { .. } => {}
+            | Record::Note { .. }
+            | Record::Decision { .. } => {}
         }
     }
     assert_eq!(setup_notes, 2);

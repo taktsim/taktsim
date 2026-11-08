@@ -32,9 +32,9 @@ pub const FORMAT_VERSION: u16 = 2;
 /// decision 2026-11-05).
 ///
 /// ```
-/// assert_eq!(taktsim_trace::RECORD_FORMAT, "taktsim-core/2");
+/// assert_eq!(taktsim_trace::RECORD_FORMAT, "taktsim-core/3");
 /// ```
-pub const RECORD_FORMAT: &str = "taktsim-core/2";
+pub const RECORD_FORMAT: &str = "taktsim-core/3";
 
 /// The most record bytes in one chunk: 64 KiB (ADR-0004). A writer holds at
 /// most one chunk in memory, and a reader too.

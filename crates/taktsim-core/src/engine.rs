@@ -802,6 +802,45 @@ impl<M: Message> Context<'_, M> {
         });
     }
 
+    /// Writes a control decision to the trace, at the current time, without
+    /// delivering it to anyone: the rule a component applied and what it chose
+    /// from (spec §4, ADR-0023 §9). Replay compares it with every other record. As
+    /// with a note, it takes no sequence number, no component sees it, and the
+    /// engine never looks inside.
+    ///
+    /// ```
+    /// # use taktsim_core::*;
+    /// # #[derive(Debug)] struct Took;
+    /// # impl Message for Took {}
+    /// struct Chooser;
+    /// impl Component<Took> for Chooser {
+    ///     fn start(&mut self, ctx: &mut Context<'_, Took>) -> Result<(), ComponentError> {
+    ///         ctx.decide(&Took);
+    ///         Ok(())
+    ///     }
+    ///     fn handle(&mut self, _: Delivery<'_, Took>, _: &mut Context<'_, Took>) -> Result<(), ComponentError> { Ok(()) }
+    /// }
+    /// struct Decisions(u32);
+    /// impl TraceSink<Took> for Decisions {
+    ///     fn record(&mut self, record: &TraceRecord<'_, Took>) {
+    ///         if let TraceRecord::Decision { .. } = record { self.0 += 1; }
+    ///     }
+    /// }
+    /// let mut engine = Engine::new(EngineConfig::new(1));
+    /// engine.add_component("chooser", Box::new(Chooser))?;
+    /// let mut decisions = Decisions(0);
+    /// let summary = engine.run(RunLimits::until("1s".parse()?), &mut decisions)?;
+    /// assert_eq!((decisions.0, summary.events), (1, 0));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn decide(&mut self, message: &M) {
+        self.trace.record(&TraceRecord::Decision {
+            time: self.state.now,
+            by: self.me,
+            message,
+        });
+    }
+
     /// A random stream for `purpose` of this component (ADR-0013), e.g.
     /// `"cycle_time"`. Only while starting, so every conflict between
     /// streams is found before the first event.

@@ -438,6 +438,109 @@ fn a_missing_note_is_a_divergence() {
     assert_eq!(found, "no further record before the engine's next event");
 }
 
+/// Decides once per event, on what depending on `word`, and notes too.
+struct Decider(&'static str);
+
+impl Component<Toy> for Decider {
+    fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+    fn handle(
+        &mut self,
+        _: Delivery<'_, Toy>,
+        ctx: &mut Context<'_, Toy>,
+    ) -> Result<(), ComponentError> {
+        ctx.decide(&Toy::Note {
+            text: self.0.to_owned(),
+            share: 0.75,
+        });
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+}
+
+#[allow(clippy::unwrap_used)] // test helper
+fn decider(word: &'static str) -> Engine<Toy> {
+    let mut engine = Engine::new(EngineConfig::new(3));
+    engine
+        .add_component("decider", Box::new(Decider(word)))
+        .unwrap();
+    engine
+}
+
+/// As [`Decider`], writing a note instead of the decision.
+struct Noting;
+
+impl Component<Toy> for Noting {
+    fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+    fn handle(
+        &mut self,
+        _: Delivery<'_, Toy>,
+        ctx: &mut Context<'_, Toy>,
+    ) -> Result<(), ComponentError> {
+        ctx.note(&Toy::Note {
+            text: "left".to_owned(),
+            share: 0.75,
+        });
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+}
+
+#[test]
+fn decisions_are_kept_and_compared_by_replay() {
+    let trace = trace_of(decider("left"), "3s");
+    let reader = TraceReader::<_, Toy>::new(trace.as_slice()).unwrap();
+    let names = reader.header().components.clone();
+    let lines: Vec<String> = reader
+        .map(|r| r.unwrap().display(&names).to_string())
+        .collect();
+    assert_eq!(lines[0], "1s event #0 decider -> decider Next");
+    assert_eq!(
+        lines[1],
+        "1s decision by decider Note { text: \"left\", share: 0.75 }"
+    );
+    assert_eq!(lines.len(), 6);
+
+    let report = replay_with(&trace, decider("left")).unwrap();
+    assert_eq!((report.records, report.events), (6, 3));
+
+    let Err(ReplayError::Diverged {
+        record,
+        expected,
+        found,
+    }) = replay_with(&trace, decider("right"))
+    else {
+        panic!("a different decision replayed");
+    };
+    assert_eq!(record, 1);
+    assert!(expected.contains("left"), "{expected}");
+    assert!(found.contains("right"), "{found}");
+
+    // A note in its place is not the same record, though the fields are.
+    let mut engine = Engine::new(EngineConfig::new(3));
+    engine.add_component("decider", Box::new(Noting)).unwrap();
+    assert!(matches!(
+        replay_with(&trace, engine),
+        Err(ReplayError::Diverged { record: 1, .. })
+    ));
+}
+
+#[test]
+fn the_hash_of_a_trace_with_decisions_is_pinned() {
+    let trace = trace_of(decider("left"), "3s");
+    let mut reader = TraceReader::<_, Toy>::new(trace.as_slice()).unwrap();
+    while reader.next_record().unwrap().is_some() {}
+    assert_eq!(
+        reader.summary().unwrap().hash.to_string(),
+        "beca4171ef84aea4f573819016c3fa86d6364f7b9cb98e1463664d7de3ecbefb"
+    );
+}
+
 /// Runs `engine` with `limits`, stating the end, into an in-memory trace.
 #[allow(clippy::unwrap_used)] // test helper
 fn trace_stating_end(mut engine: Engine<Toy>, limits: RunLimits<'_>) -> Vec<u8> {
