@@ -1,0 +1,10 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source}
+  - {id: m, type: Machine}
+  - {id: sink, type: Sink}
+flow:
+  - [source, m, sink]
+# expect: components[1].cycle_time @ 6:5 MissingField

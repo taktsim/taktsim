@@ -1,8 +1,178 @@
 {
   "$defs": {
     "Component": {
-      "description": "A component: `id`, `type` and the parameters of that type. No component type is registered in this catalog, so none is valid.",
-      "not": {}
+      "description": "A component: `id`, `type` and the parameters of that type.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "capacity": {
+              "$ref": "#/$defs/Count",
+              "description": "The places of the buffer, at least 1. A buffer of no places is a direct edge."
+            },
+            "discipline": {
+              "description": "Which part leaves first: first into the buffer, last into it, or highest priority, then first into it. Default fifo.",
+              "enum": [
+                "fifo",
+                "lifo",
+                "priority"
+              ]
+            },
+            "id": {
+              "$ref": "#/$defs/ComponentId"
+            },
+            "type": {
+              "const": "Buffer"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "capacity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "capacity": {
+              "$ref": "#/$defs/Count",
+              "description": "From 1 to 65535 parts."
+            },
+            "cycle_time": {
+              "$ref": "#/$defs/Distribution",
+              "description": "The time one unit takes, drawn when its cycle starts. A bare duration is a constant."
+            },
+            "id": {
+              "$ref": "#/$defs/ComponentId"
+            },
+            "mtbf": {
+              "$ref": "#/$defs/Distribution",
+              "description": "The up time from the end of a repair (or time zero) to the next failure, in calendar time. A bare duration is a constant: the machine fails on a fixed schedule, so name a distribution unless regular failures are meant. Comes with `mttr`."
+            },
+            "mttr": {
+              "$ref": "#/$defs/Distribution",
+              "description": "The time a repair takes, drawn at each failure. A bare duration is a constant. Comes with `mtbf`."
+            },
+            "setup": {
+              "additionalProperties": false,
+              "anyOf": [
+                {
+                  "required": [
+                    "per_variant"
+                  ]
+                },
+                {
+                  "required": [
+                    "matrix"
+                  ]
+                }
+              ],
+              "description": "Changeover times. The first unit costs none; a unit of another variant takes the `matrix` entry for that change, otherwise `per_variant`, otherwise none.",
+              "properties": {
+                "matrix": {
+                  "description": "The changeover time of each listed change of variant. `0s` means the change costs nothing: no timer, no `setup` state.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "from": {
+                        "$ref": "#/$defs/ComponentId",
+                        "description": "A variant name, declared by some Source."
+                      },
+                      "time": {
+                        "$ref": "#/$defs/Distribution"
+                      },
+                      "to": {
+                        "$ref": "#/$defs/ComponentId",
+                        "description": "A variant name, declared by some Source."
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to",
+                      "time"
+                    ],
+                    "type": "object"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "per_variant": {
+                  "$ref": "#/$defs/Distribution",
+                  "description": "The changeover time of any change of variant the `matrix` does not list."
+                }
+              },
+              "type": "object"
+            },
+            "type": {
+              "const": "Machine"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "cycle_time"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/ComponentId"
+            },
+            "type": {
+              "const": "Sink"
+            }
+          },
+          "required": [
+            "id",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "batch": {
+              "$ref": "#/$defs/Count",
+              "description": "From 1 to 65535 parts."
+            },
+            "id": {
+              "$ref": "#/$defs/ComponentId"
+            },
+            "interarrival": {
+              "$ref": "#/$defs/Distribution",
+              "description": "The time between batches, counted from the last part of the batch leaving. Absent: the Source makes a part whenever the next component takes one. A bare duration is a constant."
+            },
+            "priority": {
+              "description": "The priority of its parts in a buffer with the `priority` discipline: higher goes first, default 0.",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "Source"
+            },
+            "variants": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Ratio"
+              },
+              "description": "The share of each variant, each above 0 %, summing to 100 %. One variant and one priority per batch. Default: one variant, `default`.",
+              "minProperties": 1,
+              "propertyNames": {
+                "$ref": "#/$defs/ComponentId"
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "id",
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ComponentId": {
       "description": "A component id: letters, digits and `_`, starting with a letter or `_`, optionally joined by single `-` (ADR-0015).",
@@ -376,8 +546,9 @@
       "type": "object"
     },
     "Observable": {
-      "description": "An observable; this catalog declares none, so none is valid.",
-      "not": {}
+      "description": "An observable: a call of lead_time, state_shares, throughput, wip on component ids, e.g. `lead_time(sink)` (ADR-0009, ADR-0015). The loader checks its arguments and type.",
+      "pattern": "^[ \\t]*(lead_time|state_shares|throughput|wip)[ \\t]*\\(",
+      "type": "string"
     },
     "ObservableRef": {
       "description": "A reference to an observable: a call on component ids, e.g. `throughput(sink)`. The schema only requires the shape of a call; the loader checks that the catalog declares the function, and its arguments and type.",
@@ -396,7 +567,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A taktsim model (spec §4). Generated from the Rust types; do not edit.",
+  "description": "A taktsim model (spec §4) of the standard production catalog: Source, Machine, Buffer, Sink. Generated from the Rust types; do not edit.",
   "if": {
     "not": {
       "required": [

@@ -8,11 +8,10 @@
 //! authority for rules a schema cannot state (references to existing ids,
 //! unique ids, expression types, the exactness of a quantity).
 
-use taktsim_units::{Count, Ratio, SimDuration};
+use taktsim_units::{Ratio, SimDuration};
 
 use crate::component::{Catalog, ComponentRef};
 use crate::decode::Schemas;
-use crate::distribution::Distribution;
 use crate::document::{FORMAT_VERSION, read_main_fields};
 use crate::json::Json;
 use crate::load::read_fragment_fields;
@@ -35,11 +34,11 @@ use crate::load::read_fragment_fields;
 #[must_use]
 pub fn model_schema(catalog: &Catalog) -> Json {
     let mut schemas = Schemas::new(catalog.observables().map(str::to_owned).collect());
-    // Shared definitions for component types, also when none uses them.
+    // What the envelope itself uses, so the definitions come in one place.
+    // `Count` and `Distribution` are the catalog's: they appear only when a
+    // catalog type reads them, so a catalog without them does not offer them.
     let _ = schemas.of::<SimDuration>();
     let _ = schemas.of::<Ratio>();
-    let _ = schemas.of::<Count>();
-    let _ = schemas.of::<Distribution>();
     let _ = schemas.of::<ComponentRef>();
     let entries = catalog.entry_schemas(&mut schemas);
     schemas.set_components(entries);

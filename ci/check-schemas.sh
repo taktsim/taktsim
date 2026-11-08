@@ -6,7 +6,7 @@
 # there.
 #
 # Usage: ci/check-schemas.sh [schemas directory]   (default: schemas)
-# To regenerate: cargo run -p taktsim-model --example schemas -- schemas
+# To regenerate: cargo run -p taktsim-components --example schemas -- schemas
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,11 +14,11 @@ committed=${1:-schemas}
 fresh=$(mktemp -d)
 trap 'rm -rf "$fresh"' EXIT
 
-cargo run --quiet --locked -p taktsim-model --example schemas -- "$fresh"
+cargo run --quiet --locked -p taktsim-components --example schemas -- "$fresh"
 
 if ! diff -r -u "$committed/model" "$fresh/model"; then
   echo "error: $committed/model is stale; regenerate it with" >&2
-  echo "  cargo run -p taktsim-model --example schemas -- schemas" >&2
+  echo "  cargo run -p taktsim-components --example schemas -- schemas" >&2
   echo "and commit the result in the same change as the types (CLAUDE.md)." >&2
   exit 1
 fi

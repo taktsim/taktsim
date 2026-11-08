@@ -1,0 +1,10 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min, variants: {a: 0.5, b: 0.5}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, sink]
+# expect: components[0].variants.a @ 5:66 BareShare
+# expect: components[0].variants.b @ 5:74 BareShare

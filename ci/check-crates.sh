@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Every crate under crates/ (and python/) is a workspace member, uses the workspace lints and
 # license, and declares forbid(unsafe_code) and deny(missing_docs) at its root
-# (spec §7 Layer 1).
+# (spec §7 Layer 1). Workspace crates depend in one direction only, dev
+# dependencies included (ADR-0022 §2): units <- core <- model, trace <-
+# components <- every client.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -23,5 +25,29 @@ for dir in crates/*/ python/; do
     grep -q '^#!\[deny(missing_docs)\]' "$root" || err "$root: missing #![deny(missing_docs)]"
   done
 done
+
+# allowed <crate> <workspace crates it may depend on>
+allowed() {
+  local crate=$1 may=$2 dep
+  # Fails the script through `fail` if the crate is gone: a renamed crate must
+  # not drop out of this check.
+  jq -e --arg c "$crate" '.packages[] | select(.name == $c)' <<<"$metadata" >/dev/null ||
+    err "$crate: not found in cargo metadata; update ci/check-crates.sh"
+  for dep in $(jq -r --arg c "$crate" \
+    '.packages[] | select(.name == $c) | .dependencies[].name | select(startswith("taktsim-"))' \
+    <<<"$metadata" | sort -u); do
+    case " $may " in
+      *" $dep "*) ;;
+      *) err "$crate depends on $dep, against the direction of ADR-0022 §2 (allowed: ${may:-none})" ;;
+    esac
+  done
+}
+
+metadata=$(cargo metadata --no-deps --format-version 1)
+allowed taktsim-units ""
+allowed taktsim-core "taktsim-units"
+allowed taktsim-model "taktsim-units taktsim-core"
+allowed taktsim-trace "taktsim-units taktsim-core"
+allowed taktsim-components "taktsim-units taktsim-core taktsim-model taktsim-trace"
 
 exit "$fail"
