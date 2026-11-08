@@ -1,0 +1,97 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 3
+--- stdout ---
+{
+  "complete": false,
+  "format": "taktsim-result/1",
+  "metrics": [
+    {
+      "name": "created(source)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "name": "delivered(sink)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "items_alive",
+      "over": {
+        "at": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "engine": "taktsim-core",
+    "engine_version": "<version>",
+    "model_hash": "8f66853706191250f21ebeff56b8ad316bf0175b0ff0a9e322b228291d4a1b21",
+    "package": "taktsim-components",
+    "package_version": "<version>",
+    "platform": "<platform>",
+    "seeds": [
+      42
+    ],
+    "system_hash": "e0e22c0f8cdadababc8602c28cd565ce8961b32491a47f65c71692ff8c01300a"
+  },
+  "runs": [
+    {
+      "complete": false,
+      "end_time": "46.355978034s",
+      "events": 5,
+      "records": 12,
+      "seed": 42,
+      "stop_reason": "event_limit"
+    }
+  ],
+  "stop_reason": "event_limit",
+  "unreported": []
+}
+--- stderr ---
+{"kind":"progress","message":"ran in the store <tmp>/.taktsim","reused":false,"store":"<tmp>/.taktsim","type":"run.store"}

@@ -1,0 +1,107 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 0
+--- stdout ---
+{
+  "complete": true,
+  "experiment_id": "<experiment id>",
+  "format": "taktsim-result/1",
+  "metrics": [
+    {
+      "name": "created(source)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 645
+        }
+      ]
+    },
+    {
+      "name": "delivered(sink)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 638
+        }
+      ]
+    },
+    {
+      "name": "items_alive",
+      "over": {
+        "at": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 7
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "engine": "taktsim-core",
+    "engine_version": "<version>",
+    "model_hash": "8f66853706191250f21ebeff56b8ad316bf0175b0ff0a9e322b228291d4a1b21",
+    "package": "taktsim-components",
+    "package_version": "<version>",
+    "platform": "<platform>",
+    "seeds": [
+      42
+    ],
+    "system_hash": "e0e22c0f8cdadababc8602c28cd565ce8961b32491a47f65c71692ff8c01300a"
+  },
+  "runs": [
+    {
+      "complete": true,
+      "end_time": "8h",
+      "events": 8984,
+      "records": 14120,
+      "run_id": "<run id>",
+      "seed": 42,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 496553,
+        "message_format": "taktsim-components/1",
+        "path": "runs/<run id>/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "89ca3fe268ab361c48c3620f333cac2749bedece20a05f3c829e1419df106a9a",
+        "trace_format": 3
+      }
+    }
+  ],
+  "stop_reason": "horizon",
+  "unreported": []
+}
+--- stderr ---
+{"kind":"progress","message":"ran in the store <tmp>/.taktsim","reused":false,"store":"<tmp>/.taktsim","type":"run.store"}

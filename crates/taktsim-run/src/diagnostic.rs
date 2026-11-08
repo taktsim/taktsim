@@ -323,7 +323,13 @@ impl Record for Diagnostic {
 impl From<&LoadError> for Diagnostic {
     fn from(error: &LoadError) -> Self {
         let kind = error.kind();
-        let mut line = Self::error(kind.name(), kind.to_string()).at(error.path().to_string());
+        // A model file that cannot be read has no path inside it yet.
+        let path = if kind.is_io() && error.path().segments().is_empty() {
+            "<model>".to_owned()
+        } else {
+            error.path().to_string()
+        };
+        let mut line = Self::error(kind.name(), kind.to_string()).at(path);
         line.file = error.file().map(str::to_owned);
         if let Some(at) = error.location() {
             line.line = Some(at.line() as u64);
