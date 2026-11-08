@@ -110,13 +110,42 @@ struct StandingOffer {
     copied_at: SimTime,
 }
 
-/// What was last said about the unit behind an offer to a station with a rule.
-#[derive(Debug, Clone, Copy, Default)]
+/// What was last said about the unit behind an offer to a station with a rule, by a
+/// token that names the unit.
+#[derive(Debug, Clone, Default)]
 struct Described {
     current: Option<(OfferedUnit, u64)>,
-    /// The token of the description before, while the new one may be on its way.
-    previous: Option<u64>,
-    changed_at: Option<SimTime>,
+    /// The descriptions sent at `said_at` that an `Accept` may yet answer, oldest first.
+    /// An `Accept` carries no number, so it is taken to answer the oldest: a station
+    /// may have acted on any of them, in the order they reached it.
+    unanswered: VecDeque<u64>,
+    said_at: Option<SimTime>,
+}
+
+impl Described {
+    /// A description goes out at `now`. If the station already holds an offer, it can
+    /// still answer the one before.
+    fn said(&mut self, unit: OfferedUnit, token: u64, offer_stood: bool, now: SimTime) {
+        if self.said_at != Some(now) {
+            self.unanswered.clear();
+            if offer_stood && let Some((_, before)) = self.current {
+                self.unanswered.push_back(before);
+            }
+            self.said_at = Some(now);
+        }
+        self.unanswered.push_back(token);
+        self.current = Some((unit, token));
+    }
+
+    /// The token of the description an `Accept` at `now` answers.
+    fn answered(&mut self, now: SimTime) -> Option<u64> {
+        if self.said_at == Some(now)
+            && let Some(token) = self.unanswered.pop_front()
+        {
+            return Some(token);
+        }
+        self.current.map(|(_, token)| token)
+    }
 }
 
 /// A holder's routing state.
@@ -461,26 +490,20 @@ impl Outlet {
     /// Whether the `Accept` of the target at `position` answers a description of a
     /// unit no longer here, by `present`. Then the holder answers `Decline`: the
     /// station ranked what it was told, and the unit it would get now may rank lower
-    /// than the ones it passed over (see the ADR's implementation notes).
+    /// than the ones it passed over (ADR-0023, disagreement 14). Each description is
+    /// answered once, so an instant ends: a new offer after a `Decline` is the next
+    /// to be answered.
     pub(crate) fn answers_a_unit_gone(
-        &self,
+        &mut self,
         position: usize,
         now: SimTime,
         mut present: impl FnMut(u64) -> bool,
     ) -> bool {
-        let Some(described) = self
-            .routed
-            .as_deref()
-            .and_then(|routed| routed.described.get(position))
-        else {
-            return false;
-        };
-        let answered = if described.changed_at == Some(now) {
-            described.previous
-        } else {
-            described.current.map(|(_, token)| token)
-        };
-        answered.is_some_and(|token| !present(token))
+        self.routed
+            .as_deref_mut()
+            .and_then(|routed| routed.described.get_mut(position))
+            .and_then(|described| described.answered(now))
+            .is_some_and(|token| !present(token))
     }
 
     /// Offers to every target without an outstanding offer, in declared order.
@@ -563,10 +586,8 @@ impl Outlet {
             }
             if target.offered {
                 target.crossing_at = Some(now);
-                described.previous = described.current.map(|(_, token)| token);
-                described.changed_at = Some(now);
             }
-            described.current = Some((unit, token));
+            described.said(unit, token, target.offered, now);
             target.offered = true;
             ctx.send(target.id, FlowMessage::OfferOf(Box::new(unit)))?;
         }
