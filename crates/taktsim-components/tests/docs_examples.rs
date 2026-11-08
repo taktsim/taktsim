@@ -110,8 +110,64 @@ fn every_v0_1_model_on_a_concept_page_loads() {
             loaded += 1;
         }
     }
-    // Pages 1, 2, 4, 6, 7, 8 and 11; pages 9, 10, 12 and 13 show something else.
-    assert_eq!((loaded, waiting), (7, 4));
+    // Pages 1, 2, 4, 6, 7, 8 and 11, and 12's loop; pages 9, 10, 12 and 13 show something
+    // else. What a note on a page quotes is tested below.
+    assert_eq!((loaded, waiting), (8, 4));
+}
+
+#[test]
+fn page_12_runs_its_rework_loop() {
+    let text = std::fs::read_to_string(repo(&["docs", "concepts", "12-scrap-rework.md"])).unwrap();
+    let block = yaml_blocks(&text)
+        .into_iter()
+        .map(|(_, block)| block)
+        .find(|block| block.starts_with("format:"))
+        .unwrap();
+    let r = support::run_model(&support::load(&block), 42);
+    assert!(r.report.items.delivered.get() > 500);
+    assert_ne!(
+        r.times("weld", |m| matches!(
+            m,
+            taktsim_components::FlowMessage::Return(_)
+        ))
+        .len(),
+        0
+    );
+    support::check_records(&r);
+}
+
+#[test]
+fn the_routing_examples_on_the_pages_load() {
+    // Page 9's flow, on components of its own.
+    let text = std::fs::read_to_string(repo(&["docs", "concepts", "09-longer-lines.md"])).unwrap();
+    let start = text.find("> flow:\n").unwrap();
+    let end = text[start..].find("> ```").unwrap();
+    let flow: String = text[start..start + end]
+        .lines()
+        .map(|line| line.strip_prefix("> ").unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let machine = |id: &str| format!("  - {{id: {id}, type: Machine, cycle_time: 10s}}\n");
+    let components: String = ["cut", "weld-1", "weld-2", "paint", "pack-1", "pack-2"]
+        .map(machine)
+        .concat();
+    let model = format!(
+        "format: \"1.0\"\nmodel: {{name: page, seed: 1}}\nexperiment: {{type: terminating, horizon: 1h}}\n\
+         components:\n  - {{id: source, type: Source, variants: {{basic: 80%, premium: 20%}}}}\n{components}  \
+         - {{id: sink, type: Sink}}\n{flow}\n"
+    );
+    let r = support::run_model(&support::load(&model), 1);
+    assert!(r.arrival_variants("paint").iter().all(|v| v == "premium"));
+    assert!(r.report.items.delivered.get() > 100);
+    // Page 11's `control`, on one machine.
+    let text =
+        std::fs::read_to_string(repo(&["docs", "concepts", "11-batching-setups.md"])).unwrap();
+    assert!(text.contains("dispatch: { weld: minimum_setup }"));
+    let model = "format: \"1.0\"\nmodel: {name: page}\nexperiment: {type: terminating, horizon: 1h}\n\
+         components:\n  - {id: source, type: Source, variants: {basic: 80%, premium: 20%}}\n  \
+         - {id: weld, type: Machine, cycle_time: 45s, setup: {per_variant: 4min}}\n  - {id: sink, type: Sink}\n\
+         flow:\n  - [source, weld, sink]\ncontrol:\n  dispatch: { weld: minimum_setup }\n";
+    support::load(model);
 }
 
 #[test]

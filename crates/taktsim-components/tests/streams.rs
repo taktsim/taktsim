@@ -18,6 +18,75 @@ fn exponential(mean: &str) -> DurationDistribution {
 }
 
 #[test]
+fn the_streams_of_routing_are_pinned() {
+    let seed = 2026;
+    // `route`: once per part reaching a split, on the holder's stream, against
+    // cumulative fractions over sorted target ids.
+    let yaml = document(
+        "10min",
+        "  - {id: source, type: Source, interarrival: 10s}\n  \
+         - {id: b, type: Sink}\n  - {id: a, type: Sink}",
+        "  - {from: source, split: {b: 75%, a: 25%}}",
+    );
+    let r = run(&yaml, seed);
+    let mut route = stream(seed, "source", "route");
+    for e in r
+        .events()
+        .iter()
+        .filter(|e| matches!(e.message, FlowMessage::Arrive(_)))
+    {
+        let expected = if route.next_open01() < 0.25 { "a" } else { "b" };
+        assert_eq!(e.to, expected);
+    }
+    // Its draw is what the record states.
+    let mut route = stream(seed, "source", "route");
+    for (_, _, record) in r.routes() {
+        assert_eq!(record.detail, route.next_open01().to_bits());
+    }
+    // `priority`: once per batch, against priorities in sorted order, and `due_in` once
+    // per batch, from creation.
+    let yaml = document(
+        "10min",
+        "  - {id: source, type: Source, interarrival: 10s, batch: 2 parts, \
+         priority_mix: [{priority: 3, share: 25%}, {priority: 1, share: 75%}], \
+         due_in: {dist: exponential, mean: 1h}}\n  - {id: sink, type: Sink}",
+        "  - [source, sink]",
+    );
+    let r = run(&yaml, seed);
+    let mut priority = stream(seed, "source", "priority");
+    let mut due = stream(seed, "source", "due_in");
+    let arrivals = r.arrivals("sink");
+    for batch in arrivals.chunks(2) {
+        let expected = if priority.next_open01() < 0.75 { 1 } else { 3 };
+        let after = exponential("1h").sample(&mut due).unwrap();
+        for e in batch {
+            let FlowMessage::Arrive(attrs) = e.message else {
+                panic!("{e:?}")
+            };
+            assert_eq!(attrs.priority, expected);
+            // The batch is made at its first part's time.
+            assert_eq!(attrs.due, Some(batch[0].time.checked_add(after).unwrap()));
+        }
+    }
+    // `when` and the choice rules draw nothing, and take no stream: another stream's
+    // draws are where they were.
+    let plain = document(
+        "10min",
+        "  - {id: source, type: Source, interarrival: {dist: exponential, mean: 10s}}\n  \
+         - {id: a, type: Machine, cycle_time: {dist: exponential, mean: 1s}}\n  \
+         - {id: b, type: Machine, cycle_time: {dist: exponential, mean: 1s}}\n  - {id: sink, type: Sink}",
+        "  - {from: source, to: [a, b], choose: preferred}\n  - {from: [a, b], to: sink}",
+    );
+    let r = run(&plain, seed);
+    let mut interarrival = stream(seed, "source", "interarrival");
+    let first = exponential("10s").sample(&mut interarrival).unwrap();
+    assert_eq!(
+        r.times("source", |m| matches!(m, FlowMessage::NextArrival))[0],
+        taktsim_units::SimTime::START.checked_add(first).unwrap()
+    );
+}
+
+#[test]
 fn stream_purposes_are_pinned() {
     let seed = 2026;
     let yaml = document(

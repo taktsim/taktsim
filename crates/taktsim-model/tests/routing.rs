@@ -158,7 +158,7 @@ fn system_hash_changes_with_dispatch() {
 }
 
 #[test]
-fn a_written_first_free_stays_written() {
+fn written_first_free_is_part_of_the_hash() {
     let plain = load(&with_flow("  - [a, b]\n  - {from: b, to: [c, a]}"));
     let written = load(&with_flow(
         "  - [a, b]\n  - {from: b, to: [c, a], choose: first_free}",

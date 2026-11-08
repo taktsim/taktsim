@@ -578,7 +578,7 @@ neither does their order at one instant.
 
 | Tag | Message | Priority | Fields |
 | --- | --- | --- | --- |
-| 13 | `Status` | 4, with `Arrive`: a fact lands before `Accept` | room u8, queue u64, running u32, worked (2 × u64), has follows u8, follows u16 |
+| 13 | `Status` | 4, with `Arrive`: a fact lands before `Accept` | room u8 (bit 0: room, bit 1: the receiver's own `Accept` follows; disagreement 13), queue u64, running u32, worked (2 × u64), has follows u8, follows u16 |
 | 14 | `OfferOf` | 7, with `Offer` | has item u8, item u64, variant u16, priority u8, has due u8, due u64, since u64 |
 | 15 | `Return` + item | 4 | as `Arrive` |
 | 16 | `RouteDecision` | 8, never delivered | §9 |
@@ -684,6 +684,11 @@ after v0.1 ships.
 | 9 | ADR-0022 §2 gives a type `PORTS` and `STATION` only; rules need more | ADR-0022 §2, `run.rs`, §13 here | add facts with this ADR's acceptance; no M5 model or stand-in changes | no |
 | 10 | Spec §4 says custom rules are Rust components, while rule names are closed enums in the model crate | spec §4, §2 here | keep the enums for v1, as the spec's same sentence says, and reserve the additive path of §2 | no |
 | 11 | With no rule a merge takes the oldest offer (ADR-0022 §4), which is not the oldest unit, while a declared `fifo` is the oldest ready unit, so absent and `fifo` differ | ADR-0022 §4, §6 here | question 10 | no |
+| 12 | §10 keeps `m5_same_instant_chain`'s record lines, and §9 writes a record for every part leaving an edge with several targets "including M5's default". That model has one (`{from: source, to: [a, b]}`), so it gains `first_free` records, as `m5_branch_merge` does | §9, §10 here | §9 stands: both gain records and no event moves, which `m5_event_lines_are_unchanged` pins with hashes taken from M5's code | no |
+| 13 | §5 has a target's `Status` land ahead of its `Accept`, counting the part, and a holder re-rank on any change of a room flag. Taken together, every offer accepted beside another free target would move, while its own `Accept` was on the way: the part leaves crossed, the record shows the ranking that favoured the wrong target, and the other target gets an `Offer`, an `Accept` and a `Decline` for nothing. That contradicts §9's "shows the ranking that placed the offer" and its "only at the instant of a move" | §5, §9 here | a `Status` says so when the receiver's own `Accept` follows it (the `room` byte's second bit, `TargetStatus::accept_follows`), and nothing moves while that `Accept` is due. The ranks and §5's invariant are otherwise as written; the invariant exempts that one event | no |
+| 14 | §9 corrects the chosen entry "to the unit that came", on the grounds that a Buffer's `Accept` may give a better one. It may also give a worse one: the unit described left for another target at that instant, a new description is on its way, and the `Accept` answers the old one. The record would then not recompute | §6, §9 here | a holder answers `Decline` when the unit it last described to that station, as that station can have read it, has gone. §5's argument for an instant ending covers it: a `Decline` answers an offer sent before its part left | no |
+| 15 | §13's table lists `takes_rule` as what a dispatching rule needs, but a station ranks what its upstreams describe, and a type that does not state `routes` sends a bare `Offer` | §13 here | a station with a rule also needs upstreams that state `routes`, an error at load naming type, fact and rule. Relaxing it later breaks no model | no |
+| 16 | §10's table lists `Status`, `OfferOf` and the two decisions as messages with their fields; in Rust they are boxed, and `FlowMessage` keeps its size, so a model without rules moves no larger message (`a_model_without_rules_moves_no_larger_message_than_it_did`). The bytes in a trace are as the table says | §10 here | keep; no reader sees it | no |
 
 ## Consequences
 
@@ -747,3 +752,14 @@ request merges.
     take turns, whatever has waited longest. *Recommended:* yes.
 11. **Due dates on an on-demand Source (§7).** Rejected at load, since the part does not exist until
     accepted? *Recommended:* yes; relaxing later breaks nothing.
+12. **What moves a standing offer (disagreement 13).** Implementing §5 as written moved an offer
+    every time its own target accepted it. A `Status` now tells the receiver when its own `Accept`
+    follows, one bit in the `room` byte, and nothing moves while it is due. The alternative that adds
+    nothing to the format is to leave a receiver's own reservation out of what it reads, as its own
+    offer is, but then the next part on that edge is offered on stale room. *Recommended:* the bit.
+13. **A station told of a unit that has gone (disagreement 14).** The holder answers `Decline`, and
+    the station picks again, so a record always recomputes. The alternative keeps the part moving
+    and lets a record list a chosen unit that ranks after another. *Recommended:* `Decline`.
+14. **A rule needs upstreams that describe (disagreement 15).** A station with a rule rejects a
+    feeder whose type does not state `routes`, at load? *Recommended:* yes; relaxing later breaks
+    nothing.

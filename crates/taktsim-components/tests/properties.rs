@@ -550,12 +550,12 @@ fn write_edges(
         }
         5 => {
             let share = 100 / targets.len();
-            let last = 100 - share * (targets.len() - 1);
+            let rest = 100 - share * (targets.len() - 1);
             let shares: Vec<String> = targets
                 .iter()
                 .enumerate()
                 .map(|(i, t)| {
-                    let share = if i + 1 == targets.len() { last } else { share };
+                    let share = if i + 1 == targets.len() { rest } else { share };
                     format!("{t}: {share}%")
                 })
                 .collect();

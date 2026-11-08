@@ -42,6 +42,13 @@ checking it on data it was not fitted to. [Page 14](14-model-to-reality.md).
 The most a station can make per unit of time when it never waits:
 $1 / \text{cycle time}$. [Page 2](02-bottleneck.md).
 
+### Choice rule
+
+How a part chooses among the targets of an edge: `first_free`, `preferred`,
+`shortest_queue` or `lowest_utilization`. All but the first look at room first, so a
+part never stands at a full target beside a free one.
+[Page 9](09-longer-lines.md).
+
 ### Coefficient of variation
 
 The standard deviation of a time divided by its mean (CV). 0 means no
@@ -63,6 +70,12 @@ many such experiments, about 95 in 100 give a range that contains the true
 mean. [Page 3](03-littles-law.md#reading-simulated-numbers),
 [page 13](13-trustworthy-results.md).
 
+### Condition
+
+An expression on an edge, such as `variant == 'premium'`, over a part's `variant` and
+`priority`. A part takes the first edge whose condition holds, in the order written.
+[Page 9](09-longer-lines.md).
+
 ### CONWIP
 
 "Constant work in process": a pull system that lets a new part into the
@@ -81,11 +94,22 @@ The time a station needs per part. Some textbooks use the word for lead
 time; these pages and taktsim's model files do not.
 [Page 1](01-production-line.md).
 
+### Dispatching rule
+
+Which waiting unit a station takes next: `fifo`, `earliest_due_date`,
+`shortest_processing_time`, `minimum_setup` or `priority_class`. Declared per station
+under `control.dispatch`. [Page 11](11-batching-setups.md).
+
 ### Distribution
 
 The rule for how a time varies: which values are possible and how often
 each comes up. Part of a model; its mean and CV are exact numbers. Compare
 sample. [Page 4](04-variability.md#a-distribution-and-a-sample).
+
+### Due date
+
+When a part should be finished: in v0.1 its creation plus a Source's `due_in`. A unit
+without one sorts after every unit with one. [Page 11](11-batching-setups.md).
 
 ### Effective cycle time
 
@@ -97,6 +121,12 @@ $\text{cycle time} / A$, with $A$ its availability. [Page 8](08-unreliable-machi
 The textbook model of "completely random" times: short times are the most
 common, long ones rare, CV exactly 1. [Page 4](04-variability.md),
 [page 5](05-utilization.md).
+
+### Gate
+
+A component of a loop whose edges all leave the loop or are a split with a target
+outside it. Every cycle passes one, and that is what lets a part out.
+[Page 12](12-scrap-rework.md).
 
 ### Half-width
 
@@ -184,6 +214,11 @@ on average, before it fails. [Page 8](08-unreliable-machines.md).
 Mean time to repair: how long a station is down, on average, after a
 failure. [Page 8](08-unreliable-machines.md).
 
+### Pool
+
+An edge with several equivalent targets and a choice rule. There is no pool object in
+a model; the edge is the pool. [Page 9](09-longer-lines.md).
+
 ### Pull
 
 Releasing work into a line only when something leaves it, as Kanban and
@@ -200,6 +235,12 @@ One run of a model with its own seed, so its random numbers behave as if
 unrelated to those of the other runs (independent). Results are means over
 replications. [Page 3](03-littles-law.md#reading-simulated-numbers),
 [page 13](13-trustworthy-results.md).
+
+### Return lane
+
+Where a part coming back in a loop waits at the station it returns to. It is no place,
+it is served before new parts, and it never holds more than the loop has places, so a
+loop cannot lock up. [Page 12](12-scrap-rework.md).
 
 ### Rework
 
@@ -237,6 +278,11 @@ Where finished parts leave the line. [Page 1](01-production-line.md).
 ### Source
 
 Where parts enter the line. [Page 1](01-production-line.md).
+
+### Split
+
+An edge that shares parts out among its targets by fixed percentages, with one draw per
+part. A part whose target is full waits for it. [Page 9](09-longer-lines.md).
 
 ### Standard deviation
 
