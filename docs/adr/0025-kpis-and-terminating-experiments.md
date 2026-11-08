@@ -2,7 +2,7 @@
 
 - Status: proposed (needs the owner's explicit acceptance)
 - Date: 2026-11-08
-- Blocks: M8; used by M9 (warm-up cuts the same windows), M10 (re-runs A2),
+- Blocks: M8; used by M9 (warm-up, see "What this leaves ready for M9"), M10 (re-runs A2),
   M11 (`compare` reads experiments), M12 (Python calls the same API)
 - Spec: §2 principles 2 to 4, §4 Observables and KPIs, §5, §6 Output analysis, §7,
   §15; ADR-0007, ADR-0010, ADR-0013, ADR-0014, ADR-0015, ADR-0019, ADR-0022, ADR-0024
@@ -20,6 +20,10 @@ accepted ADR, so the whole needs the owner's answer:
    ADR-0019 item 4 requires that budget.
 4. ADR-0015 answer 5 leaves the observables' types to M8; `wip` stays a number, which
    spec §6's `wip(buf1) <= 30 parts` does not type-check against (§2).
+5. A short seed list needs no budget flag (§4). A reading of ADR-0019 item 4 and spec §5,
+   "budgets are mandatory on long-running commands".
+6. `metrics[].observable` of ADR-0024 §3 becomes the list `observables` (§2), since one metric
+   can answer several declared observables. M7 writes neither, so no M7 byte changes.
 
 ADR-0022 and ADR-0024 are still proposed, and M8 is built on them at the owner's
 instruction. "What M8 redoes" below lists the cost if their answers change.
@@ -50,65 +54,142 @@ and stats is pure numbers (ADR-0014), so it should not depend on components eith
 vocabulary stays and the bridge moves one crate up, for the gate.
 
 ```rust
-// taktsim-stats: pure, plain ids, no factory word.
+// taktsim-stats: pure, plain ids, no factory word, and no end until the end.
 pub enum Fact { Created { time, item, by }, Moved { time, item, from, to },
                 Delivered { time, item, by }, Removed { time, item, by },
-                State { time, resource, state: u16 }, Class { item, class: u16 } }
-pub struct KpiFold;   // new(places, state_count, Window); push(Fact); finish() -> KpiReport
+                State { time, resource, state: u16, in_progress: u32 },
+                Class { item, dimension: u16, class: u16 } }
+pub struct PlaceSpec { pub states: u16, pub creation: Creation }
+pub struct KpiFold;   // new(&[PlaceSpec], start); push(Fact); finish(end) -> KpiReport
 
-// taktsim-components: required, no default, `Flow` matches every message without `_`.
-pub enum MessageFact<'a> { Nothing, State(&'static str), Class(u16), ClassName(u16, &'a str) }
-trait Domain { const STATE_NAMES: &'static [&'static str]; const CLASS_LABEL: &'static str;
-               fn read_message(message: &Self::Message) -> MessageFact<'_>; }
+// taktsim-components: required, no default; `Flow` matches every message without `_`.
+pub enum MessageFact<'a> { State { name: &'static str, in_progress: u32 },
+                           Class { dimension: &'static str, value: u16 },
+                           ClassName { dimension: &'static str, value: u16, name: &'a str } }
+pub enum Creation { Never, HeldUntilFirstMove, InSystem }
+pub enum Kpi { Deliveries, Occupancy, StateShares, InProgress, AwaitingRelease, Transit }
+trait Domain { fn read_message(message: &Self::Message, facts: &mut dyn FnMut(MessageFact<'_>)); }
+trait ComponentType<D> { const STATES: &'static [&'static str]; const CREATION: Creation;
+                         fn places(&self) -> u32; }
+impl Registry { fn with_kpi(self, name, signature, kpi: Kpi) -> Result<Self, CatalogError>; }
 ```
 
 The bridge, `taktsim-run/src/facts.rs`, matches `Record` and `Disposal` exhaustively. M6's
-new messages and states do not compile until they answer, so they cannot miscount. The fold
-reads the stored trace and takes its end from the trace's end marker; a trace with no end
-marker is refused, as ADR-0022 §9 says. A live `TraceSink` can feed the same fold later.
+new messages and states do not compile until they answer, so they cannot miscount. It maps
+a state name to its position in that component type's `STATES`; a name the type did not
+declare is exit 2, type `run.kpi_undeclared_state`. `read_message` calls back, so one message
+can state several facts: a v0.2 item has a variant, a product and a material at once.
+
+**The fold learns its end last.** A stored trace states its end in the last record, and a live
+`TraceSink` does not know it until the run stops. So `new` takes the start only, and `finish(end)`
+the end. Levels are integrated exactly, as integer item-nanoseconds in a `u128`, which cannot
+overflow since a `u64` level times a `u64` span fits. `TimeWeightedAccumulator` needs its window
+when built, so the fold does not use it (disagreement 11); a test requires their means to agree. An
+empty window gives a report with no time-weighted value, so that path runs through the fold.
+A trace with no end marker is refused, as ADR-0022 §9 says.
+
+**States belong to a component type.** `MachineState` and `SourceState` already differ, and a
+calendar's or an operator's will differ again. `STATES` sits next to `PORTS`, so a new state on a new
+type adds no row, and no byte, to a line that does not have that type. Each `state_shares` row list
+is its type's, in its order.
+
+**A class has a dimension.** `{variant: a}` comes from `dimension: "variant"` on the fact, so per-product
+and per-material rows need no second label and no change to this API.
 
 **One table of levels.** `ItemCreated` adds one at `by`. An event with an item and
-`from ≠ target` moves it. `ItemDisposed` removes it at `by`. An item's first move is its
-release, by whichever component created it: `Ports` decides nothing, as in M7. A level below
-zero, or an event for an item that is not at `from`, is exit 2, type `run.kpi_conservation`.
-So at every record `Σ levels = created − disposed`, and at the end `Σ levels = items_alive`,
-which ties the new KPIs to M7's counters.
+`from ≠ target` moves it. `ItemDisposed` removes it at `by`. A level below zero, or an event for
+an item that is not at `from`, is exit 2, type `run.kpi_conservation`. So at every record
+`Σ levels = created − disposed`, and at the end `Σ levels = items_alive`, which ties the new KPIs to
+M7's counters.
+
+**Release is what the creator's type says.** ADR-0022 §7 defines release as a part leaving the
+Source. `Ports` decides nothing, because a type's ports do not say what its output means:
+
+| `CREATION` | Types | In `held(<id>)` | Released, so WIP and lead time start |
+| --- | --- | --- | --- |
+| `Never` | Machine, Buffer, Sink | | creating an item here is exit 2, `run.kpi_conservation` |
+| `HeldUntilFirstMove` | Source | from creation to its first move | at its first move |
+| `InSystem` | none yet; Assembly and Split in v0.2 | never | at creation |
+
+`taktsim-stats` has its own `Creation`, since neither crate depends on the other, and the bridge maps them
+exhaustively. An item disposed before release leaves `held` and enters neither `wip` nor lead time, so system WIP
+cannot go below zero. A chained assembly's lead time needs the lineage records of spec §4; the v0.2 ADR
+for it decides that, and until then `InSystem` starts at creation, which no v0.1 model reaches.
 
 ## 2. The KPIs
 
 | Metric | Unit | `over` | Rows | Definition |
 | --- | --- | --- | --- | --- |
-| `throughput(<id>)` | `items/s` | window | one; with two or more classes, one more per class, label from `CLASS_LABEL` | delivered by it in the window ÷ window. The class is the one on the event that carried the item |
-| `state_shares(<id>)` | `share` | window | one per name in `STATE_NAMES`, always all, labels `{resource, state}` | integer nanoseconds in that state ÷ window, from the start note to the stated end |
-| `wip(<id>)` | `items` | window | one | time-weighted mean of its level (`TimeWeightedAccumulator`) |
-| `wip` | `items` | window | one | time-weighted mean of released minus disposed |
-| `held(<id>)` | `items` | window | one, for a component that created items | time-weighted mean of items created, not yet released. ADR-0022 §7's "reported apart" |
-| `lead_time(<id>)` | `s` | window | §3 | first move to `ItemDisposed` delivered |
+| `throughput(<id>)` | `items/s` | window | one; per dimension with two or more classes, one more per class, label `{<dimension>: <name>}` | delivered by it in the window ÷ window. The class is the one on the event that carried the item |
+| `state_shares(<id>)` | `share` | window | one per name in its type's `STATES`, always all, labels `{resource, state}` | integer nanoseconds in that state ÷ window, from the start note to the stated end |
+| `utilization(<id>)` | `share` | window | one | time-weighted units in a cycle ÷ `places`. ADR-0022 §5, and what ADR-0023's `lowest_utilization` ranks |
+| `wip(<id>)` | `items` | window | one | time-weighted mean of its level |
+| `wip()` | `items` | window | one | time-weighted mean of released and not yet disposed |
+| `held(<id>)` | `items` | window | one, 0 if nothing was created | time-weighted mean of items created, not yet released. ADR-0022 §7's "reported apart" |
+| `lead_time(<id>)` | `s` | window | §3 | release to `ItemDisposed` delivered |
 
-The metrics of M7 keep their names, order and bytes, and the new ones follow `items_alive`.
-`items_alive` is not WIP: at the end `items_alive = wip_end + Σ held_end`. A test pins M7's
-rows byte for byte.
+**`busy` is not utilization.** ADR-0022 §5: any unit in a cycle makes a machine `busy`. At capacity 2
+and ρ = 0.8, M/M/2 gives `state_shares{busy}` = P(N ≥ 1) = 8/9 and `utilization` = 0.8. So both are
+listed; at capacity 1 they are equal, which a test requires. `units_in_cycle` is on the note today, 0 while
+down; `in_progress` carries it through the fold, and `places` is `capacity`. `places` is required, and is 1 for a
+type that does no work, because a wrong default would state a wrong number. Pools come after M6.
 
-**Which are listed.** Every KPI for every component its catalog signature accepts, whether
+The metrics of M7 keep their names, order and bytes, and the new ones follow `items_alive`, sorted by
+KPI name and then in model order. `items_alive` is not WIP: at the end `items_alive = wip_end + Σ held_end`.
+A test pins M7's rows byte for byte. Every KPI's metric name is the canonical text of an observable
+that answers it, which a test requires, so `wip()` and not a bare `wip`.
+
+**Every row can be asked for.** `standard()` registers:
+
+| Name | Arity | Accepts | `Kpi` |
+| --- | --- | --- | --- |
+| `throughput` | 1 | Sink | `Deliveries` |
+| `lead_time` | 1 | Sink | `Transit` |
+| `wip` | any number: `wip()` the system, `wip(a, b)` each | Buffer, Machine | `Occupancy` |
+| `held` | 1 | Source | `AwaitingRelease` |
+| `state_shares` | at least 1 | Machine, Source | `StateShares` |
+| `utilization` | 1 | Machine | `InProgress` |
+
+So a whole-line target loads: `precision: {wip(): 5%}`. `Arity::AtLeast(0)` exists and the parser takes
+`wip()`, so the expression language does not change. `wip(sink)` stays refused. M5 registered `wip` for
+Buffer only; ADR-0022 §9 already lists a machine's units as enough from the trace, and M8 is where
+ADR-0015 answer 5 settles these signatures.
+
+**Which are listed.** Every registered KPI for every component its signature accepts, whether
 declared or not, so `Signature::accepts` decides and `taktsim-run` names no `Buffer` or
-`Machine`. A declared observable tags its metrics in `observable`: `state_shares(cut, weld)`
-tags `state_shares(cut)` and `state_shares(weld)`. Listing only what is declared would give
-a smaller document, but an agent asking a new question would need another run, because
-`observe` is in the model hash. The fold computes them anyway.
+`Machine`. Listing only what is declared would give a smaller document, but an agent asking a new
+question would need another run, because `observe` is in the model hash. The fold computes them anyway.
+
+**A package brings its KPIs as data.** `Registry::with_kpi` replaces `with_observable`, so a registered
+observable always has an answer, and `metrics.rs` takes names from the registry and matches `Kpi`
+exhaustively; it holds no `throughput` or `wip`. `with_kpi("census", …, Kpi::Occupancy)` gives a hospital
+package its row, under its word, and without `wip` or `held` rows it did not register. `Domain` cannot
+instead map a `KpiReport` to rows, because `taktsim-components` does not depend on `taktsim-stats`, and
+adding that would loosen the gate of §1. A new kind of computation, such as OEE, is a new `Kpi` variant and
+a change in `taktsim-stats` and `taktsim-run`. That is by design: neither is the engine, and principle 7 is
+about the engine.
+
+**Several declarations, one metric.** The loader takes `state_shares(cut)`, `state_shares(cut, weld)` and
+`state_shares(weld, cut)` as different texts, and `observe` and `precision` are checked apart. So a metric has
+`observables`, a sorted list of every declared text it answers, left out when empty. It replaces ADR-0024 §3's
+single `observable`, which M7 never writes; ADR-0024's rule then reads "each declared observable is in
+some metric's `observables`, or in `unreported`". Refusing the overlap at load would narrow ADR-0015.
 
 **Units** are the base ones, `s` and `items/s`, so the bytes need no conversion. Text
 rendering may also show per hour. Inside the code they are typed (`Rate`, `SimDuration`,
 `Ratio`), with `wip` and `held` the recorded exception of ADR-0014 §6.
 
 **Types (ADR-0015 answer 5).** `throughput` a `Rate`; `lead_time` a time, the mean row;
-`wip` a number, as M5 registered it, because a time-weighted mean is not a whole count;
-`state_shares` is not a scalar, so the v0.4 ADR that evaluates expressions over observables
-refuses it there. M8 evaluates no expression, and neither a model nor a hash changes.
+`wip` and `held` a number, as M5 registered `wip`, because a time-weighted mean is not a whole count;
+`utilization` a number; `state_shares` is not a scalar, so the v0.4 ADR that evaluates expressions
+over observables refuses it there. M8 evaluates no expression, and neither a model nor a hash changes.
 
-**Undefined values.** A run with no delivered unit has no lead time. A run cut at time zero
-has an empty window and no time-weighted row. Their rows are left out, and a declared
-observable goes to `unreported` with `reason: undefined`. So `unreported` is empty unless a
-value truly does not exist, and ADR-0024's rule still holds.
+**Undefined values.** Only two things have no value. A run with no delivered unit has no lead time, and
+a run cut at time zero has an empty window, so no time-weighted row. Those rows are left out of that run's
+document, and a declared observable goes to `unreported` with `reason: undefined`. So `unreported` is
+empty unless a value truly does not exist, and ADR-0024's rule still holds. Everything else has a true
+value: `held` of a Source that created nothing is 0, and `throughput` of a Sink that received nothing
+is 0.
 
 ## 3. Lead time as a distribution
 
@@ -140,14 +221,24 @@ entry, and the interval is still read.
 | Asked | Mode | Budget |
 | --- | --- | --- |
 | one seed, no `experiment.precision` | one run, M7's document | none |
-| `--seed 1..20` or a repeated `--seed`, no precision | fixed list | the list |
+| `--seed 1..20` or a repeated `--seed`, no precision, at most 1,000 seeds | fixed list | the list |
+| the same, 1,001 to 100,000 seeds | fixed list | `--max-seconds` and `--max-runs` at least the list's length, both required; otherwise refused, exit 1, `run.no_budget` or `run.budget_too_small` |
+| more than 100,000 seeds, or `--max-runs` above 100,000 | refused, exit 1, `run.budget_too_large`, before any allocation | |
 | precision, `--seed s` or `model.seed`, `--max-runs n`, `--max-seconds t` | sequential over `s, s+1, …, s+n−1` | both, required (ADR-0019 item 4) |
 | precision without either flag | refused, exit 1, `run.no_budget`, one line per missing flag | |
 | precision and a seed list | refused, exit 1, `run.seed_list_with_precision` | |
 | a model that draws nothing, with any of the above | one run, `no_random_draws`, each unused flag a warning | none |
 
-`--max-seconds` also works on a fixed list. Refusing list-plus-precision is the end that can
+`--max-seconds` also works on a fixed list. `--max-runs` below a list's length is exit 1,
+`run.budget_too_small`, not a silent cut. Refusing list-plus-precision is the end that can
 widen later without breaking anything.
+
+**A list is a budget only while it is short.** Spec §5 wants no agent to start an unbounded loop, and
+`--seed 1..1000000` on an 8 h model is close to one. A range's length comes from checked arithmetic on its
+two ends before anything is expanded, so `--seed 0..9007199254740991` is exit 1 and never an allocation
+failure. The two limits are round numbers, not measurements: 1,000 is far above A2's ten seeds and any list
+written by hand, and 100,000 keeps a list at 800 KB and the value matrix of §8 at 800 KB per row. Both
+can widen later without breaking anything. The reading is listed above and in disagreement 10.
 
 **Seed order.** A list is sorted before anything uses it, and a duplicate is exit 1. The
 experiment id is over sorted run ids, but Welford's mean depends in its last bits on push
@@ -170,25 +261,52 @@ v0.4 to refuse or use. An upper end above 2^53 − 1 is exit 1, as for one seed.
 
 Same format, `taktsim-result/1`. `runs` has one entry per counted replication, in seed
 order. `provenance.seeds` lists exactly those seeds. Each counted run's metrics are read
-back from its stored `runs/<id>/result.json`, always, fresh or reused, so both follow one
-path. Rows are matched by name and labels, in the first run's order; a row missing from a
-run is zero for M7's counters, which show only non-zero rows, and "undefined" otherwise (§2).
-Windows of counted runs must be equal, or exit 2.
+back from its stored `runs/<id>/result.json`, fresh or reused, so both follow one path. That
+document is a cache of the fold over `[0, end]`, and M8 needs no other window. Windows of counted
+runs must be equal, or exit 2.
 
-`Accuracy::from_replications(values, plan)` is the only way to a replicated value:
+**The rows come from the model, not from a run.** The order and the set must not depend on what the
+lowest seed happened to do. Each row has a key, (position of the component in the model, KPI, label), with M7's
+counters and `items_alive` in M7's order and §2's order after them. The document's rows are those the registry
+and the model determine, plus any `scrapped`, `consumed` or class row that some counted run has, each at its
+key's place. Then, for a run without a row:
 
-| Case | `value` | Accuracy |
+| Row | Value in that run |
+| --- | --- |
+| a count or a rate, including `throughput` and its class rows | 0, a true value |
+| `wip`, `held`, `state_shares`, `utilization` | always present, or absent in all runs (windows are equal) |
+| `lead_time` | undefined |
+
+So with `interarrival: {dist: exponential, mean: 2h}`, `horizon: 8h` and `--seed 1..20`, an empty seed 1 removes
+nothing: `held(source)` averages over 20 with a true 0, and `lead_time(sink)` keeps its place. A rare
+`scrapped(qc)` is present with its zeros if any counted run scrapped. A model that declares `lead_time(sink)`
+gets `unreported` only if no run at all defines it.
+
+`Accuracy::from_replications(values, plan)`, over one `Option` per counted run, is the only way to a
+replicated value:
+
+| Case, over the defined values | `value` | Accuracy |
 | --- | --- | --- |
-| at least 2 values, not all equal | mean | `sampling` from `ConfidenceInterval`; `stopping: sequential` if the mode was |
-| at least 2 values, all equal | that value | `none`, `no_variation_observed` (§6) |
-| one value | that value | `none`, `single_replication` |
+| at least 2, not all equal | mean | `sampling` from `ConfidenceInterval`; `stopping: sequential` if the mode was |
+| at least 2, all equal | that value | `none`, `no_variation_observed` (§6) |
+| one, of one run | that value | `none`, `single_replication` |
+| one, of several runs | that value | `none`, `one_defined_value`: how many ran, and why more seeds may not help |
+| none | row left out | a declared observable is in `unreported`, `undefined`, with the count |
 | a model that draws nothing | M7's path | `none`, `no_random_draws`; `target` stated, `reached` left out, since no interval exists to compare |
 
-`target` and `reached` are on target rows: `throughput(<id>)` total, `wip`, `held`, the mean
-row of `lead_time`, and every row of `state_shares`. So a rare state's share may never
-reach 2 %, and the result then says so through `budget_exhausted`. One `ReplicationControl`
-runs per target row, and the experiment stops when none says `Continue` (ADR-0014 §3). A row
+If k of n runs left a row undefined, the row carries a further entry `{kind: partly_undefined, undefined: k, of: n,
+detail}`, whatever the first entry says. Its mean is over runs that delivered something, so it is conditional on
+that and biased against an unconditional mean; the entry states it, in the way §3's `censored` does.
+
+A **target row** is one that a declared `precision` covers, among: `throughput(<id>)` total, `wip()`,
+`wip(<id>)`, `held(<id>)`, `utilization(<id>)`, the mean row of `lead_time`, and every row of `state_shares`. So a rare
+state's share may never reach 2 %, and the result then says so through `budget_exhausted`. One
+`ReplicationControl` runs per target row, and the experiment stops when none says `Continue` (ADR-0014 §3). A row
 undefined in some replication never reaches its target.
+
+**The tightest target governs.** `precision: {state_shares(cut): 2%, state_shares(cut, weld): 5%}` gives the rows of
+`cut` 2 % and the rows of `weld` 5 %. A half-width within 2 % is also within 5 %, so `reached` on the tightest
+answers both, while `target` states the one that governed and a reader can compare the half-width with the other.
 
 | Ending, decided in seed order | `complete` | Top `stop_reason` | Exit | In `experiments/` |
 | --- | --- | --- | --- | --- |
@@ -292,7 +410,10 @@ finished first waits, and a run past the stopping point never reaches the store.
   speculative run past the stop is cut and its temp directory removed. Otherwise extra `runs/`
   entries would depend on the thread count.
 - **A pure `Sequencer`** holds the decision logic, with no threads and no clock, so a property test
-  can drive it through every finishing order.
+  can drive it through every finishing order. It keeps the **value matrix**, one `Option<f64>` per
+  committed seed and row. The stop decision is a function of that matrix, the targets and n₀. The
+  `ReplicationControl`s are an incremental form of it, and `rebuild(&matrix)` replays them, which a
+  property test requires to agree bit for bit.
 - **The lowest seed wins.** A failure or an event limit at seed k cuts only above k. Lower seeds
   finish, so which failure is reported does not depend on timing. Each replication therefore has
   its own cancel flag, which the coordinator sets, polling the outer flag and the deadline every
@@ -368,7 +489,7 @@ carries `experiment_id`, which names the set, and every run in it is in the stor
 treat "no document here" as "run it again, cheaply". If the document exists it is never overwritten;
 with `--no-reuse`, bytes other than `provenance.platform` must match, or exit 2.
 
-`RunRequest` stays `Copy`: `seeds: &'a [u64]`, empty for the model's.
+`RunRequest` stays `Copy`: `seeds: &'a [u64]`, empty for the model's, expanded only after §4's length check.
 
 ```rust
 pub struct Budget { pub max_runs: NonZeroU32, pub max_seconds: NonZeroU64 }
@@ -387,11 +508,26 @@ targets, so one snapshot file proves the bytes equal. No new job is needed.
 - **KPIs by hand:** `crates/taktsim-run/tests/kpis.rs` writes traces record by record with
   `TraceWriter`, no engine, with expected numbers worked out in comments from the times. Includes
   units inside at the end, a blocked Source's held part, a repair, simultaneous moves. Plus page 1's
-  table: 639 parts, WIP 22, 16.5 min.
+  table: 639 parts, WIP 22, 16.5 min; and ADR-0022's capacity-2 check, utilization + down = 1
+  (0.956 + 0.044), with `utilization_is_not_the_busy_share`.
+- **Row sets:** `row_set_does_not_depend_on_the_lowest_seed` (the empty run first, in the middle, and last,
+  giving rows in one order), `true_zero_is_averaged`, `partly_undefined_states_the_count`,
+  `one_defined_value_of_several`, `undefined_in_all_goes_to_unreported`.
+- **Declarations:** `overlapping_observables_are_all_answered`, `tightest_target_governs`,
+  `system_wip_and_held_can_be_targeted`, `every_kpi_name_is_an_observable_text`.
+- **Packages:** `a_package_gets_only_the_kpis_it_registers`, `state_rows_follow_the_type`,
+  `a_new_state_changes_no_other_type`, `undeclared_state_is_refused`, `two_dimensions_two_row_sets`,
+  `created_by_a_never_type_is_conservation`, `created_in_system_is_wip_at_once`,
+  `disposed_before_release_touches_no_wip`.
+- **The fold:** `one_pass_needs_no_end`, `cut_at_zero_goes_through_the_fold`,
+  `fold_mean_agrees_with_time_weighted_accumulator`, `fold_from_start_equals_the_cut_window`.
+- **Budgets:** `huge_range_is_refused_before_allocating`, `long_list_needs_both_budgets`,
+  `max_runs_below_list_is_refused`.
 - **Properties:** `Σ levels = created − disposed` at each record; state nanoseconds sum to the window;
-  variants sum to the total; on a drained run the WIP integral equals the sum of lead times, exact in
-  integer nanoseconds (Little's law, finite form); `Sequencer` over every finishing order gives one
-  decision and one committed set; a push order never reaches the document.
+  classes sum to the total in each dimension; on a drained run the WIP integral equals the sum of lead
+  times, exact in integer nanoseconds (Little's law, finite form); `Sequencer` over every finishing order
+  gives one decision and one committed set; `rebuild_equals_incremental`; a push order never reaches the
+  document.
 - **A2 and sequential:** `a2_fixed_n_coverage_on_mm1`, `sequential_coverage_on_mm1` (§7).
 - **Guards:** `no_draw_model_never_gets_an_interval` (over `--seed 1..5`, also in text: no `±`),
   `identical_replications_state_no_interval`, `no_golden_result_has_a_zero_width_sampling`.
@@ -404,23 +540,39 @@ targets, so one snapshot file proves the bytes equal. No new job is needed.
 
 ## Consequences
 
-- `taktsim-stats` gains the KPI fold; `Domain` gains three required items; `taktsim-run` gains the
-  coordinator. `Cargo.lock` gains `rayon` and its crates, and `ctrlc` and its crates, named in the PR.
+- `taktsim-stats` gains the KPI fold; `Domain` gains `read_message`, `ComponentType` gains `STATES`, `CREATION`
+  and `places`, all required; `Registry::with_kpi` replaces `with_observable`; `standard()` registers `held` and
+  `utilization` and widens `wip` and `state_shares`, so `describe` and the model schema regenerate;
+  `taktsim-run` gains the coordinator. `Cargo.lock` gains `rayon` and its crates, and `ctrlc` and its crates, named in the PR.
 - `ci/check-crates.sh` gains `allowed taktsim-stats "taktsim-units taktsim-core"` (tightens, the second
   for its dev-dependency); `gate-change`.
 - Three existing tests change because ADR-0024 said they would, each saying so in its commit, and none
   loses strength: `declared_observable_is_answered_or_unreported` passes a budget and now requires
   answers, not `not_computed`; the `--seed` repeated case moves to a duplicate seed; CLI snapshots gain
-  rows, while a new test pins M7's rows unchanged.
+  rows, while a new test pins M7's rows unchanged. `labels_and_observable_round_trip` round-trips the list.
 - Coverage in A2 is on fixed n; users of `precision` get `stopping: sequential`.
 - Not done, by intent: warm-up and steady state (M9), benchmark validation (M10), `compare` (M11), a
   histogram row, a bound on no-variation rows.
 
 **After M6 lands** (in the PR, for the lead session): pool utilisation; per-variant and per-product KPIs
-across routes, and a `Class` for items whose variant is not on the first `Arrive`; `read_message` and
-`STATE_NAMES` for its additions, which will not compile until answered; `wip` for what its signature
-then accepts; `branch_merge`, `rework_loop`, `pool` in the reference experiments; `Domain` items on both
-branches.
+across routes, and a `Class` for items whose variant is not on the first `Arrive`; `read_message`, `STATES`,
+`CREATION` and `places` for its additions, which will not compile until answered, with `places` meeting ADR-0023's
+own count; `wip` for what its signature then accepts; `branch_merge`, `rework_loop`, `pool` in the reference
+experiments; `Domain` and `ComponentType` items on both branches.
+
+## What this leaves ready for M9
+
+ADR-0014 leaves open which series MSER-5 reads, and its answer 3 prefers trying the mean over several
+replications first. Then the warm-up end w is known only after several runs, and can move as seeds join. M8 does
+not decide this, and does not close it off:
+
+- **A run's document stays immutable, and over `[0, end]`.** It is a cache for w = 0 only. For w > 0 the experiment
+  gets its values by running the fold over the stored trace with `KpiFold::new(places, w)`, which
+  `fold_from_start_equals_the_cut_window` proves on hand-written traces.
+- **The stop decision is a function of the value matrix** (§8). When w moves, M9 replaces the matrix and calls
+  `rebuild`. The prefix rule stays: statistics depend only on the seeds so far.
+- **Equal windows** (§5) remain M8's rule. If M9 detects per replication, windows differ and `metrics[].over`, which holds
+  one, must change; that is a format question for M9's ADR. The mean-series reading needs no such change.
 
 ## What M8 redoes if earlier answers change
 
@@ -430,7 +582,8 @@ branches.
 | Q2: `--seed` over `model.seed` refused | §4: no base seed over a stated `model.seed`; the model must drop it |
 | Q3: no-draw models may take seeds | §5's guard moves from "no seeds" to the check in §6 |
 | Q4, Q5, Q14: the header or the run id | golden results and pinned ids regenerate; no logic |
-| Q8: result documents closed | `stopping`, `censored` and `held` need a format bump |
+| Q8: result documents closed | `stopping`, `censored`, `partly_undefined` and `held` need a format bump |
+| ADR-0024 keeps the single `observable` | overlapping declarations must be refused at load instead, which amends ADR-0015 |
 | Q10: partial runs kept | a cut run could stay, under an id with its limit; §8's prefix rule is unchanged |
 | Q12: stalls become results | a stalled replication joins `event_limit`'s row, not a failure |
 | Q13: no check run | nothing here |
@@ -443,17 +596,20 @@ Before v0.1 ships each costs regenerated files; the cost below is after that.
 
 | Door | Commits to | Cost to reverse | Test that proves it |
 | --- | --- | --- | --- |
-| KPI names, units, rows and labels of §2 and §3, including `held`, bare `wip`, `share`, `items/s`, `statistic` | every reader, M11, later KPIs | a deprecation; semver major for a renamed field | `m7_rows_are_unchanged`, `kpis.rs`, golden results |
-| KPI definitions: release as first move, nearest-rank quantiles, delivered only | every number, every comparison with a factory's | every result changes | `kpis.rs`, `wip_integral_equals_lead_times`, `page_1_table` |
-| Accuracy words `no_variation_observed`, `undefined`, `censored`, `stopping` | what a number claims | a deprecation | `identical_replications_state_no_interval`, `censored_lead_time_says_so`, `sequential_says_so` |
+| KPI names, units, rows and labels of §2 and §3, including `held`, `utilization`, `wip()`, `share`, `items/s`, `statistic` | every reader, M11, later KPIs | a deprecation; semver major for a renamed field | `m7_rows_are_unchanged`, `every_kpi_name_is_an_observable_text`, `kpis.rs`, golden results |
+| The observable signatures of §2: `wip` of any arity, `held`, `utilization`, what each accepts | every model that declares them | loading fails on models; accepting more later is free | `system_wip_and_held_can_be_targeted`, model schema freshness |
+| `metrics[].observables` as a sorted list; tightest target governs a shared row | every reader of ADR-0024's rule, M11 | a format change | `overlapping_observables_are_all_answered`, `tightest_target_governs` |
+| Row set and order from the model, with 0 for a missing count | every experiment document | every golden result | `row_set_does_not_depend_on_the_lowest_seed`, `true_zero_is_averaged` |
+| KPI definitions: release per `CREATION`, nearest-rank quantiles, delivered only, `utilization` over `places` | every number, every comparison with a factory's | every result changes | `kpis.rs`, `disposed_before_release_touches_no_wip`, `wip_integral_equals_lead_times`, `page_1_table`, `utilization_is_not_the_busy_share` |
+| Accuracy words `no_variation_observed`, `one_defined_value`, `partly_undefined`, `undefined`, `censored`, `stopping` | what a number claims | a deprecation | `identical_replications_state_no_interval`, `partly_undefined_states_the_count`, `censored_lead_time_says_so`, `sequential_says_so` |
 | No zero-width `sampling`; `reached` on it | every reader of `reached` | a format change | `no_golden_result_has_a_zero_width_sampling` |
 | Stop words, `complete` for each, exit codes in §5 | scripts and agents | semver major | `endings_table`, CLI contract |
-| Flags `--seed` list and range form, `--max-runs`, `--max-seconds`, `--threads`, `--max-memory-mib`; both budgets required | every script | semver major; requiring less later is free | `run_without_budget_names_the_flag`, `walkthrough_uses_only_describe` |
+| Flags `--seed` list and range form, `--max-runs`, `--max-seconds`, `--threads`, `--max-memory-mib`; both budgets required; limits of 1,000 and 100,000 seeds | every script | semver major; requiring less later, and wider limits, are free | `run_without_budget_names_the_flag`, `long_list_needs_both_budgets`, `huge_range_is_refused_before_allocating`, `walkthrough_uses_only_describe` |
 | Seed sequence `s, s+1, …`, lists sorted, duplicates refused | which runs an experiment holds; the numbers | every experiment's numbers | `sequence_is_consecutive`, `seed_order_is_sorted`, `duplicate_seed_is_refused` |
 | Prefix rule: strict seed order, nothing past the stop stored, no thread count in any byte | determinism of every experiment, and `calibrate` later | a determinism break | `threads_1_and_8_store_the_same_bytes`, `sequencer_any_finishing_order` |
 | A2 model, seeds, count, window | the v0.1 claim | never move; a new test beside it | `a2_fixed_n_coverage_on_mm1` |
 | `experiments/<id>/result.json` and what is kept | every store, M11 | a store migration | `kept_only_when_determined`, `interrupted_then_resumed_equals_uninterrupted` |
-| `Domain::read_message`, `STATE_NAMES`, `CLASS_LABEL`, `MessageFact`, `Fact`, `KpiFold` | every later package | every package | doc tests, `flow_reads_every_message` |
+| `Domain::read_message`, `ComponentType::STATES`, `CREATION`, `places`, `Registry::with_kpi`, `Kpi`, `MessageFact`, `Fact`, `PlaceSpec`, `KpiFold::new(places, start)`, `finish(end)` | every later package | every package | doc tests, `flow_reads_every_message`, `a_package_gets_only_the_kpis_it_registers`, `one_pass_needs_no_end` |
 | `RunRequest`, `Budget`, `Ended` | M12, every client | every client | doc tests |
 | `rayon` and `ctrlc` | bill of materials | removing is easy: both are behind one module | `cargo deny check` |
 
@@ -470,6 +626,11 @@ Before v0.1 ships each costs regenerated files; the cost below is after that.
 | 7 | `wip(buf1) <= 30 parts` compares a number with a count | spec §6, ADR-0015 answer 5 | §2: number; the v0.4 ADR settles expressions | no |
 | 8 | `taktsim-stats` has no line in `ci/check-crates.sh`, though its direction is in ADR-0014 | `ci/check-crates.sh` | add it | no |
 | 9 | Changing a precision target changes the model hash, so every run id: tightening 2 % to 1 % reruns everything, and nothing is reused | ADR-0024 §6, ADR-0002 | leave for M8, and ask (question 8) | no |
+| 10 | A seed list, unlike a precision run, has no flag budget, against "budgets are mandatory on long-running commands" | spec §5, ADR-0019 item 4 | §4: its length is the budget up to 1,000 seeds, and both flags beyond; ask (question 11) | no |
+| 11 | "Keeps one `TimeWeightedAccumulator` per WIP signal" needs the window at the start, and a trace states its end last | ADR-0014 Consequences, `crates/taktsim-stats/src/time_weighted.rs` | §1: exact integer integrals in the fold, and a test that the two agree | no |
+| 12 | One `observable` per metric cannot hold ADR-0024's rule when declarations overlap | ADR-0024 §3, `crates/taktsim-model/src/load.rs` | §2: a list, `observables`; the ADR-0024 row changes in this PR | no |
+| 13 | "The share of time a station is working" reads as `busy`, and that is not utilization above capacity 1 | `docs/concepts/glossary.md`, ADR-0022 §5 | one added sentence in the glossary, in this PR | no |
+| 14 | ADR-0022 §9 lists system WIP from "first `Arrive` from a Source" only; §1 adds `CREATION` for types that do not exist yet | ADR-0022 §7, §9 | §1: equal for every v0.1 model; the v0.2 ADR settles lineage | no |
 
 ## Questions for the owner
 
@@ -496,3 +657,7 @@ Implementation proceeds on the recommendations; each can change before the M8 pu
 9. **Where A2 runs (§7).** In the `test` job, moving to a required job of its own if too slow? *Recommended:* yes,
    count unchanged either way.
 10. **`share` and `items/s` as unit words (§2).** *Recommended:* yes: base units, with text showing per hour.
+11. **A short seed list without budget flags (§4).** *Recommended:* yes, up to 1,000 seeds: the list states how much
+    work it asks for, and a signal still stops it. The alternative, both flags on every list, is stricter and can be
+    loosened later, but costs every `--seed 1..20` two flags.
+12. **Replacing `observable` with `observables` (§2).** *Recommended:* yes, while nothing has been released.
