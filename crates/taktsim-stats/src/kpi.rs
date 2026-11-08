@@ -689,6 +689,21 @@ impl KpiReport {
         self.mean(self.wip_integral)
     }
 
+    /// The time-weighted mean of items created and not yet released, over all places.
+    /// `None` for a window with no time in it.
+    ///
+    /// ```
+    /// use taktsim_stats::KpiFold;
+    /// use taktsim_units::SimTime;
+    ///
+    /// assert_eq!(KpiFold::new(&[], SimTime::START).finish("1s".parse()?)?.mean_held(), Some(0.0));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub fn mean_held(&self) -> Option<f64> {
+        self.mean(self.places.iter().map(|place| place.held_integral).sum())
+    }
+
     /// The exact integral of system WIP, in item-nanoseconds.
     ///
     /// ```

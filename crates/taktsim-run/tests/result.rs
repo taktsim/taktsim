@@ -495,16 +495,10 @@ fn declared_observable_is_answered_or_unreported() {
         .metrics
         .iter()
         .flat_map(|m| m.observables.iter().map(String::as_str))
-        .chain(result.unreported.iter().map(|u| u.observable.as_str()))
         .collect();
     let declared = BTreeSet::from(["state_shares(cut)", "throughput(sink)", "wip(buf)"]);
     assert_eq!(answered, declared);
-    assert!(result.unreported.iter().all(|u| u.reason == "not_computed"));
-    assert_eq!(
-        result.unreported.len(),
-        3,
-        "listed once, though declared in both places"
-    );
+    assert_eq!(result.unreported.len(), 0, "every one has a value");
     // A model that declares nothing has an empty list, not a missing one.
     let plain = run_text(&exact_model(""), &RunRequest::new(), &dir.store()).unwrap();
     assert_eq!(plain.result.unreported.len(), 0);

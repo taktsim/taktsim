@@ -42,7 +42,7 @@ fn a_seed_for_a_model_that_draws_nothing_is_unused_and_named() {
     let store = dir.store();
     let bare = run_text(&exact_model(""), &RunRequest::new(), &store).unwrap();
     let request = RunRequest {
-        seed: Some(7),
+        seeds: &[7],
         ..RunRequest::new()
     };
     let with_option = run_text(&exact_model(""), &request, &store).unwrap();
@@ -66,7 +66,7 @@ fn seed_option_is_recorded_over_model_seed() {
     let yaml = drawing_model(", seed: 1");
     let from_model = run_text(&yaml, &RunRequest::new(), &store).unwrap();
     let request = RunRequest {
-        seed: Some(2),
+        seeds: &[2],
         ..RunRequest::new()
     };
     let from_option = run_text(&yaml, &request, &store).unwrap();
@@ -92,7 +92,7 @@ fn seed_option_is_recorded_over_model_seed() {
 fn a_seed_beyond_the_exact_range_is_invalid() {
     let dir = TempDir::new();
     let request = RunRequest {
-        seed: Some(1 << 53),
+        seeds: &[1 << 53],
         ..RunRequest::new()
     };
     let failure = run_text(&drawing_model(""), &request, &dir.store()).unwrap_err();

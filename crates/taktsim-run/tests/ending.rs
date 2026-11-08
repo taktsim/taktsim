@@ -32,8 +32,12 @@ fn drained_is_complete() {
     assert!(response.result.runs[0].run_id.is_some());
     // The clock runs on to the horizon: the system stands empty until then.
     assert_eq!(response.result.runs[0].end_time.to_string(), "1h");
-    let alive = response.result.metrics.last().unwrap();
-    assert_eq!(alive.name, "items_alive");
+    let alive = response
+        .result
+        .metrics
+        .iter()
+        .find(|metric| metric.name == "items_alive")
+        .unwrap();
     assert_eq!(alive.values[0].value, taktsim_run::Scalar::Integer(0));
 }
 
