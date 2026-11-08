@@ -220,3 +220,51 @@ fn spec_routing_example_loads() {
     );
     support::check_records(&r);
 }
+
+#[test]
+fn spellings_of_the_routing_words_have_one_hash() {
+    let model = |mix: &str, times: &str, when: &str, split: &str, control: &str| {
+        load(&format!(
+            "{}control: {{dispatch: {{{control}}}}}\n",
+            support::document(
+                "1h",
+                &format!(
+                    "  - {{id: source, type: Source, interarrival: 1min, variants: {{red: 50%, blue: 50%}}, priority_mix: {mix}}}\n  \
+                     - {{id: a, type: Machine, cycle_time: 1min, cycle_time_by_variant: {times}}}\n  \
+                     - {{id: b, type: Machine, cycle_time: 1min}}\n  - {{id: sink, type: Sink}}"
+                ),
+                &format!(
+                    "  - {{from: source, to: a, when: \"{when}\"}}\n  - {{from: source, split: {split}}}\n  - {{from: [a, b], to: sink}}"
+                ),
+            )
+        ))
+    };
+    let first = model(
+        "[{priority: 1, share: 20%}, {priority: 0, share: 80%}]",
+        "{red: 60s, blue: 30s}",
+        "variant == 'red'",
+        "{a: 40%, b: 60%}",
+        "a: fifo, b: earliest_due_date",
+    );
+    let second = model(
+        "[{share: 80%, priority: 0}, {priority: 1, share: 20.0%}]",
+        "{blue: 0.5min, red: 1min}",
+        "(variant=='red')",
+        "{b: 60%, a: 40.0%}",
+        "b: earliest_due_date, a: fifo",
+    );
+    assert_eq!(first.hash(), second.hash());
+    assert_eq!(first.system_hash(), second.system_hash());
+    assert_eq!(first.canonical_json(), second.canonical_json());
+    // Sorted in the normalized form, and itself a model with the same hash.
+    assert!(
+        first.canonical_json().contains(
+            r#""priority_mix":[{"priority":0,"share":"80%"},{"priority":1,"share":"20%"}]"#
+        )
+    );
+    let registry = registry();
+    let again = Loader::new(registry.catalog())
+        .load_str(first.canonical_json(), Format::Json)
+        .unwrap();
+    assert_eq!(again.hash(), first.hash());
+}
