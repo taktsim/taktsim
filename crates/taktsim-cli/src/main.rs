@@ -65,7 +65,7 @@ fn print(text: &str, format: Format) -> u8 {
     match out.write_all(text.as_bytes()).and_then(|()| out.flush()) {
         Ok(()) => 0,
         Err(error) => {
-            let line = Diagnostic::error("store.write", format!("stdout: {error}"))
+            let line = Diagnostic::error("io.stdout", format!("stdout: {error}"))
                 .at("<stdout>")
                 .found(error.kind().to_string())
                 .allowed("a stdout that can be written");
