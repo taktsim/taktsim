@@ -37,6 +37,7 @@ measurements.
 | [0019](0019-cli-agent-interface.md) | The CLI is the agent interface; no MCP server | accepted | M7, v0.2 |
 | [0022](0022-components-source-machine-buffer-sink.md) | Components: Source, Machine, Buffer, Sink | proposed | M5 |
 | [0024](0024-cli-validate-run-and-result-format.md) | CLI `validate` and `run`, the result document and the run store | proposed | M7 |
+| [0025](0025-kpis-and-terminating-experiments.md) | KPIs and terminating experiments | proposed | M8 |
 
 Open decisions from spec §15 that do **not** block v0.1, to be written
 before the tier that needs them: async boundary (v0.2), viewer rendering
