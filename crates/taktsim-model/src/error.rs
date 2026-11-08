@@ -1037,6 +1037,67 @@ impl LoadErrorKind {
         Some(text.to_owned())
     }
 
+    /// The error's stable word in the `model.*` namespace, the `type` of an
+    /// error line (ADR-0024 §9). Adding a kind does not compile until it has
+    /// one, and a word, once released, does not change.
+    ///
+    /// ```
+    /// use taktsim_model::LoadErrorKind;
+    ///
+    /// assert_eq!(LoadErrorKind::Empty.name(), "model.empty");
+    /// assert_eq!(LoadErrorKind::Anchor.name(), "model.anchor");
+    /// ```
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Io { .. } => "model.io",
+            Self::NotUtf8 { .. } => "model.not_utf8",
+            Self::Yaml { .. } => "model.yaml",
+            Self::Json { .. } => "model.json",
+            Self::TooDeep { .. } => "model.too_deep",
+            Self::Empty => "model.empty",
+            Self::MultipleDocuments => "model.multiple_documents",
+            Self::Anchor => "model.anchor",
+            Self::Alias => "model.alias",
+            Self::Tag { .. } => "model.tag",
+            Self::MergeKey => "model.merge_key",
+            Self::ComplexKey => "model.complex_key",
+            Self::NonStringKey { .. } => "model.non_string_key",
+            Self::DuplicateKey { .. } => "model.duplicate_key",
+            Self::Ambiguous { .. } => "model.ambiguous",
+            Self::IntegerRange { .. } => "model.integer_range",
+            Self::NotFinite { .. } => "model.not_finite",
+            Self::WrongType { .. } => "model.wrong_type",
+            Self::MissingField { .. } => "model.missing_field",
+            Self::UnknownField { .. } => "model.unknown_field",
+            Self::UnknownValue { .. } => "model.unknown_value",
+            Self::Unit(_) => "model.unit",
+            Self::Distribution(_) => "model.distribution",
+            Self::Expression { .. } => "model.expression",
+            Self::BareShare { .. } => "model.bare_share",
+            Self::NotAllowed { .. } => "model.not_allowed",
+            Self::UnsupportedFormat { .. } => "model.unsupported_format",
+            Self::InvalidId { .. } => "model.invalid_id",
+            Self::DuplicateId { .. } => "model.duplicate_id",
+            Self::CaseClash { .. } => "model.case_clash",
+            Self::UnknownComponent { .. } => "model.unknown_component",
+            Self::TooFew { .. } => "model.too_few",
+            Self::Repeated { .. } => "model.repeated",
+            Self::SelfLoop { .. } => "model.self_loop",
+            Self::DuplicateEdge { .. } => "model.duplicate_edge",
+            Self::DuplicateObservable { .. } => "model.duplicate_observable",
+            Self::NotAnObservable { .. } => "model.not_an_observable",
+            Self::SteadyStateUnsupported => "model.steady_state_unsupported",
+            Self::IncludePath { .. } => "model.include_path",
+            Self::IncludeUnavailable => "model.include_unavailable",
+            Self::NestedInclude => "model.nested_include",
+            Self::IncludeSelf { .. } => "model.include_self",
+            Self::DuplicateInclude { .. } => "model.duplicate_include",
+            Self::IncludeHash { .. } => "model.include_hash",
+            Self::Normalize { .. } => "model.normalize",
+        }
+    }
+
     /// Whether the error is a failure to read a file (CLI exit code 7,
     /// ADR-0019) rather than invalid input (exit code 1).
     ///
@@ -1345,6 +1406,128 @@ fn edit_distance(a: &str, b: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn syntax_kinds() -> Vec<LoadErrorKind> {
+        vec![
+            LoadErrorKind::Io {
+                error: io::ErrorKind::NotFound,
+            },
+            LoadErrorKind::NotUtf8 { offset: 0 },
+            LoadErrorKind::Yaml {
+                problem: "p".into(),
+            },
+            LoadErrorKind::Json {
+                problem: JsonProblem::TrailingComma,
+            },
+            LoadErrorKind::TooDeep { limit: 1 },
+            LoadErrorKind::Empty,
+            LoadErrorKind::MultipleDocuments,
+            LoadErrorKind::Anchor,
+            LoadErrorKind::Alias,
+            LoadErrorKind::Tag { tag: "t".into() },
+            LoadErrorKind::MergeKey,
+            LoadErrorKind::ComplexKey,
+            LoadErrorKind::DuplicateKey {
+                key: "k".into(),
+                first: Location::new(1, 1),
+            },
+            LoadErrorKind::IntegerRange { text: "1".into() },
+            LoadErrorKind::NotFinite { text: "1".into() },
+        ]
+    }
+
+    fn document_kinds() -> Vec<LoadErrorKind> {
+        let place = Place::new(None, Location::new(1, 1));
+        vec![
+            LoadErrorKind::MissingField {
+                field: "f",
+                expected: "e",
+                example: "x",
+            },
+            LoadErrorKind::UnknownField {
+                field: "f".into(),
+                allowed: vec![],
+                suggestion: None,
+            },
+            LoadErrorKind::UnknownValue {
+                what: "w",
+                found: "f".into(),
+                allowed: vec![],
+                suggestion: None,
+            },
+            LoadErrorKind::BareShare {
+                found: "f".into(),
+                fix: "x".into(),
+            },
+            LoadErrorKind::NotAllowed {
+                found: "f".into(),
+                allowed: "a".into(),
+                example: "x".into(),
+            },
+            LoadErrorKind::UnsupportedFormat { found: "f".into() },
+            LoadErrorKind::InvalidId {
+                what: "w",
+                found: "f".into(),
+            },
+            LoadErrorKind::DuplicateId {
+                id: "i".into(),
+                first: place.clone(),
+            },
+            LoadErrorKind::UnknownComponent {
+                id: "i".into(),
+                suggestion: None,
+            },
+            LoadErrorKind::TooFew {
+                what: "w",
+                min: 1,
+                found: 0,
+                example: "x",
+            },
+            LoadErrorKind::Repeated { id: "i".into() },
+            LoadErrorKind::SelfLoop { id: "i".into() },
+            LoadErrorKind::DuplicateEdge {
+                from: "a".into(),
+                to: "b".into(),
+                first: place.clone(),
+            },
+            LoadErrorKind::DuplicateObservable {
+                text: "t".into(),
+                first: place.clone(),
+            },
+            LoadErrorKind::NotAnObservable { text: "t".into() },
+            LoadErrorKind::SteadyStateUnsupported,
+            LoadErrorKind::IncludeUnavailable,
+            LoadErrorKind::NestedInclude,
+            LoadErrorKind::IncludeSelf { path: "p".into() },
+            LoadErrorKind::DuplicateInclude {
+                path: "p".into(),
+                first: place,
+            },
+            LoadErrorKind::IncludeHash {
+                path: "p".into(),
+                pinned: "a".into(),
+                actual: "b".into(),
+            },
+        ]
+    }
+
+    /// Every word is in the namespace and none is used twice. The match in
+    /// `name` is exhaustive, so a new kind cannot go without a word.
+    #[test]
+    fn error_names_are_unique_words_in_the_model_namespace() {
+        let kinds = [syntax_kinds(), document_kinds()].concat();
+        let names: std::collections::BTreeSet<&str> =
+            kinds.iter().map(LoadErrorKind::name).collect();
+        assert_eq!(names.len(), kinds.len());
+        for name in names {
+            let word = name.strip_prefix("model.").unwrap();
+            assert!(
+                word.chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit()),
+                "{name}"
+            );
+        }
+    }
 
     #[test]
     fn edit_distance_counts_insertions_deletions_and_substitutions() {

@@ -11,10 +11,49 @@
 use taktsim_units::{Ratio, SimDuration};
 
 use crate::component::{Catalog, ComponentRef};
-use crate::decode::Schemas;
+use crate::decode::{Decode, Record, Schemas};
 use crate::document::{FORMAT_VERSION, read_main_fields};
 use crate::json::Json;
 use crate::load::read_fragment_fields;
+
+/// The JSON Schema (draft 2020-12) of one [`Record`] type, with its `$defs`:
+/// for a document that is not a model, such as a result (ADR-0024 §2).
+///
+/// ```
+/// use taktsim_model::{Fields, Record, record_schema};
+/// use taktsim_units::SimDuration;
+///
+/// struct Answer {
+///     after: SimDuration,
+/// }
+///
+/// impl Record for Answer {
+///     const EXPECTED: &'static str = "an answer such as `{after: 1h}`";
+///     const EXAMPLE: &'static str = "{after: 1h}";
+///     const OPEN: bool = true;
+///
+///     fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+///         Some(Self { after: fields.required("after")? })
+///     }
+/// }
+///
+/// let schema = record_schema::<Answer>();
+/// assert_eq!(schema["properties"]["after"]["$ref"], "#/$defs/Duration");
+/// assert_eq!(schema["$defs"]["Duration"]["type"], "string");
+/// assert_eq!(schema["$schema"], "https://json-schema.org/draft/2020-12/schema");
+/// ```
+#[must_use]
+pub fn record_schema<T: Record>() -> Json {
+    let mut schemas = Schemas::default();
+    let root = <T as Decode>::schema(&mut schemas);
+    let root = root.with("$schema", &"https://json-schema.org/draft/2020-12/schema");
+    let defs = schemas.into_defs();
+    if defs.is_empty() {
+        root
+    } else {
+        root.with("$defs", &Json::Object(defs))
+    }
+}
 
 /// The JSON Schema (draft 2020-12) of a model document whose component
 /// types and observables are those of `catalog`.
