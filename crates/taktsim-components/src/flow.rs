@@ -12,7 +12,7 @@ use taktsim_model::{
 use crate::buffer::Buffer;
 use crate::machine::Machine;
 use crate::message::{FlowMessage, VariantId};
-use crate::run::{BuildError, Domain, Ports, Registry, Roles};
+use crate::run::{BuildError, Domain, Kpi, MessageFact, Ports, Registry, Roles};
 use crate::sink::Sink;
 use crate::source::Source;
 
@@ -21,6 +21,9 @@ const DEFAULT_VARIANT: &str = "default";
 
 /// The most variant names in a model: a `VariantId` is a `u16`.
 const MAX_VARIANTS: usize = 65_535;
+
+/// The dimension of a variant, in `throughput` rows such as `{variant: basic}`.
+const VARIANT: &str = "variant";
 
 /// The domain of production lines: Source, Machine, Buffer, Sink and what
 /// follows them.
@@ -485,11 +488,43 @@ impl Domain for Flow {
     fn draws_random(_: &Document) -> bool {
         false
     }
+
+    /// `Arrive` carries an item's variant, the notes a state or a variant's name, and
+    /// everything else nothing (ADR-0025 §1).
+    fn read_message(message: &FlowMessage, facts: &mut dyn FnMut(MessageFact<'_>)) {
+        match message {
+            FlowMessage::Arrive(attrs) => facts(MessageFact::Class {
+                dimension: VARIANT,
+                value: attrs.variant.get(),
+            }),
+            FlowMessage::MachineState(note) => facts(MessageFact::State {
+                name: note.state.as_str(),
+                in_progress: note.units_in_cycle,
+            }),
+            FlowMessage::SourceState(note) => facts(MessageFact::State {
+                name: note.state.as_str(),
+                in_progress: 0,
+            }),
+            FlowMessage::VariantName { id, name } => facts(MessageFact::ClassName {
+                dimension: VARIANT,
+                value: id.get(),
+                name,
+            }),
+            FlowMessage::Failure
+            | FlowMessage::Repaired
+            | FlowMessage::CycleDone { .. }
+            | FlowMessage::SetupDone
+            | FlowMessage::NextArrival
+            | FlowMessage::Accept
+            | FlowMessage::Decline
+            | FlowMessage::Offer
+            | FlowMessage::Withdraw => {}
+        }
+    }
 }
 
 /// The standard catalog of production components: Source, Machine, Buffer and
-/// Sink, and the observables of spec §4, whose result types M8 may refine
-/// (ADR-0022, "Observables"). The schema generator calls it, so it picks up every
+/// Sink, and the KPIs of spec §4 as ADR-0025 §2 settles them. The schema generator calls it, so it picks up every
 /// registered type with no list of its own.
 ///
 /// # Errors
@@ -502,7 +537,7 @@ impl Domain for Flow {
 /// assert_eq!(registry.catalog().types().collect::<Vec<_>>(), ["Buffer", "Machine", "Sink", "Source"]);
 /// assert_eq!(
 ///     registry.catalog().observables().collect::<Vec<_>>(),
-///     ["lead_time", "state_shares", "throughput", "wip"]
+///     ["held", "lead_time", "state_shares", "throughput", "utilization", "wip"]
 /// );
 /// # Ok::<(), taktsim_model::CatalogError>(())
 /// ```
@@ -511,17 +546,22 @@ pub fn standard() -> Result<Registry<Flow>, CatalogError> {
         Signature::new(Arity::Exactly(1), Type::Quantity(Dimension::Rate)).accepting(["Sink"]);
     let lead_time =
         Signature::new(Arity::Exactly(1), Type::Quantity(Dimension::Time)).accepting(["Sink"]);
-    let wip = Signature::new(Arity::Exactly(1), Type::Number).accepting(["Buffer"]);
-    let state_shares = Signature::new(Arity::AtLeast(1), Type::Number).accepting(["Machine"]);
+    let wip = Signature::new(Arity::AtLeast(0), Type::Number).accepting(["Buffer", "Machine"]);
+    let held = Signature::new(Arity::Exactly(1), Type::Number).accepting(["Source"]);
+    let state_shares =
+        Signature::new(Arity::AtLeast(1), Type::Number).accepting(["Machine", "Source"]);
+    let utilization = Signature::new(Arity::Exactly(1), Type::Number).accepting(["Machine"]);
     Registry::new()
         .with::<Source>()?
         .with::<Machine>()?
         .with::<Buffer>()?
         .with::<Sink>()?
-        .with_observable("throughput", throughput)?
-        .with_observable("lead_time", lead_time)?
-        .with_observable("wip", wip)?
-        .with_observable("state_shares", state_shares)
+        .with_kpi("throughput", throughput, Kpi::Deliveries)?
+        .with_kpi("lead_time", lead_time, Kpi::Transit)?
+        .with_kpi("wip", wip, Kpi::Occupancy)?
+        .with_kpi("held", held, Kpi::AwaitingRelease)?
+        .with_kpi("state_shares", state_shares, Kpi::StateShares)?
+        .with_kpi("utilization", utilization, Kpi::InProgress)
 }
 
 /// The JSON Schema of a model of the standard catalog: the bytes of

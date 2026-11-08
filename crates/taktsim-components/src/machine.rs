@@ -16,7 +16,7 @@ use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, MachineStateNote, VariantId};
 use crate::params::{CycleTime, Mtbf, Mttr, PerVariant, Units, VariantRef, draws};
 use crate::port::{Inlet, Outlet};
-use crate::run::{BuildError, ClockEnd, ComponentType, Wiring};
+use crate::run::{BuildError, ClockEnd, ComponentType, Creation, Wiring};
 use crate::state::MachineState;
 
 /// One entry of a setup's `matrix`: the time of one change of variant.
@@ -350,6 +350,14 @@ impl ComponentParams for Machine {
 
 impl ComponentType<Flow> for Machine {
     const STATION: bool = true;
+    const STATES: &'static [&'static str] = &MachineState::NAMES;
+    const CREATION: Creation = Creation::Never;
+
+    /// Its capacity: at most 65,535 units, which fits.
+    fn places(&self) -> u32 {
+        self.capacity
+            .map_or(1, |c| u32::try_from(c.get()).unwrap_or(u32::MAX))
+    }
 
     fn draws_random(&self) -> bool {
         let Self {

@@ -12,7 +12,7 @@ use crate::flow::{Flow, FlowShared};
 use crate::message::{FlowMessage, ItemAttrs};
 use crate::params::Places;
 use crate::port::{Inlet, Outlet};
-use crate::run::{BuildError, ComponentType, Wiring};
+use crate::run::{BuildError, ComponentType, Creation, Wiring};
 
 /// Which part a Buffer gives when a place opens downstream. It chooses when an
 /// `Accept` arrives, not when it offers. The order is entry into this buffer,
@@ -142,6 +142,15 @@ impl ComponentParams for Buffer {
 }
 
 impl ComponentType<Flow> for Buffer {
+    /// A Buffer has no state; its fill says everything (ADR-0022 §5).
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::Never;
+
+    /// It does no work.
+    fn places(&self) -> u32 {
+        1
+    }
+
     fn draws_random(&self) -> bool {
         let Self {
             capacity: _,

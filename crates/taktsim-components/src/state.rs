@@ -32,6 +32,33 @@ pub enum MachineState {
 }
 
 impl MachineState {
+    /// Every state, in the order of its `state_shares` rows.
+    ///
+    /// ```
+    /// use taktsim_components::MachineState;
+    ///
+    /// assert_eq!(MachineState::ALL.len(), 6);
+    /// assert_eq!(MachineState::ALL[0], MachineState::Idle);
+    /// ```
+    pub const ALL: [Self; 6] = [
+        Self::Idle,
+        Self::Busy,
+        Self::Blocked,
+        Self::Starved,
+        Self::Down,
+        Self::Setup,
+    ];
+
+    /// The name of each state, in that order.
+    pub(crate) const NAMES: [&'static str; 6] = [
+        Self::Idle.as_str(),
+        Self::Busy.as_str(),
+        Self::Blocked.as_str(),
+        Self::Starved.as_str(),
+        Self::Down.as_str(),
+        Self::Setup.as_str(),
+    ];
+
     /// The state's code in the trace (ADR-0022 §9).
     ///
     /// ```
@@ -144,6 +171,18 @@ pub enum SourceState {
 }
 
 impl SourceState {
+    /// Every state, in the order of its `state_shares` rows.
+    ///
+    /// ```
+    /// use taktsim_components::SourceState;
+    ///
+    /// assert_eq!(SourceState::ALL, [SourceState::Waiting, SourceState::Blocked]);
+    /// ```
+    pub const ALL: [Self; 2] = [Self::Waiting, Self::Blocked];
+
+    /// The name of each state, in that order.
+    pub(crate) const NAMES: [&'static str; 2] = [Self::Waiting.as_str(), Self::Blocked.as_str()];
+
     /// The state's code in the trace (ADR-0022 §9).
     ///
     /// ```

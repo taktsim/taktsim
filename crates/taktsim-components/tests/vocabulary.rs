@@ -12,8 +12,8 @@ use regex::Regex;
 use schema_checker::Checker;
 use support::{document, files_with, load, registry, run};
 use taktsim_components::{
-    BuildError, ComponentType, Flow, FlowMessage, FlowShared, ItemAttrs, MachineState, Ports,
-    Registry, Wiring, standard,
+    BuildError, ComponentType, Creation, Flow, FlowMessage, FlowShared, ItemAttrs, MachineState,
+    Ports, Registry, Wiring, standard,
 };
 use taktsim_core::{Component, ComponentError, ComponentId, Context, Delivery, ItemId};
 use taktsim_model::{ComponentParams, Encode, Fields, Format, Json, Loader, model_schema};
@@ -124,6 +124,11 @@ impl ComponentParams for Chute {
     }
 }
 impl ComponentType<Flow> for Chute {
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::Never;
+    fn places(&self) -> u32 {
+        1
+    }
     fn build(
         &self,
         wiring: &Wiring<'_, FlowShared>,
@@ -153,6 +158,11 @@ impl ComponentParams for Station {
 }
 impl ComponentType<Flow> for Station {
     const STATION: bool = true;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::Never;
+    fn places(&self) -> u32 {
+        1
+    }
     fn build(
         &self,
         wiring: &Wiring<'_, FlowShared>,
@@ -182,6 +192,11 @@ impl ComponentParams for Calendar {
 }
 impl ComponentType<Flow> for Calendar {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::Never;
+    fn places(&self) -> u32 {
+        1
+    }
     fn build(
         &self,
         _: &Wiring<'_, FlowShared>,

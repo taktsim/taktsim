@@ -15,7 +15,7 @@ use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, SourceStateNote, VariantId};
 use crate::params::{Interarrival, MAX_NAME, Units, VARIANT_NAME_RULE, draws, is_variant_name};
 use crate::port::Outlet;
-use crate::run::{BuildError, ClockEnd, ComponentType, Ports, Wiring};
+use crate::run::{BuildError, ClockEnd, ComponentType, Creation, Ports, Wiring};
 use crate::state::SourceState;
 
 /// How far shares may be from 100 %, in percentage points: `Ratio` holds a
@@ -294,6 +294,14 @@ impl ComponentParams for Source {
 
 impl ComponentType<Flow> for Source {
     const PORTS: Ports = Ports::Outlet;
+    const STATES: &'static [&'static str] = &SourceState::NAMES;
+    /// A part is released when it leaves: ADR-0022 §7.
+    const CREATION: Creation = Creation::HeldUntilFirstMove;
+
+    /// It does no work.
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         let Self {
