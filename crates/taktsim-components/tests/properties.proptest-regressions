@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 5a40ff217794501533a9a46741e413eb328ab7ebbcdffce21c84cd172c1f9d78 # shrinks to shape = Routed { on_demand: false, interval: 1, layers: [[Machine { cycle: 1, capacity: 1, failing: false, variant_setup: false }]], kinds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], rules: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], rework: None, seed: 75875 }
+cc 4a2c9ee430d47bd6c76c7130f84825d03d84e0f82f8c5dda87bcab4fd729375b # shrinks to shape = Routed { on_demand: false, interval: 1, layers: [[Machine { cycle: 1, capacity: 1, failing: false, variant_setup: false }]], kinds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], rules: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], rework: None, seed: 18586 }

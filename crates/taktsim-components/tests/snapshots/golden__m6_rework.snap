@@ -1,0 +1,516 @@
+---
+source: crates/taktsim-components/tests/golden.rs
+expression: golden.snapshot()
+---
+case: m6_rework
+records: taktsim-core/3
+messages: taktsim-components/2
+model hash: 8036f807d53c44d7d667359b9a9bc9f041630dfadcc2fa124a0a3924f2fb8061
+system hash: 0dfd904670ee38bb62769f373a183998dcc84e401be999945c79b4b9d97ea512
+seed: 63
+components: source, other, weld, buf, qc, sink
+records: 12208 (7325 events) in 8 chunks
+stream sha256: 819899699690131f05725b4c9b1548a97eb5ed04669306a6defc2403464a40d4
+end: 1h (horizon)
+---
+0s note by source VariantName { id: VariantId(0), name: "default" }
+0s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by other VariantName { id: VariantId(0), name: "default" }
+0s note by other SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+0s event #0 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(0) })
+0s event #3 weld -> source Accept
+0s item 0 created by source
+0s event #4 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+0s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+0s event #5 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(0) })
+5.642574937s event #6 weld -> weld CycleDone { item: ItemId(0) }
+5.642574937s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+5.642574937s event #7 weld -> buf Offer
+5.642574937s event #8 buf -> weld Accept
+5.642574937s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+5.642574937s event #9 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+5.642574937s event #10 weld -> source Accept
+5.642574937s item 1 created by source
+5.642574937s event #12 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+5.642574937s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+5.642574937s event #11 buf -> qc Offer
+5.642574937s event #15 qc -> buf Accept
+5.642574937s event #16 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+5.642574937s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+5.642574937s event #13 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(5642574937) })
+8.642574937s event #17 qc -> qc CycleDone { item: ItemId(0) }
+8.642574937s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+8.642574937s event #18 qc -> sink Offer
+8.642574937s event #19 sink -> qc Accept
+8.642574937s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(0), edge: 0, chosen: 0, crossed: false, detail: 4602266619029322450, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+8.642574937s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+8.642574937s event #20 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+8.642574937s item 0 delivered by sink
+12s event #1 other -> other NextArrival
+12s item 2 created by other
+12s note by other SourceState(SourceStateNote { state: Blocked, held: 1 })
+12s event #21 other -> weld OfferOf(OfferedUnit { item: Some(ItemId(2)), variant: VariantId(0), priority: 0, due: None, since: SimTime(12000000000) })
+19.648319433s event #14 weld -> weld CycleDone { item: ItemId(1) }
+19.648319433s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+19.648319433s event #22 weld -> buf Offer
+19.648319433s event #23 buf -> weld Accept
+19.648319433s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+19.648319433s event #24 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+19.648319433s event #25 weld -> source Accept
+19.648319433s item 3 created by source
+19.648319433s event #27 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+19.648319433s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(0), item: Some(ItemId(3)), key: 5642574937, since: SimTime(5642574937) }, DispatchCandidate { from: ComponentId(1), item: Some(ItemId(2)), key: 12000000000, since: SimTime(12000000000) }] })
+19.648319433s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+19.648319433s event #26 buf -> qc Offer
+19.648319433s event #30 qc -> buf Accept
+19.648319433s event #31 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+19.648319433s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+19.648319433s event #28 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(19648319433) })
+22.648319433s event #32 qc -> qc CycleDone { item: ItemId(1) }
+22.648319433s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+22.648319433s event #33 qc -> sink Offer
+22.648319433s event #34 sink -> qc Accept
+22.648319433s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(1), edge: 0, chosen: 0, crossed: false, detail: 4603164399536241119, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+22.648319433s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+22.648319433s event #35 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+22.648319433s item 1 delivered by sink
+27.517482631s event #29 weld -> weld CycleDone { item: ItemId(3) }
+27.517482631s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+27.517482631s event #36 weld -> buf Offer
+27.517482631s event #37 buf -> weld Accept
+27.517482631s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+27.517482631s event #38 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+27.517482631s event #39 weld -> other Accept
+27.517482631s note by other SourceState(SourceStateNote { state: Waiting, held: 0 })
+27.517482631s event #41 other -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+27.517482631s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(1), item: Some(ItemId(2)), key: 12000000000, since: SimTime(12000000000) }, DispatchCandidate { from: ComponentId(0), item: None, key: 19648319433, since: SimTime(19648319433) }] })
+27.517482631s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+27.517482631s event #40 buf -> qc Offer
+27.517482631s event #44 qc -> buf Accept
+27.517482631s event #45 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+27.517482631s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+30.517482631s event #46 qc -> qc CycleDone { item: ItemId(3) }
+30.517482631s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+30.517482631s event #47 qc -> sink Offer
+30.517482631s event #48 sink -> qc Accept
+30.517482631s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(3), edge: 0, chosen: 0, crossed: false, detail: 4603613070276427671, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+30.517482631s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+30.517482631s event #49 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+30.517482631s item 3 delivered by sink
+32.145718286s event #43 weld -> weld CycleDone { item: ItemId(2) }
+32.145718286s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+32.145718286s event #50 weld -> buf Offer
+32.145718286s event #51 buf -> weld Accept
+32.145718286s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+32.145718286s event #52 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+32.145718286s event #53 weld -> source Accept
+32.145718286s item 4 created by source
+32.145718286s event #55 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+32.145718286s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+32.145718286s event #54 buf -> qc Offer
+32.145718286s event #58 qc -> buf Accept
+32.145718286s event #59 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+32.145718286s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+32.145718286s event #56 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(32145718286) })
+35.145718286s event #60 qc -> qc CycleDone { item: ItemId(2) }
+35.145718286s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+35.145718286s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(2), edge: 0, chosen: 1, crossed: false, detail: 4604542225635296247, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+35.145718286s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+35.145718286s event #61 qc -> weld Return(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+39.517482631s event #42 other -> other NextArrival
+39.517482631s item 5 created by other
+39.517482631s note by other SourceState(SourceStateNote { state: Blocked, held: 1 })
+39.517482631s event #62 other -> weld OfferOf(OfferedUnit { item: Some(ItemId(5)), variant: VariantId(0), priority: 0, due: None, since: SimTime(39517482631) })
+51.953066851s event #57 weld -> weld CycleDone { item: ItemId(4) }
+51.953066851s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+51.953066851s event #63 weld -> buf Offer
+51.953066851s event #64 buf -> weld Accept
+51.953066851s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+51.953066851s event #65 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+51.953066851s event #67 buf -> qc Offer
+51.953066851s event #68 qc -> buf Accept
+51.953066851s event #69 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+51.953066851s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+53.506700119s event #66 weld -> weld CycleDone { item: ItemId(2) }
+53.506700119s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+53.506700119s event #71 weld -> buf Offer
+53.506700119s event #72 buf -> weld Accept
+53.506700119s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+53.506700119s event #73 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+53.506700119s event #74 weld -> source Accept
+53.506700119s item 6 created by source
+53.506700119s event #76 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+53.506700119s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(0), item: Some(ItemId(6)), key: 32145718286, since: SimTime(32145718286) }, DispatchCandidate { from: ComponentId(1), item: Some(ItemId(5)), key: 39517482631, since: SimTime(39517482631) }] })
+53.506700119s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+53.506700119s event #75 buf -> qc Offer
+53.506700119s event #79 qc -> buf Accept
+53.506700119s event #80 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+53.506700119s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+53.506700119s event #77 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(53506700119) })
+54.953066851s event #70 qc -> qc CycleDone { item: ItemId(4) }
+54.953066851s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+54.953066851s event #82 qc -> sink Offer
+54.953066851s event #83 sink -> qc Accept
+54.953066851s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(4), edge: 0, chosen: 0, crossed: false, detail: 4569380535981235968, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+54.953066851s event #84 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+54.953066851s item 4 delivered by sink
+55.586411807s event #78 weld -> weld CycleDone { item: ItemId(6) }
+55.586411807s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+55.586411807s event #85 weld -> buf Offer
+55.586411807s event #86 buf -> weld Accept
+55.586411807s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+55.586411807s event #87 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+55.586411807s event #88 weld -> other Accept
+55.586411807s note by other SourceState(SourceStateNote { state: Waiting, held: 0 })
+55.586411807s event #90 other -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+55.586411807s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(1), item: Some(ItemId(5)), key: 39517482631, since: SimTime(39517482631) }, DispatchCandidate { from: ComponentId(0), item: None, key: 53506700119, since: SimTime(53506700119) }] })
+55.586411807s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+55.586411807s event #89 buf -> qc Offer
+55.586411807s event #93 qc -> buf Accept
+55.586411807s event #94 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+55.586411807s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+56.506700119s event #81 qc -> qc CycleDone { item: ItemId(2) }
+56.506700119s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+56.506700119s event #96 qc -> sink Offer
+56.506700119s event #97 sink -> qc Accept
+56.506700119s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(2), edge: 0, chosen: 0, crossed: false, detail: 4601688533755855370, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+56.506700119s event #98 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+56.506700119s item 2 delivered by sink
+57.935188416s event #92 weld -> weld CycleDone { item: ItemId(5) }
+57.935188416s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+57.935188416s event #99 weld -> buf Offer
+57.935188416s event #100 buf -> weld Accept
+57.935188416s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+57.935188416s event #101 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+57.935188416s event #102 weld -> source Accept
+57.935188416s item 7 created by source
+57.935188416s event #104 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+57.935188416s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+57.935188416s event #103 buf -> qc Offer
+57.935188416s event #107 qc -> buf Accept
+57.935188416s event #108 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+57.935188416s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+57.935188416s event #105 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(57935188416) })
+58.586411807s event #95 qc -> qc CycleDone { item: ItemId(6) }
+58.586411807s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+58.586411807s event #110 qc -> sink Offer
+58.586411807s event #111 sink -> qc Accept
+58.586411807s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(6), edge: 0, chosen: 0, crossed: false, detail: 4603505185197368011, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+58.586411807s event #112 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+58.586411807s item 6 delivered by sink
+60.935188416s event #109 qc -> qc CycleDone { item: ItemId(5) }
+60.935188416s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+60.935188416s event #113 qc -> sink Offer
+60.935188416s event #114 sink -> qc Accept
+60.935188416s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(5), edge: 0, chosen: 0, crossed: false, detail: 4603923654319165079, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+60.935188416s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+60.935188416s event #115 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+60.935188416s item 5 delivered by sink
+61.220022198s event #106 weld -> weld CycleDone { item: ItemId(7) }
+61.220022198s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+61.220022198s event #116 weld -> buf Offer
+61.220022198s event #117 buf -> weld Accept
+61.220022198s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+61.220022198s event #118 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+61.220022198s event #119 weld -> source Accept
+61.220022198s item 8 created by source
+61.220022198s event #121 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+61.220022198s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+61.220022198s event #120 buf -> qc Offer
+61.220022198s event #124 qc -> buf Accept
+61.220022198s event #125 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+61.220022198s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+61.220022198s event #122 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(61220022198) })
+61.396517319s event #123 weld -> weld CycleDone { item: ItemId(8) }
+61.396517319s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+61.396517319s event #127 weld -> buf Offer
+61.396517319s event #128 buf -> weld Accept
+61.396517319s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+61.396517319s event #129 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+61.396517319s event #130 weld -> source Accept
+61.396517319s item 9 created by source
+61.396517319s event #132 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+61.396517319s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+61.396517319s event #131 buf -> qc Offer
+61.396517319s event #135 qc -> buf Accept
+61.396517319s event #136 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+61.396517319s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+61.396517319s event #133 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(61396517319) })
+64.220022198s event #126 qc -> qc CycleDone { item: ItemId(7) }
+64.220022198s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+64.220022198s event #138 qc -> sink Offer
+64.220022198s event #139 sink -> qc Accept
+64.220022198s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(7), edge: 0, chosen: 0, crossed: false, detail: 4599561822792316998, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+64.220022198s event #140 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+64.220022198s item 7 delivered by sink
+64.396517319s event #137 qc -> qc CycleDone { item: ItemId(8) }
+64.396517319s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+64.396517319s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(8), edge: 0, chosen: 1, crossed: false, detail: 4605286739042946169, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+64.396517319s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+64.396517319s event #141 qc -> weld Return(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+67.586411807s event #91 other -> other NextArrival
+67.586411807s item 10 created by other
+67.586411807s note by other SourceState(SourceStateNote { state: Blocked, held: 1 })
+67.586411807s event #142 other -> weld OfferOf(OfferedUnit { item: Some(ItemId(10)), variant: VariantId(0), priority: 0, due: None, since: SimTime(67586411807) })
+79.570155543s event #134 weld -> weld CycleDone { item: ItemId(9) }
+79.570155543s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+79.570155543s event #143 weld -> buf Offer
+79.570155543s event #144 buf -> weld Accept
+79.570155543s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+79.570155543s event #145 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+79.570155543s event #147 buf -> qc Offer
+79.570155543s event #148 qc -> buf Accept
+79.570155543s event #149 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+79.570155543s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+79.801455012s event #146 weld -> weld CycleDone { item: ItemId(8) }
+79.801455012s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+79.801455012s event #151 weld -> buf Offer
+79.801455012s event #152 buf -> weld Accept
+79.801455012s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+79.801455012s event #153 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+79.801455012s event #154 weld -> source Accept
+79.801455012s item 11 created by source
+79.801455012s event #156 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+79.801455012s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(0), item: Some(ItemId(11)), key: 61396517319, since: SimTime(61396517319) }, DispatchCandidate { from: ComponentId(1), item: Some(ItemId(10)), key: 67586411807, since: SimTime(67586411807) }] })
+79.801455012s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+79.801455012s event #155 buf -> qc Offer
+79.801455012s event #159 qc -> buf Accept
+79.801455012s event #160 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+79.801455012s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+79.801455012s event #157 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(79801455012) })
+82.570155543s event #150 qc -> qc CycleDone { item: ItemId(9) }
+82.570155543s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+82.570155543s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(9), edge: 0, chosen: 1, crossed: false, detail: 4606769292096684013, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+82.570155543s event #162 qc -> weld Return(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+82.801455012s event #161 qc -> qc CycleDone { item: ItemId(8) }
+82.801455012s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+82.801455012s event #163 qc -> sink Offer
+82.801455012s event #164 sink -> qc Accept
+82.801455012s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(8), edge: 0, chosen: 0, crossed: false, detail: 4593974396710527204, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+82.801455012s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+82.801455012s event #165 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+82.801455012s item 8 delivered by sink
+90.505827766s event #158 weld -> weld CycleDone { item: ItemId(11) }
+90.505827766s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+90.505827766s event #166 weld -> buf Offer
+90.505827766s event #167 buf -> weld Accept
+90.505827766s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+90.505827766s event #168 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+90.505827766s event #170 buf -> qc Offer
+90.505827766s event #171 qc -> buf Accept
+90.505827766s event #172 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+90.505827766s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+93.505827766s event #173 qc -> qc CycleDone { item: ItemId(11) }
+93.505827766s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+93.505827766s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(11), edge: 0, chosen: 1, crossed: false, detail: 4605606812280069751, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+93.505827766s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+93.505827766s event #174 qc -> weld Return(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+94.848018553s event #169 weld -> weld CycleDone { item: ItemId(9) }
+94.848018553s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+94.848018553s event #175 weld -> buf Offer
+94.848018553s event #176 buf -> weld Accept
+94.848018553s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+94.848018553s event #177 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+94.848018553s event #179 buf -> qc Offer
+94.848018553s event #180 qc -> buf Accept
+94.848018553s event #181 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+94.848018553s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+96.861692577s event #178 weld -> weld CycleDone { item: ItemId(11) }
+96.861692577s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+96.861692577s event #183 weld -> buf Offer
+96.861692577s event #184 buf -> weld Accept
+96.861692577s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+96.861692577s event #185 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+96.861692577s event #186 weld -> other Accept
+96.861692577s note by other SourceState(SourceStateNote { state: Waiting, held: 0 })
+96.861692577s event #188 other -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+96.861692577s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(1), item: Some(ItemId(10)), key: 67586411807, since: SimTime(67586411807) }, DispatchCandidate { from: ComponentId(0), item: None, key: 79801455012, since: SimTime(79801455012) }] })
+96.861692577s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+96.861692577s event #187 buf -> qc Offer
+96.861692577s event #191 qc -> buf Accept
+96.861692577s event #192 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+96.861692577s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+97.009489538s event #190 weld -> weld CycleDone { item: ItemId(10) }
+97.009489538s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+97.009489538s event #194 weld -> buf Offer
+97.009489538s event #195 buf -> weld Accept
+97.009489538s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+97.009489538s event #196 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+97.009489538s event #197 weld -> source Accept
+97.009489538s item 12 created by source
+97.009489538s event #199 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+97.009489538s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+97.009489538s event #198 buf -> qc Offer
+97.009489538s event #200 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(97009489538) })
+97.848018553s event #182 qc -> qc CycleDone { item: ItemId(9) }
+97.848018553s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+97.848018553s event #202 qc -> sink Offer
+97.848018553s event #203 sink -> qc Accept
+97.848018553s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(9), edge: 0, chosen: 0, crossed: false, detail: 4599401702571349834, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+97.848018553s event #204 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+97.848018553s item 9 delivered by sink
+97.848018553s event #205 qc -> buf Accept
+97.848018553s event #206 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+97.848018553s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+98.332349816s event #201 weld -> weld CycleDone { item: ItemId(12) }
+98.332349816s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+98.332349816s event #208 weld -> buf Offer
+98.332349816s event #209 buf -> weld Accept
+98.332349816s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+98.332349816s event #210 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+98.332349816s event #211 weld -> source Accept
+98.332349816s item 13 created by source
+98.332349816s event #213 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+98.332349816s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+98.332349816s event #212 buf -> qc Offer
+98.332349816s event #214 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(98332349816) })
+98.37252265s event #215 weld -> weld CycleDone { item: ItemId(13) }
+98.37252265s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+98.37252265s event #216 weld -> buf Offer
+98.37252265s event #217 buf -> weld Accept
+98.37252265s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+98.37252265s event #218 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+98.37252265s event #219 weld -> source Accept
+98.37252265s item 14 created by source
+98.37252265s event #220 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+98.37252265s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+98.37252265s event #221 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(98372522650) })
+99.861692577s event #193 qc -> qc CycleDone { item: ItemId(11) }
+99.861692577s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+99.861692577s event #223 qc -> sink Offer
+99.861692577s event #224 sink -> qc Accept
+99.861692577s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(11), edge: 0, chosen: 0, crossed: false, detail: 4595445627934154972, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+99.861692577s event #225 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+99.861692577s item 11 delivered by sink
+99.861692577s event #226 qc -> buf Accept
+99.861692577s event #227 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+99.861692577s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+99.861692577s event #228 buf -> qc Offer
+100.848018553s event #207 qc -> qc CycleDone { item: ItemId(10) }
+100.848018553s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+100.848018553s event #230 qc -> sink Offer
+100.848018553s event #231 sink -> qc Accept
+100.848018553s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(10), edge: 0, chosen: 0, crossed: false, detail: 4594667112055703068, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+100.848018553s event #232 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+100.848018553s item 10 delivered by sink
+100.848018553s event #233 qc -> buf Accept
+100.848018553s event #234 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+100.848018553s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+101.564957736s event #222 weld -> weld CycleDone { item: ItemId(14) }
+101.564957736s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+101.564957736s event #236 weld -> buf Offer
+101.564957736s event #237 buf -> weld Accept
+101.564957736s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+101.564957736s event #238 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+101.564957736s event #239 weld -> source Accept
+101.564957736s item 15 created by source
+101.564957736s event #241 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+101.564957736s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+101.564957736s event #240 buf -> qc Offer
+101.564957736s event #242 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(101564957736) })
+102.861692577s event #229 qc -> qc CycleDone { item: ItemId(12) }
+102.861692577s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+102.861692577s event #244 qc -> sink Offer
+... 11708 records not shown ...
+3551.306622833s event #7273 weld -> source Accept
+3551.306622833s item 404 created by source
+3551.306622833s event #7275 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 404
+3551.306622833s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3551.306622833s event #7274 buf -> qc Offer
+3551.306622833s event #7278 qc -> buf Accept
+3551.306622833s event #7279 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 403
+3551.306622833s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+3551.306622833s event #7276 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(3551306622833) })
+3551.893187496s event #7266 qc -> qc CycleDone { item: ItemId(401) }
+3551.893187496s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3551.893187496s event #7281 qc -> sink Offer
+3551.893187496s event #7282 sink -> qc Accept
+3551.893187496s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(401), edge: 0, chosen: 0, crossed: false, detail: 4603484673984974723, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+3551.893187496s event #7283 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 401
+3551.893187496s item 401 delivered by sink
+3554.306622833s event #7280 qc -> qc CycleDone { item: ItemId(403) }
+3554.306622833s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3554.306622833s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(403), edge: 0, chosen: 1, crossed: false, detail: 4606533575525417357, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+3554.306622833s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3554.306622833s event #7284 qc -> weld Return(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 403
+3560.021572469s event #7251 other -> other NextArrival
+3560.021572469s item 405 created by other
+3560.021572469s note by other SourceState(SourceStateNote { state: Blocked, held: 1 })
+3560.021572469s event #7285 other -> weld OfferOf(OfferedUnit { item: Some(ItemId(405)), variant: VariantId(0), priority: 0, due: None, since: SimTime(3560021572469) })
+3571.637703587s event #7277 weld -> weld CycleDone { item: ItemId(404) }
+3571.637703587s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3571.637703587s event #7286 weld -> buf Offer
+3571.637703587s event #7287 buf -> weld Accept
+3571.637703587s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3571.637703587s event #7288 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 404
+3571.637703587s event #7290 buf -> qc Offer
+3571.637703587s event #7291 qc -> buf Accept
+3571.637703587s event #7292 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 404
+3571.637703587s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3574.637703587s event #7293 qc -> qc CycleDone { item: ItemId(404) }
+3574.637703587s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3574.637703587s event #7294 qc -> sink Offer
+3574.637703587s event #7295 sink -> qc Accept
+3574.637703587s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(404), edge: 0, chosen: 0, crossed: false, detail: 4595119548416262724, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+3574.637703587s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3574.637703587s event #7296 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 404
+3574.637703587s item 404 delivered by sink
+3585.546485184s event #7289 weld -> weld CycleDone { item: ItemId(403) }
+3585.546485184s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3585.546485184s event #7297 weld -> buf Offer
+3585.546485184s event #7298 buf -> weld Accept
+3585.546485184s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3585.546485184s event #7299 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 403
+3585.546485184s event #7300 weld -> source Accept
+3585.546485184s item 406 created by source
+3585.546485184s event #7302 source -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 406
+3585.546485184s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(0), item: Some(ItemId(406)), key: 3551306622833, since: SimTime(3551306622833) }, DispatchCandidate { from: ComponentId(1), item: Some(ItemId(405)), key: 3560021572469, since: SimTime(3560021572469) }] })
+3585.546485184s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3585.546485184s event #7301 buf -> qc Offer
+3585.546485184s event #7305 qc -> buf Accept
+3585.546485184s event #7306 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 403
+3585.546485184s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3585.546485184s event #7303 source -> weld OfferOf(OfferedUnit { item: None, variant: VariantId(0), priority: 0, due: None, since: SimTime(3585546485184) })
+3587.635658675s event #7304 weld -> weld CycleDone { item: ItemId(406) }
+3587.635658675s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3587.635658675s event #7308 weld -> buf Offer
+3587.635658675s event #7309 buf -> weld Accept
+3587.635658675s note by weld MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3587.635658675s event #7310 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 406
+3587.635658675s event #7311 weld -> other Accept
+3587.635658675s note by other SourceState(SourceStateNote { state: Waiting, held: 0 })
+3587.635658675s event #7313 other -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 405
+3587.635658675s decision by weld DispatchDecision(DispatchDecision { rule: Fifo, taker: ComponentId(2), total: 2, candidates: [DispatchCandidate { from: ComponentId(1), item: Some(ItemId(405)), key: 3560021572469, since: SimTime(3560021572469) }, DispatchCandidate { from: ComponentId(0), item: None, key: 3585546485184, since: SimTime(3585546485184) }] })
+3587.635658675s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3587.635658675s event #7312 buf -> qc Offer
+3587.635658675s event #7316 qc -> buf Accept
+3587.635658675s event #7317 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 406
+3587.635658675s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+3588.546485184s event #7307 qc -> qc CycleDone { item: ItemId(403) }
+3588.546485184s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3588.546485184s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(403), edge: 0, chosen: 1, crossed: false, detail: 4605185674275002963, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+3588.546485184s event #7319 qc -> weld Return(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 403
+3590.635658675s event #7318 qc -> qc CycleDone { item: ItemId(406) }
+3590.635658675s note by qc MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3590.635658675s event #7320 qc -> sink Offer
+3590.635658675s event #7321 sink -> qc Accept
+3590.635658675s decision by qc RouteDecision(RouteDecision { rule: Split, item: ItemId(406), edge: 0, chosen: 0, crossed: false, detail: 4592243460562700136, candidates: [RouteCandidate { id: 5, room: None, key: 4604480259023595110 }, RouteCandidate { id: 2, room: None, key: 4599075939470750515 }] })
+3590.635658675s note by qc MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3590.635658675s event #7322 qc -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 406
+3590.635658675s item 406 delivered by sink
+3599.635658675s event #7314 other -> other NextArrival
+3599.635658675s item 407 created by other
+3599.635658675s note by other SourceState(SourceStateNote { state: Blocked, held: 1 })
+3599.635658675s event #7323 other -> weld OfferOf(OfferedUnit { item: Some(ItemId(407)), variant: VariantId(0), priority: 0, due: None, since: SimTime(3599635658675) })
+3599.832209398s event #7315 weld -> weld CycleDone { item: ItemId(405) }
+3599.832209398s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3599.832209398s event #7324 weld -> buf Offer
+3599.832209398s event #7325 buf -> weld Accept
+3599.832209398s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3599.832209398s event #7326 weld -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 405
+3599.832209398s event #7328 buf -> qc Offer
+3599.832209398s event #7329 qc -> buf Accept
+3599.832209398s event #7330 buf -> qc Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 405
+3599.832209398s note by qc MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
