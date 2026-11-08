@@ -58,9 +58,14 @@ In the model, the setup is one line:
 </div>
 
 > **In taktsim.** The batch size and the mix of variants belong to the
-> Source component (spec §4), whose syntax is not specified yet, so this
-> page describes them in words. Variants and setups come with the v0.1
-> component library (M5).
+> Source: `batch: 20 parts` and `variants: { basic: 80%, premium: 20% }`. In
+> v0.1 this is not quite the page's example. A batch is created at the Source,
+> all of one variant, and its parts are welded one after the other; they do not
+> leave together. The variant of each batch is drawn from the mix, so the next
+> batch can be the same variant and then costs no setup. The first part costs
+> none either. A station that collects orders until it has a full batch and lets
+> them leave together is a separate component, `BatchProcess`, which comes in
+> v0.2.
 
 ## Capacity: the smallest batch that keeps up
 

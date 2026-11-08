@@ -41,9 +41,13 @@ exponential gaps between arrivals (CV 1), the most irregular common case.
 Parts that come from a station like cutting arrive more steadily.
 
 > **In taktsim.** This model needs a source that creates parts at random
-> intervals. The spec gives the Source component an arrival distribution
-> (§4) but does not show its syntax yet, so this page describes the model in
-> words. It arrives with the v0.1 component library (M5).
+> intervals: `interarrival: { dist: exponential, mean: 50s }` on a `Source`.
+> A source that finds no room holds its part and starts its next interval
+> only when the part has left, so nothing is lost and memory stays bounded,
+> but the arrivals then come less often than declared. A source right in
+> front of a station is held up whenever the station is busy, so to model
+> this queue, put a `Buffer` with far more places than the queue ever reaches
+> between the two.
 
 ## The numbers
 

@@ -108,6 +108,13 @@ mean − half-width to mean + half-width. [Page 13](13-trustworthy-results.md).
 A chart of a sample: each bar counts the values that fell into one range.
 [Page 4](04-variability.md).
 
+### Idle
+
+A station is idle when it could work but has no part, and only sources feed it,
+directly or through buffers: nobody asked, so its waiting says something about
+demand, not about the line. A first station is idle; a later one is
+[starved](#starved). [Page 5](05-utilization.md).
+
 ### Inspection
 
 A step that checks parts and sorts them into good, rework and scrap.
@@ -240,8 +247,10 @@ one less than the number of values, as STDEV does).
 
 ### Starved
 
-A station is starved when it could work but has no part, because the
-buffer or station before it is empty. [Page 6](06-starving-blocking.md).
+A station is starved when it could work but has no part, because a station
+before it has not delivered, so look upstream. A station that only sources feed,
+directly or through buffers, is [idle](#idle) instead.
+[Page 6](06-starving-blocking.md).
 
 ### Station
 
