@@ -16,9 +16,13 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use crate::decode::{Decode, Decoder, Fields, Schemas};
-use crate::error::{FieldPath, LoadErrorKind, Location, NormalizeProblem, Place};
+use crate::document::Document;
+use crate::error::{
+    FieldPath, LoadError, LoadErrorKind, LoadErrors, Location, NormalizeProblem, Place,
+};
 use crate::expr::{ComponentId, Signature, TypeEnv};
 use crate::json::{Encode, Json};
 use crate::syntax::{Node, Value};
@@ -109,7 +113,18 @@ impl ComponentRef {
         &self.place
     }
 
-    pub(crate) const fn path(&self) -> &FieldPath {
+    /// The field path of the reference, e.g. `flow[0].to[1]`, for an error a
+    /// catalog's check reports ([`Findings`]).
+    ///
+    /// ```
+    /// use taktsim_model::{ComponentRef, Format, decode_str};
+    ///
+    /// let r: ComponentRef = decode_str("buf1", Format::Yaml)?;
+    /// assert_eq!(r.path().to_string(), "(document)");
+    /// # Ok::<(), taktsim_model::LoadErrors>(())
+    /// ```
+    #[must_use]
+    pub const fn path(&self) -> &FieldPath {
         &self.path
     }
 }
@@ -269,7 +284,7 @@ pub trait ComponentParams: Encode + fmt::Debug + Send + Sync + Sized + 'static {
 /// A component type with its parameter type erased.
 trait Kind: Send + Sync {
     fn example(&self) -> &'static str;
-    fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Box<dyn Params>>;
+    fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Arc<dyn Params>>;
     fn schema(&self, schemas: &mut Schemas) -> Json;
 }
 
@@ -280,8 +295,8 @@ impl<P: ComponentParams> Kind for KindOf<P> {
         P::EXAMPLE
     }
 
-    fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Box<dyn Params>> {
-        P::decode(fields).map(|p| Box::new(p) as Box<dyn Params>)
+    fn decode(&self, fields: &mut Fields<'_, '_>) -> Option<Arc<dyn Params>> {
+        P::decode(fields).map(|p| Arc::new(p) as Arc<dyn Params>)
     }
 
     /// The entry: the keys `P::decode` reads, plus `id` and `type`.
@@ -427,6 +442,96 @@ pub struct Catalog {
     /// The observables as an expression environment, built as they are
     /// added, so the loader never meets an environment error.
     env: TypeEnv,
+    /// The check across the document, if the domain has one.
+    check: Option<DocumentCheck>,
+}
+
+/// A check over a whole document that a catalog's domain supplies
+/// ([`Catalog::with_check`]).
+pub type DocumentCheck = Box<dyn Fn(&Document, &mut Findings) + Send + Sync>;
+
+/// What a catalog's check reports: errors at a place and a field path, which
+/// the loader returns with its own (ADR-0022 §2).
+///
+/// ```
+/// use taktsim_model::{FieldPath, Findings, LoadErrorKind, Location, Place, Segment};
+///
+/// let mut findings = Findings::new();
+/// assert!(findings.is_empty());
+/// findings.error(
+///     &Place::new(None, Location::new(2, 3)),
+///     &FieldPath::from(vec![Segment::Key("flow".into())]),
+///     LoadErrorKind::SteadyStateUnsupported,
+/// );
+/// let errors = findings.finish().unwrap_err();
+/// assert_eq!(errors.first().path().to_string(), "flow");
+/// assert_eq!(errors.first().location(), Some(Location::new(2, 3)));
+/// ```
+#[derive(Debug, Default)]
+pub struct Findings {
+    errors: Vec<LoadError>,
+}
+
+impl Findings {
+    /// No errors yet.
+    ///
+    /// ```
+    /// assert!(taktsim_model::Findings::new().is_empty());
+    /// ```
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { errors: Vec::new() }
+    }
+
+    /// Records `kind` at `place` and `path`.
+    ///
+    /// ```
+    /// use taktsim_model::{FieldPath, Findings, LoadErrorKind, Location, Place};
+    ///
+    /// let mut findings = Findings::new();
+    /// let kind = LoadErrorKind::NotAllowed {
+    ///     found: "a loop".into(),
+    ///     allowed: "a directed acyclic graph".into(),
+    ///     example: "[source, cut, sink]".into(),
+    /// };
+    /// findings.error(&Place::new(None, Location::new(1, 1)), &FieldPath::default(), kind);
+    /// assert!(!findings.is_empty());
+    /// ```
+    pub fn error(&mut self, place: &Place, path: &FieldPath, kind: LoadErrorKind) {
+        self.errors.push(LoadError::new(
+            place.file().map(str::to_owned),
+            Some(place.location()),
+            path.clone(),
+            kind,
+        ));
+    }
+
+    /// Whether no error was recorded.
+    ///
+    /// ```
+    /// assert!(taktsim_model::Findings::default().is_empty());
+    /// ```
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    /// The errors, if any.
+    ///
+    /// # Errors
+    ///
+    /// Every recorded error, in the order recorded.
+    ///
+    /// ```
+    /// assert!(taktsim_model::Findings::new().finish().is_ok());
+    /// ```
+    pub fn finish(self) -> Result<(), LoadErrors> {
+        LoadErrors::from_vec(self.errors).map_or(Ok(()), Err)
+    }
+
+    pub(crate) fn into_errors(self) -> Vec<LoadError> {
+        self.errors
+    }
 }
 
 impl fmt::Debug for Catalog {
@@ -434,6 +539,7 @@ impl fmt::Debug for Catalog {
         f.debug_struct("Catalog")
             .field("types", &self.kinds.keys().collect::<Vec<_>>())
             .field("observables", &self.observables)
+            .field("check", &self.check.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -548,6 +654,70 @@ impl Catalog {
         Ok(self)
     }
 
+    /// Adds what the domain checks across a whole document, e.g. the shape
+    /// of the flow, so it fails at load time with a field path, and
+    /// `validate` sees it (ADR-0022 §2). The loader runs it after its own
+    /// checks, only when those found nothing, and before hashing. Setting a
+    /// check again replaces the earlier one.
+    ///
+    /// ```
+    /// use taktsim_model::{Catalog, ComponentParams, Encode, Fields, Findings, Format, Json, LoadErrorKind, Loader};
+    ///
+    /// #[derive(Debug)]
+    /// struct Station {}
+    /// impl Encode for Station {
+    ///     fn encode(&self) -> Json { Json::object([]) }
+    /// }
+    /// impl ComponentParams for Station {
+    ///     const TYPE: &'static str = "Station";
+    ///     const EXAMPLE: &'static str = "{id: a, type: Station}";
+    ///     fn decode(_: &mut Fields<'_, '_>) -> Option<Self> { Some(Self {}) }
+    /// }
+    ///
+    /// let catalog = Catalog::new().with::<Station>()?.with_check(Box::new(|document, findings| {
+    ///     // At most one edge in this domain.
+    ///     for edge in document.flow().iter().skip(1) {
+    ///         let kind = LoadErrorKind::NotAllowed {
+    ///             found: "a second edge".into(),
+    ///             allowed: "one edge".into(),
+    ///             example: "[a, b]".into(),
+    ///         };
+    ///         findings.error(edge.from()[0].place(), edge.from()[0].path(), kind);
+    ///     }
+    /// }));
+    /// let yaml = "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+    ///             components: [{id: a, type: Station}, {id: b, type: Station}, {id: c, type: Station}]\n\
+    ///             flow: [[a, b, c]]\n";
+    /// let errors = Loader::new(&catalog).load_str(yaml, Format::Yaml).unwrap_err();
+    /// assert_eq!(errors.first().path().to_string(), "flow[0][1]");
+    /// # Ok::<(), taktsim_model::CatalogError>(())
+    /// ```
+    #[must_use]
+    pub fn with_check(mut self, check: DocumentCheck) -> Self {
+        self.check = Some(check);
+        self
+    }
+
+    /// Runs the check of [`with_check`](Self::with_check), if there is one,
+    /// on `document`. Also for a document loaded with another catalog.
+    ///
+    /// ```
+    /// use taktsim_model::{Catalog, Findings};
+    ///
+    /// let catalog = Catalog::new();
+    /// fn check(catalog: &Catalog, document: &taktsim_model::Document) -> bool {
+    ///     let mut findings = Findings::new();
+    ///     catalog.check(document, &mut findings);
+    ///     findings.is_empty()
+    /// }
+    /// # let _ = catalog;
+    /// ```
+    pub fn check(&self, document: &Document, findings: &mut Findings) {
+        if let Some(check) = &self.check {
+            check(document, findings);
+        }
+    }
+
     /// The registered component type names, in sorted order.
     ///
     /// ```
@@ -629,11 +799,11 @@ impl Catalog {
 /// assert_eq!(b.params::<Buffer>().map(|p| p.capacity.get()), Some(20));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Component {
     id: String,
     type_name: &'static str,
-    params: Box<dyn Params>,
+    params: Arc<dyn Params>,
     place: Place,
     path: FieldPath,
     id_place: Place,
@@ -690,7 +860,16 @@ impl Component {
         &self.place
     }
 
-    pub(crate) const fn path(&self) -> &FieldPath {
+    /// The field path of the entry, e.g. `components[2]`, for an error a
+    /// catalog's check reports ([`Findings`]).
+    ///
+    /// ```
+    /// fn path(c: &taktsim_model::Component) -> String {
+    ///     c.path().to_string()
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn path(&self) -> &FieldPath {
         &self.path
     }
 

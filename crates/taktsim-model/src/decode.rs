@@ -438,8 +438,18 @@ impl Decoder {
         })
     }
 
-    /// Runs `read` with `segment` added to the path.
-    pub(crate) fn within<R>(&mut self, segment: Segment, read: impl FnOnce(&mut Self) -> R) -> R {
+    /// Runs `read` with `segment` added to the path, for a value a custom
+    /// [`Decode`] reads by hand, such as the entries of a mapping with free
+    /// keys.
+    ///
+    /// ```
+    /// use taktsim_model::{Decoder, Node, Segment};
+    ///
+    /// fn path_inside(cx: &mut Decoder) -> String {
+    ///     cx.within(Segment::Key("basic".into()), |cx| cx.path().to_string())
+    /// }
+    /// ```
+    pub fn within<R>(&mut self, segment: Segment, read: impl FnOnce(&mut Self) -> R) -> R {
         self.path.push(segment);
         let result = read(self);
         self.path.pop();
@@ -552,16 +562,36 @@ impl<'n> Fields<'n, '_> {
     }
 
     /// Where the value of `key` was read from, if it is present; `None`
-    /// when describing.
-    pub(crate) fn entry(&self, key: &str) -> Option<&'n Entry> {
+    /// when describing. For a rule between two keys, which needs a place to
+    /// report it.
+    ///
+    /// ```
+    /// use taktsim_model::Fields;
+    ///
+    /// fn has_mtbf(fields: &Fields<'_, '_>) -> bool {
+    ///     fields.entry("mtbf").is_some()
+    /// }
+    /// ```
+    #[must_use]
+    pub fn entry(&self, key: &str) -> Option<&'n Entry> {
         match &self.mode {
             Mode::Read { entries, .. } => entries.iter().find(|e| e.key() == key),
             Mode::Describe { .. } => None,
         }
     }
 
-    /// The mapping itself; `None` when describing.
-    pub(crate) const fn node(&self) -> Option<&'n Node> {
+    /// The mapping itself; `None` when describing. For a rule about the
+    /// whole mapping, which needs a place to report it.
+    ///
+    /// ```
+    /// use taktsim_model::Fields;
+    ///
+    /// fn line(fields: &Fields<'_, '_>) -> Option<usize> {
+    ///     fields.node().map(|n| n.start().line())
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn node(&self) -> Option<&'n Node> {
         match &self.mode {
             Mode::Read { node, .. } => Some(node),
             Mode::Describe { .. } => None,

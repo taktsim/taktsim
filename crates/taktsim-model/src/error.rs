@@ -214,7 +214,17 @@ impl FieldPath {
         self.0.pop();
     }
 
-    pub(crate) fn child(&self, segment: Segment) -> Self {
+    /// This path with `segment` added, e.g. a key inside a component entry,
+    /// for an error a catalog's check reports.
+    ///
+    /// ```
+    /// use taktsim_model::{FieldPath, Segment};
+    ///
+    /// let path = FieldPath::from(vec![Segment::Key("flow".into())]).child(Segment::Index(2));
+    /// assert_eq!(path.to_string(), "flow[2]");
+    /// ```
+    #[must_use]
+    pub fn child(&self, segment: Segment) -> Self {
         let mut path = self.clone();
         path.push(segment);
         path

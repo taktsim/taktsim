@@ -81,7 +81,7 @@ pub const FORMAT_VERSION: &str = "1.0";
 /// assert_eq!(doc.observe()[0].text(), "throughput(sink)");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Document {
     pub(crate) model: ModelInfo,
     pub(crate) experiment: Experiment,
@@ -434,7 +434,7 @@ impl Decode for ExperimentKind {
 ///     doc.experiment().horizon().to_string()
 /// }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Experiment {
     kind: ExperimentKind,
     horizon: SimDuration,
@@ -461,6 +461,10 @@ impl Encode for Experiment {
 }
 
 impl Experiment {
+    pub(crate) fn set_horizon(&mut self, horizon: SimDuration) {
+        self.horizon = horizon;
+    }
+
     /// The experiment type.
     ///
     /// ```
@@ -509,7 +513,7 @@ impl Experiment {
 ///     format!("{}: {}", p.observable().text(), p.target())
 /// }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Precision {
     observable: Observable,
     target: Ratio,
