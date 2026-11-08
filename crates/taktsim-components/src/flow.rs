@@ -185,8 +185,11 @@ pub struct StationFacts {
     pub takes_returns: bool,
 }
 
-/// What every builder of a flow model reads: the sorted variant names, and which
-/// stations are `idle` rather than `starved` when empty.
+/// What every builder of a flow model reads: the sorted variant names, which
+/// stations are `idle` rather than `starved` when empty, and, all built from what the
+/// components state, how parts leave each component that is not on a plain edge, the
+/// rule of each station that has one, who hears from each target and the bound on each
+/// return lane.
 ///
 /// ```
 /// use taktsim_components::{Domain, Flow, FlowShared};

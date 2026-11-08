@@ -617,7 +617,7 @@ fn component_line(
             if !word.is_empty() {
                 control.push(format!("{name}: {word}"));
             }
-            let times = if ties {
+            let durations = if ties {
                 // Multiples of a few seconds, so stations finish together.
                 format!(
                     "cycle_time: {}s, cycle_time_by_variant: {{red: {}s}}",
@@ -632,7 +632,7 @@ fn component_line(
                 )
             };
             format!(
-                "  - {{id: {name}, type: Machine, {times}, capacity: {capacity} parts{failures}{setup}}}\n"
+                "  - {{id: {name}, type: Machine, {durations}, capacity: {capacity} parts{failures}{setup}}}\n"
             )
         }
         Node::Buffer {

@@ -61,6 +61,12 @@ Giving two designs the same seeds, so they meet the same slow parts and
 failures and their difference is not just chance.
 [Page 13](13-trustworthy-results.md).
 
+### Condition
+
+An expression on an edge, such as `variant == 'premium'`, over a part's `variant` and
+`priority`. A part takes the first edge whose condition holds, in the order written.
+[Page 9](09-longer-lines.md).
+
 ### Confidence interval
 
 A range around a mean estimated from replications, written as
@@ -69,12 +75,6 @@ mean ± half-width. It says how precisely the runs pin down the long-run
 many such experiments, about 95 in 100 give a range that contains the true
 mean. [Page 3](03-littles-law.md#reading-simulated-numbers),
 [page 13](13-trustworthy-results.md).
-
-### Condition
-
-An expression on an edge, such as `variant == 'premium'`, over a part's `variant` and
-`priority`. A part takes the first edge whose condition holds, in the order written.
-[Page 9](09-longer-lines.md).
 
 ### CONWIP
 

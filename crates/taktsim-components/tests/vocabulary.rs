@@ -13,10 +13,12 @@ use schema_checker::Checker;
 use support::{document, load, registry, run};
 use taktsim_components::{
     BuildError, ComponentType, Flow, FlowMessage, FlowShared, ItemAttrs, MachineState, Ports,
-    Registry, Wiring, standard,
+    Registry, SetupMeans, StationFacts, StatusFact, Wiring, standard,
 };
 use taktsim_core::{Component, ComponentError, ComponentId, Context, Delivery, ItemId};
-use taktsim_model::{ComponentParams, Encode, Fields, Format, Json, Loader, model_schema};
+use taktsim_model::{
+    ComponentParams, Encode, Fields, Format, Json, Loader, RoutingWords, model_schema,
+};
 
 /// A hand-written behaviour on the public messages: takes one part at a time and
 /// passes it on at once.
@@ -397,4 +399,125 @@ fn the_standard_catalog_loads_the_stand_ins_tests_shape() {
     assert!(checker.valid(&schema, &tree));
     load(&yaml);
     assert!(run(&yaml, 1).report.items.delivered.get() > 50);
+}
+
+/// A domain with no routing words: its catalog offers none, and its models cannot name
+/// a rule it would ignore (ADR-0023 §2).
+struct Bare;
+
+impl taktsim_components::Domain for Bare {
+    type Message = FlowMessage;
+    type Shared = ();
+    type Facts = ();
+    fn check(
+        _: &taktsim_model::Document,
+        _: &taktsim_components::Roles,
+        _: &mut taktsim_model::Findings,
+    ) {
+    }
+    fn prepare(
+        _: &taktsim_model::Document,
+        _: &taktsim_components::Roles,
+    ) -> Result<(), BuildError> {
+        Ok(())
+    }
+}
+
+impl ComponentType<Bare> for taktsim_components::Sink {
+    fn build(&self, _: &Wiring<'_, ()>) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
+        Ok(Box::new(PassOn::default()))
+    }
+}
+
+#[test]
+fn a_domain_offers_the_routing_words_it_honours_and_no_others() {
+    assert_eq!(standard().unwrap().catalog().routing(), RoutingWords::ALL);
+    let bare = Registry::<Bare>::new()
+        .with::<taktsim_components::Sink>()
+        .unwrap();
+    assert_eq!(bare.catalog().routing(), RoutingWords::NONE);
+    let flow = |edge: &str| {
+        document(
+            "1h",
+            "  - {id: a, type: Sink}\n  - {id: b, type: Sink}\n  - {id: c, type: Sink}",
+            edge,
+        )
+    };
+    let loader = Loader::new(bare.catalog());
+    assert!(
+        loader
+            .load_str(&flow("  - [a, b]\n  - [b, c]"), Format::Yaml)
+            .is_ok()
+    );
+    for (edge, path) in [
+        (
+            "  - {from: a, to: b, when: \"true\"}\n  - {from: a, to: c}",
+            "flow[0].when",
+        ),
+        (
+            "  - {from: a, to: [b, c], choose: preferred}",
+            "flow[0].choose",
+        ),
+    ] {
+        let errors = loader.load_str(&flow(edge), Format::Yaml).unwrap_err();
+        assert_eq!(errors.first().path().to_string(), path, "{errors}");
+    }
+    let schema = model_schema(bare.catalog());
+    assert_eq!(schema["properties"]["control"], Json::Null);
+    assert!(
+        !schema["$defs"]["FlowEntry"]
+            .to_string()
+            .contains("\"when\"")
+    );
+}
+
+/// What each standard type states for a rule (ADR-0023 §13).
+#[test]
+fn the_standard_types_state_their_facts() {
+    let registry = registry();
+    let model = load(&document(
+        "1h",
+        "  - {id: source, type: Source, interarrival: 1min, variants: {red: 50%, blue: 50%}}\n  \
+         - {id: m, type: Machine, cycle_time: 45s, cycle_time_by_variant: {red: {dist: uniform, min: 10s, max: 20s}}, \
+         capacity: 3 parts, setup: {per_variant: 4min, matrix: [{from: red, to: blue, time: 0s}]}}\n  \
+         - {id: plain, type: Machine, cycle_time: 45s}\n  \
+         - {id: buf, type: Buffer, capacity: 7 parts}\n  - {id: sink, type: Sink}",
+        "  - [source, m, plain, buf, sink]",
+    ));
+    let facts =
+        |i: usize| -> StationFacts { registry.roles().facts(&model.document().components()[i]) };
+    let source = facts(0);
+    assert!(source.routes && !source.work && !source.takes_rule && !source.takes_returns);
+    assert_eq!(source.status, StatusFact::None);
+    assert_eq!(source.places, None);
+
+    let machine = facts(1);
+    assert!(machine.routes && machine.work && machine.takes_rule && machine.takes_returns);
+    assert_eq!(machine.status, StatusFact::Reports);
+    assert_eq!(machine.places, Some(3));
+    let times = machine.mean_time.unwrap();
+    assert_eq!(times.of("blue").to_string(), "45s");
+    assert_eq!(times.of("red").to_string(), "15s");
+    let setup = machine.setup.unwrap();
+    assert_eq!(
+        setup.of("red", "blue").map(|d| d.to_string()).as_deref(),
+        Some("0s")
+    );
+    assert_eq!(
+        setup.of("blue", "red").map(|d| d.to_string()).as_deref(),
+        Some("4min")
+    );
+
+    // No `setup` is a stated "no setups", not an unstated fact.
+    assert_eq!(facts(2).setup, Some(SetupMeans::default()));
+
+    let buffer = facts(3);
+    assert!(buffer.routes && !buffer.work && !buffer.takes_rule && !buffer.takes_returns);
+    assert_eq!(buffer.status, StatusFact::Reports);
+    assert_eq!(buffer.places, Some(7));
+    assert_eq!(buffer.mean_time, None);
+
+    let sink = facts(4);
+    assert_eq!(sink.status, StatusFact::AlwaysRoom);
+    assert!(!sink.routes && !sink.work);
 }
