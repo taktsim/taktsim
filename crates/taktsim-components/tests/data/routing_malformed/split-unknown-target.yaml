@@ -1,0 +1,9 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: a, type: Sink}
+flow:
+  - {from: source, split: {a: 50%, nobody: 50%}}
+# expect: flow[0].split.nobody @ 8:36 UnknownComponent

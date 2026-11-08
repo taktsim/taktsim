@@ -1,0 +1,10 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min, variants: {red: 100%}}
+  - {id: m, type: Machine, cycle_time: 1min, cycle_time_by_variant: {blue: 2min}}
+  - {id: a, type: Sink}
+flow:
+  - [source, m, a]
+# expect: components[1].cycle_time_by_variant.blue @ 6:70 NotAllowed

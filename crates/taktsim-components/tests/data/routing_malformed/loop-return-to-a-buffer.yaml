@@ -1,0 +1,13 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: b, type: Buffer, capacity: 2 parts}
+  - {id: m, type: Machine, cycle_time: 1min}
+  - {id: q, type: Machine, cycle_time: 1min}
+  - {id: a, type: Sink}
+flow:
+  - [source, b, m, q]
+  - {from: q, split: {b: 5%, a: 95%}}
+# expect: flow[1].split.b @ 12:23 NotAllowed

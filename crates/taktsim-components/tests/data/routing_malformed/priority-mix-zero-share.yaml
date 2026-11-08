@@ -1,0 +1,9 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min, priority_mix: [{priority: 1, share: 0%}, {priority: 0, share: 100%}]}
+  - {id: a, type: Sink}
+flow:
+  - [source, a]
+# expect: components[0].priority_mix[0] @ 5:67 NotAllowed

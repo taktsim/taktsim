@@ -1,0 +1,10 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min}
+  - {id: a, type: Sink}
+  - {id: b, type: Sink}
+flow:
+  - {from: source, split: {a: 50%, b: 50%}, choose: preferred}
+# expect: flow[0].choose @ 9:53 NotAllowed
