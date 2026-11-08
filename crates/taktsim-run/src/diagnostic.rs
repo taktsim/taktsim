@@ -82,7 +82,7 @@ impl Decode for DiagnosticKind {
 /// One line of what goes to stderr: an error, a warning or a progress report.
 ///
 /// `type_name` is a stable word in a namespace: `args.*`, `model.*`, `run.*`,
-/// `store.*`, `internal.*`. An error of exit code 1 says what was found, what is
+/// `store.*`, `io.*`, `internal.*`. An error of exit code 1 says what was found, what is
 /// allowed and, where the loader has one, one valid example; an error of exit
 /// code 2 says when and what happened last instead (ADR-0024 §9).
 ///

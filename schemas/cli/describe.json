@@ -31,7 +31,7 @@
         {
           "code": 7,
           "error_types": [
-            "store.write"
+            "io.stdout"
           ]
         }
       ],
@@ -86,7 +86,7 @@
         {
           "code": 7,
           "error_types": [
-            "store.write"
+            "io.stdout"
           ]
         }
       ],
@@ -142,8 +142,8 @@
         {
           "code": 7,
           "error_types": [
-            "model.io",
-            "store.write"
+            "io.stdout",
+            "model.io"
           ]
         }
       ],
@@ -387,6 +387,7 @@
         {
           "code": 7,
           "error_types": [
+            "io.stdout",
             "model.io",
             "store.format",
             "store.read",
@@ -957,7 +958,7 @@
     },
     {
       "code": 7,
-      "meaning": "I/O failure: a file or the run store cannot be read or written"
+      "meaning": "I/O failure: a file or the run store cannot be read or written, or stdout cannot be written"
     },
     {
       "code": 101,

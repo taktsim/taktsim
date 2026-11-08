@@ -89,7 +89,7 @@ const EXIT_CODES: [(u8, &str); 9] = [
     (6, "a person's confirmation is required"),
     (
         7,
-        "I/O failure: a file or the run store cannot be read or written",
+        "I/O failure: a file or the run store cannot be read or written, or stdout cannot be written",
     ),
     (101, "internal bug: the single invariant-violation path"),
 ];
@@ -138,7 +138,7 @@ struct Facts {
 
 /// The codes every command can give.
 const COMMON_ARGS: &[&str] = &["args.*"];
-const WRITE_ERROR: &[&str] = &["store.write"];
+const WRITE_ERROR: &[&str] = &["io.stdout"];
 
 /// The facts of a command. Exhaustive, so adding a command does not compile until
 /// it has them.
@@ -180,7 +180,7 @@ fn facts(command: &Command) -> Facts {
             exits: &[
                 (0, &[]),
                 (1, &["args.*", "model.*"]),
-                (7, &["model.io", "store.write"]),
+                (7, &["io.stdout", "model.io"]),
             ],
             example: "taktsim validate line.yaml --format json",
         },
@@ -224,6 +224,7 @@ fn facts(command: &Command) -> Facts {
                 (
                     7,
                     &[
+                        "io.stdout",
                         "model.io",
                         "store.format",
                         "store.read",
