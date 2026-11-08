@@ -107,6 +107,7 @@ fn every_error_says_what_was_found_and_what_is_allowed() {
                     | LoadErrorKind::CaseClash { .. }
                     | LoadErrorKind::UnknownComponent {
                         suggestion: None,
+                        declared: None,
                         ..
                     }
                     | LoadErrorKind::NestedInclude

@@ -497,6 +497,7 @@ fn document_kinds() -> Vec<LoadErrorKind> {
         LoadErrorKind::UnknownComponent {
             id: "snk".into(),
             suggestion: Some("sink".into()),
+            declared: Some("source".into()),
         },
         LoadErrorKind::TooFew {
             what: "a chain",
@@ -745,6 +746,28 @@ mod catalog_checks {
             errors.first().kind(),
             LoadErrorKind::UnknownComponent { .. }
         ));
+    }
+
+    /// Every kind gives, "where a valid alternative exists, `example()`" (ADR-0020):
+    /// for a reference, any declared id is one, close to what was written or not. A
+    /// model with no components gets that error instead, and no reference is checked.
+    #[test]
+    fn an_unknown_reference_has_an_example_wherever_a_component_exists() {
+        let example = |text: &str| {
+            let catalog = stand_ins();
+            let errors = Loader::new(&catalog)
+                .load_str(text, Format::Yaml)
+                .unwrap_err();
+            let reference = errors
+                .iter()
+                .find(|e| matches!(e.kind(), LoadErrorKind::UnknownComponent { .. }))
+                .unwrap_or_else(|| panic!("{errors}"));
+            reference.kind().example()
+        };
+        let closest = LINE.replace("[[source, sink]]", "[[source, sinkk]]");
+        assert_eq!(example(&closest).as_deref(), Some("sink"));
+        let none_close = LINE.replace("[[source, sink]]", "[[source, nowhere]]");
+        assert_eq!(example(&none_close).as_deref(), Some("source"));
     }
 
     #[test]

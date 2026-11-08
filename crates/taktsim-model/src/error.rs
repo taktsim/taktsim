@@ -735,6 +735,9 @@ pub enum LoadErrorKind {
         id: String,
         /// The closest existing id, if one is close.
         suggestion: Option<String>,
+        /// The first id declared in the model, for the example when none is
+        /// close; `None` if the model declares no component.
+        declared: Option<String>,
     },
     /// A list with too few entries.
     #[error("{what} needs at least {min} entries, found {found}")]
@@ -1021,7 +1024,11 @@ impl LoadErrorKind {
             } => {
                 return suggestion.clone().or_else(|| allowed.first().cloned());
             }
-            Self::UnknownComponent { suggestion, .. } => return suggestion.clone(),
+            Self::UnknownComponent {
+                suggestion,
+                declared,
+                ..
+            } => return suggestion.clone().or_else(|| declared.clone()),
             Self::Unit(error) => return unit_example(error),
             Self::Distribution(_) => "{dist: lognormal, mean: 42s, sigma: 0.08}",
             Self::Expression { .. } | Self::NotAnObservable { .. } => "throughput(sink)",
@@ -1353,6 +1360,23 @@ mod tests {
         assert_eq!(edit_distance("sed", "seed"), 1);
         assert_eq!(edit_distance("kitten", "sitting"), 3);
         assert_eq!(edit_distance("abc", ""), 3);
+    }
+
+    #[test]
+    fn an_unknown_component_gets_the_closest_id_then_a_declared_one() {
+        let kind =
+            |suggestion: Option<&str>, declared: Option<&str>| LoadErrorKind::UnknownComponent {
+                id: "nowhere".to_owned(),
+                suggestion: suggestion.map(str::to_owned),
+                declared: declared.map(str::to_owned),
+            };
+        let example = |k: LoadErrorKind| k.example();
+        assert_eq!(
+            example(kind(Some("sink"), Some("a"))).as_deref(),
+            Some("sink")
+        );
+        assert_eq!(example(kind(None, Some("a"))).as_deref(), Some("a"));
+        assert_eq!(example(kind(None, None)), None);
     }
 
     #[test]

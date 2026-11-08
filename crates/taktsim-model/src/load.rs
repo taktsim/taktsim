@@ -751,6 +751,7 @@ impl Run<'_> {
             let kind = LoadErrorKind::UnknownComponent {
                 id: r.id().to_owned(),
                 suggestion: suggest(r.id(), known.iter().copied()),
+                declared: known.first().map(|id| (*id).to_owned()),
             };
             self.error(r.place(), r.path().clone(), kind);
         }
