@@ -353,10 +353,7 @@ fn a_zero_horizon_is_invalid_with_its_path() {
     };
     let failure = run_text(&drawing_model(", seed: 1"), &request, &dir.store()).unwrap_err();
     assert_eq!(failure.class, FailureClass::Invalid);
-    assert_eq!(
-        failure.diagnostics[0].path.as_deref(),
-        Some("experiment.horizon")
-    );
+    assert_eq!(failure.diagnostics[0].path.as_deref(), Some("--horizon"));
     assert_eq!(failure.diagnostics[0].example.as_deref(), Some("8h"));
 }
 
@@ -370,6 +367,24 @@ fn discover_finds_the_nearest_store_upward() {
     assert_eq!(
         Store::discover(&below).unwrap().root(),
         dir.path().join("a").join(".taktsim")
+    );
+}
+
+/// A file that states a zero horizon is wrong itself: that stays at the file's path, even
+/// with a flag that would have replaced it.
+#[test]
+fn a_zero_horizon_in_the_file_is_at_the_files_path() {
+    let dir = TempDir::new();
+    let text = drawing_model(", seed: 1").replace("1h", "0s");
+    let request = RunRequest {
+        horizon: Some("1h".parse().unwrap()),
+        ..RunRequest::new()
+    };
+    let failure = run_text(&text, &request, &dir.store()).unwrap_err();
+    assert_eq!(failure.class, FailureClass::Invalid);
+    assert_eq!(
+        failure.diagnostics[0].path.as_deref(),
+        Some("experiment.horizon")
     );
 }
 

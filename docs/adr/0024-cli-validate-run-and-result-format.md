@@ -494,7 +494,9 @@ An error line on stderr, with `--format json`, is one JSON object per line:
 - `type` is a stable word in a namespace: `args.*`, `model.*`, `run.*`, `store.*`,
   `internal.*`. Model errors take it from a new `LoadErrorKind::name()`, an exhaustive
   match.
-- `path` is a model path, or the flag or argument (`--horizon`, `<model>`). Parser
+- `path` is a model path, or the flag or argument (`--horizon`, `<model>`). A value that
+  came from a flag is reported at the flag, as is a value with a leading hyphen
+  (`--seed -1`), since the file it would otherwise point at is not wrong. Parser
   errors go through `Cli::try_parse_from` and clap's error context into the same type,
   and exit 1, not clap's 2. The format is found by scanning the raw arguments, since a
   failed parse has no value.
