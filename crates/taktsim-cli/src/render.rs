@@ -88,6 +88,12 @@ fn accuracy_text(accuracy: &[Accuracy]) -> String {
                 interval.half_width, interval.level, interval.replications
             ),
             AccuracyKind::None { reason, .. } => format!("no error bound: {reason}"),
+            AccuracyKind::Censored { units_inside, .. } => {
+                format!("{units_inside} units still inside at the end")
+            }
+            AccuracyKind::PartlyUndefined { undefined, of, .. } => {
+                format!("undefined in {undefined} of {of} runs")
+            }
             AccuracyKind::Unknown { kind } => format!("no statement read from `{kind}`"),
         })
         .collect();
@@ -248,6 +254,7 @@ mod tests {
                 std_dev: 0.25,
                 replications: 3,
                 level: 0.95,
+                stopping: None,
             }),
             target: None,
             reached: None,
@@ -269,7 +276,7 @@ mod tests {
                 over: Over::At {
                     at: "1h".parse().unwrap(),
                 },
-                observable: None,
+                observables: vec![],
                 values: vec![
                     taktsim_run::MetricValue {
                         value: Scalar::Number(0.5),

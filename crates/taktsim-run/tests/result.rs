@@ -46,6 +46,9 @@ fn full_document() -> ResultDocument {
     let ci =
         ConfidenceInterval::from_values(&[98.0, 100.5, 102.0], ConfidenceLevel::DEFAULT).unwrap();
     let mut sampling = Accuracy::from(&ci);
+    if let AccuracyKind::Sampling(interval) = &mut sampling.kind {
+        interval.stopping = Some("sequential".to_owned());
+    }
     sampling.target = Some(AccuracyTarget {
         relative: Some(0.02),
     });
@@ -57,7 +60,10 @@ fn full_document() -> ResultDocument {
             from: "1h".parse().unwrap(),
             to: "8h".parse().unwrap(),
         },
-        observable: Some("state_shares(cut)".to_owned()),
+        observables: vec![
+            "state_shares(cut)".to_owned(),
+            "state_shares(cut, weld)".to_owned(),
+        ],
         values: vec![
             MetricValue {
                 value: Scalar::Number(0.75),
@@ -68,7 +74,20 @@ fn full_document() -> ResultDocument {
                     ]
                     .into(),
                 ),
-                accuracy: vec![sampling, Accuracy::none("model_error", "unknown")],
+                accuracy: vec![
+                    sampling,
+                    Accuracy::none("model_error", "unknown"),
+                    Accuracy::censored(3.5),
+                    Accuracy {
+                        kind: AccuracyKind::PartlyUndefined {
+                            undefined: 1,
+                            of: 3,
+                            detail: "one run delivered nothing".to_owned(),
+                        },
+                        target: None,
+                        reached: None,
+                    },
+                ],
             },
             MetricValue {
                 value: Scalar::Flag(true),
@@ -103,7 +122,10 @@ fn labels_and_observable_round_trip() {
     let document = full_document();
     let read: ResultDocument = decode_str(&document.to_text(), Format::Json).unwrap();
     let metric = read.metrics.last().unwrap();
-    assert_eq!(metric.observable.as_deref(), Some("state_shares(cut)"));
+    assert_eq!(
+        metric.observables,
+        ["state_shares(cut)", "state_shares(cut, weld)"]
+    );
     let labels = metric.values[0].labels.as_ref().unwrap();
     assert_eq!(labels["state"], "busy");
     assert_eq!(labels["resource"], "cut");
@@ -432,6 +454,7 @@ fn sampling_wraps_the_interval() {
             std_dev: ci.std_dev(),
             replications: 3,
             level: ConfidenceLevel::DEFAULT.level(),
+            stopping: None,
         }
     );
     let json = Accuracy::from(&ci).encode();
@@ -454,7 +477,7 @@ fn over_is_a_window_or_a_reading() {
     );
 }
 
-/// Each declared observable is either the `observable` of some metric or in
+/// Each declared observable is in some metric's `observables` or in
 /// `unreported`, so a reader can check that it got what it asked for.
 #[test]
 fn declared_observable_is_answered_or_unreported() {
@@ -471,7 +494,7 @@ fn declared_observable_is_answered_or_unreported() {
     let answered: BTreeSet<&str> = result
         .metrics
         .iter()
-        .filter_map(|m| m.observable.as_deref())
+        .flat_map(|m| m.observables.iter().map(String::as_str))
         .chain(result.unreported.iter().map(|u| u.observable.as_str()))
         .collect();
     let declared = BTreeSet::from(["state_shares(cut)", "throughput(sink)", "wip(buf)"]);
