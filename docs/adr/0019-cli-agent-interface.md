@@ -1,7 +1,8 @@
 # ADR-0019: The CLI is the agent interface; no MCP server
 
 - Status: accepted (2026-10-26, by the owner, explicitly, with every
-  recommendation; amends ADR-0003, ADR-0004 and ADR-0005)
+  recommendation; amends ADR-0003, ADR-0004 and ADR-0005); items 1, 3, 5 and 9
+  amended by ADR-0024 (proposed)
 - Date: 2026-10-26
 - Blocks: M7 (first commands under the contract), v0.2 Agent tier
 - Spec: §1, §3, §5 (rewritten), §7, §9, §10, §11, §12, §13, §14, §15;
@@ -80,7 +81,8 @@ subcommand with:
 The document carries the package version and its own schema. It is
 generated from the same Rust types as the CLI: the argument parser
 (`clap` with derive; this ADR accepts it as a CLI dependency) and the
-result types (`schemars`, already the schema generator from M4). It is
+result types (`schemars`, already the schema generator from M4; note: ADR-0020
+§11 replaced `schemars` with own code, and ADR-0024 §2 uses that code here). It is
 committed as `schemas/cli/describe.json` and checked for freshness in CI
 like the other schemas. A CLI reference in the docs is generated from it.
 
@@ -101,7 +103,8 @@ everything else goes to stderr.
 With `--format json`, stderr is JSON Lines: one object per line with a
 `kind` (`error`, `warning`, `progress`). An error carries the field path,
 what was found, what is allowed and one valid example (§5, CLAUDE.md),
-and the error's type name. Argument errors from the parser go through the
+and the error's type name. (ADR-0024 §9, proposed: an error of exit code 2 or 7 has
+no valid example, and states the simulation time and the last events instead.) Argument errors from the parser go through the
 same type, so a misspelt flag is also a path-level JSON error.
 
 Exit codes are part of the contract:
@@ -136,7 +139,9 @@ synchronous; the stop reaches it through the cancellation hook of
 ### 5. Run store and ids
 
 Runs are kept in a content-addressed store. The run id is the hash of the
-canonical model (ADR-0002), seed, horizon and engine version (§5), so
+canonical model (ADR-0002), seed, horizon and engine version (§5; ADR-0024 §6,
+proposed, adds the engine's name, its record format and the domain package's name,
+version and message format, and the horizon is inside the model's hash), so
 running the same thing twice returns the stored run instead of running
 again. A run with several seeds returns one run id per replication and an
 experiment id over them. Later commands (`trace query`, `compare`,
@@ -203,7 +208,8 @@ require it.
 Idempotent reads, explicit writes (`calibrate` and `optimize` write new
 model files and never overwrite their input), the uncertainty with every
 number (confidence interval, replications, seed list), actionable errors,
-mandatory budgets.
+mandatory budgets. (ADR-0024 §4, proposed: a number states its accuracy, which may
+be that it has no error bound and why; a confidence interval is one such statement.)
 
 ## Consequences
 

@@ -638,6 +638,8 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | 9 | Roadmap M7 lists branch/merge, rework and pool models, which need M6 | roadmap M7, M6 | they join from the directory after M6 (§11) |
 | 10 | CLAUDE.md: a milestone does not start while an ADR it depends on is proposed | ADR-0022 | the owner's instruction this time; M7 merges after M5 |
 | 11 | "A registry with a type from outside is not named by the header or the run id" still holds for `Registry::with`, but a whole `Domain` is now named by the run id | ADR-0022 §11 | a note there when M7 merges (§6) |
+| 12 | §9 requires `example` for exit 1, but `LoadErrorKind::example` returns none for about twenty kinds (a syntax error, a duplicate, a self-loop), and has since ADR-0020 | §9, ADR-0020, `crates/taktsim-model/src/error.rs` | the error schema requires `example` for `args.*` only; a `model.*` error has one where the loader has one. Giving every kind an example is a later change that adds a key, so it breaks nothing |
+| 13 | A docs-only pull request skips the gates (`ci/changes.sh`), but `every_yaml_block_of_the_docs_validates`, like the older `docs_examples.rs`, reads `docs/` and `README.md`, so a broken example in a page fails only the next full run | `ci/changes.sh`, `crates/taktsim-cli/tests/examples.rs` | decide separately; narrowing what may skip is a gate change of its own |
 
 ## Questions for the owner
 
