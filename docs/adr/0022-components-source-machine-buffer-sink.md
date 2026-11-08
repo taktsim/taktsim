@@ -462,6 +462,24 @@ failure at the same instant as a cycle end comes first (ADR-0001), so that
 cycle resumes with zero remaining. All units of a machine stop together: one
 machine, one failure process.
 
+**The end of the clock.** Simulation time ends after about 584 years, 213,503
+days (ADR-0001). A wait that ends past that, a draw too long for a `SimDuration`
+or a time that added to now passes the limit, never ends: the unit stays in its
+cycle, the changeover or the repair runs on, no further part or failure comes. No
+horizon lies past the clock, so this is what happens to anything after the horizon,
+and neither loading nor running depends on a seed (principle 2). The draw still
+takes its place in the stream. A pause only moves an end later, so such a wait stays
+one, and a remaining time that no longer fits at the repair becomes one. The engine
+keeps its typed error (ADR-0001); the components do not ask for what it refuses. An
+end exactly at the limit still happens. A very long `mtbf` meaning "practically never"
+therefore means that. If nothing else is due, the run ends at its horizon with the
+outcome `idle`, as core defines it: no events are left.
+
+Refusing such values at load was the alternative. It cannot be decided for a
+distribution, whose reach past the limit depends on the seed, and for a constant it
+would refuse `cycle_time: 150000d` with a horizon of 213,000 days, where the end that
+does not fit is after the horizon anyway.
+
 **Room for v0.5.** An operating-time clock is a new optional key (say
 `failure_clock: operating`), absent meaning calendar for ever, so no model or
 hash changes. M5 has no such key. The failure timer is held in one small type
@@ -827,6 +845,7 @@ below is after v0.1 ships.
 | Six states, their definitions and codes | KPIs, viewer colours, what users report | every state share, every comparison with history | `state_equals_what_the_machine_holds`, `every_transition_in_the_table`, `idle_when_a_source_reaches_it_through_non_stations` |
 | Blocking after service and the handshake | every golden trace, every queueing result | every trace; throughput of every finite-buffer line | `two_stations_without_buffer_give_two_thirds`, `reservation_never_lasts_past_its_instant`, golden cases |
 | Failure rules (calendar, any state, resume) | throughput of unreliable lines | every result with failures | `failure_while_blocked_or_idle`, `interrupted_cycle_resumes_with_remaining_time` |
+| A wait past the end of the clock never ends (§6) | what a very long duration means, the trace of such a run | results of models with durations of centuries; refusing them instead breaks those models | `a_cycle_past_the_clock_never_ends_and_the_run_reaches_its_horizon`, `a_paused_cycle_whose_rest_ends_past_the_clock_never_ends`, `long_durations_never_fail_a_run` |
 | Blocked Source (S2) | offered load under blocking | results of overloaded lines | `blocked_source_holds_and_loses_nothing`, `created_equals_emitted_plus_held` |
 | Setup rules (first unit free, FIFO, one variant at a time, `0s` is no changeover) | throughput with variants | results with setups | `first_unit_costs_no_setup`, `changeover_waits_for_units_in_cycle`, `zero_matrix_entry_is_no_changeover` |
 | Flow defaults (one edge per source, first free in list order, oldest offer first, event order when room opens at one instant) | M6's defaults, every branch and merge | every model with a branch | `branch_ties_go_to_the_first_declared`, `branch_room_opening_together_follows_event_order`, `merge_serves_oldest_offer`, `withdrawn_offer_loses_its_place`, `second_edge_from_a_component_is_rejected` |
@@ -861,7 +880,8 @@ below is after v0.1 ships.
 ## Consequences
 
 - A model that loads with the standard catalog always builds, and runs on every
-  tier-1 target with the same bytes; golden cases check it.
+  tier-1 target with the same bytes; golden cases check it. A duration past the end
+  of the clock does not fail a run (§6).
 - `taktsim validate` gets flow and variant errors with paths for free.
 - Fifteen events per part on the five-component line, plus 8 notes. Traces grow
   accordingly; memory does not (ADR-0021). Each branch adds `Withdraw` events.
@@ -957,3 +977,6 @@ the M5 pull request merges.
     this from the trace). A part can take the place of an earlier offer of the same
     outlet at that instant, which no one can observe except in event order, and golden
     cases pin it. *Recommended:* yes, and replace the sentence in §4.
+19. **A wait past the end of the clock (§6).** It never ends, rather than failing the
+    run or being refused at load, and a run with nothing else due ends `idle` at its
+    horizon. *Recommended:* yes. Implementation proceeds on this.

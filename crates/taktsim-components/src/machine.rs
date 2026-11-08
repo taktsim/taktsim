@@ -11,6 +11,7 @@ use taktsim_model::{
 };
 use taktsim_units::{Count, SimDuration, SimTime};
 
+use crate::clock;
 use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, MachineStateNote, VariantId};
 use crate::params::{CycleTime, Mtbf, Mttr, PerVariant, Units, VariantRef};
@@ -408,43 +409,48 @@ impl FailureProcess {
         self.arm(ctx)
     }
 
-    /// Draws the next up time and schedules the failure.
+    /// Draws the next up time and schedules the failure. Past the end of the
+    /// clock, it never fails again.
     fn arm(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         if let Some((failures, _)) = &mut self.streams {
-            let up = self.up.sample(failures)?;
-            ctx.schedule(up, FlowMessage::Failure)?;
+            let up = clock::draw(&self.up, failures)?;
+            clock::schedule(up, FlowMessage::Failure, ctx)?;
         }
         Ok(())
     }
 
-    /// Draws the repair time and schedules its end.
+    /// Draws the repair time and schedules its end. Past the end of the clock, it
+    /// stays down.
     fn repair(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         if let Some((_, repairs)) = &mut self.streams {
-            let time = self.repair.sample(repairs)?;
-            ctx.schedule(time, FlowMessage::Repaired)?;
+            let time = clock::draw(&self.repair, repairs)?;
+            clock::schedule(time, FlowMessage::Repaired, ctx)?;
         }
         Ok(())
     }
 }
 
 /// A running or paused timer: it knows its end while it runs, and what remains
-/// while paused.
+/// while paused. One whose end falls past the clock never ends, and a pause only
+/// moves an end later, so it stays that way.
 #[derive(Debug, Clone, Copy)]
 enum Timer {
     Running { event: EventId, ends: SimTime },
     Paused { remaining: SimDuration },
+    Never,
 }
 
 impl Timer {
-    /// Starts a timer of `after` with `message`.
+    /// Starts a timer of `after` with `message`; `None` is longer than the clock.
     fn start(
-        after: SimDuration,
+        after: Option<SimDuration>,
         message: FlowMessage,
         ctx: &mut Context<'_, FlowMessage>,
     ) -> Result<Self, ComponentError> {
-        let ends = ctx.now().checked_add(after)?;
-        let event = ctx.schedule(after, message)?;
-        Ok(Self::Running { event, ends })
+        Ok(match clock::schedule(after, message, ctx)? {
+            Some((event, ends)) => Self::Running { event, ends },
+            None => Self::Never,
+        })
     }
 
     /// Cancels the timer and keeps what remains.
@@ -465,7 +471,7 @@ impl Timer {
         ctx: &mut Context<'_, FlowMessage>,
     ) -> Result<(), ComponentError> {
         if let Self::Paused { remaining } = *self {
-            *self = Self::start(remaining, message, ctx)?;
+            *self = Self::start(Some(remaining), message, ctx)?;
         }
         Ok(())
     }
@@ -562,7 +568,7 @@ impl MachineBehaviour {
                         event: "start".to_owned(),
                     });
                 };
-                let after = time.sample(stream)?;
+                let after = clock::draw(time, stream)?;
                 self.changeover = Some(Changeover {
                     to: variant,
                     timer: Timer::start(after, FlowMessage::SetupDone, ctx)?,
@@ -577,7 +583,7 @@ impl MachineBehaviour {
                     event: "start".to_owned(),
                 });
             };
-            let after = self.cycle_time.sample(stream)?;
+            let after = clock::draw(&self.cycle_time, stream)?;
             let timer = Timer::start(after, FlowMessage::CycleDone { item }, ctx)?;
             self.cycles.insert(item, (attrs, timer));
         }

@@ -10,6 +10,7 @@ use taktsim_model::{
 };
 use taktsim_units::{Count, Ratio};
 
+use crate::clock;
 use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, SourceStateNote, VariantId};
 use crate::params::{Interarrival, Units, VARIANT_NAME_RULE, is_variant_name};
@@ -357,13 +358,14 @@ impl SourceBehaviour {
         Ok(ItemAttrs::new(chosen.0, self.priority))
     }
 
-    /// Starts the next interval, if the Source has intervals.
+    /// Starts the next interval, if the Source has intervals. Past the end of the
+    /// clock, no part comes any more.
     fn next_interval(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         if let (Some(distribution), Some(stream)) =
             (&self.interarrival, self.interval_stream.as_mut())
         {
-            let after = distribution.sample(stream)?;
-            ctx.schedule(after, FlowMessage::NextArrival)?;
+            let after = clock::draw(distribution, stream)?;
+            clock::schedule(after, FlowMessage::NextArrival, ctx)?;
         }
         Ok(())
     }
