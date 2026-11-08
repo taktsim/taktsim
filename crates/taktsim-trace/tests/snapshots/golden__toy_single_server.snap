@@ -11,6 +11,7 @@ seed: 42
 components: source, station, sink
 records: 332 (223 events) in 1 chunks
 stream sha256: 208cda594606f9c0962eaf11b248a4aeb5b50ae09093fba036f434c93c01adad
+end: 1h (horizon)
 ---
 68.464025213s event #0 source -> source Next
 68.464025213s item 0 created by source

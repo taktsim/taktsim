@@ -11,6 +11,7 @@ seed: 7
 components: source, cut, weld, sink
 records: 1824 (1379 events) in 1 chunks
 stream sha256: 744ef2b5754faccc360ca0bef9f3300a49163501a3fd7d3db34cc92ddd46d4f9
+end: 4h (horizon)
 ---
 24.73972074s event #0 source -> source Next
 24.73972074s item 0 created by source

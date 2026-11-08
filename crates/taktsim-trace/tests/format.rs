@@ -412,20 +412,20 @@ fn data_after_the_end_marker_is_rejected() {
 #[test]
 fn another_format_version_says_what_was_found_and_what_is_allowed() {
     let (mut bytes, _) = write(&header(1), &[]);
-    bytes[8..10].copy_from_slice(&2_u16.to_le_bytes());
+    bytes[8..10].copy_from_slice(&1_u16.to_le_bytes());
     let Err(e) = TraceReader::<_, Toy>::new(bytes.as_slice()) else {
-        panic!("version 2 was read");
+        panic!("version 1 was read");
     };
     assert!(matches!(
         e,
         ReadError::UnsupportedVersion {
-            found: 2,
+            found: 1,
             supported: FORMAT_VERSION
         }
     ));
     assert_eq!(
         e.to_string(),
-        "trace format version 2 is not supported: this build reads version 1 only; \
+        "trace format version 1 is not supported: this build reads version 2 only; \
          read the trace with the taktsim release that wrote it"
     );
 }

@@ -4,7 +4,7 @@
 use std::io::Read;
 
 use taktsim_core::{
-    ENGINE_VERSION, Engine, ItemCounts, RunError, RunLimits, TraceRecord, TraceSink,
+    ENGINE_VERSION, Engine, ItemCounts, RunError, RunLimits, RunOutcome, TraceRecord, TraceSink,
 };
 use taktsim_units::SimTime;
 
@@ -12,13 +12,14 @@ use crate::codec::{EncodeError, TraceMessage};
 use crate::header::{TraceHash, component_names};
 use crate::read::{ReadError, TraceReader};
 use crate::record::{self, EVENT};
+use crate::write::RunEnd;
 
 /// What a successful replay compared.
 ///
 /// ```
 /// use taktsim_trace::{ReplayReport, TraceHash};
 ///
-/// let r = ReplayReport { records: 3, events: 2, hash: TraceHash::default() };
+/// let r = ReplayReport { records: 3, events: 2, hash: TraceHash::default(), end: None };
 /// assert_eq!(r.events, 2);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +30,8 @@ pub struct ReplayReport {
     pub events: u64,
     /// The trace's stream hash, checked against its records.
     pub hash: TraceHash,
+    /// How the run ended, if the trace states it, checked against the engine.
+    pub end: Option<RunEnd>,
 }
 
 /// Re-executes the run recorded in `trace` with `engine`, and checks that it
@@ -43,7 +46,10 @@ pub struct ReplayReport {
 ///   byte: the event's time, sequence number, target, sender, message and
 ///   item, every item created or disposed of, and every note;
 /// - after starting and after every event, the engine's clock and item
-///   counts with those the trace implies.
+///   counts with those the trace implies;
+/// - if the trace states how the run ended, that the engine reaches that end:
+///   a run to its horizon with no event due by then, so a due event missing
+///   from the trace is a divergence (ADR-0022 §9).
 ///
 /// The first difference stops the replay with [`ReplayError::Diverged`] or
 /// [`ReplayError::State`], naming the record. The components' own state is
@@ -165,11 +171,59 @@ pub fn replay<R: Read, M: TraceMessage>(
     }
     let summary = sink.trace.summary();
     let summary = summary.ok_or(ReplayError::Trace(ReadError::AlreadyFailed))?;
+    if let Some(end) = summary.end {
+        check_end(engine, &mut sink, end, summary.records)?;
+    }
     Ok(ReplayReport {
         records: summary.records,
         events: summary.events,
         hash: summary.hash,
+        end: summary.end,
     })
+}
+
+/// Runs the engine to the end the trace states, with no event allowed. A run
+/// stopped early (event limit, cancelled) had events left, so it is compared
+/// by its clock only.
+fn check_end<R: Read, M: TraceMessage>(
+    engine: &mut Engine<M>,
+    sink: &mut Replayer<R, M>,
+    end: RunEnd,
+    records: u64,
+) -> Result<(), ReplayError> {
+    let diverged = |found: String| ReplayError::Diverged {
+        record: records,
+        expected: format!("the end of the run at {end}"),
+        found,
+    };
+    if engine.now() > end.time {
+        return Err(diverged(format!("the engine's clock at {}", engine.now())));
+    }
+    match end.outcome {
+        RunOutcome::Horizon | RunOutcome::Idle => {
+            let ran = run(engine, RunLimits::until(end.time).max_events(0), sink)?;
+            if ran.outcome == RunOutcome::EventLimit {
+                return Err(diverged(format!("an event due by {}", end.time)));
+            }
+            if ran.outcome == end.outcome {
+                return Ok(());
+            }
+            Err(diverged(
+                RunEnd {
+                    time: ran.now,
+                    outcome: ran.outcome,
+                }
+                .to_string(),
+            ))
+        }
+        RunOutcome::EventLimit | RunOutcome::Cancelled => {
+            if engine.now() == end.time {
+                Ok(())
+            } else {
+                Err(diverged(format!("the engine's clock at {}", engine.now())))
+            }
+        }
+    }
 }
 
 /// Runs `engine` with the replaying sink, reporting a divergence before a

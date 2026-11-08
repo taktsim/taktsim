@@ -7,6 +7,7 @@ use proptest::prelude::*;
 use support::{Sink, Source, Station, Toy};
 use taktsim_core::{
     Component, ComponentError, Context, Delivery, Engine, EngineConfig, EngineError, RunLimits,
+    RunOutcome, RunSummary,
 };
 use taktsim_trace::{
     Header, ModelHash, ReadError, ReplayError, SystemHash, TraceReader, TraceWriter, replay,
@@ -435,4 +436,152 @@ fn a_missing_note_is_a_divergence() {
         panic!("a missing note replayed");
     };
     assert_eq!(found, "no further record before the engine's next event");
+}
+
+/// Runs `engine` with `limits`, stating the end, into an in-memory trace.
+#[allow(clippy::unwrap_used)] // test helper
+fn trace_stating_end(mut engine: Engine<Toy>, limits: RunLimits<'_>) -> Vec<u8> {
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine.run(limits, &mut writer).unwrap();
+    writer.run_ended(&ran);
+    writer.finish().unwrap().0
+}
+
+#[test]
+fn cancelled_run_states_its_end() {
+    let flag = std::sync::atomic::AtomicBool::new(true);
+    let trace = trace_stating_end(
+        support::single_server(1).unwrap(),
+        RunLimits::until(t("1h")).cancel_on(&flag),
+    );
+    let mut reader = TraceReader::<_, Toy>::new(trace.as_slice()).unwrap();
+    while reader.next_record().unwrap().is_some() {}
+    let end = reader.summary().unwrap().end.unwrap();
+    assert_eq!(end.outcome, RunOutcome::Cancelled);
+    assert_eq!(end.time, SimTime::START);
+    assert_eq!(end.to_string(), "0s (cancelled)");
+    // A cancelled run had events left: replay compares its clock, and does
+    // not look for them.
+    let report = replay_with(&trace, support::single_server(1).unwrap()).unwrap();
+    assert_eq!(report.end, Some(end));
+}
+
+#[test]
+fn every_way_a_run_ends_replays() {
+    // The horizon, with an event still to come.
+    let trace = trace_stating_end(
+        support::single_server(1).unwrap(),
+        RunLimits::until(t("30min")),
+    );
+    let report = replay_with(&trace, support::single_server(1).unwrap()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::Horizon, t("30min")));
+    // Stopped by the event limit: the clock is at the last event.
+    let trace = trace_stating_end(
+        support::single_server(1).unwrap(),
+        RunLimits::until(t("30min")).max_events(10),
+    );
+    let report = replay_with(&trace, support::single_server(1).unwrap()).unwrap();
+    assert_eq!(report.end.unwrap().outcome, RunOutcome::EventLimit);
+    // No events left.
+    let empty = || Engine::<Toy>::new(EngineConfig::new(1));
+    let trace = trace_stating_end(empty(), RunLimits::until(t("5min")));
+    let report = replay_with(&trace, empty()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::Idle, t("5min")));
+}
+
+#[test]
+fn replay_finds_an_event_missing_before_the_end() {
+    // The trace stops at 10 min but states an end at 1 h: an event was due.
+    let mut engine = support::single_server(1).unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine
+        .run(RunLimits::until(t("10min")), &mut writer)
+        .unwrap();
+    writer.run_ended(&RunSummary {
+        now: t("1h"),
+        ..ran
+    });
+    let (trace, summary) = writer.finish().unwrap();
+    let Err(ReplayError::Diverged {
+        record,
+        expected,
+        found,
+    }) = replay_with(&trace, support::single_server(1).unwrap())
+    else {
+        panic!("a trace with a missing event replayed");
+    };
+    assert_eq!(record, summary.records);
+    assert_eq!(expected, "the end of the run at 1h (horizon)");
+    assert_eq!(found, "an event due by 1h");
+}
+
+#[test]
+fn replay_compares_the_stated_outcome_and_clock() {
+    fn stated(ran: RunSummary, engine: &Engine<Toy>) -> Vec<u8> {
+        let header = Header::for_engine(
+            engine,
+            ModelHash::sha256(b"replay tests"),
+            SystemHash::default(),
+        );
+        let mut writer = TraceWriter::<_, Toy>::new(Vec::new(), &header).unwrap();
+        writer.run_ended(&ran);
+        writer.finish().unwrap().0
+    }
+    let empty = || Engine::<Toy>::new(EngineConfig::new(1));
+    // Stated: an event was left at the horizon; the engine has none.
+    let ran = RunSummary {
+        outcome: RunOutcome::Horizon,
+        events: 0,
+        now: t("5min"),
+    };
+    let Err(ReplayError::Diverged { found, .. }) = replay_with(&stated(ran, &empty()), empty())
+    else {
+        panic!("another outcome replayed");
+    };
+    assert_eq!(found, "5min (idle)");
+    // Stated: stopped at a time the engine's clock is not at.
+    let ran = RunSummary {
+        outcome: RunOutcome::EventLimit,
+        events: 0,
+        now: t("5min"),
+    };
+    let Err(ReplayError::Diverged { found, .. }) = replay_with(&stated(ran, &empty()), empty())
+    else {
+        panic!("another clock replayed");
+    };
+    assert_eq!(found, "the engine's clock at 0s");
+    // Stated: an end before the last event.
+    let mut engine = support::single_server(1).unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine
+        .run(RunLimits::until(t("10min")), &mut writer)
+        .unwrap();
+    writer.run_ended(&RunSummary {
+        now: t("1s"),
+        ..ran
+    });
+    let trace = writer.finish().unwrap().0;
+    let Err(ReplayError::Diverged { found, .. }) =
+        replay_with(&trace, support::single_server(1).unwrap())
+    else {
+        panic!("an end before the last event replayed");
+    };
+    assert!(found.starts_with("the engine's clock at "), "{found}");
 }
