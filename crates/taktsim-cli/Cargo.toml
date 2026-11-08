@@ -1,6 +1,6 @@
 [package]
 name = "taktsim-cli"
-description = "The taktsim command line: validate and run models"
+description = "The taktsim command line: describe, schema, validate and run"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,3 +18,14 @@ doc = false
 
 [lints]
 workspace = true
+
+[dependencies]
+taktsim-units.workspace = true
+taktsim-model.workspace = true
+taktsim-components.workspace = true
+taktsim-run.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+regex.workspace = true

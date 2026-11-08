@@ -1,0 +1,11 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+error[args.invalid_value] --format: `yaml` is not a value of --format
+  found: yaml
+  allowed: text, json
+  example: text

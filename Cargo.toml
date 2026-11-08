@@ -55,6 +55,9 @@ crc32fast = { version = "1.5.4", default-features = false }
 # for gungraun; the bench workflow installs it from there.
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 gungraun = "0.20.0"
+# The command line's parser (ADR-0019, ADR-0024 §2). Default features off, so no
+# colour crates and no `strsim`. New in the lock with it: `clap_derive`.
+clap = { version = "4.6.7", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 # Golden-trace snapshots (ADR-0021), tests only, without colors or extra
 # formats.
 insta = { version = "1.49.0", default-features = false }

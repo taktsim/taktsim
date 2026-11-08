@@ -1,0 +1,8 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+{"allowed":"--seed, --horizon, --store, --max-events, --no-reuse, --format","example":"taktsim run line.yaml --seed 42","found":"--sed","kind":"error","message":"no argument `--sed`","path":"--sed","type":"args.unknown_argument"}

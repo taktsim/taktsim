@@ -1,4 +1,5 @@
 /target
+.taktsim/
 /python/.venv
 /mutants.out*
 *.profraw

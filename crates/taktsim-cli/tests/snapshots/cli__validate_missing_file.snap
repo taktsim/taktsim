@@ -1,0 +1,12 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 7
+--- stdout ---
+invalid; errors: 1
+--- stderr ---
+error[model.io] <model>: cannot read the file: entity not found
+  at: nothing.yaml
+  found: entity not found
+  allowed: a readable file
