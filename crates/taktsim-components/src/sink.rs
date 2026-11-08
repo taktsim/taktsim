@@ -45,6 +45,10 @@ impl ComponentParams for Sink {
 impl ComponentType<Flow> for Sink {
     const PORTS: Ports = Ports::Inlet;
 
+    fn draws_random(&self) -> bool {
+        false
+    }
+
     fn build(
         &self,
         _: &Wiring<'_, crate::flow::FlowShared>,

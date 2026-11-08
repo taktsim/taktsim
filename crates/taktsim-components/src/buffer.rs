@@ -153,6 +153,15 @@ impl ComponentParams for Buffer {
 }
 
 impl ComponentType<Flow> for Buffer {
+    fn draws_random(&self) -> bool {
+        let Self {
+            capacity: _,
+            capacity_at: _,
+            discipline: _,
+        } = self;
+        false
+    }
+
     fn build(
         &self,
         wiring: &Wiring<'_, FlowShared>,

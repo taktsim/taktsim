@@ -193,3 +193,9 @@ pub(crate) const VARIANT_NAME_RULE: &str =
 pub(crate) fn is_variant_name(name: &str) -> bool {
     name.len() <= MAX_NAME && ComponentId::new(name).is_some()
 }
+
+/// Whether sampling `distribution` draws from a stream. A constant returns before
+/// touching it (ADR-0024 §5).
+pub(crate) const fn draws(distribution: &Distribution) -> bool {
+    distribution.name().is_some()
+}

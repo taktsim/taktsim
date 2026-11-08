@@ -14,7 +14,7 @@ use taktsim_units::{Count, SimDuration, SimTime};
 use crate::clock;
 use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, MachineStateNote, VariantId};
-use crate::params::{CycleTime, Mtbf, Mttr, PerVariant, Units, VariantRef};
+use crate::params::{CycleTime, Mtbf, Mttr, PerVariant, Units, VariantRef, draws};
 use crate::port::{Inlet, Outlet};
 use crate::run::{BuildError, ComponentType, Wiring};
 use crate::state::MachineState;
@@ -170,6 +170,25 @@ pub struct Setup {
 }
 
 impl Setup {
+    /// Whether any of its times is drawn.
+    fn draws_random(&self) -> bool {
+        let Self {
+            per_variant,
+            matrix,
+        } = self;
+        per_variant.as_ref().is_some_and(draws)
+            || matrix.as_ref().is_some_and(|Matrix(changes)| {
+                changes.iter().any(|change| {
+                    let Change {
+                        from: _,
+                        to: _,
+                        time,
+                    } = change;
+                    draws(time)
+                })
+            })
+    }
+
     /// The listed changes, sorted by `(from, to)`.
     pub(crate) fn changes(&self) -> &[Change] {
         self.matrix.as_ref().map_or(&[], |m| m.0.as_slice())
@@ -334,6 +353,20 @@ impl ComponentParams for Machine {
 
 impl ComponentType<Flow> for Machine {
     const STATION: bool = true;
+
+    fn draws_random(&self) -> bool {
+        let Self {
+            cycle_time,
+            mtbf,
+            mttr,
+            setup,
+            capacity: _,
+        } = self;
+        draws(cycle_time)
+            || mtbf.as_ref().is_some_and(draws)
+            || mttr.as_ref().is_some_and(draws)
+            || setup.as_ref().is_some_and(Setup::draws_random)
+    }
 
     fn build(
         &self,
