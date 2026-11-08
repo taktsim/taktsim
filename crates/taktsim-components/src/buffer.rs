@@ -2,16 +2,18 @@
 
 use std::collections::BTreeMap;
 
-use taktsim_core::{Component, ComponentError, Context, Delivery, ItemId, Violation};
+use taktsim_core::{Component, ComponentError, ComponentId, Context, Delivery, ItemId, Violation};
 use taktsim_model::{
     ComponentParams, Decode, Decoder, Encode, Fields, Json, LoadErrorKind, Node, Schemas,
 };
-use taktsim_units::Count;
+use taktsim_units::{Count, SimTime};
 
+use crate::dispatch::MAX_LISTED;
 use crate::flow::{Flow, FlowShared, StationFacts, StatusFact};
-use crate::message::{FlowMessage, ItemAttrs};
+use crate::message::{DispatchCandidate, DispatchDecision, FlowMessage, ItemAttrs};
 use crate::params::Places;
-use crate::port::{Inlet, Outlet};
+use crate::port::{Asking, Inlet, Outlet, TargetView};
+use crate::route::Part;
 use crate::run::{BuildError, ComponentType, Wiring};
 
 /// Which part a Buffer gives when a place opens downstream. It chooses when an
@@ -155,12 +157,13 @@ impl ComponentType<Flow> for Buffer {
         &self,
         wiring: &Wiring<'_, FlowShared>,
     ) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
+        let shared = wiring.shared();
         Ok(Box::new(BufferBehaviour {
             capacity: self.capacity.get(),
             discipline: self.discipline.unwrap_or(Discipline::Fifo),
             downstream: wiring.downstream().to_vec(),
-            inlet: Inlet::default(),
-            outlet: Outlet::default(),
+            inlet: Inlet::new(None, shared.subscribers(wiring.id())),
+            outlet: Outlet::new(shared.route_table(wiring.id())),
             parts: BTreeMap::new(),
             entered: 0,
         }))
@@ -175,8 +178,8 @@ struct BufferBehaviour {
     downstream: Vec<String>,
     inlet: Inlet,
     outlet: Outlet,
-    /// The parts, in the order they leave.
-    parts: BTreeMap<(u16, u64), (ItemId, ItemAttrs)>,
+    /// The parts, in the order they leave, each with its number in entry order.
+    parts: BTreeMap<(u16, u64), (Part, u64)>,
     /// How many parts entered: the entry order.
     entered: u64,
 }
@@ -204,17 +207,133 @@ impl BufferBehaviour {
     /// Takes what is waiting and offers what it has, or withdraws.
     fn settle(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         self.inlet.accept(self.free(), ctx)?;
-        if self.parts.is_empty() {
-            self.outlet.withdraw(ctx)
+        if self.outlet.is_routed() {
+            let (outlet, parts) = (&mut self.outlet, &self.parts);
+            outlet.settle_routed(ctx, |asking| {
+                best_unit(parts, asking).map(|part| (part.offered(), part.item.as_u64()))
+            })?;
+        } else if self.parts.is_empty() {
+            self.outlet.withdraw(ctx)?;
         } else {
-            self.outlet.offer(ctx)
+            self.outlet.offer(ctx)?;
         }
+        if self.inlet.is_plain() {
+            return Ok(());
+        }
+        let view = TargetView {
+            room: self.free() > 0,
+            units: self.fill(),
+            running: 0,
+            worked: 0,
+            follows: None,
+        };
+        self.inlet.end_event(view, ctx)
     }
+
+    /// What an `Accept` from the target at `position` gets: the first part, or the
+    /// first meant for that target when routed, or the best by that target's rule,
+    /// which replaces this buffer's discipline while it is declared (ADR-0023 §6).
+    /// Nothing if the unit it was told of has gone. A rule's choice with two or more
+    /// candidates goes on record at once: the part is leaving (ADR-0023 §9).
+    fn give(
+        &mut self,
+        position: usize,
+        taker: ComponentId,
+        ctx: &mut Context<'_, FlowMessage>,
+    ) -> Option<Part> {
+        if !self.outlet.is_routed() {
+            return self.parts.pop_first().map(|(_, (part, _))| part);
+        }
+        let parts = &self.parts;
+        let gone = self
+            .outlet
+            .answers_a_unit_gone(position, ctx.now(), |token| {
+                parts.values().any(|(p, _)| p.item.as_u64() == token)
+            });
+        if gone {
+            return None;
+        }
+        let meant = |part: &Part| self.outlet.meant_for(part.route, position);
+        let key = if let Some((plan, follows)) = self.outlet.taker(position) {
+            let mut ranked: Vec<Ranked> = parts
+                .iter()
+                .filter(|(_, (part, _))| meant(part))
+                .map(|(key, (part, entry))| Ranked {
+                    key: plan.key(part.attrs, part.since, follows),
+                    since: part.since,
+                    entry: *entry,
+                    place: *key,
+                })
+                .collect();
+            let total = ranked.len();
+            if total > MAX_LISTED {
+                // A total order, so the list is the same everywhere (ADR-0023 §9).
+                ranked.select_nth_unstable(MAX_LISTED - 1);
+                ranked.truncate(MAX_LISTED);
+            }
+            ranked.sort_unstable();
+            if total > 1 {
+                let me = ctx.me();
+                let candidates = ranked
+                    .iter()
+                    .filter_map(|r| parts.get(&r.place).map(|(part, _)| (r, part)))
+                    .map(|(r, part)| DispatchCandidate {
+                        from: me,
+                        item: Some(part.item),
+                        key: r.key,
+                        since: r.since,
+                    })
+                    .collect();
+                ctx.decide(&FlowMessage::DispatchDecision(Box::new(DispatchDecision {
+                    rule: plan.rule,
+                    taker,
+                    total: total as u64,
+                    candidates,
+                })));
+            }
+            ranked.first().map(|r| r.place)
+        } else {
+            parts
+                .iter()
+                .find(|(_, (part, _))| meant(part))
+                .map(|(key, _)| *key)
+        };
+        key.and_then(|key| self.parts.remove(&key))
+            .map(|(part, _)| part)
+    }
+}
+
+/// A part by a station's rule: lower wins, ties to the first into the buffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Ranked {
+    key: u64,
+    since: SimTime,
+    entry: u64,
+    place: (u16, u64),
+}
+
+/// The unit that would win now for the station asking (ADR-0023 §6).
+fn best_unit<'a>(
+    parts: &'a BTreeMap<(u16, u64), (Part, u64)>,
+    asking: &Asking<'_>,
+) -> Option<&'a Part> {
+    parts
+        .values()
+        .filter(|(part, _)| asking.wants(part.route))
+        .min_by_key(|(part, entry)| {
+            (
+                asking.plan.key(part.attrs, part.since, asking.follows),
+                part.since,
+                *entry,
+            )
+        })
+        .map(|(part, _)| part)
 }
 
 impl Component<FlowMessage> for BufferBehaviour {
     fn start(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
-        self.outlet.connect(&self.downstream, ctx)
+        self.outlet.connect(&self.downstream, ctx)?;
+        self.inlet.connect(ctx)
     }
 
     fn handle(
@@ -226,21 +345,36 @@ impl Component<FlowMessage> for BufferBehaviour {
             FlowMessage::Offer => self.inlet.offered(d.from),
             FlowMessage::Withdraw => self.inlet.withdrawn(d.from),
             FlowMessage::Decline => self.inlet.release("Decline")?,
+            FlowMessage::Status(status) => self.outlet.status(d.from, status, ctx.now()),
             FlowMessage::Arrive(attrs) => {
                 self.inlet.release("Arrive")?;
                 let Some(item) = d.item else {
                     return Err(unexpected(d.message));
                 };
                 ctx.receive(item)?;
-                let order = self.order(*attrs, self.entered);
-                self.entered += 1;
-                self.parts.insert(order, (item, *attrs));
+                let route = self.outlet.route(*attrs)?;
+                if let Some((position, to)) = self.outlet.returns_to(route) {
+                    // A way back into a loop never waits (ADR-0023 §8).
+                    self.outlet.leaving(route, position, item, ctx);
+                    ctx.transfer(item, to, FlowMessage::Return(*attrs))?;
+                } else {
+                    let order = self.order(*attrs, self.entered);
+                    let part = Part {
+                        item,
+                        attrs: *attrs,
+                        since: ctx.now(),
+                        route,
+                    };
+                    self.parts.insert(order, (part, self.entered));
+                    self.entered += 1;
+                }
             }
             FlowMessage::Accept => {
-                self.outlet.accepted(d.from, ctx)?;
-                match self.parts.pop_first() {
-                    Some((_, (item, attrs))) => {
-                        ctx.transfer(item, d.from, FlowMessage::Arrive(attrs))?;
+                let position = self.outlet.accepted(d.from, ctx)?;
+                match self.give(position, d.from, ctx) {
+                    Some(part) => {
+                        self.outlet.leaving(part.route, position, part.item, ctx);
+                        ctx.transfer(part.item, d.from, FlowMessage::Arrive(part.attrs))?;
                     }
                     None => ctx.send(d.from, FlowMessage::Decline)?,
                 }
@@ -253,7 +387,6 @@ impl Component<FlowMessage> for BufferBehaviour {
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
             | FlowMessage::VariantName { .. }
-            | FlowMessage::Status(_)
             | FlowMessage::OfferOf(_)
             | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
@@ -264,8 +397,8 @@ impl Component<FlowMessage> for BufferBehaviour {
     }
 
     fn held_items(&self, visit: &mut dyn FnMut(ItemId)) {
-        for (item, _) in self.parts.values() {
-            visit(*item);
+        for (part, _) in self.parts.values() {
+            visit(part.item);
         }
     }
 
@@ -289,13 +422,13 @@ impl Component<FlowMessage> for BufferBehaviour {
                 ),
             });
         }
-        if fill > 0 && !self.outlet.all_offered() {
+        if fill > 0 && !self.outlet.parts_offered() {
             return Err(Violation {
                 invariant: "a unit to give and no outstanding offer never coexist",
                 detail: format!("fill {fill}"),
             });
         }
-        Ok(())
+        self.outlet.check_standing_offers()
     }
 }
 
@@ -308,8 +441,6 @@ fn unexpected(message: &FlowMessage) -> ComponentError {
 
 #[cfg(test)]
 mod tests {
-    use taktsim_core::ComponentId;
-
     use super::*;
     use crate::message::VariantId;
 
@@ -327,7 +458,13 @@ mod tests {
 
     fn add(buffer: &mut BufferBehaviour, n: u64) {
         let attrs = ItemAttrs::new(VariantId::new(0), 0);
-        buffer.parts.insert((0, n), (ItemId::from_raw(n), attrs));
+        let part = Part {
+            item: ItemId::from_raw(n),
+            attrs,
+            since: SimTime::START,
+            route: crate::route::Route::default(),
+        };
+        buffer.parts.insert((0, n), (part, n));
     }
 
     #[test]

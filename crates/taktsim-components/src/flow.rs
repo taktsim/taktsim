@@ -1320,7 +1320,6 @@ fn route_tables(
         let targets = names
             .iter()
             .map(|name| TargetPlan {
-                name: (*name).to_owned(),
                 taker: takers.get(*name).cloned(),
                 places: facts
                     .get(name)

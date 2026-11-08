@@ -5,6 +5,7 @@
 
 mod support;
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use support::{document, load, registry, try_load};
@@ -229,7 +230,7 @@ fn too_many_leaving_edges() {
         let mut components = String::from("  - {id: source, type: Source, interarrival: 1min}\n");
         let mut list = Vec::new();
         for i in 0..n {
-            components.push_str(&format!("  - {{id: s{i}, type: Sink}}\n"));
+            let _ = writeln!(components, "  - {{id: s{i}, type: Sink}}");
             list.push(format!("s{i}"));
         }
         document(

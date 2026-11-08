@@ -3,18 +3,19 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use taktsim_core::random::{DurationDistribution, Stream};
-use taktsim_core::{Component, ComponentError, Context, Delivery, ItemId, Violation};
+use taktsim_core::{Component, ComponentError, ComponentId, Context, Delivery, ItemId, Violation};
 use taktsim_model::{
     ComponentParams, Decode, Decoder, Distribution, Encode, Fields, Json, LoadErrorKind, Node,
     Record, Schemas, Segment, Value,
 };
-use taktsim_units::{Count, Ratio};
+use taktsim_units::{Count, Ratio, SimTime};
 
 use crate::clock;
 use crate::flow::{Flow, FlowShared, StationFacts, variant_id};
-use crate::message::{FlowMessage, ItemAttrs, SourceStateNote, VariantId};
+use crate::message::{FlowMessage, ItemAttrs, OfferedUnit, SourceStateNote, VariantId};
 use crate::params::{Interarrival, Units, VARIANT_NAME_RULE, is_variant_name};
 use crate::port::Outlet;
+use crate::route::{Part, Route, split_target};
 use crate::run::{BuildError, ComponentType, Ports, Wiring};
 use crate::state::SourceState;
 
@@ -503,6 +504,20 @@ impl ComponentType<Flow> for Source {
             mix.push((id, cumulative));
             names.push((id, name.to_owned()));
         }
+        let (mut priorities, mut priority_shares, mut total) = (Vec::new(), Vec::new(), 0.0);
+        for entry in self.priority_mix.iter().flat_map(|mix| mix.0.iter()) {
+            total += entry.share.as_fraction();
+            priorities.push(entry.priority.0);
+            priority_shares.push(total);
+        }
+        let due_in = self
+            .due_in
+            .map(|d| d.0.sampler())
+            .transpose()
+            .map_err(|source| BuildError::Distribution {
+                path: wiring.path().clone(),
+                source: Box::new(source),
+            })?;
         Ok(Box::new(SourceBehaviour {
             interarrival,
             interval_stream: None,
@@ -511,13 +526,42 @@ impl ComponentType<Flow> for Source {
             mix,
             names,
             priority: self.priority.map_or(0, |p| p.0),
+            priorities,
+            priority_shares,
+            priority_stream: None,
+            due_in,
+            due_stream: None,
             downstream: wiring.downstream().to_vec(),
-            outlet: Outlet::default(),
+            outlet: Outlet::new(shared.route_table(wiring.id())),
             held: VecDeque::new(),
+            next: None,
+            drawn: 0,
             created: 0,
             emitted: 0,
             noted: None,
         }))
+    }
+}
+
+/// A part drawn ahead at an on-demand Source: it has no item yet, and no due date
+/// (ADR-0023 §7).
+#[derive(Debug, Clone, Copy)]
+struct NextPart {
+    attrs: ItemAttrs,
+    route: Route,
+    since: SimTime,
+    number: u64,
+}
+
+impl NextPart {
+    const fn offered(&self) -> OfferedUnit {
+        OfferedUnit {
+            item: None,
+            variant: self.attrs.variant,
+            priority: self.attrs.priority,
+            due: None,
+            since: self.since,
+        }
     }
 }
 
@@ -532,10 +576,23 @@ struct SourceBehaviour {
     mix: Vec<(VariantId, f64)>,
     names: Vec<(VariantId, String)>,
     priority: u8,
+    /// With `priority_mix`: the priorities and their cumulative fractions, sorted by
+    /// priority.
+    priorities: Vec<u8>,
+    priority_shares: Vec<f64>,
+    priority_stream: Option<Stream>,
+    /// With `due_in`: when a part is due, from creation.
+    due_in: Option<DurationDistribution>,
+    due_stream: Option<Stream>,
     downstream: Vec<String>,
     outlet: Outlet,
     /// Created and not yet released, in creation order.
-    held: VecDeque<(ItemId, ItemAttrs)>,
+    held: VecDeque<Part>,
+    /// The next part of an on-demand Source whose route or rule needs to be known
+    /// before the part exists: drawn ahead, created when accepted (ADR-0023 §6).
+    next: Option<NextPart>,
+    /// How many such parts it drew: what names one.
+    drawn: u64,
     created: u64,
     emitted: u64,
     noted: Option<SourceStateNote>,
@@ -554,7 +611,40 @@ impl SourceBehaviour {
                 state: "a source without variants",
                 event: "NextArrival".to_owned(),
             })?;
-        Ok(ItemAttrs::new(chosen.0, self.priority))
+        let variant = chosen.0;
+        let priority = match self.priority_stream.as_mut() {
+            Some(stream) => {
+                let at = split_target(&self.priority_shares, stream.next_open01());
+                self.priorities.get(at).copied().unwrap_or(self.priority)
+            }
+            None => self.priority,
+        };
+        Ok(ItemAttrs::new(variant, priority))
+    }
+
+    /// A batch's due date: its creation plus one draw. Past the end of simulated time
+    /// it is a run failure (ADR-0023 §7).
+    fn next_due(&mut self, now: SimTime) -> Result<Option<SimTime>, ComponentError> {
+        let (Some(distribution), Some(stream)) = (&self.due_in, self.due_stream.as_mut()) else {
+            return Ok(None);
+        };
+        let after = distribution.sample(stream)?;
+        Ok(Some(now.checked_add(after)?))
+    }
+
+    /// Draws the next part of an on-demand Source with routes: its variant and
+    /// priority, and its route, which is decided when it is about to be offered.
+    fn draw_next(&mut self, now: SimTime) -> Result<(), ComponentError> {
+        let attrs = self.next_attrs()?;
+        let route = self.outlet.route(attrs)?;
+        self.next = Some(NextPart {
+            attrs,
+            route,
+            since: now,
+            number: self.drawn,
+        });
+        self.drawn += 1;
+        Ok(())
     }
 
     /// Starts the next interval, if the Source has intervals. Past the end of the
@@ -572,7 +662,17 @@ impl SourceBehaviour {
     /// Offers while it has something to give; writes a note if anything
     /// changed.
     fn settle(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
-        if self.interarrival.is_none() || !self.held.is_empty() {
+        if self.outlet.is_routed() {
+            let (outlet, held, next) = (&mut self.outlet, &self.held, self.next);
+            outlet.settle_routed(ctx, |asking| {
+                if let Some(next) = next.filter(|next| asking.wants(next.route)) {
+                    return Some((next.offered(), next.number));
+                }
+                held.iter()
+                    .find(|part| asking.wants(part.route))
+                    .map(|part| (part.offered(), part.item.as_u64()))
+            })?;
+        } else if self.interarrival.is_none() || !self.held.is_empty() {
             self.outlet.offer(ctx)?;
         } else {
             self.outlet.withdraw(ctx)?;
@@ -593,6 +693,56 @@ impl SourceBehaviour {
     }
 }
 
+impl SourceBehaviour {
+    /// What an `Accept` from the target at `position` gets at a timed Source: the
+    /// first part, or the first meant for that target when routed; nothing if the unit
+    /// it was told of has gone (ADR-0023 §6).
+    fn give(&mut self, position: usize, now: SimTime) -> Option<Part> {
+        if !self.outlet.is_routed() {
+            return self.held.pop_front();
+        }
+        let held = &self.held;
+        let gone = self.outlet.answers_a_unit_gone(position, now, |token| {
+            held.iter().any(|p| p.item.as_u64() == token)
+        });
+        if gone {
+            return None;
+        }
+        let at = held
+            .iter()
+            .position(|p| self.outlet.meant_for(p.route, position))?;
+        self.held.remove(at)
+    }
+
+    /// An `Accept` at an on-demand Source with routes: the part drawn ahead is created
+    /// now, if it is meant for this target and the one it was told of, and the next is
+    /// drawn.
+    fn accept_drawn(
+        &mut self,
+        position: usize,
+        from: ComponentId,
+        ctx: &mut Context<'_, FlowMessage>,
+    ) -> Result<(), ComponentError> {
+        let next = self.next;
+        let usable = next.filter(|part| {
+            self.outlet.meant_for(part.route, position)
+                && !self
+                    .outlet
+                    .answers_a_unit_gone(position, ctx.now(), |token| token == part.number)
+        });
+        let Some(part) = usable else {
+            ctx.send(from, FlowMessage::Decline)?;
+            return Ok(());
+        };
+        let item = ctx.create_item();
+        self.created += 1;
+        self.emitted += 1;
+        self.outlet.leaving(part.route, position, item, ctx);
+        ctx.transfer(item, from, FlowMessage::Arrive(part.attrs))?;
+        self.draw_next(ctx.now())
+    }
+}
+
 impl Component<FlowMessage> for SourceBehaviour {
     fn start(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         self.outlet.connect(&self.downstream, ctx)?;
@@ -602,6 +752,12 @@ impl Component<FlowMessage> for SourceBehaviour {
         if self.mix.len() > 1 {
             self.variant_stream = Some(ctx.stream("variant")?);
         }
+        if !self.priorities.is_empty() {
+            self.priority_stream = Some(ctx.stream("priority")?);
+        }
+        if self.due_in.is_some() {
+            self.due_stream = Some(ctx.stream("due_in")?);
+        }
         for (id, name) in &self.names {
             ctx.note(&FlowMessage::VariantName {
                 id: *id,
@@ -609,6 +765,9 @@ impl Component<FlowMessage> for SourceBehaviour {
             });
         }
         self.next_interval(ctx)?;
+        if self.interarrival.is_none() && self.outlet.is_routed() {
+            self.draw_next(ctx.now())?;
+        }
         self.settle(ctx)
     }
 
@@ -619,30 +778,49 @@ impl Component<FlowMessage> for SourceBehaviour {
     ) -> Result<(), ComponentError> {
         match d.message {
             FlowMessage::NextArrival => {
-                let attrs = self.next_attrs()?;
+                let now = ctx.now();
+                let mut attrs = self.next_attrs()?;
+                attrs.due = self.next_due(now)?;
                 for _ in 0..self.batch {
                     let item = ctx.create_item();
                     self.created += 1;
-                    self.held.push_back((item, attrs));
+                    let route = self.outlet.route(attrs)?;
+                    self.held.push_back(Part {
+                        item,
+                        attrs,
+                        since: now,
+                        route,
+                    });
                 }
             }
+            FlowMessage::Status(status) => self.outlet.status(d.from, status, ctx.now()),
             FlowMessage::Accept => {
-                self.outlet.accepted(d.from, ctx)?;
+                let position = self.outlet.accepted(d.from, ctx)?;
                 if self.interarrival.is_none() {
-                    // On demand: the part exists from this moment.
-                    let attrs = self.next_attrs()?;
-                    let item = ctx.create_item();
-                    self.created += 1;
-                    self.emitted += 1;
-                    ctx.transfer(item, d.from, FlowMessage::Arrive(attrs))?;
-                } else if let Some((item, attrs)) = self.held.pop_front() {
-                    self.emitted += 1;
-                    ctx.transfer(item, d.from, FlowMessage::Arrive(attrs))?;
-                    if self.held.is_empty() {
-                        self.next_interval(ctx)?;
+                    if self.outlet.is_routed() {
+                        self.accept_drawn(position, d.from, ctx)?;
+                    } else {
+                        // On demand: the part exists from this moment.
+                        let attrs = self.next_attrs()?;
+                        let item = ctx.create_item();
+                        self.created += 1;
+                        self.emitted += 1;
+                        self.outlet.leaving(Route::default(), position, item, ctx);
+                        ctx.transfer(item, d.from, FlowMessage::Arrive(attrs))?;
                     }
                 } else {
-                    ctx.send(d.from, FlowMessage::Decline)?;
+                    let now = ctx.now();
+                    match self.give(position, now) {
+                        Some(part) => {
+                            self.emitted += 1;
+                            self.outlet.leaving(part.route, position, part.item, ctx);
+                            ctx.transfer(part.item, d.from, FlowMessage::Arrive(part.attrs))?;
+                            if self.held.is_empty() {
+                                self.next_interval(ctx)?;
+                            }
+                        }
+                        None => ctx.send(d.from, FlowMessage::Decline)?,
+                    }
                 }
             }
             message @ (FlowMessage::Failure
@@ -656,7 +834,6 @@ impl Component<FlowMessage> for SourceBehaviour {
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
             | FlowMessage::VariantName { .. }
-            | FlowMessage::Status(_)
             | FlowMessage::OfferOf(_)
             | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
@@ -672,8 +849,8 @@ impl Component<FlowMessage> for SourceBehaviour {
     }
 
     fn held_items(&self, visit: &mut dyn FnMut(ItemId)) {
-        for (item, _) in &self.held {
-            visit(*item);
+        for part in &self.held {
+            visit(part.item);
         }
     }
 
@@ -700,13 +877,24 @@ impl Component<FlowMessage> for SourceBehaviour {
                 detail: format!("{held} held"),
             });
         }
-        if (held > 0 || self.interarrival.is_none()) && !self.outlet.all_offered() {
+        if (held > 0 || self.interarrival.is_none()) && !self.outlet.parts_offered() {
             return Err(Violation {
                 invariant: "held > 0 or on demand => offer outstanding",
                 detail: format!("{held} held"),
             });
         }
-        Ok(())
+        if let Some(first) = self.held.front()
+            && self
+                .held
+                .iter()
+                .any(|p| p.attrs.priority != first.attrs.priority || p.attrs.due != first.attrs.due)
+        {
+            return Err(Violation {
+                invariant: "a batch has one priority and one due date",
+                detail: format!("{held} held"),
+            });
+        }
+        self.outlet.check_standing_offers()
     }
 }
 
@@ -724,9 +912,16 @@ mod tests {
             mix: vec![(VariantId::new(0), 1.0)],
             names: Vec::new(),
             priority: 0,
+            priorities: Vec::new(),
+            priority_shares: Vec::new(),
+            priority_stream: None,
+            due_in: None,
+            due_stream: None,
             downstream: Vec::new(),
             outlet: Outlet::default(),
             held: VecDeque::new(),
+            next: None,
+            drawn: 0,
             created: 0,
             emitted: 0,
             noted: None,
@@ -735,7 +930,12 @@ mod tests {
 
     fn hold(s: &mut SourceBehaviour, n: u64) {
         let attrs = ItemAttrs::new(VariantId::new(0), 0);
-        s.held.push_back((ItemId::from_raw(n), attrs));
+        s.held.push_back(Part {
+            item: ItemId::from_raw(n),
+            attrs,
+            since: SimTime::START,
+            route: Route::default(),
+        });
     }
 
     #[test]

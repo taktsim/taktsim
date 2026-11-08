@@ -9,8 +9,8 @@ model hash: 54bb6a040236813c125e97a1c3304e3b2ab422e485725757f95569aaaaae24b9
 system hash: 99d78176375e0868682ca1ee3855f0f3933fee27d8bbd7bb3a18b30a8b0d8054
 seed: 1
 components: source, a, b, buf, c, d, sink
-records: 338 (207 events) in 1 chunks
-stream sha256: e26e0779cea9851a5bed63940fc512938f48659fe7778e59c8e7aaf0b98ed405
+records: 350 (207 events) in 1 chunks
+stream sha256: 7dd2f591cb3df10f747e5492ad69d7529f6ec5f0635d8935d6331803ef7de7d8
 end: 4min (horizon)
 ---
 0s note by source VariantName { id: VariantId(0), name: "default" }
@@ -24,6 +24,7 @@ end: 4min (horizon)
 4s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
 4s event #1 source -> a Offer
 4s event #3 a -> source Accept
+4s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(0), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 4s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 4s event #4 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
 4s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -37,6 +38,7 @@ end: 4min (horizon)
 8s event #10 source -> a Offer
 8s event #11 source -> b Offer
 8s event #12 b -> source Accept
+8s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(1), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 8s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 8s event #13 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
 8s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -53,6 +55,7 @@ end: 4min (horizon)
 17s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 17s event #21 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
 17s event #22 a -> source Accept
+17s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(2), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 17s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 17s event #24 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
 17s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -75,6 +78,7 @@ end: 4min (horizon)
 30s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 30s event #36 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
 30s event #37 b -> source Accept
+30s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(3), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 30s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 30s event #39 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
 30s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -100,6 +104,7 @@ end: 4min (horizon)
 43s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 43s event #53 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
 43s event #54 a -> source Accept
+43s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(4), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 43s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 43s event #56 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
 43s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -137,6 +142,7 @@ end: 4min (horizon)
 69s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 69s event #75 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
 69s event #76 b -> source Accept
+69s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(5), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 69s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 69s event #78 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
 69s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -171,6 +177,7 @@ end: 4min (horizon)
 95s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 95s event #96 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
 95s event #97 a -> source Accept
+95s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(6), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 95s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 95s event #99 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
 95s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -205,6 +212,7 @@ end: 4min (horizon)
 121s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 121s event #117 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
 121s event #118 b -> source Accept
+121s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(7), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 121s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 121s event #120 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
 121s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -239,6 +247,7 @@ end: 4min (horizon)
 147s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 147s event #138 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
 147s event #139 a -> source Accept
+147s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(8), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 147s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 147s event #141 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
 147s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -273,6 +282,7 @@ end: 4min (horizon)
 173s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 173s event #159 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
 173s event #160 b -> source Accept
+173s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(9), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 173s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 173s event #162 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
 173s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -307,6 +317,7 @@ end: 4min (horizon)
 199s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 199s event #180 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
 199s event #181 a -> source Accept
+199s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(10), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 199s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 199s event #183 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
 199s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -341,6 +352,7 @@ end: 4min (horizon)
 225s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 225s event #201 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
 225s event #202 b -> source Accept
+225s decision by source RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(11), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 1, room: None, key: 0 }, RouteCandidate { id: 2, room: None, key: 0 }] })
 225s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
 225s event #204 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
 225s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
