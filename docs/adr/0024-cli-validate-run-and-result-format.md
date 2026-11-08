@@ -68,7 +68,7 @@ pub fn run<D: Domain>(registry: &Registry<D>, source: ModelSource<'_>, request: 
 pub fn replay_stored<D: Domain>(registry: &Registry<D>, store: &Store, run_id: &RunId)
                       -> Result<ReplaySummary, Failure>;
 
-pub struct RunResponse { pub result: ResultDocument, pub reused: bool, pub warnings: Vec<Diagnostic> }
+pub struct RunResponse { pub result: ResultDocument, pub text: String, pub reused: bool, pub warnings: Vec<Diagnostic> }
 pub struct Failure { pub class: FailureClass, pub diagnostics: Vec<Diagnostic> }
 pub enum FailureClass { Invalid, RunFailed, Io }   // exit 1, 2, 7
 ```
@@ -77,7 +77,9 @@ pub enum FailureClass { Invalid, RunFailed, Io }   // exit 1, 2, 7
 command, because the roadmap lists replay as a test, not a command. Beside
 replaying, it checks the stored model against the header's model and system
 hashes, which replay itself does not (ADR-0021 checks version, seed and
-components), and the running package's version against `provenance`. A run with no
+components), the running package's version against `provenance`, the result against
+the id it is filed under, and the replay's stream hash, records and events against what
+the result states. A run with no
 seed is replayed under a different internal seed, so a false claim of drawing
 nothing diverges (§5).
 
@@ -430,11 +432,13 @@ directory, else `.taktsim/` here, `--store` overrides. Layout below it:
   tmp/<pid>-<n>/         a run in progress
 ```
 
-- **Atomic.** A run writes in `tmp/`, closes its files, then renames the directory
-  into `runs/`. If the target appeared meanwhile, another process did the same run,
+- **Atomic.** `store.json` and `.gitignore` are written in `tmp/` and renamed into place.
+  A run writes in `tmp/`, closes its files, then renames the directory into `runs/`. If the target appeared meanwhile, another process did the same run,
   and the temporary one is dropped. No half-written run is ever visible.
 - **Reuse.** If `runs/<id>/result.json` exists and reads, `run` returns it without
-  running (ADR-0019 item 5). With `--max-events` too: nothing runs, so no limit is
+  running (ADR-0019 item 5), as the bytes in the file, so a key this build does not read
+  is not lost. A result that does not compute to the id it is filed under is exit 2,
+  `run.stored_run_differs`, not this run. With `--max-events` too: nothing runs, so no limit is
   reached, and it is exit 0. `--no-reuse` runs anyway and, if the new run reached its
   end, compares the stream hash with the stored one, never overwriting: a difference is
   exit 2 and means the engine changed or determinism broke. This also matters while the
@@ -472,7 +476,7 @@ The exit codes are ADR-0019's. Which appear in M7:
 | --- | --- |
 | 0 | success |
 | 1 | a bad flag or value, a model that fails to load, `run.no_seed`, a zero horizon. `validate` on an invalid model |
-| 2 | invariant or conservation violation, engine error, `--no-reuse` mismatch, `run.stalled` (§3), `run.no_draw_claim_false` (§5) |
+| 2 | invariant or conservation violation, engine error, `--no-reuse` mismatch, a stored result that is not its run's, `run.stalled` (§3), `run.no_draw_claim_false` (§5) |
 | 3 | `--max-events` reached, with the partial result on stdout |
 | 7 | the model file, an included file or the store cannot be read or written (`LoadErrorKind::is_io`), or stdout cannot be written (`io.stdout`) |
 | 101 | the invariant-violation path of ADR-0007; a panic hook writes it as one JSON line first when `--format json` was asked for |
@@ -612,14 +616,14 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | --- | --- | --- | --- |
 | Commands and flags | every script and agent | semver major (ADR-0019) | `describe_is_fresh`, `walkthrough_uses_only_describe`, CLI snapshots |
 | Exit code use per command | every caller's error handling | semver major | `documented_exit_codes`, `malformed_models_exit_1_with_a_path` |
-| Error line (`kind`, `type`, `path`, `found`, `allowed`, `example`; none for exit 2 and 7) | every agent's error handling | semver major | `error_lines_match_their_schema`, CLI snapshots |
+| Error line (`kind`, `type`, `path`, `found`, `allowed`, `example`; none for exit 2 and 7), and `io.stdout` | every agent's error handling | semver major | `error_lines_match_their_schema`, `a_broken_stdout_does_not_blame_the_store`, CLI snapshots |
 | Result document: fields and `taktsim-result/1`, including `labels` and `observable` | M8, M11, M12, every reader | a new format; every stored result | `result_round_trips`, `emitted_results_match_the_schema`, `unknown_keys_are_ignored`, `labels_and_observable_round_trip`, `declared_observable_is_answered_or_unreported`, CLI snapshots |
 | Accuracy: required list, tags, reader rule, `none` | what every number claims | a new format | `every_value_has_accuracy`, `unknown_kind_reads_as_no_statement`, `single_run_states_no_interval`, `sampling_wraps_the_interval` |
 | `complete` as the reader's only test, `stop_reason` as an open explanation | every reader of partial results | a new format | `complete_decides_and_stop_reason_only_explains`, `event_limit_is_partial_and_exits_3` |
 | A stall is exit 2 in M7; `drained` for an empty system; `stalled` reserved | every reader's idea of a finished run; v0.2's stalls | an exit code's use (semver major) | `stall_is_exit_2_and_not_kept`, `drained_is_complete` |
 | Metric names `created`, `delivered`, `scrapped`, `consumed`, `items_alive`, unit `items` | scripts reading M7's result | a deprecation | `metrics_equal_item_counts`, `any_component_may_create_items`, CLI snapshots |
 | Run id and experiment id definition, ids only on stored runs | every stored run, every later reference | all stores go stale | `run_id_is_pinned`, `horizon_changes_the_run_id`, `run_id_names_the_engine`, `package_version_changes_the_run_id`, `experiment_id_is_over_sorted_runs`, `partial_document_has_no_ids` |
-| Store layout, `store_format`, reuse rule | every store, `trace query`, `compare` | a store migration | `store_layout_is_pinned`, `second_run_is_reused`, `no_reuse_detects_a_different_trace`, `truncated_no_reuse_exits_3_without_comparing`, `partial_run_is_not_kept`, `model_json_hashes_to_the_model_hash`, `unknown_store_format_is_refused` |
+| Store layout, `store_format`, reuse rule | every store, `trace query`, `compare` | a store migration | `store_layout_is_pinned`, `second_run_is_reused`, `no_reuse_detects_a_different_trace`, `truncated_no_reuse_exits_3_without_comparing`, `partial_run_is_not_kept`, `model_json_hashes_to_the_model_hash`, `unknown_store_format_is_refused`, `processes_racing_on_one_store_all_succeed`, `a_reused_result_prints_what_is_stored`, `a_result_filed_under_another_run_is_not_returned`, `replay_refuses_a_run_filed_under_another_id` |
 | Trace header: `has seed`, file format 3 | every trace reader | a format version | `header_bytes_are_pinned`, `absent_seed_round_trips`, `run_without_seed_replays`, the unchanged stream hashes in the snapshots |
 | Seed rules: no-draw models have none, K2, refusal | which runs count as the same; replication counts | different ids and refusals | `no_seed_refused_when_the_model_draws`, `draws_nothing_runs_with_empty_seeds`, `seed_option_is_recorded_over_model_seed`, `no_draw_claim_is_true`, `no_draw_claim_holds_on_generated_models`, `false_no_draw_claim_exits_2_and_is_not_kept` |
 | `ComponentType::draws_random`, `Domain::draws_random`, `Domain::PACKAGE`, `Domain::PACKAGE_VERSION`, `RunOptions::no_seed`, `RunOptions::no_seed_check`, `ENGINE_NAME` | every later package; core's public API | every package | `no_draw_claim_is_true`, doc tests, `record_format_names_the_engine`, `message_format_names_the_package` |
