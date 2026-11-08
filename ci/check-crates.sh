@@ -46,6 +46,8 @@ allowed() {
 metadata=$(cargo metadata --no-deps --format-version 1)
 allowed taktsim-units ""
 allowed taktsim-core "taktsim-units"
+# Pure numbers: core only as a dev-dependency, for seeded test data (ADR-0014, ADR-0025 §1).
+allowed taktsim-stats "taktsim-units taktsim-core"
 allowed taktsim-model "taktsim-units taktsim-core"
 allowed taktsim-trace "taktsim-units taktsim-core"
 allowed taktsim-components "taktsim-units taktsim-core taktsim-model taktsim-trace"
