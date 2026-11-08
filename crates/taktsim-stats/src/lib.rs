@@ -1,6 +1,6 @@
-//! Output analysis for taktsim: confidence intervals from independent
+//! Output analysis for taktsim: the KPI fold, confidence intervals from independent
 //! replications, sequential replication control, time-weighted statistics
-//! and MSER-5 warm-up detection (spec §6 "Output analysis"; ADR-0014).
+//! and MSER-5 warm-up detection (spec §6 "Output analysis"; ADR-0014, ADR-0025).
 //! Roadmap M8 and M9.
 //!
 //! Everything here is a pure function of its input: no randomness, no
@@ -49,6 +49,7 @@
 
 mod error;
 mod interval;
+mod kpi;
 mod level;
 mod sequential;
 mod student_t;
@@ -57,6 +58,7 @@ mod warm_up;
 
 pub use error::StatsError;
 pub use interval::{ConfidenceInterval, Summary};
+pub use kpi::{Creation, Fact, KpiFold, KpiReport, LeadTimes, PlaceKpis, PlaceSpec};
 pub use level::{ConfidenceLevel, Probability};
 pub use sequential::{PrecisionReport, ReplicationControl, ReplicationPlan, ReplicationStatus};
 pub use student_t::StudentT;
