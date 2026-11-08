@@ -198,24 +198,27 @@ impl Store {
     }
 
     /// The stored result of the run `id`, if it is in the store.
-    pub(crate) fn read_result(&self, id: &RunId) -> Result<Option<ResultDocument>, Failure> {
+    pub(crate) fn read_result(&self, id: &RunId) -> Result<Option<StoredResult>, Failure> {
         let path = self.run_file(id, RESULT_FILE);
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(io_failure("store.read", &path, &e)),
         };
-        decode_str(&text, Format::Json).map(Some).map_err(|errors| {
-            let mut line = Diagnostic::error(
-                "store.result",
-                format!("{} is not a result this build reads", path.display()),
-            )
-            .at("--store")
-            .found(errors.first().to_string())
-            .allowed(crate::RESULT_FORMAT);
-            line.file = Some(path.display().to_string());
-            Failure::one(FailureClass::Io, line)
-        })
+        match decode_str(&text, Format::Json) {
+            Ok(document) => Ok(Some(StoredResult { document, text })),
+            Err(errors) => {
+                let mut line = Diagnostic::error(
+                    "store.result",
+                    format!("{} is not a result this build reads", path.display()),
+                )
+                .at("--store")
+                .found(errors.first().to_string())
+                .allowed(crate::RESULT_FORMAT);
+                line.file = Some(path.display().to_string());
+                Err(Failure::one(FailureClass::Io, line))
+            }
+        }
     }
 
     /// A new directory for a run in progress.
@@ -252,6 +255,14 @@ impl Store {
             Err(e) => Err(io_failure("store.write", &target, &e)),
         }
     }
+}
+
+/// A stored result: its value, and its bytes as they are in the store. A reader
+/// ignores keys it does not know, so only the bytes are sure to hold all of them.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct StoredResult {
+    pub(crate) document: ResultDocument,
+    pub(crate) text: String,
 }
 
 /// What [`Store::commit`] did.

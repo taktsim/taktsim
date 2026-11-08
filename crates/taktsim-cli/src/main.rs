@@ -233,7 +233,7 @@ fn run(args: &RunArgs, format: Format) -> u8 {
     progress.reused = Some(response.reused);
     write_stderr(&render::line(&progress, format));
     let text = match format {
-        Format::Json => response.result.to_text(),
+        Format::Json => response.text.clone(),
         Format::Text => render::result_text(&response.result),
     };
     match print(&text, format) {

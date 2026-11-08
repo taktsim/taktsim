@@ -69,7 +69,9 @@ pub use store::Store;
 
 use crate::ending::Ending;
 use crate::metrics::Fold;
-use crate::store::{Commit, MODEL_FILE, RESULT_FILE, TRACE_FILE, TempRun, io_failure};
+use crate::store::{
+    Commit, MODEL_FILE, RESULT_FILE, StoredResult, TRACE_FILE, TempRun, io_failure,
+};
 
 /// Where a model comes from.
 ///
@@ -156,6 +158,9 @@ impl Default for RunRequest<'_> {
 pub struct RunResponse {
     /// The result.
     pub result: ResultDocument,
+    /// The result as a document: the bytes in the store for a run that is kept or
+    /// reused, including any key this build does not read (ADR-0024 §3).
+    pub text: String,
     /// Whether it came from the store without running.
     pub reused: bool,
     /// What the caller should know, such as a seed that is not used.
@@ -533,10 +538,11 @@ pub fn run<D: Domain>(
     )?;
     let id = run_id::<D>(&model, seeding.seed)?;
     if request.reuse
-        && let Some(result) = store.read_result(&id)?
+        && let Some(stored) = store.read_result(&id)?
     {
         return Ok(RunResponse {
-            result,
+            result: stored.document,
+            text: stored.text,
             reused: true,
             warnings: seeding.warnings,
         });
@@ -582,8 +588,10 @@ pub fn run<D: Domain>(
         fold: &fold,
     };
     if !complete {
+        let result = result_document(registry, &model, &finished(None))?;
         return Ok(RunResponse {
-            result: result_document(registry, &model, &finished(None))?,
+            text: result.to_text(),
+            result,
             reused: false,
             warnings: seeding.warnings,
         });
@@ -592,15 +600,19 @@ pub fn run<D: Domain>(
         check_no_draw_claim(registry, &model, &trace_path, &fold)?;
     }
     let result = result_document(registry, &model, &finished(Some(&id)))?;
+    let text = result.to_text();
     let result_path = temp.file(RESULT_FILE);
-    std::fs::write(&result_path, result.to_text())
-        .map_err(|e| io_failure("store.write", &result_path, &e))?;
-    let result = match store.commit(&temp, &id)? {
-        Commit::Stored => result,
+    std::fs::write(&result_path, &text).map_err(|e| io_failure("store.write", &result_path, &e))?;
+    let stored = match store.commit(&temp, &id)? {
+        Commit::Stored => StoredResult {
+            document: result,
+            text,
+        },
         Commit::AlreadyThere => compare_with_stored(store, &id, &written)?,
     };
     Ok(RunResponse {
-        result,
+        result: stored.document,
+        text: stored.text,
         reused: false,
         warnings: seeding.warnings,
     })
@@ -627,11 +639,11 @@ fn compare_with_stored(
     store: &Store,
     id: &RunId,
     written: &Summary,
-) -> Result<ResultDocument, Failure> {
+) -> Result<StoredResult, Failure> {
     let stored = store.read_result(id)?;
     let stored_hash = stored
         .iter()
-        .flat_map(|result| &result.runs)
+        .flat_map(|stored| &stored.document.runs)
         .find_map(|run| run.trace.as_ref())
         .map(|trace| trace.stream_hash);
     match stored {
@@ -684,7 +696,10 @@ pub fn replay_stored<D: Domain>(
     store: &Store,
     id: &RunId,
 ) -> Result<ReplaySummary, Failure> {
-    let Some(result) = store.read_result(id)? else {
+    let Some(StoredResult {
+        document: result, ..
+    }) = store.read_result(id)?
+    else {
         return Err(Failure::one(
             FailureClass::Invalid,
             Diagnostic::error("run.unknown_id", format!("no run {id} in the store"))

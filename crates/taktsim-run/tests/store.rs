@@ -372,3 +372,30 @@ fn discover_finds_the_nearest_store_upward() {
         dir.path().join("a").join(".taktsim")
     );
 }
+
+/// A kept run's text is the stored file, and a partial run's is its only copy.
+#[test]
+fn the_text_of_a_response_is_the_document() {
+    let dir = TempDir::new();
+    let store = dir.store();
+    let kept = run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    assert_eq!(kept.text, kept.result.to_text());
+    let id = kept.result.runs[0].run_id.as_ref().unwrap();
+    let stored = std::fs::read_to_string(
+        store
+            .root()
+            .join("runs")
+            .join(id.as_str())
+            .join("result.json"),
+    )
+    .unwrap();
+    assert_eq!(kept.text, stored);
+    let limited = RunRequest {
+        seed: Some(2),
+        max_events: Some(1),
+        ..RunRequest::new()
+    };
+    let partial = run_text(&drawing_model(", seed: 1"), &limited, &store).unwrap();
+    assert!(!partial.result.complete);
+    assert_eq!(partial.text, partial.result.to_text());
+}
