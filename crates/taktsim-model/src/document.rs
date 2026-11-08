@@ -4,7 +4,8 @@
 use taktsim_units::{Ratio, SimDuration};
 
 use crate::component::{
-    Catalog, Component, ComponentEntry, ComponentRef, ID_PATTERN, read_component, read_id,
+    Catalog, Component, ComponentEntry, ComponentRef, ID_PATTERN, RoutingWords, read_component,
+    read_id,
 };
 use crate::decode::{Decode, Decoder, Fields, Record, Schemas};
 use crate::error::{FieldPath, LoadErrorKind, Location, Place, Segment};
@@ -88,6 +89,7 @@ pub struct Document {
     pub(crate) components: Vec<Component>,
     pub(crate) flow: Vec<Edge>,
     pub(crate) observe: Vec<Observable>,
+    pub(crate) control: Control,
 }
 
 impl Document {
@@ -153,6 +155,19 @@ impl Document {
         &self.observe
     }
 
+    /// The `control` section: read from the model file only, empty when it is
+    /// absent (ADR-0023 §2).
+    ///
+    /// ```
+    /// fn rules(doc: &taktsim_model::Document) -> usize {
+    ///     doc.control().dispatch().len()
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn control(&self) -> &Control {
+        &self.control
+    }
+
     /// The normalized form, before canonicalization: every value typed and
     /// in canonical text, shorthands expanded, `include:` resolved, and
     /// absent or empty optional sections left out.
@@ -169,10 +184,15 @@ impl Document {
         .with("model", &self.model)
         .with("experiment", &self.experiment)
         .with("flow", &self.flow);
-        Ok(if self.observe.is_empty() {
+        let doc = if self.observe.is_empty() {
             doc
         } else {
             doc.with("observe", &self.observe)
+        };
+        Ok(if self.control.dispatch.is_empty() {
+            doc
+        } else {
+            doc.with("control", &self.control)
         })
     }
 }
@@ -613,12 +633,280 @@ impl Encode for Observable {
     }
 }
 
+/// How a part chooses among the targets of an edge (spec §4, ADR-0023 §5). The
+/// list order is the preference, and the last term of every rank. Matched
+/// exhaustively, with no wildcard arm, so a new rule has to be handled everywhere
+/// (ADR-0023 §2).
+///
+/// ```
+/// use taktsim_model::{ChoiceRule, Format, decode_str};
+///
+/// let rule: ChoiceRule = decode_str("shortest_queue", Format::Yaml)?;
+/// assert_eq!(rule, ChoiceRule::ShortestQueue);
+/// assert_eq!(rule.as_str(), "shortest_queue");
+/// assert!(decode_str::<ChoiceRule>("shortest", Format::Yaml).is_err());
+/// # Ok::<(), taktsim_model::LoadErrors>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ChoiceRule {
+    /// Offers to every target; the first `Accept` takes the part. When room
+    /// opens at several at one instant, event order decides.
+    FirstFree,
+    /// Has room, then the fewest units at the target, then list order.
+    ShortestQueue,
+    /// Has room, then the least work per place so far, then list order.
+    LowestUtilization,
+    /// Has room, then list order: preferred with fallback.
+    Preferred,
+}
+
+impl ChoiceRule {
+    /// Every rule, in the order of the documents.
+    pub const ALL: [Self; 4] = [
+        Self::FirstFree,
+        Self::ShortestQueue,
+        Self::LowestUtilization,
+        Self::Preferred,
+    ];
+
+    /// The word in a model.
+    ///
+    /// ```
+    /// assert_eq!(taktsim_model::ChoiceRule::FirstFree.as_str(), "first_free");
+    /// ```
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FirstFree => "first_free",
+            Self::ShortestQueue => "shortest_queue",
+            Self::LowestUtilization => "lowest_utilization",
+            Self::Preferred => "preferred",
+        }
+    }
+}
+
+impl Encode for ChoiceRule {
+    fn encode(&self) -> Json {
+        self.as_str().into()
+    }
+}
+
+impl Decode for ChoiceRule {
+    const EXPECTED: &'static str =
+        "a choice rule: first_free, shortest_queue, lowest_utilization or preferred";
+    const EXAMPLE: &'static str = "shortest_queue";
+    const SCHEMA_NAME: Option<&'static str> = Some("ChoiceRule");
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let options = Self::ALL.map(|r| (r.as_str(), r));
+        one_of(node, cx, "choice rule", &options)
+    }
+
+    fn schema(_: &mut Schemas) -> Json {
+        let words = Self::ALL.iter().map(|r| Json::from(r.as_str())).collect();
+        Json::object([
+            ("enum", Json::Array(words)),
+            (
+                "description",
+                Json::from(
+                    "How a part chooses among the targets of an edge, the list being the \
+                     preference. Default first_free.",
+                ),
+            ),
+        ])
+    }
+}
+
+/// Which waiting unit a station takes next (spec §4, ADR-0023 §6). Lower key
+/// wins; ties go to the oldest ready unit. Matched exhaustively, with no wildcard
+/// arm.
+///
+/// ```
+/// use taktsim_model::{DispatchRule, Format, decode_str};
+///
+/// let rule: DispatchRule = decode_str("earliest_due_date", Format::Yaml)?;
+/// assert_eq!(rule, DispatchRule::EarliestDueDate);
+/// assert_eq!(rule.as_str(), "earliest_due_date");
+/// # Ok::<(), taktsim_model::LoadErrors>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DispatchRule {
+    /// The oldest ready unit, across every upstream.
+    Fifo,
+    /// The earliest due date; a unit with none comes after all others.
+    EarliestDueDate,
+    /// The shortest mean time on this machine.
+    ShortestProcessingTime,
+    /// The same variant first, then the cheapest change.
+    MinimumSetup,
+    /// The highest priority.
+    PriorityClass,
+}
+
+impl DispatchRule {
+    /// Every rule, in the order of the documents.
+    pub const ALL: [Self; 5] = [
+        Self::Fifo,
+        Self::EarliestDueDate,
+        Self::ShortestProcessingTime,
+        Self::MinimumSetup,
+        Self::PriorityClass,
+    ];
+
+    /// The word in a model.
+    ///
+    /// ```
+    /// assert_eq!(taktsim_model::DispatchRule::Fifo.as_str(), "fifo");
+    /// ```
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Fifo => "fifo",
+            Self::EarliestDueDate => "earliest_due_date",
+            Self::ShortestProcessingTime => "shortest_processing_time",
+            Self::MinimumSetup => "minimum_setup",
+            Self::PriorityClass => "priority_class",
+        }
+    }
+}
+
+impl Encode for DispatchRule {
+    fn encode(&self) -> Json {
+        self.as_str().into()
+    }
+}
+
+impl Decode for DispatchRule {
+    const EXPECTED: &'static str = "a dispatching rule: fifo, earliest_due_date, \
+         shortest_processing_time, minimum_setup or priority_class";
+    const EXAMPLE: &'static str = "earliest_due_date";
+    const SCHEMA_NAME: Option<&'static str> = Some("DispatchRule");
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let options = Self::ALL.map(|r| (r.as_str(), r));
+        one_of(node, cx, "dispatching rule", &options)
+    }
+
+    fn schema(_: &mut Schemas) -> Json {
+        let words = Self::ALL.iter().map(|r| Json::from(r.as_str())).collect();
+        Json::object([
+            ("enum", Json::Array(words)),
+            (
+                "description",
+                Json::from("Which waiting unit the station takes next."),
+            ),
+        ])
+    }
+}
+
+/// The `control` section: the dispatching rule declared for each station, in the
+/// order of their ids. `release` waits for v0.2.
+///
+/// ```
+/// fn rule_of<'a>(doc: &'a taktsim_model::Document, id: &str) -> Option<taktsim_model::DispatchRule> {
+///     doc.control().dispatch().iter().find(|(r, _)| r.id() == id).map(|(_, rule)| *rule)
+/// }
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct Control {
+    dispatch: Vec<(ComponentRef, DispatchRule)>,
+}
+
+impl Control {
+    /// Each station with a declared rule, sorted by id.
+    ///
+    /// ```
+    /// assert!(taktsim_model::Control::default().dispatch().is_empty());
+    /// ```
+    #[must_use]
+    pub fn dispatch(&self) -> &[(ComponentRef, DispatchRule)] {
+        &self.dispatch
+    }
+}
+
+impl Encode for Control {
+    /// `{dispatch: {id: rule}}`.
+    fn encode(&self) -> Json {
+        let rules = Json::Object(
+            self.dispatch
+                .iter()
+                .map(|(id, rule)| (id.id().to_owned(), rule.encode()))
+                .collect(),
+        );
+        Json::object([]).with("dispatch", &rules)
+    }
+}
+
+impl Record for Control {
+    const EXPECTED: &'static str = "the control section: a mapping with `dispatch`";
+    const EXAMPLE: &'static str = "{dispatch: {weld-1: earliest_due_date}}";
+    const SCHEMA_NAME: Option<&'static str> = Some("Control");
+    const DESCRIPTION: Option<&'static str> =
+        Some("Control logic: the dispatching rule of each station (ADR-0023).");
+
+    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+        let dispatch = fields.optional::<DispatchRules>("dispatch");
+        Some(Self {
+            dispatch: dispatch?.map(|d| d.0).unwrap_or_default(),
+        })
+    }
+}
+
+/// `control.dispatch`: a mapping from station to rule, sorted by id.
+struct DispatchRules(Vec<(ComponentRef, DispatchRule)>);
+
+impl Decode for DispatchRules {
+    const EXPECTED: &'static str = "a mapping from station to dispatching rule";
+    const EXAMPLE: &'static str = "{weld-1: earliest_due_date}";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let Value::Map(entries) = node.value() else {
+            cx.wrong_type::<Self>(node);
+            return None;
+        };
+        let mut rules = Vec::with_capacity(entries.len());
+        let mut ok = true;
+        for entry in entries {
+            let read = cx.within(Segment::Key(entry.key().to_owned()), |cx| {
+                let station = ComponentRef::from_key(entry, cx);
+                let rule = DispatchRule::decode(entry.value(), cx);
+                Some((station?, rule?))
+            });
+            match read {
+                Some(rule) => rules.push(rule),
+                None => ok = false,
+            }
+        }
+        rules.sort_by(|a, b| a.0.id().cmp(b.0.id()));
+        ok.then_some(Self(rules))
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("object")),
+            ("propertyNames", schemas.of::<ComponentRef>()),
+            ("additionalProperties", schemas.of::<DispatchRule>()),
+        ])
+    }
+}
+
+/// A condition on an edge: as written until the loader parses it, then its
+/// expression, whose canonical text is the normalized form.
+#[derive(Debug, Clone)]
+struct When {
+    written: String,
+    expr: Option<Expr>,
+    place: Place,
+    path: FieldPath,
+}
+
 /// One edge of the flow graph: units go from any component in `from` to a
 /// component in `to` (spec §4, "Routing"). A single id is a one-element
 /// list; a chain `[a, b, c]` is the edges `a → b` and `b → c`.
 ///
-/// Conditions (`when`), choice rules (`choose`) and split ratios arrive
-/// with routing (roadmap M6); until then an edge has only `from` and `to`.
+/// Edges leaving one component are tried in the order written; the first whose
+/// condition holds is the part's way out (ADR-0023 §3). With a [`split`](Self::split),
+/// [`to`](Self::to) lists the split's targets, sorted by id.
 ///
 /// ```
 /// fn pairs(doc: &taktsim_model::Document) -> Vec<(String, String)> {
@@ -634,14 +922,36 @@ impl Encode for Observable {
 pub struct Edge {
     from: Vec<ComponentRef>,
     to: Vec<ComponentRef>,
+    when: Option<When>,
+    choose: Option<ChoiceRule>,
+    split: Option<Vec<(ComponentRef, Ratio)>>,
 }
 
 impl Encode for Edge {
-    /// `{from: [ids], to: [ids]}`.
+    /// `{from: [ids], to: [ids], when?, choose?}`, or `{from: [ids], split: {id:
+    /// share}, when?}`; what is absent is left out, so no pinned hash moves.
     fn encode(&self) -> Json {
-        Json::object([])
-            .with("from", &self.from)
-            .with("to", &self.to)
+        let value = Json::object([]).with("from", &self.from);
+        let value = match &self.split {
+            Some(shares) => {
+                let shares = Json::Object(
+                    shares
+                        .iter()
+                        .map(|(id, share)| (id.id().to_owned(), share.encode()))
+                        .collect(),
+                );
+                value.with("split", &shares)
+            }
+            None => value.with("to", &self.to),
+        };
+        let when = self.when.as_ref().map(|when| {
+            when.expr
+                .as_ref()
+                .map_or_else(|| when.written.clone(), ToString::to_string)
+        });
+        value
+            .with_optional("when", when.as_ref())
+            .with_optional("choose", self.choose.as_ref())
     }
 }
 
@@ -658,7 +968,8 @@ impl Edge {
         &self.from
     }
 
-    /// The components units go to.
+    /// The components units go to: for a [`split`](Self::split), its targets
+    /// sorted by id.
     ///
     /// ```
     /// fn targets(e: &taktsim_model::Edge) -> Vec<&str> {
@@ -668,6 +979,77 @@ impl Edge {
     #[must_use]
     pub fn to(&self) -> &[ComponentRef] {
         &self.to
+    }
+
+    /// The condition, if the edge has one. Its [`Display`](std::fmt::Display) is
+    /// the canonical text.
+    ///
+    /// ```
+    /// fn condition(e: &taktsim_model::Edge) -> Option<String> {
+    ///     e.when().map(ToString::to_string)
+    /// }
+    /// ```
+    #[must_use]
+    pub fn when(&self) -> Option<&Expr> {
+        self.when.as_ref().and_then(|when| when.expr.as_ref())
+    }
+
+    /// The condition as written, where it is written and its field path, for an
+    /// error a catalog's check reports.
+    ///
+    /// ```
+    /// fn path(e: &taktsim_model::Edge) -> Option<String> {
+    ///     e.when_written().map(|(_, _, path)| path.to_string())
+    /// }
+    /// ```
+    #[must_use]
+    pub fn when_written(&self) -> Option<(&str, &Place, &FieldPath)> {
+        self.when
+            .as_ref()
+            .map(|when| (when.written.as_str(), &when.place, &when.path))
+    }
+
+    /// The written choice rule. Absent, a part takes the first target free.
+    ///
+    /// ```
+    /// use taktsim_model::{ChoiceRule, Edge};
+    ///
+    /// fn rule(e: &Edge) -> ChoiceRule {
+    ///     e.choose().unwrap_or(ChoiceRule::FirstFree)
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn choose(&self) -> Option<ChoiceRule> {
+        self.choose
+    }
+
+    /// The share of each target, sorted by id, if the edge is a split.
+    ///
+    /// ```
+    /// fn total(e: &taktsim_model::Edge) -> f64 {
+    ///     e.split().map_or(0.0, |shares| shares.iter().map(|(_, s)| s.as_percent()).sum())
+    /// }
+    /// ```
+    #[must_use]
+    pub fn split(&self) -> Option<&[(ComponentRef, Ratio)]> {
+        self.split.as_deref()
+    }
+
+    /// Replaces the condition as written by what the loader made of it.
+    pub(crate) fn take_when(&mut self) -> Option<(&str, &mut Option<Expr>, &Place, &FieldPath)> {
+        self.when.as_mut().map(|when| {
+            (
+                when.written.as_str(),
+                &mut when.expr,
+                &when.place,
+                &when.path,
+            )
+        })
+    }
+
+    /// Whether the edge has a condition, parsed or not.
+    pub(crate) const fn has_when(&self) -> bool {
+        self.when.is_some()
     }
 }
 
@@ -929,6 +1311,8 @@ pub(crate) struct Parts {
 pub(crate) struct MainFile {
     pub(crate) model: Option<ModelInfo>,
     pub(crate) experiment: Option<RawExperiment>,
+    /// The `control` section; `None` if it could not be read.
+    pub(crate) control: Option<Control>,
     /// `None` if `include:` could not be read: the files it names may hold
     /// the sections the checks across files would report as missing.
     pub(crate) includes: Option<Vec<IncludeSpec>>,
@@ -964,9 +1348,16 @@ pub(crate) fn read_main_fields(fields: &mut Fields<'_, '_>, catalog: &Catalog) -
     let experiment = fields.required::<RawExperiment>("experiment");
     let includes = fields.optional::<Includes>("include");
     let parts = read_parts(fields, catalog);
+    // Only where the catalog honours it; otherwise an unknown key (ADR-0023 §2).
+    let control = if catalog.routing().dispatch {
+        fields.optional::<Control>("control")
+    } else {
+        Some(None)
+    };
     Some(MainFile {
         model,
         experiment,
+        control: control.map(Option::unwrap_or_default),
         includes: includes.map(|read| read.map(|i| i.0).unwrap_or_default()),
         parts,
         start: Location::new(1, 1),
@@ -1056,17 +1447,25 @@ impl Decode for ComponentList {
 /// The `flow` section: chains and edges.
 struct FlowList(Vec<(Edge, EdgePlaces)>);
 
-impl Decode for FlowList {
-    const EXPECTED: &'static str = "a list of chains and edges";
-    const EXAMPLE: &'static str = "[[source, cut, sink]]";
-
-    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+impl FlowList {
+    /// Reads the list, with the routing words the catalog honours.
+    fn read(node: &Node, cx: &mut Decoder, words: RoutingWords) -> Option<Self> {
         if !matches!(node.value(), Value::List(_)) {
             cx.wrong_type::<Self>(node);
             return None;
         }
-        let entries = cx.list(node, FlowEntry::decode)?;
+        let entries = cx.list(node, |item, cx| FlowEntry::read(item, cx, words))?;
         Some(Self(entries.into_iter().flat_map(|e| e.0).collect()))
+    }
+}
+
+impl Decode for FlowList {
+    const EXPECTED: &'static str = "a list of chains and edges";
+    const EXAMPLE: &'static str = "[[source, cut, sink]]";
+
+    /// Reads with no routing words: the loader uses [`FlowList::read`].
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        Self::read(node, cx, RoutingWords::NONE)
     }
 
     fn schema(schemas: &mut Schemas) -> Json {
@@ -1113,7 +1512,9 @@ pub(crate) fn read_parts(fields: &mut Fields<'_, '_>, catalog: &Catalog) -> Part
         }
         cx.list(node, |item, cx| read_component(item, cx, catalog))
     });
-    let flow = fields.optional::<FlowList>("flow");
+    let words = catalog.routing();
+    let flow =
+        fields.optional_with::<FlowList, _>("flow", |node, cx| FlowList::read(node, cx, words));
     let observe = fields.optional::<ObserveList>("observe");
     let complete = components.is_some() && flow.is_some() && observe.is_some();
     let (flow, flow_places) = match flow.flatten() {
@@ -1137,36 +1538,217 @@ pub(crate) fn read_parts(fields: &mut Fields<'_, '_>, catalog: &Catalog) -> Part
 /// The places of an edge's parts: the entry, then each `to` reference.
 pub(crate) type EdgePlaces = Vec<(Place, FieldPath)>;
 
-/// An edge as a mapping: `{from, to}`.
-struct EdgeMap {
-    from: IdList,
-    to: IdList,
+/// An edge's condition as written: parsed once the whole document is read.
+struct WhenText(When);
+
+impl Decode for WhenText {
+    const EXPECTED: &'static str = "a condition on a part, such as `variant == 'premium'`";
+    const EXAMPLE: &'static str = "variant == 'premium'";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let written = String::decode(node, cx)?;
+        Some(Self(When {
+            written,
+            expr: None,
+            place: Place::new(cx.file().map(str::to_owned), node.start()),
+            path: cx.path().clone(),
+        }))
+    }
+
+    fn schema(_: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("string")),
+            (
+                "description",
+                Json::from(
+                    "A boolean expression over the part's attributes (ADR-0009, ADR-0023). A part \
+                     takes the first edge whose condition holds, in the order written, and the \
+                     last edge leaving a component has none. The loader checks its type.",
+                ),
+            ),
+            (
+                "examples",
+                Json::Array(vec![Json::from("variant == 'premium'")]),
+            ),
+        ])
+    }
 }
 
-impl Record for EdgeMap {
+/// `split`: a mapping from target to share, sorted by id.
+struct SplitShares(Vec<(ComponentRef, Ratio)>);
+
+impl Decode for SplitShares {
+    const EXPECTED: &'static str = "a mapping from target to share, such as `{cut: 5%, pack: 95%}`";
+    const EXAMPLE: &'static str = "{cut: 5%, pack: 95%}";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let Value::Map(entries) = node.value() else {
+            cx.wrong_type::<Self>(node);
+            return None;
+        };
+        let mut shares = Vec::with_capacity(entries.len());
+        let mut ok = true;
+        for entry in entries {
+            let read = cx.within(Segment::Key(entry.key().to_owned()), |cx| {
+                let target = ComponentRef::from_key(entry, cx);
+                let share = Ratio::decode(entry.value(), cx);
+                Some((target?, share?))
+            });
+            match read {
+                Some(share) => shares.push(share),
+                None => ok = false,
+            }
+        }
+        shares.sort_by(|a, b| a.0.id().cmp(b.0.id()));
+        ok.then_some(Self(shares))
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("object")),
+            ("minProperties", Json::from(2)),
+            ("propertyNames", schemas.of::<ComponentRef>()),
+            ("additionalProperties", schemas.of::<Ratio>()),
+            (
+                "description",
+                Json::from(
+                    "The share of each target, each above 0 %, summing to 100 %. A part takes one \
+                     target by one draw and waits for it when it is full.",
+                ),
+            ),
+        ])
+    }
+}
+
+/// An edge as a mapping, in either closed shape: `{from, to, when?, choose?}` or
+/// `{from, split, when?}`.
+struct EdgeMap {
+    from: Vec<ComponentRef>,
+    to: Vec<ComponentRef>,
+    when: Option<When>,
+    choose: Option<ChoiceRule>,
+    split: Option<Vec<(ComponentRef, Ratio)>>,
+}
+
+impl Decode for EdgeMap {
     const EXPECTED: &'static str = FlowEntry::EXPECTED;
     const EXAMPLE: &'static str = "{from: cut, to: [weld-1, weld-2]}";
 
-    fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
-        let from = fields.required("from");
-        let to = fields.required("to");
+    /// Reads with no routing words: the loader uses [`EdgeMap::read`].
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        Self::read(node, cx, RoutingWords::NONE)
+    }
+
+    /// The closed shapes the catalog offers (ADR-0023 §2): with `split`, two,
+    /// and a value can match only one of them.
+    fn schema(schemas: &mut Schemas) -> Json {
+        let words = schemas.routing();
+        let to = schemas.describe(|fields| {
+            let _ = Self::read_to(fields, words);
+        });
+        if !words.split {
+            return to;
+        }
+        let split = schemas.describe(|fields| {
+            let _ = Self::read_split(fields, words);
+        });
+        Json::object([("oneOf", Json::Array(vec![to, split]))])
+    }
+}
+
+impl EdgeMap {
+    /// Reads the mapping, with the routing words the catalog honours. A word it
+    /// does not honour is an unknown key.
+    fn read(node: &Node, cx: &mut Decoder, words: RoutingWords) -> Option<Self> {
+        let mut fields = cx.fields::<Self>(node)?;
+        let edge = if words.split && fields.entry("split").is_some() {
+            Self::report_mixed(&mut fields, words);
+            Self::read_split(&mut fields, words)
+        } else {
+            let edge = Self::read_to(&mut fields, words);
+            // Known, so the message about an unknown key lists it.
+            if words.split {
+                let _ = fields.take("split");
+            }
+            edge
+        };
+        fields.finish();
+        edge
+    }
+
+    /// `split` with `to` or `choose`: one error for each, at the other key.
+    fn report_mixed(fields: &mut Fields<'_, '_>, words: RoutingWords) {
+        for (key, allowed) in [
+            ("to", "a split names its targets itself; leave out `to`"),
+            (
+                "choose",
+                "a split chooses by its shares; leave out `choose`, or use `to` with `choose`",
+            ),
+        ] {
+            let offered = key == "to" || words.choose;
+            if let (true, Some(entry)) = (offered, fields.entry(key)) {
+                fields.skip(key);
+                fields.decoder().within(Segment::Key(key.to_owned()), |cx| {
+                    cx.not_allowed(
+                        entry.value(),
+                        format!("`{key}` together with `split`"),
+                        allowed,
+                        "{from: qc, split: {cut: 5%, pack: 95%}}",
+                    );
+                });
+            }
+        }
+    }
+
+    /// `{from, to, when?, choose?}`.
+    fn read_to(fields: &mut Fields<'_, '_>, words: RoutingWords) -> Option<Self> {
+        let from = fields.required::<IdList>("from");
+        let to = fields.required::<IdList>("to");
+        let when = if words.when {
+            fields.optional::<WhenText>("when")
+        } else {
+            Some(None)
+        };
+        let choose = if words.choose {
+            fields.optional("choose")
+        } else {
+            Some(None)
+        };
         Some(Self {
-            from: from?,
-            to: to?,
+            from: from?.0,
+            to: to?.0,
+            when: when?.map(|w| w.0),
+            choose: choose?,
+            split: None,
+        })
+    }
+
+    /// `{from, split, when?}`.
+    fn read_split(fields: &mut Fields<'_, '_>, words: RoutingWords) -> Option<Self> {
+        let from = fields.required::<IdList>("from");
+        let split = fields.required::<SplitShares>("split");
+        let when = if words.when {
+            fields.optional::<WhenText>("when")
+        } else {
+            Some(None)
+        };
+        let shares = split?.0;
+        Some(Self {
+            from: from?.0,
+            to: shares.iter().map(|(target, _)| target.clone()).collect(),
+            when: when?.map(|w| w.0),
+            choose: None,
+            split: Some(shares),
         })
     }
 }
 
 /// One flow entry: a chain (a list of ids) or an edge (a mapping with
-/// `from` and `to`), as edges.
+/// `from` and `to` or `split`), as edges.
 struct FlowEntry(Vec<(Edge, EdgePlaces)>);
 
-impl Decode for FlowEntry {
-    const EXPECTED: &'static str = "a chain such as `[source, cut, sink]` or an edge such as `{from: cut, to: [weld-1, weld-2]}`";
-    const EXAMPLE: &'static str = "[source, cut, sink]";
-    const SCHEMA_NAME: Option<&'static str> = Some("FlowEntry");
-
-    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+impl FlowEntry {
+    fn read(node: &Node, cx: &mut Decoder, words: RoutingWords) -> Option<Self> {
         let place = Place::new(cx.file().map(str::to_owned), node.start());
         match node.value() {
             Value::List(items) => {
@@ -1191,6 +1773,9 @@ impl Decode for FlowEntry {
                         let edge = Edge {
                             from: vec![pair[0].clone()],
                             to: vec![pair[1].clone()],
+                            when: None,
+                            choose: None,
+                            split: None,
                         };
                         (edge, places)
                     })
@@ -1198,17 +1783,40 @@ impl Decode for FlowEntry {
                 Some(Self(edges))
             }
             Value::Map(_) => {
-                let EdgeMap { from, to } = EdgeMap::decode(node, cx)?;
-                let (from, to) = (from.0, to.0);
+                let EdgeMap {
+                    from,
+                    to,
+                    when,
+                    choose,
+                    split,
+                } = EdgeMap::read(node, cx, words)?;
                 let mut places = vec![(place, cx.path().clone())];
                 places.extend(to.iter().map(|r| (r.place().clone(), r.path().clone())));
-                Some(Self(vec![(Edge { from, to }, places)]))
+                let edge = Edge {
+                    from,
+                    to,
+                    when,
+                    choose,
+                    split,
+                };
+                Some(Self(vec![(edge, places)]))
             }
             Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Str(_) => {
                 cx.wrong_type::<Self>(node);
                 None
             }
         }
+    }
+}
+
+impl Decode for FlowEntry {
+    const EXPECTED: &'static str = "a chain such as `[source, cut, sink]` or an edge such as `{from: cut, to: [weld-1, weld-2]}`";
+    const EXAMPLE: &'static str = "[source, cut, sink]";
+    const SCHEMA_NAME: Option<&'static str> = Some("FlowEntry");
+
+    /// Reads with no routing words: the loader uses [`FlowEntry::read`].
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        Self::read(node, cx, RoutingWords::NONE)
     }
 
     fn schema(schemas: &mut Schemas) -> Json {

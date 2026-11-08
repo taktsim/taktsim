@@ -33,7 +33,10 @@ use crate::load::read_fragment_fields;
 /// ```
 #[must_use]
 pub fn model_schema(catalog: &Catalog) -> Json {
-    let mut schemas = Schemas::new(catalog.observables().map(str::to_owned).collect());
+    let mut schemas = Schemas::new(
+        catalog.observables().map(str::to_owned).collect(),
+        catalog.routing(),
+    );
     // What the envelope itself uses, so the definitions come in one place.
     // `Count` and `Distribution` are the catalog's: they appear only when a
     // catalog type reads them, so a catalog without them does not offer them.

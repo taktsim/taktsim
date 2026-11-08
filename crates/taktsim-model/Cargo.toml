@@ -16,6 +16,8 @@ workspace = true
 taktsim-units.workspace = true
 # Distribution parameters are checked by the constructors that sample them.
 taktsim-core.workspace = true
+# The mean of a distribution, the same on every platform (ADR-0013, ADR-0023 §6).
+libm.workspace = true
 thiserror.workspace = true
 saphyr-parser.workspace = true
 sha2.workspace = true
