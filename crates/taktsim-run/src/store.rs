@@ -162,7 +162,9 @@ impl Store {
         Err(Failure::one(FailureClass::Io, line))
     }
 
-    /// Creates the store's own files on the first write.
+    /// Creates the store's own files on the first write. Each is written beside its
+    /// place and renamed in, so a process starting on the same new store reads the
+    /// whole file or none (ADR-0024 §8).
     fn ensure(&self) -> Result<(), Failure> {
         for dir in [self.root.join("runs"), self.root.join("tmp")] {
             fs::create_dir_all(&dir).map_err(|e| io_failure("store.write", &dir, &e))?;
@@ -172,7 +174,15 @@ impl Store {
             if path.exists() {
                 return Ok(());
             }
-            fs::write(&path, text).map_err(|e| io_failure("store.write", &path, &e))
+            let temp = self.temp_dir()?;
+            let written = temp.file(name);
+            fs::write(&written, text).map_err(|e| io_failure("store.write", &written, &e))?;
+            match fs::rename(&written, &path) {
+                Ok(()) => Ok(()),
+                // Another process put the same bytes there first.
+                Err(_) if path.is_file() => Ok(()),
+                Err(e) => Err(io_failure("store.write", &path, &e)),
+            }
         };
         write_new("store.json", "{\"store_format\": 1}\n")?;
         write_new(".gitignore", "*\n")
@@ -210,8 +220,13 @@ impl Store {
 
     /// A new directory for a run in progress.
     pub(crate) fn begin(&self) -> Result<TempRun, Failure> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
         self.ensure()?;
+        self.temp_dir()
+    }
+
+    /// A new directory below `tmp/`, which exists.
+    fn temp_dir(&self) -> Result<TempRun, Failure> {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         loop {
             let n = NEXT.fetch_add(1, Ordering::Relaxed);
             let dir = self
