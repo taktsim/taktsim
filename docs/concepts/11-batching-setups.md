@@ -67,6 +67,22 @@ In the model, the setup is one line:
 > them leave together is a separate component, `BatchProcess`, which comes in
 > v0.2.
 
+> **In taktsim.** What a machine takes next can follow a rule of its own, in the
+> `control` section. `minimum_setup` takes a unit of the variant the last committed
+> unit was, then the cheapest change, so runs of a variant form by themselves.
+>
+> ```yaml
+> control:
+>   dispatch: { weld: minimum_setup }
+> ```
+>
+> The other rules are `fifo` (the oldest ready unit, from any upstream),
+> `earliest_due_date`, `shortest_processing_time` (with `cycle_time_by_variant` on the
+> machine, or there is nothing to tell the units apart) and `priority_class`. A rule
+> also replaces the `discipline` of a Buffer directly upstream, while it is declared.
+> A Source sets what the rules read, until order lists arrive in v0.2: `due_in` (needs
+> `interarrival`) and `priority_mix`.
+
 ## Capacity: the smallest batch that keeps up
 
 Welding needs 45 s per part plus 240 s per batch, and a part arrives every

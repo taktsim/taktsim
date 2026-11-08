@@ -65,7 +65,77 @@ waits in a queue of its own that welding serves before new parts.
 </div>
 
 > **In taktsim.** This is the spec's Inspection component (§4), which comes
-> with the v0.2 tier.
+> with the v0.2 tier. Scrap comes with it. The loop itself is there already: a
+> `split` sends a share of what leaves a station back to welding.
+
+<div class="ts-panel">
+<span class="ts-label">Model · v0.1, a loop without scrap</span>
+
+```yaml
+format: "1.0"
+model: {name: line-c, seed: 42}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source}
+  - {id: weld, type: Machine, cycle_time: 45s}
+  - {id: qc, type: Machine, cycle_time: 40s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, weld, qc]
+  - {from: qc, split: {weld: 5%, sink: 95%}}
+```
+
+</div>
+
+A loop is allowed only through a *gate*, a component whose edges all leave the
+loop or are a split with a target outside it. A condition alone is no exit, since a
+part's attributes never change, and a matching part would circle for ever. New parts
+enter a loop only at the station it returns to.
+
+A part coming back never waits for a place. It joins that station's *return lane*,
+which is served before any new part, like the queue in the text above. So a loop with
+finite places cannot lock up, and the lane never holds more than the loop has places.
+
+From Rust, the same model runs like every other, and its trace states each choice:
+
+```rust
+use taktsim_components::{FlowMessage, RunOptions, standard};
+use taktsim_model::{Format, Loader};
+use taktsim_trace::{Record, TraceReader};
+
+let registry = standard()?;
+let model = Loader::new(registry.catalog()).load_str(
+    r#"
+format: "1.0"
+model: {name: line-c, seed: 42}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source}
+  - {id: weld, type: Machine, cycle_time: 45s}
+  - {id: qc, type: Machine, cycle_time: 40s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, weld, qc]
+  - {from: qc, split: {weld: 5%, sink: 95%}}
+"#,
+    Format::Yaml,
+)?;
+let (trace, report) = registry
+    .prepare(&model, RunOptions::new())?
+    .run_traced(Vec::new())?;
+assert!(report.items.delivered.get() > 500);
+
+let mut reader = TraceReader::<_, FlowMessage>::new(trace.as_slice())?;
+let mut splits = 0;
+while let Some(record) = reader.next_record()? {
+    if matches!(record, Record::Decision { .. }) {
+        splits += 1;
+    }
+}
+// One record per part leaving `qc`, for ever more than the parts delivered.
+assert!(splits > report.items.delivered.get());
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
 
 ## The numbers
 

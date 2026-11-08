@@ -1,7 +1,7 @@
 //! Production components built on the engine's primitives: Source, Machine,
-//! Buffer and Sink, the protocol between them, and one way to run a model
-//! (ADR-0022, roadmap M5). The engine knows nothing about machines; this crate
-//! is the first domain package, and later ones copy its shape.
+//! Buffer and Sink, the protocol between them, routing and control, and one way to
+//! run a model (ADR-0022, ADR-0023, roadmap M5, M6). The engine knows nothing about
+//! machines; this crate is the first domain package, and later ones copy its shape.
 //!
 //! ```
 //! use taktsim_components::{RunOptions, standard};
@@ -42,6 +42,11 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+
+/// The Rust example of the page on scrap and rework is tested here.
+#[doc = include_str!("../../../docs/concepts/12-scrap-rework.md")]
+#[cfg(doctest)]
+struct ReworkPage;
 
 mod buffer;
 mod dispatch;

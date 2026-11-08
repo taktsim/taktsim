@@ -52,6 +52,28 @@ flow:
 Each new station and buffer is declared in `components` as on the earlier
 pages; `flow` lists them in order.
 
+> **In taktsim.** A line need not be one chain. `flow` is a graph, and a part
+> leaving a component takes the first edge whose condition holds, in the order
+> written. An edge can name several targets with a rule for choosing among them,
+> which makes them a pool of equivalent stations, or share parts out by fixed
+> percentages. A part whose target is full waits for it, and never takes another
+> way.
+>
+> ```yaml
+> flow:
+>   - [source, cut]
+>   - { from: cut, to: [weld-1, weld-2], choose: shortest_queue }
+>   - { from: [weld-1, weld-2], to: paint, when: "variant == 'premium'" }
+>   - { from: [weld-1, weld-2], split: { pack-1: 70%, pack-2: 30% } }
+>   - [paint, pack-1, sink]
+>   - [pack-2, sink]
+> ```
+>
+> The rules are `first_free`, `preferred` (the list is the preference),
+> `shortest_queue` and `lowest_utilization`. A condition can read a part's
+> `variant` and `priority`. Every choice is written to the trace with what it chose
+> from, when the part leaves, so a run can say why a part went where it did.
+
 ## A stop travels
 
 <figure class="ts-figure">
