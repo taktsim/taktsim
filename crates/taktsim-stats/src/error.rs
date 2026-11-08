@@ -209,4 +209,82 @@ pub enum StatsError {
         /// The time of the first change, if there is one.
         first: Option<SimTime>,
     },
+    /// A place that never creates anything created an item.
+    #[error(
+        "conservation: place {by} created item {item} at {time}, and its type declares that it \
+         never creates; allowed: a place that creates; example: `Creation::HeldUntilFirstMove`"
+    )]
+    CreatedAtNoCreator {
+        /// The item.
+        item: u64,
+        /// The place.
+        by: u32,
+        /// When.
+        time: SimTime,
+    },
+    /// An item was created while one of that id is alive.
+    #[error(
+        "conservation: place {by} created item {item} at {time}, and that item is already \
+         alive; allowed: an id that is not in use; example: a new id"
+    )]
+    ItemAlreadyAlive {
+        /// The item.
+        item: u64,
+        /// The place.
+        by: u32,
+        /// When.
+        time: SimTime,
+    },
+    /// A fact about an item that is not alive.
+    #[error(
+        "conservation: a fact about item {item} at place {at}, time {time}, and that item is \
+         not alive; allowed: an item created and not yet disposed of; example: a created item"
+    )]
+    ItemNotAlive {
+        /// The item.
+        item: u64,
+        /// The place the fact states, or `u32::MAX` if it states none.
+        at: u32,
+        /// When.
+        time: SimTime,
+    },
+    /// A fact about an item at a place it is not at.
+    #[error(
+        "conservation: item {item} is at place {found}, and a fact at {time} states place \
+         {stated}; allowed: the place the item is at; example: place {found}"
+    )]
+    ItemElsewhere {
+        /// The item.
+        item: u64,
+        /// The place the fact states.
+        stated: u32,
+        /// The place the item is at.
+        found: u32,
+        /// When.
+        time: SimTime,
+    },
+    /// A place the fold was not told about.
+    #[error(
+        "conservation: place {place} is not one of the {places} places of this fold; allowed: \
+         a position below {places}; example: 0"
+    )]
+    UnknownPlace {
+        /// The place found.
+        place: u32,
+        /// How many there are.
+        places: usize,
+    },
+    /// A state beyond what the place declares.
+    #[error(
+        "place {place} stated state {state} and declares {states} states; allowed: a position \
+         below {states}; example: 0"
+    )]
+    UnknownState {
+        /// The place.
+        place: u32,
+        /// The state found.
+        state: u16,
+        /// How many it declares.
+        states: u16,
+    },
 }
