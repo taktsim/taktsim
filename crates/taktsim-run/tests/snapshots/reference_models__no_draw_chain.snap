@@ -1,0 +1,516 @@
+---
+source: crates/taktsim-run/tests/reference_models.rs
+expression: golden.snapshot()
+---
+case: no_draw_chain
+records: taktsim-core/2
+messages: taktsim-components/1
+model hash: ccd40867df4df7ebed6a5bf0fa9a985e8e3e6a1cd13b9e386ab8354d6b6c2155
+system hash: a1016e19655f89ebef356d9c7cf5f3b32d4e80976018d5621bc0c14667882c78
+seed: none
+components: source, cut, buf1, weld, sink
+records: 1663 (994 events) in 1 chunks
+stream sha256: 09741285a1ef81ffbc9ac75ee84484a25940fa18fe467f5de34d1fb08d1b4156
+end: 1h (horizon)
+---
+0s note by source VariantName { id: VariantId(0), name: "default" }
+0s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+50s event #0 source -> source NextArrival
+50s item 0 created by source
+50s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+50s event #2 source -> cut Offer
+50s event #3 cut -> source Accept
+50s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+50s event #4 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+50s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+92s event #6 cut -> cut CycleDone { item: ItemId(0) }
+92s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+92s event #7 cut -> buf1 Offer
+92s event #8 buf1 -> cut Accept
+92s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+92s event #9 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+92s event #10 buf1 -> weld Offer
+92s event #11 weld -> buf1 Accept
+92s event #12 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+92s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+100s event #5 source -> source NextArrival
+100s item 1 created by source
+100s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+100s event #14 source -> cut Offer
+100s event #15 cut -> source Accept
+100s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+100s event #16 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+100s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+137s event #13 weld -> weld CycleDone { item: ItemId(0) }
+137s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+137s event #19 weld -> sink Offer
+137s event #20 sink -> weld Accept
+137s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+137s event #21 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+137s item 0 delivered by sink
+142s event #18 cut -> cut CycleDone { item: ItemId(1) }
+142s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+142s event #22 cut -> buf1 Offer
+142s event #23 buf1 -> cut Accept
+142s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+142s event #24 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+142s event #25 buf1 -> weld Offer
+142s event #26 weld -> buf1 Accept
+142s event #27 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+142s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+150s event #17 source -> source NextArrival
+150s item 2 created by source
+150s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+150s event #29 source -> cut Offer
+150s event #30 cut -> source Accept
+150s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+150s event #31 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+150s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+187s event #28 weld -> weld CycleDone { item: ItemId(1) }
+187s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+187s event #34 weld -> sink Offer
+187s event #35 sink -> weld Accept
+187s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+187s event #36 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+187s item 1 delivered by sink
+192s event #33 cut -> cut CycleDone { item: ItemId(2) }
+192s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+192s event #37 cut -> buf1 Offer
+192s event #38 buf1 -> cut Accept
+192s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+192s event #39 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+192s event #40 buf1 -> weld Offer
+192s event #41 weld -> buf1 Accept
+192s event #42 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+192s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+200s event #32 source -> source NextArrival
+200s item 3 created by source
+200s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+200s event #44 source -> cut Offer
+200s event #45 cut -> source Accept
+200s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+200s event #46 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+200s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+237s event #43 weld -> weld CycleDone { item: ItemId(2) }
+237s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+237s event #49 weld -> sink Offer
+237s event #50 sink -> weld Accept
+237s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+237s event #51 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+237s item 2 delivered by sink
+242s event #48 cut -> cut CycleDone { item: ItemId(3) }
+242s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+242s event #52 cut -> buf1 Offer
+242s event #53 buf1 -> cut Accept
+242s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+242s event #54 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+242s event #55 buf1 -> weld Offer
+242s event #56 weld -> buf1 Accept
+242s event #57 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+242s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+250s event #47 source -> source NextArrival
+250s item 4 created by source
+250s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+250s event #59 source -> cut Offer
+250s event #60 cut -> source Accept
+250s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+250s event #61 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+250s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+287s event #58 weld -> weld CycleDone { item: ItemId(3) }
+287s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+287s event #64 weld -> sink Offer
+287s event #65 sink -> weld Accept
+287s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+287s event #66 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+287s item 3 delivered by sink
+292s event #63 cut -> cut CycleDone { item: ItemId(4) }
+292s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+292s event #67 cut -> buf1 Offer
+292s event #68 buf1 -> cut Accept
+292s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+292s event #69 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+292s event #70 buf1 -> weld Offer
+292s event #71 weld -> buf1 Accept
+292s event #72 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+292s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+5min event #62 source -> source NextArrival
+5min item 5 created by source
+5min note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+5min event #74 source -> cut Offer
+5min event #75 cut -> source Accept
+5min note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+5min event #76 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+5min note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+337s event #73 weld -> weld CycleDone { item: ItemId(4) }
+337s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+337s event #79 weld -> sink Offer
+337s event #80 sink -> weld Accept
+337s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+337s event #81 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+337s item 4 delivered by sink
+342s event #78 cut -> cut CycleDone { item: ItemId(5) }
+342s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+342s event #82 cut -> buf1 Offer
+342s event #83 buf1 -> cut Accept
+342s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+342s event #84 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+342s event #85 buf1 -> weld Offer
+342s event #86 weld -> buf1 Accept
+342s event #87 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+342s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+350s event #77 source -> source NextArrival
+350s item 6 created by source
+350s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+350s event #89 source -> cut Offer
+350s event #90 cut -> source Accept
+350s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+350s event #91 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+350s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+387s event #88 weld -> weld CycleDone { item: ItemId(5) }
+387s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+387s event #94 weld -> sink Offer
+387s event #95 sink -> weld Accept
+387s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+387s event #96 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+387s item 5 delivered by sink
+392s event #93 cut -> cut CycleDone { item: ItemId(6) }
+392s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+392s event #97 cut -> buf1 Offer
+392s event #98 buf1 -> cut Accept
+392s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+392s event #99 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+392s event #100 buf1 -> weld Offer
+392s event #101 weld -> buf1 Accept
+392s event #102 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+392s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+400s event #92 source -> source NextArrival
+400s item 7 created by source
+400s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+400s event #104 source -> cut Offer
+400s event #105 cut -> source Accept
+400s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+400s event #106 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+400s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+437s event #103 weld -> weld CycleDone { item: ItemId(6) }
+437s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+437s event #109 weld -> sink Offer
+437s event #110 sink -> weld Accept
+437s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+437s event #111 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+437s item 6 delivered by sink
+442s event #108 cut -> cut CycleDone { item: ItemId(7) }
+442s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+442s event #112 cut -> buf1 Offer
+442s event #113 buf1 -> cut Accept
+442s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+442s event #114 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+442s event #115 buf1 -> weld Offer
+442s event #116 weld -> buf1 Accept
+442s event #117 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+442s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+450s event #107 source -> source NextArrival
+450s item 8 created by source
+450s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+450s event #119 source -> cut Offer
+450s event #120 cut -> source Accept
+450s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+450s event #121 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+450s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+487s event #118 weld -> weld CycleDone { item: ItemId(7) }
+487s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+487s event #124 weld -> sink Offer
+487s event #125 sink -> weld Accept
+487s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+487s event #126 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+487s item 7 delivered by sink
+492s event #123 cut -> cut CycleDone { item: ItemId(8) }
+492s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+492s event #127 cut -> buf1 Offer
+492s event #128 buf1 -> cut Accept
+492s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+492s event #129 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+492s event #130 buf1 -> weld Offer
+492s event #131 weld -> buf1 Accept
+492s event #132 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+492s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+500s event #122 source -> source NextArrival
+500s item 9 created by source
+500s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+500s event #134 source -> cut Offer
+500s event #135 cut -> source Accept
+500s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+500s event #136 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+500s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+537s event #133 weld -> weld CycleDone { item: ItemId(8) }
+537s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+537s event #139 weld -> sink Offer
+537s event #140 sink -> weld Accept
+537s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+537s event #141 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+537s item 8 delivered by sink
+542s event #138 cut -> cut CycleDone { item: ItemId(9) }
+542s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+542s event #142 cut -> buf1 Offer
+542s event #143 buf1 -> cut Accept
+542s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+542s event #144 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+542s event #145 buf1 -> weld Offer
+542s event #146 weld -> buf1 Accept
+542s event #147 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+542s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+550s event #137 source -> source NextArrival
+550s item 10 created by source
+550s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+550s event #149 source -> cut Offer
+550s event #150 cut -> source Accept
+550s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+550s event #151 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+550s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+587s event #148 weld -> weld CycleDone { item: ItemId(9) }
+587s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+587s event #154 weld -> sink Offer
+587s event #155 sink -> weld Accept
+587s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+587s event #156 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+587s item 9 delivered by sink
+592s event #153 cut -> cut CycleDone { item: ItemId(10) }
+592s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+592s event #157 cut -> buf1 Offer
+592s event #158 buf1 -> cut Accept
+592s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+592s event #159 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+592s event #160 buf1 -> weld Offer
+592s event #161 weld -> buf1 Accept
+592s event #162 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+592s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+10min event #152 source -> source NextArrival
+10min item 11 created by source
+10min note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+10min event #164 source -> cut Offer
+10min event #165 cut -> source Accept
+10min note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+10min event #166 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+10min note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+637s event #163 weld -> weld CycleDone { item: ItemId(10) }
+637s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+637s event #169 weld -> sink Offer
+637s event #170 sink -> weld Accept
+637s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+637s event #171 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+637s item 10 delivered by sink
+642s event #168 cut -> cut CycleDone { item: ItemId(11) }
+642s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+642s event #172 cut -> buf1 Offer
+642s event #173 buf1 -> cut Accept
+642s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+642s event #174 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+642s event #175 buf1 -> weld Offer
+642s event #176 weld -> buf1 Accept
+642s event #177 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+642s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+650s event #167 source -> source NextArrival
+650s item 12 created by source
+650s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+650s event #179 source -> cut Offer
+650s event #180 cut -> source Accept
+650s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+650s event #181 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+650s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+687s event #178 weld -> weld CycleDone { item: ItemId(11) }
+687s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+687s event #184 weld -> sink Offer
+687s event #185 sink -> weld Accept
+687s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+687s event #186 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+687s item 11 delivered by sink
+692s event #183 cut -> cut CycleDone { item: ItemId(12) }
+692s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+692s event #187 cut -> buf1 Offer
+692s event #188 buf1 -> cut Accept
+692s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+692s event #189 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+692s event #190 buf1 -> weld Offer
+692s event #191 weld -> buf1 Accept
+692s event #192 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+692s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+700s event #182 source -> source NextArrival
+700s item 13 created by source
+700s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+700s event #194 source -> cut Offer
+700s event #195 cut -> source Accept
+700s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+700s event #196 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+700s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+737s event #193 weld -> weld CycleDone { item: ItemId(12) }
+737s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+737s event #199 weld -> sink Offer
+737s event #200 sink -> weld Accept
+737s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+737s event #201 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+737s item 12 delivered by sink
+742s event #198 cut -> cut CycleDone { item: ItemId(13) }
+742s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+742s event #202 cut -> buf1 Offer
+742s event #203 buf1 -> cut Accept
+742s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+742s event #204 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+742s event #205 buf1 -> weld Offer
+742s event #206 weld -> buf1 Accept
+742s event #207 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+742s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+750s event #197 source -> source NextArrival
+750s item 14 created by source
+750s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+750s event #209 source -> cut Offer
+750s event #210 cut -> source Accept
+750s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+750s event #211 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+750s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+787s event #208 weld -> weld CycleDone { item: ItemId(13) }
+787s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+787s event #214 weld -> sink Offer
+787s event #215 sink -> weld Accept
+787s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+787s event #216 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+787s item 13 delivered by sink
+792s event #213 cut -> cut CycleDone { item: ItemId(14) }
+792s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+792s event #217 cut -> buf1 Offer
+792s event #218 buf1 -> cut Accept
+792s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+792s event #219 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+792s event #220 buf1 -> weld Offer
+792s event #221 weld -> buf1 Accept
+792s event #222 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+792s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+800s event #212 source -> source NextArrival
+800s item 15 created by source
+800s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+800s event #224 source -> cut Offer
+800s event #225 cut -> source Accept
+800s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+800s event #226 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+800s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+837s event #223 weld -> weld CycleDone { item: ItemId(14) }
+837s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+837s event #229 weld -> sink Offer
+837s event #230 sink -> weld Accept
+837s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+837s event #231 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+837s item 14 delivered by sink
+842s event #228 cut -> cut CycleDone { item: ItemId(15) }
+842s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+842s event #232 cut -> buf1 Offer
+842s event #233 buf1 -> cut Accept
+842s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+842s event #234 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+842s event #235 buf1 -> weld Offer
+842s event #236 weld -> buf1 Accept
+842s event #237 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+842s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+850s event #227 source -> source NextArrival
+850s item 16 created by source
+850s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+... 1163 records not shown ...
+3427s event #932 weld -> weld CycleDone { item: ItemId(61) }
+3427s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3427s event #938 weld -> sink Offer
+3427s event #939 sink -> weld Accept
+3427s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3427s event #940 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 61
+3427s item 61 delivered by sink
+3432s event #937 cut -> cut CycleDone { item: ItemId(62) }
+3432s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3432s event #941 cut -> buf1 Offer
+3432s event #942 buf1 -> cut Accept
+3432s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3432s event #943 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 62
+3432s event #944 buf1 -> weld Offer
+3432s event #945 weld -> buf1 Accept
+3432s event #946 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 62
+3432s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3440s event #936 source -> source NextArrival
+3440s item 63 created by source
+3440s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+3440s event #948 source -> cut Offer
+3440s event #949 cut -> source Accept
+3440s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+3440s event #950 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 63
+3440s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3477s event #947 weld -> weld CycleDone { item: ItemId(62) }
+3477s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3477s event #953 weld -> sink Offer
+3477s event #954 sink -> weld Accept
+3477s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3477s event #955 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 62
+3477s item 62 delivered by sink
+3482s event #952 cut -> cut CycleDone { item: ItemId(63) }
+3482s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3482s event #956 cut -> buf1 Offer
+3482s event #957 buf1 -> cut Accept
+3482s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3482s event #958 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 63
+3482s event #959 buf1 -> weld Offer
+3482s event #960 weld -> buf1 Accept
+3482s event #961 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 63
+3482s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3490s event #951 source -> source NextArrival
+3490s item 64 created by source
+3490s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+3490s event #963 source -> cut Offer
+3490s event #964 cut -> source Accept
+3490s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+3490s event #965 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 64
+3490s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3527s event #962 weld -> weld CycleDone { item: ItemId(63) }
+3527s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3527s event #968 weld -> sink Offer
+3527s event #969 sink -> weld Accept
+3527s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3527s event #970 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 63
+3527s item 63 delivered by sink
+3532s event #967 cut -> cut CycleDone { item: ItemId(64) }
+3532s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3532s event #971 cut -> buf1 Offer
+3532s event #972 buf1 -> cut Accept
+3532s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3532s event #973 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 64
+3532s event #974 buf1 -> weld Offer
+3532s event #975 weld -> buf1 Accept
+3532s event #976 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 64
+3532s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+59min event #966 source -> source NextArrival
+59min item 65 created by source
+59min note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+59min event #978 source -> cut Offer
+59min event #979 cut -> source Accept
+59min note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+59min event #980 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 65
+59min note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3577s event #977 weld -> weld CycleDone { item: ItemId(64) }
+3577s note by weld MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3577s event #983 weld -> sink Offer
+3577s event #984 sink -> weld Accept
+3577s note by weld MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3577s event #985 weld -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 64
+3577s item 64 delivered by sink
+3582s event #982 cut -> cut CycleDone { item: ItemId(65) }
+3582s note by cut MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3582s event #986 cut -> buf1 Offer
+3582s event #987 buf1 -> cut Accept
+3582s note by cut MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3582s event #988 cut -> buf1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 65
+3582s event #989 buf1 -> weld Offer
+3582s event #990 weld -> buf1 Accept
+3582s event #991 buf1 -> weld Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 65
+3582s note by weld MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3590s event #981 source -> source NextArrival
+3590s item 66 created by source
+3590s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+3590s event #993 source -> cut Offer
+3590s event #994 cut -> source Accept
+3590s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+3590s event #995 source -> cut Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 66
+3590s note by cut MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })

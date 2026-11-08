@@ -1,0 +1,12 @@
+# Reference model: a serial line with random arrivals and cycle times.
+format: "1.0"
+model: {name: chain, seed: 42}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: {dist: exponential, mean: 50s}}
+  - {id: cut, type: Machine, cycle_time: {dist: lognormal, mean: 42s, sigma: 0.08}}
+  - {id: buf1, type: Buffer, capacity: 5 parts}
+  - {id: weld, type: Machine, cycle_time: 45s}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, buf1, weld, sink]

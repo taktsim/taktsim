@@ -1,0 +1,13 @@
+# A model that draws nothing: every time is a constant, one variant. A run has
+# no seed, and the `seed:` here is unused, with a warning.
+format: "1.0"
+model: {name: no-draw-chain, seed: 3}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 50s}
+  - {id: cut, type: Machine, cycle_time: 42s, mtbf: 20min, mttr: 2min}
+  - {id: buf1, type: Buffer, capacity: 2 parts}
+  - {id: weld, type: Machine, cycle_time: 45s, setup: {per_variant: 1min}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, buf1, weld, sink]
