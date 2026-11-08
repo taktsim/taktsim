@@ -207,12 +207,12 @@ impl<D: Domain> Registry<D> {
     pub fn catalog(&self) -> &Catalog;
     pub fn build(&self, document: &Document, config: EngineConfig)
         -> Result<Engine<D::Message>, BuildError>;
-    pub fn prepare(&self, model: &Model, options: RunOptions<'_>)
-        -> Result<Prepared<D>, RunFailure>;
+    pub fn prepare<'a>(&self, model: &Model, options: RunOptions<'a>)
+        -> Result<Prepared<'a, D>, RunFailure>;
 }
 
-pub struct Prepared<D: Domain>;      // the engine, its header and its limits, together
-impl<D: Domain> Prepared<D> {
+pub struct Prepared<'a, D: Domain>;  // the engine, its header and its limits, together
+impl<D: Domain> Prepared<'_, D> {
     pub fn header(&self) -> &Header;
     pub fn run(self, trace: &mut dyn TraceSink<D::Message>) -> Result<RunReport, RunFailure>;
     pub fn run_traced<W: Write>(self, out: W) -> Result<(W, RunReport), RunFailure>;
@@ -240,9 +240,9 @@ horizon is always the model's, and `run_traced` states how the run ended (§9).
 - **Seed.** The options' seed, then `model.seed`, otherwise
   `RunFailure::NoSeed` with the path `model.seed`. Never entropy and never an
   unstated default, so every client gets the same answer.
-- **Another horizon.** `Model::with_horizon(duration) -> Model`, new in
-  `taktsim-model`, re-normalizes, re-hashes and returns a new version
-  (principle 5). The system hash stays, the model hash changes as ADR-0020 §8
+- **Another horizon.** `Model::with_horizon(duration) -> Result<Model, LoadErrors>`,
+  new in `taktsim-model`, re-normalizes, re-hashes and returns a new version
+  (principle 5), and refuses a horizon of zero as a file's is. The system hash stays, the model hash changes as ADR-0020 §8
   already says. The rule lives in the library, not in one client, and
   `canonical_json` of the new version is what the run store keeps. Spec §5's run
   id still hashes model, seed, horizon and engine version.
@@ -856,6 +856,7 @@ below is after v0.1 ships.
 | 9 | ADR-0021 foresees a record kind for control decisions; §9's first draft said the note covers them | ADR-0021 | keep ADR-0021's plan; M6 settles the kind and its size limit |
 | 10 | The end marker's fields are a new file format version | ADR-0021 | format 2 (§9), free before v0.1 ships a trace |
 | 11 | Spec §5 lists the horizon as a run input; ADR-0020 §8 has it in the model hash | spec §5, ADR-0019 §5, ADR-0020 §8 | `Model::with_horizon` satisfies both: the input makes a new version, whose hash spec §9's promise then holds for |
+| 12 | §4 says an `Accept` that crosses a `Withdraw` "gets a `Decline`, and the outlet sends `Withdraw` again before any new `Offer`". Read literally this does not end: with room at the target, each new offer is answered and declined at one instant for ever. `Accept` carries no number, so the outlet cannot tell which offer it answers | §4 above; `crates/taktsim-components/src/port.rs` | question 18: the answer depends on what the outlet has, and the `Withdraw` is what keeps the two sides in step |
 
 ## Consequences
 
@@ -935,3 +936,24 @@ the M5 pull request merges.
     then, the choice has to be made before v0.1 ships.
 16. **One edge per source (§3).** Reject two edges leaving one component in M5, so
     M6 can make them first-match in order? *Recommended:* yes.
+17. **Which schema a document is valid against.** `schemas/model/1.0.json` describes
+    `format: "1.0"` with the standard catalog, so a `format: "1.0"` document of
+    another domain is not valid against it, and nothing in the document says which
+    catalog it uses. Options: (a) name each schema file after its catalog,
+    `schemas/model/1.0.json` staying the standard one until a second domain exists,
+    which then gets `schemas/<catalog>/1.0.json`; (b) add a key naming the vocabulary
+    to the document, which changes every hash. *Recommended:* (a): it changes no
+    document, and the choice only matters with a second domain. M5 is compatible with
+    both: the generator's description says which catalog the file is for, and
+    `model_schema` emits `Count` and `Distribution` only when a type of the catalog
+    uses them, so a catalog without them does not offer them.
+18. **An `Accept` that crosses a `Withdraw` (§4, disagreement 12).** Implemented:
+    the outlet answers by what it has, an `Arrive` if it has a part and a `Decline`
+    otherwise, and if a withdrawal went to that target at this instant while an
+    offer stands, it sends `Withdraw` again, so that the last message on its way says
+    what the outlet believes. Every `Accept` then either moves a part or finds the
+    outlet with nothing, so an instant ends, and between instants a target holds an
+    entry exactly when its upstream has an offer outstanding (a property test reads
+    this from the trace). A part can take the place of an earlier offer of the same
+    outlet at that instant, which no one can observe except in event order, and golden
+    cases pin it. *Recommended:* yes, and replace the sentence in §4.
