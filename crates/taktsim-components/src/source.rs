@@ -10,7 +10,7 @@ use taktsim_model::{
 };
 use taktsim_units::{Count, Ratio};
 
-use crate::flow::{Flow, FlowShared, variant_id};
+use crate::flow::{Flow, FlowShared, StationFacts, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, SourceStateNote, VariantId};
 use crate::params::{Interarrival, Units, VARIANT_NAME_RULE, is_variant_name};
 use crate::port::Outlet;
@@ -272,6 +272,13 @@ impl ComponentParams for Source {
 impl ComponentType<Flow> for Source {
     const PORTS: Ports = Ports::Outlet;
 
+    fn facts(&self) -> StationFacts {
+        StationFacts {
+            routes: true,
+            ..StationFacts::default()
+        }
+    }
+
     fn build(
         &self,
         wiring: &Wiring<'_, FlowShared>,
@@ -454,7 +461,13 @@ impl Component<FlowMessage> for SourceBehaviour {
             | FlowMessage::Withdraw
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
-            | FlowMessage::VariantName { .. }) => {
+            | FlowMessage::VariantName { .. }
+            | FlowMessage::Status(_)
+            | FlowMessage::OfferOf(_)
+            | FlowMessage::Return(_)
+            | FlowMessage::RouteDecision(_)
+            | FlowMessage::DispatchDecision(_)
+            | FlowMessage::EdgeCondition { .. }) => {
                 return Err(ComponentError::Unexpected {
                     state: "source",
                     event: format!("{message:?}"),

@@ -76,7 +76,7 @@ pub(crate) const CANONICAL_NAN: u64 = 0x7ff8_0000_0000_0000;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait TraceMessage: Message + Sized {
-    /// The name and version of the encoding, e.g. `"taktsim-components/1"`.
+    /// The name and version of the encoding, e.g. `"taktsim-components/2"`.
     /// Written into the trace header (at most 65,535 bytes of UTF-8).
     const FORMAT: &'static str;
 

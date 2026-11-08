@@ -6,15 +6,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
     CatalogError, Component as Entry, ComponentRef, Document, FieldPath, Findings, LoadErrorKind,
-    Place,
+    Place, RoutingWords,
 };
+use taktsim_units::SimDuration;
 
 use crate::buffer::Buffer;
 use crate::machine::Machine;
 use crate::message::{FlowMessage, VariantId};
-use crate::run::{BuildError, Domain, Ports, Registry, Roles};
+use crate::run::{BuildError, Domain, Ports, Registry};
 use crate::sink::Sink;
 use crate::source::Source;
+
+/// `Roles` of this domain.
+type Roles = crate::run::Roles<StationFacts>;
 
 /// The variant of a Source that declares none.
 const DEFAULT_VARIANT: &str = "default";
@@ -33,6 +37,143 @@ const MAX_VARIANTS: usize = 65_535;
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct Flow;
+
+/// What a target says it does for an upstream's rule (ADR-0023 §13).
+///
+/// ```
+/// assert_eq!(taktsim_components::StatusFact::default(), taktsim_components::StatusFact::None);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StatusFact {
+    /// It says nothing, so an upstream cannot use a status rule on it.
+    #[default]
+    None,
+    /// It always has room and an empty queue, and sends nothing: a Sink.
+    AlwaysRoom,
+    /// It sends `Status` to its subscribers at the end of any event that changed it.
+    Reports,
+}
+
+/// The mean time of a unit by variant: `default` for a variant not listed
+/// (ADR-0023 §6).
+///
+/// ```
+/// use taktsim_components::MeanTimes;
+///
+/// let times = MeanTimes { default: "45s".parse()?, by_variant: Default::default() };
+/// assert_eq!(times.of("premium").to_string(), "45s");
+/// # Ok::<(), taktsim_units::UnitError>(())
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeanTimes {
+    /// For a variant not listed.
+    pub default: SimDuration,
+    /// By variant name.
+    pub by_variant: BTreeMap<String, SimDuration>,
+}
+
+impl MeanTimes {
+    /// The mean time of `variant`.
+    ///
+    /// ```
+    /// use std::collections::BTreeMap;
+    /// use taktsim_components::MeanTimes;
+    ///
+    /// let times = MeanTimes {
+    ///     default: "45s".parse()?,
+    ///     by_variant: BTreeMap::from([("premium".to_owned(), "60s".parse()?)]),
+    /// };
+    /// assert_eq!(times.of("premium").to_string(), "1min");
+    /// assert_eq!(times.of("basic").to_string(), "45s");
+    /// # Ok::<(), taktsim_units::UnitError>(())
+    /// ```
+    #[must_use]
+    pub fn of(&self, variant: &str) -> SimDuration {
+        self.by_variant
+            .get(variant)
+            .copied()
+            .unwrap_or(self.default)
+    }
+}
+
+/// The mean time of a change of variant (ADR-0023 §6). The default states that no
+/// change takes time, which is a fact about a machine with no `setup`.
+///
+/// ```
+/// use taktsim_components::SetupMeans;
+///
+/// assert_eq!(SetupMeans::default().of("a", "b"), None);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SetupMeans {
+    /// For a change the matrix does not list.
+    pub per_variant: Option<SimDuration>,
+    /// By `(from, to)`; `0s` for a listed change that costs nothing.
+    pub matrix: BTreeMap<(String, String), SimDuration>,
+}
+
+impl SetupMeans {
+    /// The mean time of the change from `from` to `to`; `None` if it takes no
+    /// changeover.
+    ///
+    /// ```
+    /// use std::collections::BTreeMap;
+    /// use taktsim_components::SetupMeans;
+    /// use taktsim_units::SimDuration;
+    ///
+    /// let setup = SetupMeans {
+    ///     per_variant: Some("4min".parse()?),
+    ///     matrix: BTreeMap::from([(("a".to_owned(), "b".to_owned()), SimDuration::ZERO)]),
+    /// };
+    /// assert_eq!(setup.of("a", "b"), Some(SimDuration::ZERO));
+    /// assert_eq!(setup.of("b", "a").map(|d| d.to_string()).as_deref(), Some("4min"));
+    /// # Ok::<(), taktsim_units::UnitError>(())
+    /// ```
+    #[must_use]
+    pub fn of(&self, from: &str, to: &str) -> Option<SimDuration> {
+        self.matrix
+            .get(&(from.to_owned(), to.to_owned()))
+            .copied()
+            .or(self.per_variant)
+    }
+}
+
+/// What a component states for the rules of a flow (ADR-0023 §13). A rule on a type
+/// lacking a fact it needs is an error at load, naming the type, the fact and the
+/// rule, so a new station states its facts and never silently gets a default.
+///
+/// ```
+/// use taktsim_components::{StationFacts, StatusFact};
+///
+/// let facts = StationFacts::default();
+/// assert!(!facts.routes && !facts.work && !facts.takes_rule && !facts.takes_returns);
+/// assert_eq!(facts.status, StatusFact::None);
+/// assert_eq!(facts.places, None);
+/// ```
+// Four yes-or-no facts among others, each stated by itself: the names are the point.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StationFacts {
+    /// It uses the route table for parts leaving. Needed for a leaving `when`,
+    /// `split`, or any `choose` but `first_free`.
+    pub routes: bool,
+    /// What it says as a target. A target of `preferred` or `shortest_queue` needs
+    /// more than [`StatusFact::None`].
+    pub status: StatusFact,
+    /// It keeps `worked` and `running`. Needed by a target of `lowest_utilization`.
+    pub work: bool,
+    /// How many places it has, however derived. Needed by a target of
+    /// `lowest_utilization`, and by every component of a loop.
+    pub places: Option<u64>,
+    /// It picks among described offers. Needed for any `control.dispatch`.
+    pub takes_rule: bool,
+    /// The mean time of a unit by variant. Needed for `shortest_processing_time`.
+    pub mean_time: Option<MeanTimes>,
+    /// The mean time of a change of variant. Needed for `minimum_setup`.
+    pub setup: Option<SetupMeans>,
+    /// It has a return lane. Needed by a loop's return target.
+    pub takes_returns: bool,
+}
 
 /// What every builder of a flow model reads: the sorted variant names, and which
 /// stations are `idle` rather than `starved` when empty.
@@ -360,8 +501,8 @@ fn check_on_demand(document: &Document, roles: &Roles, graph: &Graph<'_>, findin
     }
 }
 
-/// Matrix names are declared by some Source, and the model's names fit a
-/// `VariantId`.
+/// Matrix names and a machine's times per variant are declared by some Source, and
+/// the model's names fit a `VariantId`.
 fn check_variants(document: &Document, findings: &mut Findings) {
     let declared = declared_variants(document);
     if declared.len() > MAX_VARIANTS
@@ -375,22 +516,27 @@ fn check_variants(document: &Document, findings: &mut Findings) {
             "{basic: 80%, premium: 20%}",
         );
     }
-    for c in document.components() {
-        let Some(setup) = c.params::<Machine>().and_then(Machine::setup) else {
-            continue;
-        };
-        for change in setup.changes() {
-            for name in [&change.from, &change.to] {
-                if !declared.contains(name.id()) {
-                    let known: Vec<&str> = declared.iter().copied().collect();
-                    not_allowed(
-                        findings,
-                        (name.place(), name.path()),
-                        format!("the variant `{}`, which no Source declares", name.id()),
-                        &format!("a variant some Source declares: {}", known.join(", ")),
-                        "{id: source, type: Source, variants: {basic: 80%, premium: 20%}}",
-                    );
-                }
+    for machine in document
+        .components()
+        .iter()
+        .filter_map(|c| c.params::<Machine>())
+    {
+        let changes = machine.setup().into_iter().flat_map(|setup| {
+            setup
+                .changes()
+                .iter()
+                .flat_map(|change| [&change.from, &change.to])
+        });
+        for name in changes.chain(machine.variants_timed()) {
+            if !declared.contains(name.id()) {
+                let known: Vec<&str> = declared.iter().copied().collect();
+                not_allowed(
+                    findings,
+                    (name.place(), name.path()),
+                    format!("the variant `{}`, which no Source declares", name.id()),
+                    &format!("a variant some Source declares: {}", known.join(", ")),
+                    "{id: source, type: Source, variants: {basic: 80%, premium: 20%}}",
+                );
             }
         }
     }
@@ -399,6 +545,9 @@ fn check_variants(document: &Document, findings: &mut Findings) {
 impl Domain for Flow {
     type Message = FlowMessage;
     type Shared = FlowShared;
+    type Facts = StationFacts;
+
+    const ROUTING: RoutingWords = RoutingWords::ALL;
 
     fn check(document: &Document, roles: &Roles, findings: &mut Findings) {
         let graph = Graph::new(document);

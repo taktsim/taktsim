@@ -94,7 +94,13 @@ fn priority_gives_the_highest_then_the_first_into_the_buffer() {
             | FlowMessage::Withdraw
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
-            | FlowMessage::VariantName { .. } => None,
+            | FlowMessage::VariantName { .. }
+            | FlowMessage::Status(_)
+            | FlowMessage::OfferOf(_)
+            | FlowMessage::Return(_)
+            | FlowMessage::RouteDecision(_)
+            | FlowMessage::DispatchDecision(_)
+            | FlowMessage::EdgeCondition { .. } => None,
         })
         .collect();
     assert_eq!(leaving[..3], [0, 1, 1]);

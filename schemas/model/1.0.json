@@ -1,5 +1,14 @@
 {
   "$defs": {
+    "ChoiceRule": {
+      "description": "How a part chooses among the targets of an edge, the list being the preference. Default first_free.",
+      "enum": [
+        "first_free",
+        "shortest_queue",
+        "lowest_utilization",
+        "preferred"
+      ]
+    },
     "Component": {
       "description": "A component: `id`, `type` and the parameters of that type.",
       "oneOf": [
@@ -42,6 +51,17 @@
             "cycle_time": {
               "$ref": "#/$defs/Distribution",
               "description": "The time one unit takes, drawn when its cycle starts. A bare duration is a constant."
+            },
+            "cycle_time_by_variant": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Distribution",
+                "description": "The time one unit takes, drawn when its cycle starts. A bare duration is a constant."
+              },
+              "description": "The time one unit of a variant takes, instead of `cycle_time`, from the same stream. Each is a variant some Source declares, and not a constant 0s.",
+              "propertyNames": {
+                "$ref": "#/$defs/ComponentId"
+              },
+              "type": "object"
             },
             "id": {
               "$ref": "#/$defs/ComponentId"
@@ -183,6 +203,22 @@
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*(-[A-Za-z0-9_]+)*$",
       "type": "string"
     },
+    "Control": {
+      "additionalProperties": false,
+      "description": "Control logic: the dispatching rule of each station (ADR-0023).",
+      "properties": {
+        "dispatch": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DispatchRule"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/ComponentId"
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
     "Count": {
       "description": "A whole number of parts.",
       "examples": [
@@ -191,6 +227,16 @@
       ],
       "pattern": "^[0-9]+(\\.0+)? ?parts?$",
       "type": "string"
+    },
+    "DispatchRule": {
+      "description": "Which waiting unit the station takes next.",
+      "enum": [
+        "fifo",
+        "earliest_due_date",
+        "shortest_processing_time",
+        "minimum_setup",
+        "priority_class"
+      ]
     },
     "Distribution": {
       "description": "A duration (a constant), or a distribution named by `dist` with named parameters (ADR-0003).",
@@ -438,20 +484,65 @@
           "type": "array"
         },
         {
-          "additionalProperties": false,
-          "properties": {
-            "from": {
-              "$ref": "#/$defs/EdgeEnd"
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "choose": {
+                  "$ref": "#/$defs/ChoiceRule"
+                },
+                "from": {
+                  "$ref": "#/$defs/EdgeEnd"
+                },
+                "to": {
+                  "$ref": "#/$defs/EdgeEnd"
+                },
+                "when": {
+                  "description": "A boolean expression over the part's attributes (ADR-0009, ADR-0023). A part takes the first edge whose condition holds, in the order written, and the last edge leaving a component has none. The loader checks its type.",
+                  "examples": [
+                    "variant == 'premium'"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ],
+              "type": "object"
             },
-            "to": {
-              "$ref": "#/$defs/EdgeEnd"
+            {
+              "additionalProperties": false,
+              "properties": {
+                "from": {
+                  "$ref": "#/$defs/EdgeEnd"
+                },
+                "split": {
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Ratio"
+                  },
+                  "description": "The share of each target, each above 0 %, summing to 100 %. A part takes one target by one draw and waits for it when it is full.",
+                  "minProperties": 2,
+                  "propertyNames": {
+                    "$ref": "#/$defs/ComponentId"
+                  },
+                  "type": "object"
+                },
+                "when": {
+                  "description": "A boolean expression over the part's attributes (ADR-0009, ADR-0023). A part takes the first edge whose condition holds, in the order written, and the last edge leaving a component has none. The loader checks its type.",
+                  "examples": [
+                    "variant == 'premium'"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "split"
+              ],
+              "type": "object"
             }
-          },
-          "required": [
-            "from",
-            "to"
-          ],
-          "type": "object"
+          ]
         }
       ]
     },
@@ -581,6 +672,9 @@
         "$ref": "#/$defs/Component"
       },
       "type": "array"
+    },
+    "control": {
+      "$ref": "#/$defs/Control"
     },
     "experiment": {
       "$ref": "#/$defs/Experiment"

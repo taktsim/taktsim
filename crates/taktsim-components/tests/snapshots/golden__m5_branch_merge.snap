@@ -4,7 +4,7 @@ expression: golden.snapshot()
 ---
 case: m5_branch_merge
 records: taktsim-core/3
-messages: taktsim-components/1
+messages: taktsim-components/2
 model hash: 282346086f92e170c6592284037474eb9b637f6c3aef864b3b13350bf925b9c6
 system hash: 0e6f6303820c3e4787c4022056ec378c7503611626f09e71d21eb8ab21f15c76
 seed: 3

@@ -3,7 +3,7 @@
 use taktsim_core::{Component, ComponentError, Context, Delivery, Disposal, Violation};
 use taktsim_model::{ComponentParams, Encode, Fields, Json};
 
-use crate::flow::Flow;
+use crate::flow::{Flow, StationFacts, StatusFact};
 use crate::message::FlowMessage;
 use crate::port::Inlet;
 use crate::run::{BuildError, ComponentType, Ports, Wiring};
@@ -44,6 +44,13 @@ impl ComponentParams for Sink {
 
 impl ComponentType<Flow> for Sink {
     const PORTS: Ports = Ports::Inlet;
+
+    fn facts(&self) -> StationFacts {
+        StationFacts {
+            status: StatusFact::AlwaysRoom,
+            ..StationFacts::default()
+        }
+    }
 
     fn build(
         &self,
@@ -93,7 +100,13 @@ impl Component<FlowMessage> for SinkBehaviour {
             | FlowMessage::Accept
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
-            | FlowMessage::VariantName { .. }) => return Err(unexpected(message)),
+            | FlowMessage::VariantName { .. }
+            | FlowMessage::Status(_)
+            | FlowMessage::OfferOf(_)
+            | FlowMessage::Return(_)
+            | FlowMessage::RouteDecision(_)
+            | FlowMessage::DispatchDecision(_)
+            | FlowMessage::EdgeCondition { .. }) => return Err(unexpected(message)),
         }
         Ok(())
     }

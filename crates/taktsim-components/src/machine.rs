@@ -11,9 +11,11 @@ use taktsim_model::{
 };
 use taktsim_units::{Count, SimDuration, SimTime};
 
-use crate::flow::{Flow, FlowShared, variant_id};
+use crate::flow::{Flow, FlowShared, MeanTimes, SetupMeans, StationFacts, StatusFact, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, MachineStateNote, VariantId};
-use crate::params::{CycleTime, Mtbf, Mttr, PerVariant, Units, VariantRef};
+use crate::params::{
+    CycleTime, Mtbf, Mttr, PerVariant, Units, VARIANT_NAME_RULE, VariantRef, is_variant_name,
+};
 use crate::port::{Inlet, Outlet};
 use crate::run::{BuildError, ComponentType, Wiring};
 use crate::state::MachineState;
@@ -266,6 +268,7 @@ impl Encode for Setup {
 #[derive(Debug, Clone)]
 pub struct Machine {
     cycle_time: Distribution,
+    cycle_time_by_variant: Option<CycleTimes>,
     mtbf: Option<Distribution>,
     mttr: Option<Distribution>,
     setup: Option<Setup>,
@@ -277,12 +280,93 @@ impl Machine {
     pub(crate) const fn setup(&self) -> Option<&Setup> {
         self.setup.as_ref()
     }
+
+    /// The variants its `cycle_time_by_variant` names.
+    pub(crate) fn variants_timed(&self) -> impl Iterator<Item = &ComponentRef> {
+        self.cycle_time_by_variant
+            .iter()
+            .flat_map(|times| times.0.iter().map(|(name, _)| name))
+    }
+}
+
+/// A mean as a fact: beyond what a duration holds, the longest there is, which
+/// ranks after every other.
+fn mean_of(distribution: &Distribution) -> SimDuration {
+    distribution.mean().unwrap_or(SimDuration::MAX)
+}
+
+/// `cycle_time_by_variant`: a mapping from variant to duration or distribution,
+/// each by the rule on `cycle_time`, sorted by name (ADR-0023 §6).
+#[derive(Debug, Clone)]
+struct CycleTimes(Vec<(ComponentRef, Distribution)>);
+
+impl Decode for CycleTimes {
+    const EXPECTED: &'static str =
+        "a mapping from variant to duration or distribution, such as `{premium: 60s}`";
+    const EXAMPLE: &'static str = "{premium: 60s}";
+
+    fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+        let Value::Map(entries) = node.value() else {
+            cx.wrong_type::<Self>(node);
+            return None;
+        };
+        let mut times = Vec::with_capacity(entries.len());
+        let mut ok = true;
+        for entry in entries {
+            let read = cx.within(Segment::Key(entry.key().to_owned()), |cx| {
+                let time = CycleTime::decode(entry.value(), cx);
+                if !is_variant_name(entry.key()) {
+                    let kind = LoadErrorKind::NotAllowed {
+                        found: entry.key().to_owned(),
+                        allowed: VARIANT_NAME_RULE.to_owned(),
+                        example: Self::EXAMPLE.to_owned(),
+                    };
+                    cx.error(entry.key_start(), kind);
+                    return None;
+                }
+                Some((ComponentRef::from_key(entry, cx)?, time?.0))
+            });
+            match read {
+                Some(time) => times.push(time),
+                None => ok = false,
+            }
+        }
+        times.sort_by(|a, b| a.0.id().cmp(b.0.id()));
+        ok.then_some(Self(times))
+    }
+
+    fn schema(schemas: &mut Schemas) -> Json {
+        Json::object([
+            ("type", Json::from("object")),
+            ("propertyNames", schemas.of::<ComponentRef>()),
+            ("additionalProperties", schemas.of::<CycleTime>()),
+            (
+                "description",
+                Json::from(
+                    "The time one unit of a variant takes, instead of `cycle_time`, from the same \
+                     stream. Each is a variant some Source declares, and not a constant 0s.",
+                ),
+            ),
+        ])
+    }
+}
+
+impl Encode for CycleTimes {
+    fn encode(&self) -> Json {
+        Json::Object(
+            self.0
+                .iter()
+                .map(|(name, time)| (name.id().to_owned(), time.encode()))
+                .collect(),
+        )
+    }
 }
 
 impl Encode for Machine {
     fn encode(&self) -> Json {
         Json::object([])
             .with("cycle_time", &self.cycle_time)
+            .with_optional("cycle_time_by_variant", self.cycle_time_by_variant.as_ref())
             .with_optional("mtbf", self.mtbf.as_ref())
             .with_optional("mttr", self.mttr.as_ref())
             .with_optional("setup", self.setup.as_ref())
@@ -296,6 +380,7 @@ impl ComponentParams for Machine {
 
     fn decode(fields: &mut Fields<'_, '_>) -> Option<Self> {
         let cycle_time = fields.required::<CycleTime>("cycle_time");
+        let cycle_time_by_variant = fields.optional::<CycleTimes>("cycle_time_by_variant");
         let mtbf = fields.optional::<Mtbf>("mtbf");
         let mttr = fields.optional::<Mttr>("mttr");
         let setup = fields.optional::<SetupEntry>("setup");
@@ -318,6 +403,7 @@ impl ComponentParams for Machine {
         }
         Some(Self {
             cycle_time: cycle_time?.0,
+            cycle_time_by_variant: cycle_time_by_variant?,
             mtbf: mtbf?.map(|m| m.0),
             mttr: mttr?.map(|m| m.0),
             setup: setup?.map(|s| s.0),
@@ -328,6 +414,43 @@ impl ComponentParams for Machine {
 
 impl ComponentType<Flow> for Machine {
     const STATION: bool = true;
+
+    fn facts(&self) -> StationFacts {
+        StationFacts {
+            routes: true,
+            status: StatusFact::Reports,
+            work: true,
+            places: Some(self.capacity.map_or(1, Count::get)),
+            takes_rule: true,
+            mean_time: Some(MeanTimes {
+                default: mean_of(&self.cycle_time),
+                by_variant: self
+                    .cycle_time_by_variant
+                    .iter()
+                    .flat_map(|times| times.0.iter())
+                    .map(|(name, time)| (name.id().to_owned(), mean_of(time)))
+                    .collect(),
+            }),
+            setup: Some(
+                self.setup
+                    .as_ref()
+                    .map_or_else(SetupMeans::default, |setup| SetupMeans {
+                        per_variant: setup.per_variant.as_ref().map(mean_of),
+                        matrix: setup
+                            .changes()
+                            .iter()
+                            .map(|c| {
+                                (
+                                    (c.from.id().to_owned(), c.to.id().to_owned()),
+                                    mean_of(&c.time),
+                                )
+                            })
+                            .collect(),
+                    }),
+            ),
+            takes_returns: true,
+        }
+    }
 
     fn build(
         &self,
@@ -725,7 +848,13 @@ impl Component<FlowMessage> for MachineBehaviour {
             message @ (FlowMessage::NextArrival
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
-            | FlowMessage::VariantName { .. }) => return Err(self.unexpected(message)),
+            | FlowMessage::VariantName { .. }
+            | FlowMessage::Status(_)
+            | FlowMessage::OfferOf(_)
+            | FlowMessage::Return(_)
+            | FlowMessage::RouteDecision(_)
+            | FlowMessage::DispatchDecision(_)
+            | FlowMessage::EdgeCondition { .. }) => return Err(self.unexpected(message)),
         }
         self.settle(ctx)
     }

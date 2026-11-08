@@ -91,7 +91,13 @@ impl Component<FlowMessage> for PassOn {
             | FlowMessage::NextArrival
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
-            | FlowMessage::VariantName { .. }) => {
+            | FlowMessage::VariantName { .. }
+            | FlowMessage::Status(_)
+            | FlowMessage::OfferOf(_)
+            | FlowMessage::Return(_)
+            | FlowMessage::RouteDecision(_)
+            | FlowMessage::DispatchDecision(_)
+            | FlowMessage::EdgeCondition { .. }) => {
                 return Err(ComponentError::Unexpected {
                     state: "pass-on",
                     event: format!("{other:?}"),
@@ -275,7 +281,7 @@ fn the_envelope_stays_apart_from_the_factory() {
     let schema = model_schema(registry().catalog());
     let defs = schema["$defs"].as_object().unwrap();
     let mut checked = 0;
-    for name in ["Model", "Experiment", "Include", "ObservableRef"] {
+    for name in ["Model", "Experiment", "Include", "ObservableRef", "Control"] {
         let mut seen = BTreeSet::new();
         let mut todo = vec![name.to_owned()];
         while let Some(next) = todo.pop() {
@@ -295,7 +301,8 @@ fn the_envelope_stays_apart_from_the_factory() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 4);
+    assert_eq!(checked, 5);
+    assert!(defs.contains_key("Control"));
     // The factory's value types stay inline in their entries.
     for name in ["VariantMix", "Setup", "Change", "Discipline", "Matrix"] {
         assert!(!defs.contains_key(name), "{name} in $defs");
