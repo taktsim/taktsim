@@ -237,6 +237,18 @@ fn run_id<D: Domain>(model: &Model, seed: Option<u64>) -> Result<RunId, Failure>
     })
 }
 
+/// A horizon the rules refuse came from the request, and the file's is fine, so the
+/// error stands at the flag (ADR-0024 §9). Any other error is the model's.
+fn horizon_refused(errors: &LoadErrors) -> Failure {
+    let mut failure = Failure::from_load(errors);
+    for line in &mut failure.diagnostics {
+        if line.path.as_deref() == Some("experiment.horizon") {
+            line.path = Some("--horizon".to_owned());
+        }
+    }
+    failure
+}
+
 /// Where this binary runs: the only field of a result that differs across targets.
 fn platform() -> String {
     format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS)
@@ -527,7 +539,7 @@ pub fn run<D: Domain>(
     let model = match request.horizon {
         Some(horizon) => model
             .with_horizon(horizon)
-            .map_err(|errors| Failure::from_load(&errors))?,
+            .map_err(|errors| horizon_refused(&errors))?,
         None => model,
     };
     let document = model.document();

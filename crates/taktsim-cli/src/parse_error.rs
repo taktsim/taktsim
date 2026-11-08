@@ -30,6 +30,47 @@ pub(crate) fn format_in(args: &[OsString]) -> Format {
     format
 }
 
+/// A word with one leading hyphen right after a flag that takes a value is that
+/// flag's value, as in `--seed -1`. The parser would read it as a flag of its own and
+/// report it as unknown, so it is attached (`--seed=-1`) and the flag's own rule
+/// answers, at the flag and with what was typed (ADR-0024 §9). A word with two
+/// hyphens stays a flag, so `--seed --no-reuse` still says `--seed` needs a value.
+pub(crate) fn attach_hyphen_values(args: &[OsString]) -> Vec<OsString> {
+    let Some(command) = subcommand_in(args) else {
+        return args.to_vec();
+    };
+    let takes_value = |word: &str| {
+        word.strip_prefix("--").is_some_and(|long| {
+            command
+                .get_arguments()
+                .any(|arg| arg.get_long() == Some(long) && arg.get_action().takes_values())
+        })
+    };
+    let one_hyphen =
+        |word: &str| word.len() > 1 && word.starts_with('-') && !word.starts_with("--");
+    let mut attached = Vec::with_capacity(args.len());
+    let mut words = args.iter().peekable();
+    while let Some(word) = words.next() {
+        if word == "--" {
+            attached.push(word.clone());
+            attached.extend(words.cloned());
+            break;
+        }
+        let value = words
+            .peek()
+            .and_then(|next| next.to_str())
+            .filter(|next| one_hyphen(next));
+        match (word.to_str(), value) {
+            (Some(flag), Some(value)) if takes_value(flag) => {
+                attached.push(format!("{flag}={value}").into());
+                words.next();
+            }
+            _ => attached.push(word.clone()),
+        }
+    }
+    attached
+}
+
 /// What the parser said about `kind`, as text.
 fn context(error: &clap::Error, kind: ContextKind) -> Vec<String> {
     match error.get(kind) {
@@ -251,6 +292,36 @@ mod tests {
             Format::Text
         );
         assert_eq!(format_in(&words(&["taktsim", "--format"])), Format::Text);
+    }
+
+    #[test]
+    fn a_value_with_one_hyphen_is_attached_to_its_flag() {
+        let attached = |args: &[&str]| attach_hyphen_values(&words(args));
+        assert_eq!(
+            attached(&["taktsim", "run", "m.yaml", "--seed", "-1", "--no-reuse"]),
+            words(&["taktsim", "run", "m.yaml", "--seed=-1", "--no-reuse"])
+        );
+        assert_eq!(
+            attached(&["taktsim", "run", "m.yaml", "--horizon", "-5s"]),
+            words(&["taktsim", "run", "m.yaml", "--horizon=-5s"])
+        );
+        for unchanged in [
+            &["taktsim", "run", "m.yaml", "--seed", "1"][..],
+            // Two hyphens: a flag, so `--seed` has no value.
+            &["taktsim", "run", "m.yaml", "--seed", "--no-reuse"],
+            // Takes no value.
+            &["taktsim", "run", "m.yaml", "--no-reuse", "-1"],
+            // Not a flag of this command.
+            &["taktsim", "validate", "m.yaml", "--seed", "-1"],
+            // After `--` nothing is a flag.
+            &["taktsim", "run", "--", "--seed", "-1"],
+            // No command to know the flags of.
+            &["taktsim", "--seed", "-1"],
+            // A lone hyphen is the parser's value already.
+            &["taktsim", "run", "m.yaml", "--store", "-"],
+        ] {
+            assert_eq!(attached(unchanged), words(unchanged));
+        }
     }
 
     #[test]
