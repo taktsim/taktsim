@@ -983,6 +983,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "taktsim-run"
+version = "0.0.0"
+dependencies = [
+ "insta",
+ "proptest",
+ "regex",
+ "sha2",
+ "taktsim-components",
+ "taktsim-core",
+ "taktsim-model",
+ "taktsim-stats",
+ "taktsim-trace",
+ "taktsim-units",
+ "thiserror",
+]
+
+[[package]]
 name = "taktsim-stats"
 version = "0.0.0"
 dependencies = [
