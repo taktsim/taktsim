@@ -1,0 +1,13 @@
+# Reference model: the chain with failures and a small buffer that fills, so a
+# run shows blocking, repairs and the buffer at its capacity.
+format: "1.0"
+model: {name: chain-failures, seed: 7}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source}
+  - {id: cut, type: Machine, cycle_time: {dist: lognormal, mean: 30s, sigma: 0.2}, mtbf: {dist: exponential, mean: 3h}, mttr: {dist: exponential, mean: 6min}}
+  - {id: buf1, type: Buffer, capacity: 3 parts}
+  - {id: weld, type: Machine, cycle_time: {dist: lognormal, mean: 45s, sigma: 0.2}, mtbf: {dist: exponential, mean: 1h}, mttr: {dist: exponential, mean: 8min}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, cut, buf1, weld, sink]
