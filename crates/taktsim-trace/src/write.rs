@@ -305,7 +305,8 @@ fn record_time<M>(record: &TraceRecord<'_, M>) -> taktsim_units::SimTime {
     match record {
         TraceRecord::Event { time, .. }
         | TraceRecord::ItemCreated { time, .. }
-        | TraceRecord::ItemDisposed { time, .. } => *time,
+        | TraceRecord::ItemDisposed { time, .. }
+        | TraceRecord::Note { time, .. } => *time,
     }
 }
 
@@ -313,7 +314,9 @@ fn record_time<M>(record: &TraceRecord<'_, M>) -> taktsim_units::SimTime {
 fn highest_component<M>(record: &TraceRecord<'_, M>) -> taktsim_core::ComponentId {
     match record {
         TraceRecord::Event { target, from, .. } => *target.max(from),
-        TraceRecord::ItemCreated { by, .. } | TraceRecord::ItemDisposed { by, .. } => *by,
+        TraceRecord::ItemCreated { by, .. }
+        | TraceRecord::ItemDisposed { by, .. }
+        | TraceRecord::Note { by, .. } => *by,
     }
 }
 

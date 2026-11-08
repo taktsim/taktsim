@@ -6,14 +6,15 @@
 //! not know a kind can still find the record's end and its time (the
 //! envelope every engine shares; owner's decision 2026-11-05). The fields
 //! after the prefix are the engine's ([`RECORD_FORMAT`](crate::RECORD_FORMAT)),
-//! fixed-width little-endian; an event's message comes last and fills the
-//! rest of the record.
+//! fixed-width little-endian; a message comes last and fills the rest of the
+//! record.
 //!
 //! | Kind | Byte | Fields after the prefix |
 //! | --- | --- | --- |
 //! | event | 1 | seq u64, target u32, from u32, has item u8 (0/1), item u64 (0 if none), message |
 //! | item created | 2 | item u64, by u32 |
 //! | item disposed | 3 | item u64, by u32, how u8 (0 delivered, 1 scrapped, 2 consumed) |
+//! | note | 4 | by u32, message |
 
 use std::fmt;
 
@@ -25,6 +26,7 @@ use crate::codec::{DecodeError, Decoder, EncodeError, Encoder, TraceMessage};
 pub(crate) const EVENT: u8 = 1;
 pub(crate) const ITEM_CREATED: u8 = 2;
 pub(crate) const ITEM_DISPOSED: u8 = 3;
+pub(crate) const NOTE: u8 = 4;
 
 /// The prefix every record starts with: kind u8, length u16, time u64.
 pub(crate) const PREFIX: usize = 1 + 2 + 8;
@@ -82,6 +84,15 @@ pub enum Record<M> {
         /// How the item left the model.
         how: Disposal,
     },
+    /// `by` wrote a note: a message on record that no component received.
+    Note {
+        /// The simulation time.
+        time: SimTime,
+        /// The component that wrote it.
+        by: ComponentId,
+        /// The message.
+        message: M,
+    },
 }
 
 impl<M> Record<M> {
@@ -130,6 +141,11 @@ impl<M> Record<M> {
                 by: *by,
                 how: *how,
             },
+            Self::Note { time, by, message } => TraceRecord::Note {
+                time: *time,
+                by: *by,
+                message,
+            },
         }
     }
 
@@ -150,7 +166,8 @@ impl<M> Record<M> {
         match self {
             Self::Event { time, .. }
             | Self::ItemCreated { time, .. }
-            | Self::ItemDisposed { time, .. } => *time,
+            | Self::ItemDisposed { time, .. }
+            | Self::Note { time, .. } => *time,
         }
     }
 
@@ -245,6 +262,9 @@ impl<M: fmt::Debug> fmt::Display for Line<'_, '_, M> {
                 };
                 write!(f, "{time} item {} {how} by {}", item.as_u64(), name(by))
             }
+            TraceRecord::Note { time, by, message } => {
+                write!(f, "{time} note by {} {message:?}", name(by))
+            }
         }
     }
 }
@@ -275,6 +295,7 @@ pub(crate) fn encode<M: TraceMessage>(
         TraceRecord::Event { time, .. } => (EVENT, *time),
         TraceRecord::ItemCreated { time, .. } => (ITEM_CREATED, *time),
         TraceRecord::ItemDisposed { time, .. } => (ITEM_DISPOSED, *time),
+        TraceRecord::Note { time, .. } => (NOTE, *time),
     };
     encoder.u8(kind);
     // The length, filled in below.
@@ -308,6 +329,10 @@ pub(crate) fn encode<M: TraceMessage>(
                 Disposal::Scrapped => 1,
                 Disposal::Consumed => 2,
             });
+        }
+        TraceRecord::Note { by, message, .. } => {
+            encoder.component(*by);
+            message.encode(&mut encoder);
         }
     }
     let result = encoder.finish().and_then(|()| {
@@ -364,11 +389,11 @@ pub(crate) fn decode<M: TraceMessage>(
 ) -> Result<Record<M>, DecodeError> {
     let mut input = Decoder::new(bytes);
     let kind = input.u8()?;
-    if !matches!(kind, EVENT | ITEM_CREATED | ITEM_DISPOSED) {
+    if !matches!(kind, EVENT | ITEM_CREATED | ITEM_DISPOSED | NOTE) {
         return Err(input.invalid(
             "record kind",
             kind.into(),
-            format_args!("1, 2 or 3 ({})", crate::RECORD_FORMAT),
+            format_args!("1, 2, 3 or 4 ({})", crate::RECORD_FORMAT),
         ));
     }
     // The length framed the record already ([`frame`]); the decoder's
@@ -421,8 +446,13 @@ pub(crate) fn decode<M: TraceMessage>(
                 }
             },
         },
+        NOTE => {
+            let by = component(&mut input, components)?;
+            let message = crate::codec::decode_message(input.slice(bytes.len() - input.offset())?)?;
+            Record::Note { time, by, message }
+        }
         // Refused above.
-        _ => return Err(input.invalid("record kind", kind.into(), "1, 2 or 3")),
+        _ => return Err(input.invalid("record kind", kind.into(), "1, 2, 3 or 4")),
     };
     input.finish()?;
     Ok(record)

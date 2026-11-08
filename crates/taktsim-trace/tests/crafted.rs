@@ -145,7 +145,7 @@ fn invalid_records_in_an_intact_chunk_are_named() {
     let cases: [(Vec<u8>, &str); 7] = [
         (
             bad_kind,
-            "invalid record kind before byte 1: found 9, allowed 1, 2 or 3 (taktsim-core/1)",
+            "invalid record kind before byte 1: found 9, allowed 1, 2, 3 or 4 (taktsim-core/2)",
         ),
         (
             created(2),
@@ -430,4 +430,39 @@ fn values_that_do_not_fit_are_refused() {
         panic!("a component number above u32::MAX was encoded");
     };
     assert!(e.to_string().starts_with("component number "), "{e}");
+}
+
+#[test]
+fn a_note_naming_an_unknown_component_is_refused() {
+    // Kind 4: time, by u32, message.
+    let mut body = 7_u64.to_le_bytes().to_vec();
+    body.extend_from_slice(&5_u32.to_le_bytes());
+    body.push(0);
+    let e = first_error(&trace(&framed(4, &body), 1));
+    let ReadError::Record { source, .. } = &e else {
+        panic!("{e}");
+    };
+    assert_eq!(
+        source.to_string(),
+        "invalid component before byte 15: found 5, allowed below 2, the number of components in the header"
+    );
+}
+
+#[test]
+fn a_hand_made_note_reads() {
+    let mut body = 7_u64.to_le_bytes().to_vec();
+    body.extend_from_slice(&1_u32.to_le_bytes());
+    body.push(0);
+    let bytes = trace(&framed(4, &body), 1);
+    let mut reader = TraceReader::<_, Toy>::new(bytes.as_slice()).unwrap();
+    let record = reader.next_record().unwrap().unwrap();
+    assert_eq!(
+        record,
+        Record::Note {
+            time: taktsim_units::SimTime::from_nanos(7),
+            by: taktsim_core::ComponentId::from_index(1),
+            message: Toy::Next,
+        }
+    );
+    assert_eq!(record.time(), taktsim_units::SimTime::from_nanos(7));
 }

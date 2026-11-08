@@ -925,3 +925,71 @@ fn an_engine_is_send() {
     fn assert_send<T: Send>(_: &T) {}
     assert_send(&line(None, true));
 }
+
+#[test]
+fn notes_reach_the_trace_and_no_component() {
+    use std::sync::atomic::AtomicU32;
+
+    let (handled, seen) = (Arc::new(AtomicU32::new(0)), Arc::new(AtomicU32::new(0)));
+    let (for_a, for_b) = (handled.clone(), seen.clone());
+    let mut engine = Engine::new(EngineConfig::new(1));
+    engine
+        .add_component(
+            "a",
+            scripted(
+                |ctx| {
+                    ctx.note(&Msg::Tick(1));
+                    ctx.schedule(d("1s"), Msg::Tick(0))?;
+                    Ok(())
+                },
+                move |_, ctx| {
+                    for_a.fetch_add(1, Ordering::Relaxed);
+                    ctx.note(&Msg::Tick(2));
+                    Ok(())
+                },
+            ),
+        )
+        .unwrap();
+    engine
+        .add_component(
+            "b",
+            scripted(
+                |_| Ok(()),
+                move |_, _| {
+                    for_b.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                },
+            ),
+        )
+        .unwrap();
+    let mut recorder = Recorder::default();
+    let summary = engine
+        .run(RunLimits::until(t("1min")), &mut recorder)
+        .unwrap();
+    // One event: a note is no event, and takes no sequence number.
+    assert_eq!(summary.events, 1);
+    assert_eq!(handled.load(Ordering::Relaxed), 1);
+    assert_eq!(seen.load(Ordering::Relaxed), 0);
+    assert_eq!(recorder.0.len(), 3, "{:?}", recorder.0);
+    assert!(recorder.0[0].starts_with("Note {"), "{}", recorder.0[0]);
+    assert!(
+        recorder.0[0].contains("message: Tick(1)"),
+        "{}",
+        recorder.0[0]
+    );
+    assert!(
+        recorder.0[1].starts_with("Event { seq: 0"),
+        "{}",
+        recorder.0[1]
+    );
+    assert!(
+        recorder.0[2].contains("message: Tick(2)"),
+        "{}",
+        recorder.0[2]
+    );
+    assert!(
+        recorder.0[2].contains("by: ComponentId(0)"),
+        "{}",
+        recorder.0[2]
+    );
+}

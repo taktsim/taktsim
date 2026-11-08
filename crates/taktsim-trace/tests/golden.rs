@@ -98,8 +98,9 @@ fn the_harness_checks_names_and_writes_hash_files() {
 
 /// The stream and file hashes of the three cases, pinned for the layout of
 /// ADR-0021 as decided on 2026-11-05 (record prefix, chunk first time,
-/// record format and system hash in the header), recorded on Linux
-/// x86-64. The cross-platform job compares the same hashes from every
+/// record format and system hash in the header), then ADR-0022 (the record
+/// format's name in the header; the stream hashes did not change), recorded
+/// on Linux x86-64. The cross-platform job compares the same hashes from every
 /// tier-1 target, so this test pins the bytes and that job proves they are
 /// the same everywhere. The header's engine version is set to 0.0.0, so a
 /// release does not change these values; a change to any record, the
@@ -113,21 +114,21 @@ fn hashes_are_pinned_for_this_layout() {
             "1h",
             b"toy single server: source 1min, station 45s, sink",
             "208cda594606f9c0962eaf11b248a4aeb5b50ae09093fba036f434c93c01adad",
-            "687281944974272df607b4417f104e95a7cff27a05323c9cd7503d7ac1dcabb5",
+            "3c46b400bdfa100d73051aec1d9276fab60053e18bff0ad99fce7244b4cabd3b",
         ),
         (
             || support::tandem(7),
             "4h",
             b"toy tandem: source 1min, cut 40s mtbf 20min mttr 3min, weld 50s scrap 1/7, sink",
             "744ef2b5754faccc360ca0bef9f3300a49163501a3fd7d3db34cc92ddd46d4f9",
-            "23404259c347b06ab62a938edfb13a5e590ac870a09e1234fcc697b696fee71e",
+            "f7ee8ea69acff4b46b2db98ef0f584ee929b23afce06c4f776a6b08a3e8974a2",
         ),
         (
             || support::line(2026, 20),
             "8h",
             b"toy line: source 1min, 20 stations 40s, sink",
             "1e4383e4188daeeb3fc7ca8f44a34b45c348c52d621f0039a40742399bd251f3",
-            "04b3bba31f85f7ad14f30b974bb53fb111950d0788c6193a9930486627fd8b6d",
+            "b258a887079773ac028956becc8f3bd104504733214d8b0398bc20b8f426ff83",
         ),
     ];
     for (build, until, model, stream, file) in cases {

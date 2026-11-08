@@ -41,14 +41,14 @@ pub struct ReplayReport {
 ///
 /// - every record the engine emits with the trace's next record, byte for
 ///   byte: the event's time, sequence number, target, sender, message and
-///   item, and every item created or disposed of;
+///   item, every item created or disposed of, and every note;
 /// - after starting and after every event, the engine's clock and item
 ///   counts with those the trace implies.
 ///
 /// The first difference stops the replay with [`ReplayError::Diverged`] or
 /// [`ReplayError::State`], naming the record. The components' own state is
-/// checked by their invariants, which the engine runs after every event when
-/// checks are on.
+/// checked by their notes, as far as they write it down, and by their
+/// invariants, which the engine runs after every event when checks are on.
 ///
 /// # Errors
 ///
@@ -230,7 +230,7 @@ impl<R: Read, M: TraceMessage> Replayer<R, M> {
         }
         self.trace.consume();
         match emitted {
-            TraceRecord::Event { .. } => {}
+            TraceRecord::Event { .. } | TraceRecord::Note { .. } => {}
             TraceRecord::ItemCreated { .. } => self.counts.created += 1,
             TraceRecord::ItemDisposed { how, .. } => match how {
                 taktsim_core::Disposal::Delivered => self.counts.delivered += 1,

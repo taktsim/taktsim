@@ -334,3 +334,105 @@ fn a_run_that_fails_fails_its_replay() {
         "{e}"
     );
 }
+
+/// Notes once per event, its text depending on `word`.
+struct Noter(&'static str);
+
+impl Component<Toy> for Noter {
+    fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+        ctx.note(&Toy::Note {
+            text: "start".to_owned(),
+            share: 0.5,
+        });
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+    fn handle(
+        &mut self,
+        _: Delivery<'_, Toy>,
+        ctx: &mut Context<'_, Toy>,
+    ) -> Result<(), ComponentError> {
+        ctx.note(&Toy::Note {
+            text: self.0.to_owned(),
+            share: 0.25,
+        });
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+}
+
+#[allow(clippy::unwrap_used)] // test helper
+fn noter(word: &'static str) -> Engine<Toy> {
+    let mut engine = Engine::new(EngineConfig::new(3));
+    engine
+        .add_component("noter", Box::new(Noter(word)))
+        .unwrap();
+    engine
+}
+
+#[test]
+fn notes_are_kept_and_compared_by_replay() {
+    let trace = trace_of(noter("busy"), "3s");
+    let reader = TraceReader::<_, Toy>::new(trace.as_slice()).unwrap();
+    let names = reader.header().components.clone();
+    let lines: Vec<String> = reader
+        .map(|r| r.unwrap().display(&names).to_string())
+        .collect();
+    assert_eq!(
+        lines[0],
+        "0s note by noter Note { text: \"start\", share: 0.5 }"
+    );
+    assert_eq!(lines[1], "1s event #0 noter -> noter Next");
+    assert_eq!(
+        lines[2],
+        "1s note by noter Note { text: \"busy\", share: 0.25 }"
+    );
+    assert_eq!(lines.len(), 7);
+
+    // The same run replays; events count events only.
+    let report = replay_with(&trace, noter("busy")).unwrap();
+    assert_eq!((report.records, report.events), (7, 3));
+
+    // A note that differs is a divergence, naming both.
+    let Err(ReplayError::Diverged {
+        record,
+        expected,
+        found,
+    }) = replay_with(&trace, noter("down"))
+    else {
+        panic!("a different note replayed");
+    };
+    assert_eq!(record, 2);
+    assert!(expected.contains("busy"), "{expected}");
+    assert!(found.contains("down"), "{found}");
+}
+
+#[test]
+fn a_missing_note_is_a_divergence() {
+    // A run that wrote notes, replayed by an engine that writes none.
+    struct Quiet;
+    impl Component<Toy> for Quiet {
+        fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+            ctx.schedule("1s".parse()?, Toy::Next)?;
+            Ok(())
+        }
+        fn handle(
+            &mut self,
+            _: Delivery<'_, Toy>,
+            ctx: &mut Context<'_, Toy>,
+        ) -> Result<(), ComponentError> {
+            ctx.schedule("1s".parse()?, Toy::Next)?;
+            Ok(())
+        }
+    }
+    let trace = trace_of(noter("busy"), "3s");
+    let mut engine = Engine::new(EngineConfig::new(3));
+    engine.add_component("noter", Box::new(Quiet)).unwrap();
+    let Err(ReplayError::Diverged {
+        record: 0, found, ..
+    }) = replay_with(&trace, engine)
+    else {
+        panic!("a missing note replayed");
+    };
+    assert_eq!(found, "no further record before the engine's next event");
+}

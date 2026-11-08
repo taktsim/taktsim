@@ -222,7 +222,7 @@ impl Golden {
     /// # }
     /// let case = golden::Case { name: "doc_snapshot", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
-    /// assert!(golden.snapshot().starts_with("case: doc_snapshot\nrecords: taktsim-core/1\nmessages: tick/1\n"));
+    /// assert!(golden.snapshot().starts_with("case: doc_snapshot\nrecords: taktsim-core/2\nmessages: tick/1\n"));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[must_use]
