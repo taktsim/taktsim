@@ -56,7 +56,7 @@ mod source;
 mod state;
 
 pub use buffer::{Buffer, Discipline};
-pub use flow::{Flow, FlowShared, standard};
+pub use flow::{Flow, FlowShared, standard, standard_schema};
 pub use machine::{Machine, Setup};
 pub use message::{FlowMessage, ItemAttrs, MachineStateNote, SourceStateNote, VariantId};
 pub use run::{

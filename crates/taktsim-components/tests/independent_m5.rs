@@ -3099,7 +3099,7 @@ fn the_seed_changes_the_draws_and_the_header_states_it() {
         "option 1 equals the model's seed: 1"
     );
     let reader = TraceReader::<_, FlowMessage>::new(other.bytes.as_slice()).unwrap();
-    assert_eq!(reader.header().seed, 2);
+    assert_eq!(reader.header().seed, Some(2));
 }
 
 /// ADR-0022 §2: neither options nor model give a seed: `RunFailure::NoSeed`, with
@@ -4951,7 +4951,7 @@ fn a_trace_accounts_for_itself() {
     assert_eq!(r.names, ["source", "cut", "buf1", "weld", "sink"]);
     let reader = TraceReader::<_, FlowMessage>::new(r.bytes.as_slice()).unwrap();
     assert_eq!(reader.header().message_format, "taktsim-components/1");
-    assert_eq!(reader.header().seed, 1);
+    assert_eq!(reader.header().seed, Some(1));
 }
 
 fn event_nanos(r: &Run, name: &str, pick: fn(&FlowMessage) -> bool) -> Vec<u64> {
