@@ -1,0 +1,353 @@
+---
+source: crates/taktsim-components/tests/golden.rs
+expression: golden.snapshot()
+---
+case: m5_same_instant_chain
+records: taktsim-core/2
+messages: taktsim-components/1
+model hash: 54bb6a040236813c125e97a1c3304e3b2ab422e485725757f95569aaaaae24b9
+system hash: 99d78176375e0868682ca1ee3855f0f3933fee27d8bbd7bb3a18b30a8b0d8054
+seed: 1
+components: source, a, b, buf, c, d, sink
+records: 338 (207 events) in 1 chunks
+stream sha256: e26e0779cea9851a5bed63940fc512938f48659fe7778e59c8e7aaf0b98ed405
+end: 4min (horizon)
+---
+0s note by source VariantName { id: VariantId(0), name: "default" }
+0s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+0s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+4s event #0 source -> source NextArrival
+4s item 0 created by source
+4s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+4s event #1 source -> a Offer
+4s event #3 a -> source Accept
+4s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+4s event #4 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+4s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+4s event #2 source -> b Offer
+4s event #8 b -> source Accept
+4s event #9 source -> b Decline
+4s event #6 source -> b Withdraw
+8s event #5 source -> source NextArrival
+8s item 1 created by source
+8s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+8s event #10 source -> a Offer
+8s event #11 source -> b Offer
+8s event #12 b -> source Accept
+8s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+8s event #13 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+8s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+8s event #15 source -> a Withdraw
+12s event #14 source -> source NextArrival
+12s item 2 created by source
+12s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+12s event #17 source -> a Offer
+12s event #18 source -> b Offer
+17s event #7 a -> a CycleDone { item: ItemId(0) }
+17s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+17s event #19 a -> buf Offer
+17s event #20 buf -> a Accept
+17s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+17s event #21 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+17s event #22 a -> source Accept
+17s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+17s event #24 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+17s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+17s event #23 buf -> c Offer
+17s event #28 c -> buf Accept
+17s event #29 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+17s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+17s event #26 source -> b Withdraw
+21s event #25 source -> source NextArrival
+21s item 3 created by source
+21s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+21s event #31 source -> a Offer
+21s event #32 source -> b Offer
+30s event #16 b -> b CycleDone { item: ItemId(1) }
+30s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+30s event #27 a -> a CycleDone { item: ItemId(2) }
+30s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+30s event #33 b -> buf Offer
+30s event #35 buf -> b Accept
+30s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+30s event #36 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+30s event #37 b -> source Accept
+30s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+30s event #39 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+30s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+30s event #34 a -> buf Offer
+30s event #38 buf -> c Offer
+30s event #41 source -> a Withdraw
+34s event #40 source -> source NextArrival
+34s item 4 created by source
+34s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+34s event #43 source -> a Offer
+34s event #44 source -> b Offer
+43s event #30 c -> c CycleDone { item: ItemId(0) }
+43s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+43s event #45 c -> d Offer
+43s event #46 d -> c Accept
+43s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+43s event #47 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+43s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+43s event #48 c -> buf Accept
+43s event #50 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+43s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+43s event #51 buf -> a Accept
+43s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+43s event #53 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+43s event #54 a -> source Accept
+43s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+43s event #56 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+43s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+43s event #55 buf -> c Offer
+43s event #58 source -> b Withdraw
+47s event #57 source -> source NextArrival
+47s item 5 created by source
+47s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+47s event #60 source -> a Offer
+47s event #61 source -> b Offer
+52s event #42 b -> b CycleDone { item: ItemId(3) }
+52s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+52s event #62 b -> buf Offer
+56s event #59 a -> a CycleDone { item: ItemId(4) }
+56s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+56s event #63 a -> buf Offer
+69s event #49 d -> d CycleDone { item: ItemId(0) }
+69s note by d MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+69s event #52 c -> c CycleDone { item: ItemId(1) }
+69s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+69s event #64 d -> sink Offer
+69s event #66 sink -> d Accept
+69s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+69s event #67 d -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+69s item 0 delivered by sink
+69s event #65 c -> d Offer
+69s event #68 d -> c Accept
+69s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+69s event #69 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+69s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+69s event #70 c -> buf Accept
+69s event #72 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+69s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+69s event #73 buf -> b Accept
+69s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+69s event #75 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+69s event #76 b -> source Accept
+69s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+69s event #78 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+69s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+69s event #77 buf -> c Offer
+69s event #80 source -> a Withdraw
+73s event #79 source -> source NextArrival
+73s item 6 created by source
+73s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+73s event #82 source -> a Offer
+73s event #83 source -> b Offer
+91s event #81 b -> b CycleDone { item: ItemId(5) }
+91s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+91s event #84 b -> buf Offer
+95s event #71 d -> d CycleDone { item: ItemId(1) }
+95s note by d MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+95s event #74 c -> c CycleDone { item: ItemId(2) }
+95s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+95s event #85 d -> sink Offer
+95s event #87 sink -> d Accept
+95s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+95s event #88 d -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+95s item 1 delivered by sink
+95s event #86 c -> d Offer
+95s event #89 d -> c Accept
+95s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+95s event #90 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+95s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+95s event #91 c -> buf Accept
+95s event #93 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+95s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+95s event #94 buf -> a Accept
+95s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+95s event #96 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+95s event #97 a -> source Accept
+95s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+95s event #99 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+95s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+95s event #98 buf -> c Offer
+95s event #101 source -> b Withdraw
+99s event #100 source -> source NextArrival
+99s item 7 created by source
+99s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+99s event #103 source -> a Offer
+99s event #104 source -> b Offer
+108s event #102 a -> a CycleDone { item: ItemId(6) }
+108s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+108s event #105 a -> buf Offer
+121s event #92 d -> d CycleDone { item: ItemId(2) }
+121s note by d MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+121s event #95 c -> c CycleDone { item: ItemId(3) }
+121s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+121s event #106 d -> sink Offer
+121s event #108 sink -> d Accept
+121s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+121s event #109 d -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+121s item 2 delivered by sink
+121s event #107 c -> d Offer
+121s event #110 d -> c Accept
+121s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+121s event #111 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+121s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+121s event #112 c -> buf Accept
+121s event #114 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+121s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+121s event #115 buf -> b Accept
+121s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+121s event #117 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+121s event #118 b -> source Accept
+121s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+121s event #120 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+121s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+121s event #119 buf -> c Offer
+121s event #122 source -> a Withdraw
+125s event #121 source -> source NextArrival
+125s item 8 created by source
+125s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+125s event #124 source -> a Offer
+125s event #125 source -> b Offer
+143s event #123 b -> b CycleDone { item: ItemId(7) }
+143s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+143s event #126 b -> buf Offer
+147s event #113 d -> d CycleDone { item: ItemId(3) }
+147s note by d MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+147s event #116 c -> c CycleDone { item: ItemId(4) }
+147s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+147s event #127 d -> sink Offer
+147s event #129 sink -> d Accept
+147s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+147s event #130 d -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+147s item 3 delivered by sink
+147s event #128 c -> d Offer
+147s event #131 d -> c Accept
+147s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+147s event #132 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+147s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+147s event #133 c -> buf Accept
+147s event #135 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+147s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+147s event #136 buf -> a Accept
+147s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+147s event #138 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+147s event #139 a -> source Accept
+147s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+147s event #141 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+147s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+147s event #140 buf -> c Offer
+147s event #143 source -> b Withdraw
+151s event #142 source -> source NextArrival
+151s item 9 created by source
+151s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+151s event #145 source -> a Offer
+151s event #146 source -> b Offer
+160s event #144 a -> a CycleDone { item: ItemId(8) }
+160s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+160s event #147 a -> buf Offer
+173s event #134 d -> d CycleDone { item: ItemId(4) }
+173s note by d MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+173s event #137 c -> c CycleDone { item: ItemId(5) }
+173s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+173s event #148 d -> sink Offer
+173s event #150 sink -> d Accept
+173s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+173s event #151 d -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+173s item 4 delivered by sink
+173s event #149 c -> d Offer
+173s event #152 d -> c Accept
+173s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+173s event #153 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+173s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+173s event #154 c -> buf Accept
+173s event #156 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+173s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+173s event #157 buf -> b Accept
+173s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+173s event #159 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+173s event #160 b -> source Accept
+173s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+173s event #162 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+173s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+173s event #161 buf -> c Offer
+173s event #164 source -> a Withdraw
+177s event #163 source -> source NextArrival
+177s item 10 created by source
+177s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+177s event #166 source -> a Offer
+177s event #167 source -> b Offer
+195s event #165 b -> b CycleDone { item: ItemId(9) }
+195s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+195s event #168 b -> buf Offer
+199s event #155 d -> d CycleDone { item: ItemId(5) }
+199s note by d MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+199s event #158 c -> c CycleDone { item: ItemId(6) }
+199s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+199s event #169 d -> sink Offer
+199s event #171 sink -> d Accept
+199s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+199s event #172 d -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+199s item 5 delivered by sink
+199s event #170 c -> d Offer
+199s event #173 d -> c Accept
+199s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+199s event #174 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+199s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+199s event #175 c -> buf Accept
+199s event #177 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+199s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+199s event #178 buf -> a Accept
+199s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+199s event #180 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+199s event #181 a -> source Accept
+199s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+199s event #183 source -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+199s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+199s event #182 buf -> c Offer
+199s event #185 source -> b Withdraw
+203s event #184 source -> source NextArrival
+203s item 11 created by source
+203s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+203s event #187 source -> a Offer
+203s event #188 source -> b Offer
+212s event #186 a -> a CycleDone { item: ItemId(10) }
+212s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+212s event #189 a -> buf Offer
+225s event #176 d -> d CycleDone { item: ItemId(6) }
+225s note by d MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+225s event #179 c -> c CycleDone { item: ItemId(7) }
+225s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+225s event #190 d -> sink Offer
+225s event #192 sink -> d Accept
+225s note by d MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+225s event #193 d -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+225s item 6 delivered by sink
+225s event #191 c -> d Offer
+225s event #194 d -> c Accept
+225s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+225s event #195 c -> d Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+225s note by d MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+225s event #196 c -> buf Accept
+225s event #198 buf -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+225s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+225s event #199 buf -> b Accept
+225s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+225s event #201 b -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+225s event #202 b -> source Accept
+225s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+225s event #204 source -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+225s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+225s event #203 buf -> c Offer
+225s event #206 source -> a Withdraw
+229s event #205 source -> source NextArrival
+229s item 12 created by source
+229s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+229s event #208 source -> a Offer
+229s event #209 source -> b Offer

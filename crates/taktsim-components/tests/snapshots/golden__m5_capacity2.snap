@@ -1,0 +1,516 @@
+---
+source: crates/taktsim-components/tests/golden.rs
+expression: golden.snapshot()
+---
+case: m5_capacity2
+records: taktsim-core/2
+messages: taktsim-components/1
+model hash: 83e229b1dce72f444ac1e0165ca80b1122a1850b522c9c86d776da5ea00074f1
+system hash: 2bb063fe1937ae0df3d9f997ffd9bc74a592661455919a3440e7befc8e9806fb
+seed: 11
+components: source, m, buf, press, sink
+records: 7329 (4882 events) in 4 chunks
+stream sha256: 50fa9348ac7f6f0ab9afed9132d734547b694f0609b8e2c87b929d3ee439aa58
+end: 4h (horizon)
+---
+0s note by source VariantName { id: VariantId(0), name: "default" }
+0s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by m MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+0s event #0 source -> m Offer
+0s event #2 m -> source Accept
+0s item 0 created by source
+0s event #3 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+0s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+0s event #4 source -> m Offer
+0s event #6 m -> source Accept
+0s item 1 created by source
+0s event #7 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+0s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+0s event #8 source -> m Offer
+24.027133925s event #5 m -> m CycleDone { item: ItemId(0) }
+24.027133925s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+24.027133925s event #10 m -> buf Offer
+24.027133925s event #11 buf -> m Accept
+24.027133925s event #12 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+24.027133925s event #13 m -> source Accept
+24.027133925s item 2 created by source
+24.027133925s event #15 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+24.027133925s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+24.027133925s event #14 buf -> press Offer
+24.027133925s event #18 press -> buf Accept
+24.027133925s event #19 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+24.027133925s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+24.027133925s event #16 source -> m Offer
+46.699313862s event #17 m -> m CycleDone { item: ItemId(2) }
+46.699313862s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+46.699313862s event #21 m -> buf Offer
+46.699313862s event #22 buf -> m Accept
+46.699313862s event #23 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+46.699313862s event #24 m -> source Accept
+46.699313862s item 3 created by source
+46.699313862s event #26 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+46.699313862s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+46.699313862s event #25 buf -> press Offer
+46.699313862s event #27 source -> m Offer
+103.631606466s event #20 press -> press CycleDone { item: ItemId(0) }
+103.631606466s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+103.631606466s event #29 press -> sink Offer
+103.631606466s event #30 sink -> press Accept
+103.631606466s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+103.631606466s event #31 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+103.631606466s item 0 delivered by sink
+103.631606466s event #32 press -> buf Accept
+103.631606466s event #33 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+103.631606466s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+138.335906178s event #28 m -> m CycleDone { item: ItemId(3) }
+138.335906178s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+138.335906178s event #35 m -> buf Offer
+138.335906178s event #36 buf -> m Accept
+138.335906178s event #37 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+138.335906178s event #38 m -> source Accept
+138.335906178s item 4 created by source
+138.335906178s event #40 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+138.335906178s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+138.335906178s event #39 buf -> press Offer
+138.335906178s event #41 source -> m Offer
+144.622036379s event #42 m -> m CycleDone { item: ItemId(4) }
+144.622036379s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+144.622036379s event #43 m -> buf Offer
+144.622036379s event #44 buf -> m Accept
+144.622036379s event #45 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+144.622036379s event #46 m -> source Accept
+144.622036379s item 5 created by source
+144.622036379s event #47 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+144.622036379s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+144.622036379s event #48 source -> m Offer
+150.971663782s event #9 m -> m CycleDone { item: ItemId(1) }
+150.971663782s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+150.971663782s event #50 m -> buf Offer
+150.971663782s event #51 buf -> m Accept
+150.971663782s event #52 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+150.971663782s event #53 m -> source Accept
+150.971663782s item 6 created by source
+150.971663782s event #54 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+150.971663782s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+150.971663782s event #55 source -> m Offer
+151.050021904s event #49 m -> m CycleDone { item: ItemId(5) }
+151.050021904s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+151.050021904s event #57 m -> buf Offer
+160.709390842s event #34 press -> press CycleDone { item: ItemId(2) }
+160.709390842s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+160.709390842s event #58 press -> sink Offer
+160.709390842s event #59 sink -> press Accept
+160.709390842s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+160.709390842s event #60 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+160.709390842s item 2 delivered by sink
+160.709390842s event #61 press -> buf Accept
+160.709390842s event #62 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+160.709390842s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+160.709390842s event #63 buf -> m Accept
+160.709390842s event #66 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+160.709390842s event #67 m -> source Accept
+160.709390842s item 7 created by source
+160.709390842s event #68 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+160.709390842s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+160.709390842s event #64 buf -> press Offer
+160.709390842s event #69 source -> m Offer
+162.699592356s event #56 m -> m CycleDone { item: ItemId(6) }
+162.699592356s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+162.699592356s event #71 m -> buf Offer
+165.690887188s event #70 m -> m CycleDone { item: ItemId(7) }
+165.690887188s note by m MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+180.689327742s event #65 press -> press CycleDone { item: ItemId(1) }
+180.689327742s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+180.689327742s event #72 press -> sink Offer
+180.689327742s event #73 sink -> press Accept
+180.689327742s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+180.689327742s event #74 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+180.689327742s item 1 delivered by sink
+180.689327742s event #75 press -> buf Accept
+180.689327742s event #76 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+180.689327742s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+180.689327742s event #77 buf -> m Accept
+180.689327742s event #80 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+180.689327742s event #81 m -> source Accept
+180.689327742s item 8 created by source
+180.689327742s event #83 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+180.689327742s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+180.689327742s event #78 buf -> press Offer
+180.689327742s event #82 m -> buf Offer
+180.689327742s event #84 source -> m Offer
+229.294277237s event #79 press -> press CycleDone { item: ItemId(5) }
+229.294277237s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+229.294277237s event #86 press -> sink Offer
+229.294277237s event #87 sink -> press Accept
+229.294277237s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+229.294277237s event #88 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+229.294277237s item 5 delivered by sink
+229.294277237s event #89 press -> buf Accept
+229.294277237s event #90 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+229.294277237s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+229.294277237s event #91 buf -> m Accept
+229.294277237s event #94 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+229.294277237s event #95 m -> source Accept
+229.294277237s item 9 created by source
+229.294277237s event #96 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+229.294277237s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+229.294277237s event #92 buf -> press Offer
+229.294277237s event #97 source -> m Offer
+260.387227691s event #85 m -> m CycleDone { item: ItemId(8) }
+260.387227691s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+260.387227691s event #99 m -> buf Offer
+287.240891118s event #93 press -> press CycleDone { item: ItemId(6) }
+287.240891118s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+287.240891118s event #100 press -> sink Offer
+287.240891118s event #101 sink -> press Accept
+287.240891118s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+287.240891118s event #102 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+287.240891118s item 6 delivered by sink
+287.240891118s event #103 press -> buf Accept
+287.240891118s event #104 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+287.240891118s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+287.240891118s event #105 buf -> m Accept
+287.240891118s event #108 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+287.240891118s event #109 m -> source Accept
+287.240891118s item 10 created by source
+287.240891118s event #110 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+287.240891118s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+287.240891118s event #106 buf -> press Offer
+287.240891118s event #111 source -> m Offer
+297.960332855s event #98 m -> m CycleDone { item: ItemId(9) }
+297.960332855s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+297.960332855s event #113 m -> buf Offer
+299.669150648s event #107 press -> press CycleDone { item: ItemId(7) }
+299.669150648s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+299.669150648s event #114 press -> sink Offer
+299.669150648s event #115 sink -> press Accept
+299.669150648s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+299.669150648s event #116 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+299.669150648s item 7 delivered by sink
+299.669150648s event #117 press -> buf Accept
+299.669150648s event #118 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+299.669150648s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+299.669150648s event #119 buf -> m Accept
+299.669150648s event #122 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+299.669150648s event #123 m -> source Accept
+299.669150648s item 11 created by source
+299.669150648s event #124 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+299.669150648s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+299.669150648s event #120 buf -> press Offer
+299.669150648s event #125 source -> m Offer
+334.347007842s event #121 press -> press CycleDone { item: ItemId(8) }
+334.347007842s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+334.347007842s event #127 press -> sink Offer
+334.347007842s event #128 sink -> press Accept
+334.347007842s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+334.347007842s event #129 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+334.347007842s item 8 delivered by sink
+334.347007842s event #130 press -> buf Accept
+334.347007842s event #131 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+334.347007842s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+334.347007842s event #132 buf -> press Offer
+363.28414428s event #112 m -> m CycleDone { item: ItemId(10) }
+363.28414428s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+363.28414428s event #134 m -> buf Offer
+363.28414428s event #135 buf -> m Accept
+363.28414428s event #136 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+363.28414428s event #137 m -> source Accept
+363.28414428s item 12 created by source
+363.28414428s event #138 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+363.28414428s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+363.28414428s event #139 source -> m Offer
+365.114266812s event #133 press -> press CycleDone { item: ItemId(9) }
+365.114266812s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+365.114266812s event #141 press -> sink Offer
+365.114266812s event #142 sink -> press Accept
+365.114266812s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+365.114266812s event #143 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+365.114266812s item 9 delivered by sink
+365.114266812s event #144 press -> buf Accept
+365.114266812s event #145 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+365.114266812s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+365.114266812s event #146 buf -> press Offer
+390.469820521s event #147 press -> press CycleDone { item: ItemId(10) }
+390.469820521s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+390.469820521s event #148 press -> sink Offer
+390.469820521s event #149 sink -> press Accept
+390.469820521s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+390.469820521s event #150 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+390.469820521s item 10 delivered by sink
+390.469820521s event #151 press -> buf Accept
+390.469820521s event #152 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+390.469820521s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+390.469820521s event #153 buf -> press Offer
+423.667468677s event #154 press -> press CycleDone { item: ItemId(4) }
+423.667468677s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+423.667468677s event #155 press -> sink Offer
+423.667468677s event #156 sink -> press Accept
+423.667468677s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+423.667468677s event #157 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+423.667468677s item 4 delivered by sink
+423.667468677s event #158 press -> buf Accept
+423.667468677s event #159 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+423.667468677s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+478.046308877s event #160 press -> press CycleDone { item: ItemId(3) }
+478.046308877s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+478.046308877s event #161 press -> sink Offer
+478.046308877s event #162 sink -> press Accept
+478.046308877s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+478.046308877s event #163 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+478.046308877s item 3 delivered by sink
+498.407664203s event #140 m -> m CycleDone { item: ItemId(12) }
+498.407664203s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+498.407664203s event #164 m -> buf Offer
+498.407664203s event #165 buf -> m Accept
+498.407664203s event #166 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+498.407664203s event #167 m -> source Accept
+498.407664203s item 13 created by source
+498.407664203s event #169 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+498.407664203s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+498.407664203s event #168 buf -> press Offer
+498.407664203s event #172 press -> buf Accept
+498.407664203s event #173 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+498.407664203s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+498.407664203s event #170 source -> m Offer
+536.464196662s event #171 m -> m CycleDone { item: ItemId(13) }
+536.464196662s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+536.464196662s event #175 m -> buf Offer
+536.464196662s event #176 buf -> m Accept
+536.464196662s event #177 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+536.464196662s event #178 m -> source Accept
+536.464196662s item 14 created by source
+536.464196662s event #180 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+536.464196662s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+536.464196662s event #179 buf -> press Offer
+536.464196662s event #181 source -> m Offer
+548.432077049s event #182 m -> m CycleDone { item: ItemId(14) }
+548.432077049s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+548.432077049s event #183 m -> buf Offer
+548.432077049s event #184 buf -> m Accept
+548.432077049s event #185 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+548.432077049s event #186 m -> source Accept
+548.432077049s item 15 created by source
+548.432077049s event #187 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+548.432077049s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+548.432077049s event #188 source -> m Offer
+552.20939234s event #174 press -> press CycleDone { item: ItemId(12) }
+552.20939234s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+552.20939234s event #190 press -> sink Offer
+552.20939234s event #191 sink -> press Accept
+552.20939234s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+552.20939234s event #192 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+552.20939234s item 12 delivered by sink
+552.20939234s event #193 press -> buf Accept
+552.20939234s event #194 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+552.20939234s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+552.20939234s event #195 buf -> press Offer
+573.274248202s event #196 press -> press CycleDone { item: ItemId(14) }
+573.274248202s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+573.274248202s event #197 press -> sink Offer
+573.274248202s event #198 sink -> press Accept
+573.274248202s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+573.274248202s event #199 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+573.274248202s item 14 delivered by sink
+573.274248202s event #200 press -> buf Accept
+573.274248202s event #201 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+573.274248202s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+595.946080751s event #202 press -> press CycleDone { item: ItemId(13) }
+595.946080751s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+595.946080751s event #203 press -> sink Offer
+595.946080751s event #204 sink -> press Accept
+595.946080751s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+595.946080751s event #205 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+595.946080751s item 13 delivered by sink
+722.838619776s event #189 m -> m CycleDone { item: ItemId(15) }
+722.838619776s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+722.838619776s event #206 m -> buf Offer
+722.838619776s event #207 buf -> m Accept
+722.838619776s event #208 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+722.838619776s event #209 m -> source Accept
+722.838619776s item 16 created by source
+722.838619776s event #211 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 16
+722.838619776s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+722.838619776s event #210 buf -> press Offer
+722.838619776s event #214 press -> buf Accept
+722.838619776s event #215 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+722.838619776s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+722.838619776s event #212 source -> m Offer
+743.596770433s event #216 press -> press CycleDone { item: ItemId(15) }
+743.596770433s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+743.596770433s event #217 press -> sink Offer
+743.596770433s event #218 sink -> press Accept
+743.596770433s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+743.596770433s event #219 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+743.596770433s item 15 delivered by sink
+841.066594307s event #126 m -> m CycleDone { item: ItemId(11) }
+841.066594307s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+841.066594307s event #220 m -> buf Offer
+841.066594307s event #221 buf -> m Accept
+841.066594307s event #222 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+841.066594307s event #223 m -> source Accept
+841.066594307s item 17 created by source
+841.066594307s event #225 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 17
+841.066594307s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+841.066594307s event #224 buf -> press Offer
+841.066594307s event #228 press -> buf Accept
+841.066594307s event #229 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+841.066594307s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+841.066594307s event #226 source -> m Offer
+865.319157497s event #227 m -> m CycleDone { item: ItemId(17) }
+865.319157497s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+865.319157497s event #231 m -> buf Offer
+865.319157497s event #232 buf -> m Accept
+865.319157497s event #233 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 17
+865.319157497s event #234 m -> source Accept
+865.319157497s item 18 created by source
+865.319157497s event #236 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 18
+865.319157497s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+865.319157497s event #235 buf -> press Offer
+865.319157497s event #237 source -> m Offer
+885.605873576s event #213 m -> m CycleDone { item: ItemId(16) }
+885.605873576s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+885.605873576s event #239 m -> buf Offer
+885.605873576s event #240 buf -> m Accept
+885.605873576s event #241 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 16
+885.605873576s event #242 m -> source Accept
+885.605873576s item 19 created by source
+885.605873576s event #243 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 19
+885.605873576s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+885.605873576s event #244 source -> m Offer
+903.240851194s event #230 press -> press CycleDone { item: ItemId(11) }
+903.240851194s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+903.240851194s event #246 press -> sink Offer
+903.240851194s event #247 sink -> press Accept
+903.240851194s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+903.240851194s event #248 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+903.240851194s item 11 delivered by sink
+903.240851194s event #249 press -> buf Accept
+903.240851194s event #250 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 16
+903.240851194s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+903.240851194s event #251 buf -> press Offer
+907.556263807s event #245 m -> m CycleDone { item: ItemId(19) }
+907.556263807s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+907.556263807s event #253 m -> buf Offer
+907.556263807s event #254 buf -> m Accept
+907.556263807s event #255 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 19
+907.556263807s event #256 m -> source Accept
+907.556263807s item 20 created by source
+907.556263807s event #257 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 20
+907.556263807s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+907.556263807s event #258 source -> m Offer
+933.944079537s event #259 m -> m CycleDone { item: ItemId(20) }
+933.944079537s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+933.944079537s event #260 m -> buf Offer
+933.944079537s event #261 buf -> m Accept
+933.944079537s event #262 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 20
+933.944079537s event #263 m -> source Accept
+933.944079537s item 21 created by source
+933.944079537s event #264 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 21
+933.944079537s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+933.944079537s event #265 source -> m Offer
+934.748638806s event #252 press -> press CycleDone { item: ItemId(16) }
+934.748638806s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+934.748638806s event #267 press -> sink Offer
+934.748638806s event #268 sink -> press Accept
+... 6829 records not shown ...
+14253.986403363s item 343 delivered by sink
+14253.986403363s event #4828 press -> buf Accept
+14253.986403363s event #4829 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 342
+14253.986403363s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14253.986403363s event #4830 buf -> press Offer
+14283.585275469s event #4831 press -> press CycleDone { item: ItemId(342) }
+14283.585275469s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+14283.585275469s event #4832 press -> sink Offer
+14283.585275469s event #4833 sink -> press Accept
+14283.585275469s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+14283.585275469s event #4834 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 342
+14283.585275469s item 342 delivered by sink
+14283.585275469s event #4835 press -> buf Accept
+14283.585275469s event #4836 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 312
+14283.585275469s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14283.585275469s event #4837 buf -> press Offer
+14320.224836038s event #4810 m -> m CycleDone { item: ItemId(344) }
+14320.224836038s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14320.224836038s event #4839 m -> buf Offer
+14320.224836038s event #4840 buf -> m Accept
+14320.224836038s event #4841 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 344
+14320.224836038s event #4842 m -> source Accept
+14320.224836038s item 346 created by source
+14320.224836038s event #4843 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 346
+14320.224836038s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+14320.224836038s event #4844 source -> m Offer
+14324.773274409s event #4838 press -> press CycleDone { item: ItemId(312) }
+14324.773274409s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+14324.773274409s event #4846 press -> sink Offer
+14324.773274409s event #4847 sink -> press Accept
+14324.773274409s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+14324.773274409s event #4848 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 312
+14324.773274409s item 312 delivered by sink
+14324.773274409s event #4849 press -> buf Accept
+14324.773274409s event #4850 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 344
+14324.773274409s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14324.773274409s event #4851 buf -> press Offer
+14331.762056447s event #4852 press -> press CycleDone { item: ItemId(344) }
+14331.762056447s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+14331.762056447s event #4853 press -> sink Offer
+14331.762056447s event #4854 sink -> press Accept
+14331.762056447s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+14331.762056447s event #4855 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 344
+14331.762056447s item 344 delivered by sink
+14331.762056447s event #4856 press -> buf Accept
+14331.762056447s event #4857 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 309
+14331.762056447s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14370.168669082s event #4824 m -> m CycleDone { item: ItemId(345) }
+14370.168669082s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14370.168669082s event #4859 m -> buf Offer
+14370.168669082s event #4860 buf -> m Accept
+14370.168669082s event #4861 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 345
+14370.168669082s event #4862 m -> source Accept
+14370.168669082s item 347 created by source
+14370.168669082s event #4864 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 347
+14370.168669082s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+14370.168669082s event #4863 buf -> press Offer
+14370.168669082s event #4865 source -> m Offer
+14376.569538401s event #4858 press -> press CycleDone { item: ItemId(309) }
+14376.569538401s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+14376.569538401s event #4867 press -> sink Offer
+14376.569538401s event #4868 sink -> press Accept
+14376.569538401s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+14376.569538401s event #4869 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 309
+14376.569538401s item 309 delivered by sink
+14376.569538401s event #4870 press -> buf Accept
+14376.569538401s event #4871 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 345
+14376.569538401s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14380.467579533s event #4845 m -> m CycleDone { item: ItemId(346) }
+14380.467579533s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14380.467579533s event #4873 m -> buf Offer
+14380.467579533s event #4874 buf -> m Accept
+14380.467579533s event #4875 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 346
+14380.467579533s event #4876 m -> source Accept
+14380.467579533s item 348 created by source
+14380.467579533s event #4878 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 348
+14380.467579533s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+14380.467579533s event #4877 buf -> press Offer
+14380.467579533s event #4879 source -> m Offer
+14384.539531911s event #4880 m -> m CycleDone { item: ItemId(348) }
+14384.539531911s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14384.539531911s event #4881 m -> buf Offer
+14384.539531911s event #4882 buf -> m Accept
+14384.539531911s event #4883 m -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 348
+14384.539531911s event #4884 m -> source Accept
+14384.539531911s item 349 created by source
+14384.539531911s event #4885 source -> m Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 349
+14384.539531911s note by m MachineState(MachineStateNote { state: Busy, units_in_cycle: 2, setup_variant: None })
+14384.539531911s event #4886 source -> m Offer
+14396.146334796s event #4872 press -> press CycleDone { item: ItemId(345) }
+14396.146334796s note by press MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+14396.146334796s event #4888 press -> sink Offer
+14396.146334796s event #4889 sink -> press Accept
+14396.146334796s note by press MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+14396.146334796s event #4890 press -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 345
+14396.146334796s item 345 delivered by sink
+14396.146334796s event #4891 press -> buf Accept
+14396.146334796s event #4892 buf -> press Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 348
+14396.146334796s note by press MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+14396.146334796s event #4893 buf -> press Offer
