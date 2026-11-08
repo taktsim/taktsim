@@ -52,7 +52,8 @@ v0.4). Constraints:
   adapters) implements it.
 - Records in event order, fixed-width little-endian encoding, chunks of
   e.g. 64 KiB with CRC32; the header carries format version, engine
-  version, model hash and seed.
+  version, model hash and seed. (Amended by ADR-0024 §7, proposed: the seed may
+  be absent, for a run of a model that draws nothing.)
 - Golden traces and the cross-platform test compare the SHA-256 of the
   canonical stream, with a readable text dump for `insta` diffs.
 - Reader: iterator over records (used by replay) and, behind a feature,

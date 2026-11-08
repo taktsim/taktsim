@@ -119,7 +119,7 @@ pub struct Case<'a> {
 /// let case = golden::Case { name: "doc_empty", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
 /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
 /// assert_eq!(golden.summary().records, 0);
-/// assert_eq!(golden.header().seed, 5);
+/// assert_eq!(golden.header().seed, Some(5));
 /// assert_ne!(golden.file_hash(), golden.summary().hash);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -241,7 +241,8 @@ impl Golden {
             h.message_format,
             h.model_hash,
             h.system_hash,
-            h.seed,
+            h.seed
+                .map_or_else(|| "none".to_owned(), |seed| seed.to_string()),
             h.components.join(", "),
             s.records,
             s.events,
@@ -356,6 +357,47 @@ pub fn record<M: TraceMessage>(
     case: &Case<'_>,
     build: impl Fn() -> Result<Engine<M>, EngineError>,
 ) -> Result<Golden, GoldenError> {
+    record_with(case, build, true)
+}
+
+/// Like [`record`], for a run with no seed (ADR-0024 §7): the header states
+/// none, whatever internal seed `build` gives the engine, and the snapshot says
+/// `seed: none`.
+///
+/// # Errors
+///
+/// As [`record`].
+///
+/// ```
+/// use taktsim_core::{Engine, EngineConfig};
+/// use taktsim_trace::{golden, ModelHash, SystemHash};
+/// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
+/// # #[derive(Debug)] struct Tick;
+/// # impl taktsim_core::Message for Tick {}
+/// # impl TraceMessage for Tick {
+/// #     const FORMAT: &'static str = "tick/1";
+/// #     fn encode(&self, _: &mut Encoder<'_>) {}
+/// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
+/// # }
+///
+/// let case = golden::Case { name: "doc_no_seed", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
+/// let golden = golden::record_without_seed(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(0))))?;
+/// assert_eq!(golden.header().seed, None);
+/// assert!(golden.snapshot().contains("\nseed: none\n"));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn record_without_seed<M: TraceMessage>(
+    case: &Case<'_>,
+    build: impl Fn() -> Result<Engine<M>, EngineError>,
+) -> Result<Golden, GoldenError> {
+    record_with(case, build, false)
+}
+
+fn record_with<M: TraceMessage>(
+    case: &Case<'_>,
+    build: impl Fn() -> Result<Engine<M>, EngineError>,
+    states_seed: bool,
+) -> Result<Golden, GoldenError> {
     let valid = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_';
     if case.name.is_empty() || !case.name.chars().all(valid) {
         return Err(GoldenError::Name {
@@ -363,7 +405,10 @@ pub fn record<M: TraceMessage>(
         });
     }
     let mut engine = build()?;
-    let header = Header::for_engine(&engine, case.model_hash, case.system_hash);
+    let mut header = Header::for_engine(&engine, case.model_hash, case.system_hash);
+    if !states_seed {
+        header.seed = None;
+    }
     let mut writer = TraceWriter::new(Vec::new(), &header)?;
     let ran = engine
         .run(RunLimits::until(case.until), &mut writer)

@@ -26,9 +26,9 @@ fn seed_comes_from_options_then_model() {
     let model = load(&seeded(", seed: 42"));
     let registry = registry();
     let from_model = registry.prepare(&model, RunOptions::new()).unwrap();
-    assert_eq!(from_model.header().seed, 42);
+    assert_eq!(from_model.header().seed, Some(42));
     let from_options = registry.prepare(&model, RunOptions::new().seed(7)).unwrap();
-    assert_eq!(from_options.header().seed, 7);
+    assert_eq!(from_options.header().seed, Some(7));
     // The header names the seed that ran: each gives its own run.
     let run = |prepared: taktsim_components::Prepared<'_, _>| {
         let (bytes, report) = prepared.run_traced(Vec::new()).unwrap();
@@ -37,7 +37,7 @@ fn seed_comes_from_options_then_model() {
     };
     let (a_seed, a) = run(registry.prepare(&model, RunOptions::new()).unwrap());
     let (b_seed, b) = run(registry.prepare(&model, RunOptions::new().seed(7)).unwrap());
-    assert_eq!((a_seed, b_seed), (42, 7));
+    assert_eq!((a_seed, b_seed), (Some(42), Some(7)));
     assert_ne!(a, b);
 }
 

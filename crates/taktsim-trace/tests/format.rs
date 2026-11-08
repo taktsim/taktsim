@@ -24,7 +24,7 @@ fn header(seed: u64) -> Header {
     Header::new::<Toy>(
         ModelHash::sha256(b"format tests"),
         SystemHash::sha256(b"format system"),
-        seed,
+        Some(seed),
         names,
     )
 }
@@ -119,6 +119,7 @@ fn blocks(bytes: &[u8]) -> Vec<usize> {
         + h.message_format.len()
         + 32
         + 32
+        + 1
         + 8
         + 4
         + h.components.iter().map(|n| 2 + n.len()).sum::<usize>()
@@ -425,7 +426,7 @@ fn another_format_version_says_what_was_found_and_what_is_allowed() {
     ));
     assert_eq!(
         e.to_string(),
-        "trace format version 1 is not supported: this build reads version 2 only; \
+        "trace format version 1 is not supported: this build reads version 3 only; \
          read the trace with the taktsim release that wrote it"
     );
 }
@@ -770,4 +771,80 @@ fn decode_errors_name_the_value_and_position() {
         EncodeError::ComponentOutOfRange { index: 1 << 33 }.to_string(),
         "component number 8589934592 does not fit a trace: at most 4294967295 is allowed"
     );
+}
+
+/// The header's bytes, laid out by hand from ADR-0021's table as amended by
+/// ADR-0024 §7 (`has seed` before `seed`).
+#[test]
+fn header_bytes_are_pinned() {
+    let lay_out = |has_seed: u8, seed: u64| {
+        let mut expected = Vec::new();
+        expected.extend_from_slice(b"TAKT\r\n\x1a\n");
+        expected.extend_from_slice(&3_u16.to_le_bytes());
+        for text in ["0.0.0", "taktsim-core/2", "tick/1"] {
+            expected.extend_from_slice(&u16::try_from(text.len()).unwrap().to_le_bytes());
+            expected.extend_from_slice(text.as_bytes());
+        }
+        expected.extend_from_slice(&[0xaa; 32]);
+        expected.extend_from_slice(&[0xbb; 32]);
+        expected.push(has_seed);
+        expected.extend_from_slice(&seed.to_le_bytes());
+        expected.extend_from_slice(&1_u32.to_le_bytes());
+        expected.extend_from_slice(&1_u16.to_le_bytes());
+        expected.push(b'm');
+        let crc = crc32fast::hash(&expected);
+        expected.extend_from_slice(&crc.to_le_bytes());
+        expected
+    };
+    let header = |seed| Header {
+        engine_version: "0.0.0".to_owned(),
+        record_format: "taktsim-core/2".to_owned(),
+        message_format: "tick/1".to_owned(),
+        model_hash: ModelHash::from_bytes([0xaa; 32]),
+        system_hash: SystemHash::from_bytes([0xbb; 32]),
+        seed,
+        components: vec!["m".to_owned()],
+    };
+    for (seed, has, stored) in [(Some(42), 1, 42), (None, 0, 0)] {
+        let (bytes, _) = TraceWriter::<_, Tick>::new(Vec::new(), &header(seed))
+            .unwrap()
+            .finish()
+            .unwrap();
+        let expected = lay_out(has, stored);
+        assert_eq!(&bytes[..expected.len()], expected.as_slice());
+    }
+}
+
+/// A message format of its own, so the pinned header names no other test's.
+#[derive(Debug)]
+struct Tick;
+impl taktsim_core::Message for Tick {}
+impl taktsim_trace::TraceMessage for Tick {
+    const FORMAT: &'static str = "tick/1";
+    fn encode(&self, _: &mut Encoder<'_>) {}
+    fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> {
+        Ok(Self)
+    }
+}
+
+#[test]
+fn absent_seed_round_trips() {
+    let mut stated = header(0);
+    stated.seed = None;
+    let (bytes, _) = write(&stated, &[]);
+    let reader = TraceReader::<_, Toy>::new(bytes.as_slice()).unwrap();
+    assert_eq!(reader.header().seed, None);
+    assert_eq!(reader.header(), &stated);
+    // Seed 0 is a seed, not its absence.
+    let (zero, _) = write(&header(0), &[]);
+    let reader = TraceReader::<_, Toy>::new(zero.as_slice()).unwrap();
+    assert_eq!(reader.header().seed, Some(0));
+    assert_ne!(zero, bytes);
+}
+
+#[test]
+fn record_format_names_the_engine() {
+    let (name, version) = taktsim_trace::RECORD_FORMAT.split_once('/').unwrap();
+    assert_eq!(name, taktsim_core::ENGINE_NAME);
+    assert!(version.parse::<u32>().is_ok(), "{version}");
 }
