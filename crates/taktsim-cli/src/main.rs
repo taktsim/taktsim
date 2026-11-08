@@ -36,7 +36,7 @@ fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().collect();
     let format = parse_error::format_in(&args);
     install_panic_hook(format);
-    let code = match Cli::try_parse_from(&args) {
+    let code = match Cli::try_parse_from(parse_error::attach_hyphen_values(&args)) {
         Ok(cli) => run_command(&cli),
         Err(error) => parse_error::handle(&error, &args, format),
     };

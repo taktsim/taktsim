@@ -219,8 +219,8 @@ fn malformed_invocations_exit_1_at_their_path() {
         ),
         (
             &["run", "line.yaml", "--seed", "-1"],
-            "args.unknown_argument",
-            "-1",
+            "args.invalid_value",
+            "--seed",
         ),
         (
             &["run", "line.yaml", "--seed", "1", "--seed", "2"],
@@ -274,7 +274,7 @@ fn malformed_invocations_exit_1_at_their_path() {
     // A zero horizon and a seed beyond the exact range: refused, with an example.
     let zero = dir.taktsim(&["run", "line.yaml", "--horizon", "0s", "--format", "json"]);
     assert_eq!(zero.code, 1);
-    assert_eq!(zero.lines()[0]["path"], "experiment.horizon");
+    assert_eq!(zero.lines()[0]["path"], "--horizon");
     let big = dir.taktsim(&[
         "run",
         "line.yaml",
