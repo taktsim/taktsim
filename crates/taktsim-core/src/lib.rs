@@ -79,3 +79,13 @@ pub use trace::{NoTrace, TraceRecord, TraceSink};
 /// assert!(!taktsim_core::ENGINE_VERSION.is_empty());
 /// ```
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The engine's name, part of every run's provenance and of a run id
+/// (ADR-0024 §6). A store can hold the runs of several engines. A trace's
+/// record format starts with this name, so the name before the `/` in a record
+/// format names the engine.
+///
+/// ```
+/// assert_eq!(taktsim_core::ENGINE_NAME, "taktsim-core");
+/// ```
+pub const ENGINE_NAME: &str = "taktsim-core";

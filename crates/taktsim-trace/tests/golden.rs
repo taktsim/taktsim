@@ -73,7 +73,7 @@ fn the_harness_checks_names_and_writes_hash_files() {
         until: "30min".parse().unwrap(),
     };
     let golden = golden::record(&case, || support::single_server(9)).unwrap();
-    assert_eq!(golden.header().seed, 9);
+    assert_eq!(golden.header().seed, Some(9));
     let dir = std::env::temp_dir().join(format!("taktsim-golden-{}", std::process::id()));
     golden.write_hashes(&dir).unwrap();
     let line = std::fs::read_to_string(dir.join("harness_check.txt")).unwrap();
@@ -99,7 +99,9 @@ fn the_harness_checks_names_and_writes_hash_files() {
 /// The stream and file hashes of the three cases, pinned for the layout of
 /// ADR-0021 as decided on 2026-11-05 (record prefix, chunk first time,
 /// record format and system hash in the header), then ADR-0022 (the record
-/// format's name in the header; the stream hashes did not change), recorded
+/// format's name in the header; the stream hashes did not change), then
+/// ADR-0024 §7 (`has seed` in the header, file format 3: the file hashes change,
+/// the stream hashes do not, since the header is not in the stream), recorded
 /// on Linux x86-64. The cross-platform job compares the same hashes from every
 /// tier-1 target, so this test pins the bytes and that job proves they are
 /// the same everywhere. The header's engine version is set to 0.0.0, so a
@@ -114,21 +116,21 @@ fn hashes_are_pinned_for_this_layout() {
             "1h",
             b"toy single server: source 1min, station 45s, sink",
             "208cda594606f9c0962eaf11b248a4aeb5b50ae09093fba036f434c93c01adad",
-            "6cebd0cbed04f1669ba67d6e576db29db3830ac4c77684de0984893e52ebc9f3",
+            "463ed546cb6949d952081576d7c78d83e0a8a44b79fc2d4d45b5c1193155cbde",
         ),
         (
             || support::tandem(7),
             "4h",
             b"toy tandem: source 1min, cut 40s mtbf 20min mttr 3min, weld 50s scrap 1/7, sink",
             "744ef2b5754faccc360ca0bef9f3300a49163501a3fd7d3db34cc92ddd46d4f9",
-            "3499cdf7ceda553f34f85007b43e01b8766d83b676f4c248093ab152b757c25d",
+            "7d82fef53196735fb1aeac61f4af7a0a749955edf0d8cc419da08049e8e4dc4e",
         ),
         (
             || support::line(2026, 20),
             "8h",
             b"toy line: source 1min, 20 stations 40s, sink",
             "1e4383e4188daeeb3fc7ca8f44a34b45c348c52d621f0039a40742399bd251f3",
-            "35ca1c08705ff169dda00231d5d394cea7a83fe4a41d47cd2cfed9121aca8d28",
+            "17d1d56b084f0e6d632f93385ac81b912e39ac5426de4f86f6402e75bb3e15e0",
         ),
     ];
     for (build, until, model, stream, file) in cases {
@@ -150,4 +152,24 @@ fn hashes_are_pinned_for_this_layout() {
         assert_eq!(summary.hash.to_string(), stream);
         assert_eq!(taktsim_trace::TraceHash::sha256(&bytes).to_string(), file);
     }
+}
+
+/// A case with no seed says so, and the stream is the same as with one: the
+/// seed is in the header, not in the records.
+#[test]
+fn a_case_without_a_seed_says_none() {
+    let case = golden::Case {
+        name: "no_seed_check",
+        model_hash: ModelHash::sha256(b"no seed"),
+        system_hash: SystemHash::sha256(b"no seed"),
+        until: "1h".parse().unwrap(),
+    };
+    let stated = golden::record(&case, || support::single_server(42)).unwrap();
+    let none = golden::record_without_seed(&case, || support::single_server(42)).unwrap();
+    assert_eq!(stated.header().seed, Some(42));
+    assert_eq!(none.header().seed, None);
+    assert_eq!(none.summary().hash, stated.summary().hash);
+    assert_ne!(none.file_hash(), stated.file_hash());
+    assert!(none.snapshot().contains("\nseed: none\n"));
+    assert!(stated.snapshot().contains("\nseed: 42\n"));
 }
