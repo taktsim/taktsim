@@ -181,14 +181,14 @@ Every number above is illustrative, none a measurement.
 | `format` | `taktsim-result/1`. A new major number only for a breaking change. |
 | `metrics[].name`, `unit` | Open strings. `unit` is required: ADR-0014 §6's one declared unit per KPI. |
 | `metrics[].over` | `{from, to}` for a window, `{at}` for a reading at one time, as duration strings. M9's warm-up is a `from` above `0s`. |
-| `metrics[].observable` | Optional: the declared text this metric answers, such as `state_shares(cut, weld)`. Several metrics may carry the same text. M7 writes none. |
+| `metrics[].observables` | Optional, left out when empty: every declared text this metric answers, sorted, such as `state_shares(cut)` and `state_shares(cut, weld)`. Several metrics may carry the same text. M7 writes none. (Amended by ADR-0025 §2, from a single `observable`: one metric can answer several declarations.) |
 | `metrics[].values` | A list, each with its own accuracy. One entry for a scalar. `state_shares` and a lead-time distribution (M8) are several entries, told apart by an optional `labels` mapping, such as `{resource: cut, state: busy}`, so no reader splits a string. `value` is a number or a boolean, since ADR-0015 lets an observable be declared yes or no; M7 writes numbers only and no `labels`. |
 | `runs` | At least one. `seed` absent if the run has none. `run_id` and `trace` absent if the run was not kept (§8). |
 | `experiment_id` | Present exactly when every entry of `runs` has a `run_id` (§8). |
 | `complete`, `runs[].complete` | Required booleans, and **the only field a reader uses to decide.** `true`: the run, or the experiment, finished what was asked. `false`: it was cut short, the numbers hold only for the stated `over`, and they must not be compared with a complete result. |
 | `provenance.seeds` | The seeds used, empty allowed (§5). |
 | `stop_reason`, `runs[].stop_reason` | Open set, explanation only: it says why, and `complete` says what follows. At the top it is the experiment's reason. M8 adds `precision_reached` (with `complete: true`) and `budget_exhausted` (with `complete: false`) there, and a later clean ending adds its own word without a format change. |
-| `unreported` | What the model declares in `observe` or `experiment.precision` that this result does not hold, with an open `reason`. Required, empty allowed, so a missing KPI is stated in the result, where an agent reads it, not only on stderr. **Each declared observable is either the `observable` of some metric or in `unreported`,** so a reader can check that it got what it asked for. |
+| `unreported` | What the model declares in `observe` or `experiment.precision` that this result does not hold, with an open `reason`. Required, empty allowed, so a missing KPI is stated in the result, where an agent reads it, not only on stderr. **Each declared observable is in some metric's `observables` or in `unreported`,** so a reader can check that it got what it asked for. |
 
 Nested `provenance` follows spec §7 Layer 3, and `compare` (M11) can refuse a result
 without it. **Reader rule for the whole document:** ignore unknown keys.
@@ -610,7 +610,7 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | Commands and flags | every script and agent | semver major (ADR-0019) | `describe_is_fresh`, `walkthrough_uses_only_describe`, CLI snapshots |
 | Exit code use per command | every caller's error handling | semver major | `documented_exit_codes`, `malformed_models_exit_1_with_a_path` |
 | Error line (`kind`, `type`, `path`, `found`, `allowed`, `example`; none for exit 2 and 7) | every agent's error handling | semver major | `error_lines_match_their_schema`, CLI snapshots |
-| Result document: fields and `taktsim-result/1`, including `labels` and `observable` | M8, M11, M12, every reader | a new format; every stored result | `result_round_trips`, `emitted_results_match_the_schema`, `unknown_keys_are_ignored`, `labels_and_observable_round_trip`, `declared_observable_is_answered_or_unreported`, CLI snapshots |
+| Result document: fields and `taktsim-result/1`, including `labels` and `observables` | M8, M11, M12, every reader | a new format; every stored result | `result_round_trips`, `emitted_results_match_the_schema`, `unknown_keys_are_ignored`, `labels_and_observable_round_trip`, `declared_observable_is_answered_or_unreported`, CLI snapshots |
 | Accuracy: required list, tags, reader rule, `none` | what every number claims | a new format | `every_value_has_accuracy`, `unknown_kind_reads_as_no_statement`, `single_run_states_no_interval`, `sampling_wraps_the_interval` |
 | `complete` as the reader's only test, `stop_reason` as an open explanation | every reader of partial results | a new format | `complete_decides_and_stop_reason_only_explains`, `event_limit_is_partial_and_exits_3` |
 | A stall is exit 2 in M7; `drained` for an empty system; `stalled` reserved | every reader's idea of a finished run; v0.2's stalls | an exit code's use (semver major) | `stall_is_exit_2_and_not_kept`, `drained_is_complete` |

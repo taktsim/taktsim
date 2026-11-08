@@ -61,9 +61,10 @@ use taktsim_units::SimDuration;
 pub use diagnostic::{Diagnostic, DiagnosticKind, Failure, FailureClass};
 pub use id::{ExperimentId, ParseIdError, RunId, RunIdInputs};
 pub use result::{
-    Accuracy, AccuracyKind, AccuracyTarget, Metric, MetricValue, Over, Provenance, RESULT_FORMAT,
-    ResultDocument, RunEntry, SamplingInterval, Scalar, TraceRef, Unreported, VALIDATION_FORMAT,
-    ValidationReport, diagnostic_schema, result_schema, validation_schema,
+    Accuracy, AccuracyKind, AccuracyPlan, AccuracyTarget, Metric, MetricValue, Over, Provenance,
+    RESULT_FORMAT, Replicated, ResultDocument, RunEntry, SamplingInterval, Scalar, TraceRef,
+    Unreported, VALIDATION_FORMAT, ValidationReport, diagnostic_schema, result_schema,
+    validation_schema,
 };
 pub use store::Store;
 

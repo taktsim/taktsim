@@ -138,7 +138,7 @@ impl Fold {
             name,
             unit: ITEMS.to_owned(),
             over,
-            observable: None,
+            observables: Vec::new(),
             values: vec![MetricValue {
                 value: Scalar::Integer(count),
                 labels: None,

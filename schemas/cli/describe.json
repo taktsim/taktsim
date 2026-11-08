@@ -442,6 +442,43 @@
                     "detail"
                   ]
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "censored"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "units_inside",
+                    "detail"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "partly_undefined"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "undefined",
+                    "of",
+                    "detail"
+                  ]
+                }
               }
             ],
             "description": "What can be said about a value's error. Read a kind you do not know as no statement, never as an error.",
@@ -455,6 +492,11 @@
               "kind": {
                 "type": "string"
               },
+              "of": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
               "reached": {
                 "type": "boolean"
               },
@@ -463,6 +505,14 @@
               },
               "target": {
                 "$ref": "#/$defs/AccuracyTarget"
+              },
+              "undefined": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "units_inside": {
+                "type": "number"
               }
             },
             "required": [
@@ -494,8 +544,11 @@
               "name": {
                 "type": "string"
               },
-              "observable": {
-                "type": "string"
+              "observables": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               "over": {
                 "$ref": "#/$defs/Over"
@@ -686,6 +739,9 @@
               },
               "std_dev": {
                 "type": "number"
+              },
+              "stopping": {
+                "type": "string"
               }
             },
             "required": [

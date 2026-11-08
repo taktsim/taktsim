@@ -9,9 +9,9 @@ use taktsim_model::{
     Decode, Decoder, Encode, Fields, Json, ModelHash, Node, Record, Schemas, Segment, SystemHash,
     Value, record_schema,
 };
-use taktsim_stats::ConfidenceInterval;
+use taktsim_stats::{ConfidenceInterval, ConfidenceLevel, ReplicationPlan, StatsError};
 use taktsim_trace::TraceHash;
-use taktsim_units::SimDuration;
+use taktsim_units::{Ratio, SimDuration};
 
 use crate::diagnostic::Diagnostic;
 use crate::id::{ExperimentId, RunId};
@@ -476,7 +476,7 @@ impl Record for TraceRef {
 ///     name: "delivered(sink)".into(),
 ///     unit: "items".into(),
 ///     over: Over::Window { from: "0s".parse()?, to: "8h".parse()? },
-///     observable: None,
+///     observables: vec![],
 ///     values: vec![MetricValue {
 ///         value: Scalar::Integer(639),
 ///         labels: None,
@@ -494,8 +494,9 @@ pub struct Metric {
     pub unit: String,
     /// What span it covers.
     pub over: Over,
-    /// The declared text this metric answers, if any.
-    pub observable: Option<String>,
+    /// Every declared text this metric answers, sorted; left out when empty. One
+    /// metric can answer several: `state_shares(cut)` and `state_shares(cut, weld)`.
+    pub observables: Vec<String>,
     /// Its values, each with its own accuracy.
     pub values: Vec<MetricValue>,
 }
@@ -506,7 +507,10 @@ impl Encode for Metric {
             .with("name", &self.name)
             .with("unit", &self.unit)
             .with("over", &self.over)
-            .with_optional("observable", self.observable.as_ref())
+            .with_optional(
+                "observables",
+                (!self.observables.is_empty()).then_some(&self.observables),
+            )
             .with("values", &self.values)
     }
 }
@@ -521,13 +525,13 @@ impl Record for Metric {
         let name = fields.required("name");
         let unit = fields.required("unit");
         let over = fields.required("over");
-        let observable = fields.optional("observable");
+        let observables = fields.optional::<Vec<String>>("observables");
         let values = fields.required::<NonEmpty<MetricValue>>("values");
         Some(Self {
             name: name?,
             unit: unit?,
             over: over?,
-            observable: observable?,
+            observables: observables?.unwrap_or_default(),
             values: values?.0,
         })
     }
@@ -659,6 +663,48 @@ pub enum Scalar {
     Number(f64),
     /// A yes or no.
     Flag(bool),
+}
+
+impl Scalar {
+    /// A measured number, as a document reads it back: JSON has no `3.0`, so a whole
+    /// number is an [`Integer`](Self::Integer), and a document equals its reading.
+    ///
+    /// ```
+    /// use taktsim_run::Scalar;
+    ///
+    /// assert_eq!(Scalar::measured(0.5), Scalar::Number(0.5));
+    /// assert_eq!(Scalar::measured(3.0), Scalar::Integer(3));
+    /// assert_eq!(Scalar::measured(-1.0), Scalar::Number(-1.0));
+    /// ```
+    #[must_use]
+    pub fn measured(x: f64) -> Self {
+        // Below 2^64, a whole number is exactly that integer.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        if (0.0..18_446_744_073_709_551_616.0).contains(&x) && x.fract().to_bits() == 0 {
+            Self::Integer(x as u64)
+        } else {
+            Self::Number(x)
+        }
+    }
+
+    /// The number, to compute with; a yes or no has none.
+    ///
+    /// ```
+    /// use taktsim_run::Scalar;
+    ///
+    /// assert_eq!(Scalar::Integer(3).as_f64(), Some(3.0));
+    /// assert_eq!(Scalar::Flag(true).as_f64(), None);
+    /// ```
+    #[must_use]
+    pub fn as_f64(self) -> Option<f64> {
+        match self {
+            // A count above 2^53 rounds, as any mean of it would.
+            #[allow(clippy::cast_precision_loss)]
+            Self::Integer(n) => Some(n as f64),
+            Self::Number(x) => Some(x),
+            Self::Flag(_) => None,
+        }
+    }
 }
 
 impl Encode for Scalar {
@@ -842,6 +888,229 @@ impl Accuracy {
             reached: None,
         }
     }
+
+    /// That lead times cover delivered units only, while `units_inside` were still
+    /// inside at the end (ADR-0025 §3): a second entry beside the first.
+    ///
+    /// ```
+    /// use taktsim_model::Encode;
+    ///
+    /// let censored = taktsim_run::Accuracy::censored(7.0);
+    /// assert_eq!(censored.encode()["kind"], "censored");
+    /// assert_eq!(censored.encode()["units_inside"], taktsim_model::Json::from(7.0));
+    /// ```
+    #[must_use]
+    pub fn censored(units_inside: f64) -> Self {
+        Self {
+            kind: AccuracyKind::Censored {
+                units_inside,
+                detail: "lead time covers delivered units only, so it understates while units \
+                         are still inside at the end"
+                    .to_owned(),
+            },
+            target: None,
+            reached: None,
+        }
+    }
+
+    /// What can be said about a row over counted replications, in seed order, with
+    /// `None` for a replication that left it undefined: the only way to a replicated
+    /// value (ADR-0025 §5). `None` if no replication defines it.
+    ///
+    /// | Defined values | `value` | First statement |
+    /// | --- | --- | --- |
+    /// | at least 2, not all equal | mean | `sampling` |
+    /// | at least 2, all equal | that value | `none`, `no_variation_observed` |
+    /// | one, of one run | that value | `none`, `single_replication` |
+    /// | one, of several runs | that value | `none`, `one_defined_value` |
+    ///
+    /// # Errors
+    ///
+    /// A [`StatsError`] if a value is not finite or the interval overflows.
+    ///
+    /// ```
+    /// use taktsim_run::{Accuracy, AccuracyKind, AccuracyPlan};
+    ///
+    /// let fixed = AccuracyPlan::fixed();
+    /// let row = Accuracy::from_replications(&[Some(1.0), Some(3.0)], &fixed)?.ok_or("defined")?;
+    /// assert_eq!(row.value, 2.0);
+    /// assert!(matches!(row.accuracy[0].kind, AccuracyKind::Sampling(_)));
+    ///
+    /// // Equal values say so, and never an interval of width zero.
+    /// let same = Accuracy::from_replications(&[Some(4.0), Some(4.0)], &fixed)?.ok_or("defined")?;
+    /// assert_eq!(same.value, 4.0);
+    /// assert!(matches!(&same.accuracy[0].kind, AccuracyKind::None { reason, .. } if reason == "no_variation_observed"));
+    ///
+    /// assert_eq!(Accuracy::from_replications(&[None, None], &fixed)?, None);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn from_replications(
+        values: &[Option<f64>],
+        plan: &AccuracyPlan,
+    ) -> Result<Option<Replicated>, StatsError> {
+        let defined: Vec<f64> = values.iter().filter_map(|value| *value).collect();
+        let Some(first) = defined.first().copied() else {
+            return Ok(None);
+        };
+        let runs = u32::try_from(values.len()).unwrap_or(u32::MAX);
+        let count = u32::try_from(defined.len()).unwrap_or(u32::MAX);
+        let undefined = runs - count;
+        let enough = undefined == 0 && count >= plan.min_replications;
+        let target = plan.target.map(|ratio| AccuracyTarget {
+            relative: Some(ratio.as_fraction()),
+        });
+        let gamma = plan.target.map(Ratio::as_fraction);
+        // The values themselves, not a standard deviation that rounding could hide.
+        let all_equal = defined
+            .iter()
+            .all(|value| value.to_bits() == first.to_bits());
+        let (value, mut statement) = if count >= 2 && !all_equal {
+            let interval = ConfidenceInterval::from_values(&defined, plan.level)?;
+            let mut sampling = SamplingInterval::from(&interval);
+            sampling.stopping = plan.sequential.then(|| SEQUENTIAL.to_owned());
+            let reached =
+                gamma.map(|gamma| enough && interval.half_width() <= gamma * interval.mean().abs());
+            let statement = Self {
+                kind: AccuracyKind::Sampling(sampling),
+                target: None,
+                reached,
+            };
+            (interval.mean(), statement)
+        } else if count >= 2 {
+            let mut statement = Self::none(
+                "no_variation_observed",
+                &format!(
+                    "all {count} replications gave this value; an interval of width zero would \
+                     not be certainty, since a rarer outcome may not have shown"
+                ),
+            );
+            statement.reached = gamma.map(|_| enough);
+            (first, statement)
+        } else if runs == 1 {
+            let mut statement = Self::none(
+                "single_replication",
+                "one replication has no interval; run several seeds",
+            );
+            statement.reached = gamma.map(|_| false);
+            (first, statement)
+        } else {
+            let mut statement = Self::none(
+                "one_defined_value",
+                &format!(
+                    "{runs} replications ran and one defines this value; more seeds may not \
+                     help if the event that defines it is rare"
+                ),
+            );
+            statement.reached = gamma.map(|_| false);
+            (first, statement)
+        };
+        statement.target = target;
+        let mut accuracy = vec![statement];
+        if undefined > 0 {
+            accuracy.push(Self {
+                kind: AccuracyKind::PartlyUndefined {
+                    undefined,
+                    of: runs,
+                    detail: "the value is over the runs that define it, so it is conditional on \
+                             them and may differ from an unconditional mean"
+                        .to_owned(),
+                },
+                target: None,
+                reached: None,
+            });
+        }
+        Ok(Some(Replicated { value, accuracy }))
+    }
+}
+
+/// The word in a [`SamplingInterval`] of an experiment whose length depended on its
+/// results.
+const SEQUENTIAL: &str = "sequential";
+
+/// How the replications of a row were asked for.
+///
+/// ```
+/// use taktsim_run::AccuracyPlan;
+///
+/// let fixed = AccuracyPlan::fixed();
+/// assert!(!fixed.sequential && fixed.target.is_none());
+/// let targeted = AccuracyPlan::sequential().with_target("2%".parse()?);
+/// assert!(targeted.sequential && targeted.target.is_some());
+/// # Ok::<(), taktsim_units::UnitError>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AccuracyPlan {
+    /// Whether the number of replications depended on their results.
+    pub sequential: bool,
+    /// The relative half-width asked for this row.
+    pub target: Option<Ratio>,
+    /// The confidence level of an interval.
+    pub level: ConfidenceLevel,
+    /// n₀: below this, a target is not reached.
+    pub min_replications: u32,
+}
+
+impl AccuracyPlan {
+    /// A fixed list of seeds, at 95 %, with no target.
+    ///
+    /// ```
+    /// assert_eq!(taktsim_run::AccuracyPlan::fixed().min_replications, 10);
+    /// ```
+    #[must_use]
+    pub const fn fixed() -> Self {
+        Self {
+            sequential: false,
+            target: None,
+            level: ConfidenceLevel::DEFAULT,
+            min_replications: ReplicationPlan::DEFAULT_MIN_REPLICATIONS,
+        }
+    }
+
+    /// As [`fixed`](Self::fixed), for an experiment whose length depended on results.
+    ///
+    /// ```
+    /// assert!(taktsim_run::AccuracyPlan::sequential().sequential);
+    /// ```
+    #[must_use]
+    pub const fn sequential() -> Self {
+        Self {
+            sequential: true,
+            ..Self::fixed()
+        }
+    }
+
+    /// With this target.
+    ///
+    /// ```
+    /// let plan = taktsim_run::AccuracyPlan::fixed().with_target("5%".parse()?);
+    /// assert_eq!(plan.target.map(|t| t.to_string()).as_deref(), Some("5%"));
+    /// # Ok::<(), taktsim_units::UnitError>(())
+    /// ```
+    #[must_use]
+    pub const fn with_target(self, target: Ratio) -> Self {
+        Self {
+            target: Some(target),
+            ..self
+        }
+    }
+}
+
+/// A row over counted replications: its value and what can be said about it.
+///
+/// ```
+/// use taktsim_run::{Accuracy, AccuracyPlan};
+///
+/// let row = Accuracy::from_replications(&[Some(5.0)], &AccuracyPlan::fixed())?.ok_or("defined")?;
+/// assert_eq!(row.value, 5.0);
+/// assert_eq!(row.accuracy.len(), 1);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct Replicated {
+    /// The value.
+    pub value: f64,
+    /// At least one statement.
+    pub accuracy: Vec<Accuracy>,
 }
 
 /// The statement of an [`Accuracy`]. A kind this build does not know reads as no
@@ -866,6 +1135,22 @@ pub enum AccuracyKind {
         /// The same for a person.
         detail: String,
     },
+    /// Lead time covers delivered units only, and some were still inside at the end.
+    Censored {
+        /// Units still inside at the end; over several runs, their mean.
+        units_inside: f64,
+        /// What follows from it, for a person.
+        detail: String,
+    },
+    /// Some replications left this row undefined.
+    PartlyUndefined {
+        /// How many.
+        undefined: u32,
+        /// Of how many that ran.
+        of: u32,
+        /// What follows from it, for a person.
+        detail: String,
+    },
     /// A kind this build does not know.
     Unknown {
         /// Its word.
@@ -885,7 +1170,7 @@ pub enum AccuracyKind {
 /// assert_eq!(interval.mean, 100.0);
 /// # Ok::<(), taktsim_stats::StatsError>(())
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SamplingInterval {
     /// The mean.
     pub mean: f64,
@@ -897,6 +1182,9 @@ pub struct SamplingInterval {
     pub replications: u32,
     /// The confidence level, such as 0.95.
     pub level: f64,
+    /// `sequential` if the number of replications depended on the results, so the
+    /// level is nominal: the t interval assumes a fixed number (ADR-0025 §7).
+    pub stopping: Option<String>,
 }
 
 impl From<&ConfidenceInterval> for SamplingInterval {
@@ -907,6 +1195,7 @@ impl From<&ConfidenceInterval> for SamplingInterval {
             std_dev: ci.std_dev(),
             replications: ci.replications(),
             level: ci.level().level(),
+            stopping: None,
         }
     }
 }
@@ -929,6 +1218,7 @@ impl Encode for SamplingInterval {
             .with("std_dev", &self.std_dev)
             .with("replications", &self.replications)
             .with("level", &self.level)
+            .with_optional("stopping", self.stopping.as_ref())
     }
 }
 
@@ -945,12 +1235,14 @@ impl Record for SamplingInterval {
         let std_dev = fields.required("std_dev");
         let replications = fields.required("replications");
         let level = fields.required("level");
+        let stopping = fields.optional("stopping");
         Some(Self {
             mean: mean?,
             half_width: half_width?,
             std_dev: std_dev?,
             replications: replications?,
             level: level?,
+            stopping: stopping?,
         })
     }
 }
@@ -999,6 +1291,22 @@ impl Encode for Accuracy {
                 .with("kind", &"none")
                 .with("reason", reason)
                 .with("detail", detail),
+            AccuracyKind::Censored {
+                units_inside,
+                detail,
+            } => Json::object([])
+                .with("kind", &"censored")
+                .with("units_inside", units_inside)
+                .with("detail", detail),
+            AccuracyKind::PartlyUndefined {
+                undefined,
+                of,
+                detail,
+            } => Json::object([])
+                .with("kind", &"partly_undefined")
+                .with("undefined", undefined)
+                .with("of", of)
+                .with("detail", detail),
             AccuracyKind::Unknown { kind } => Json::object([]).with("kind", kind),
         };
         statement
@@ -1013,6 +1321,9 @@ struct AccuracyKeys {
     interval: Option<SamplingInterval>,
     reason: Option<String>,
     detail: Option<String>,
+    units_inside: Option<f64>,
+    undefined: Option<u32>,
+    of: Option<u32>,
     target: Option<AccuracyTarget>,
     reached: Option<bool>,
 }
@@ -1027,6 +1338,9 @@ impl Record for AccuracyKeys {
         let interval = fields.optional("interval");
         let reason = fields.optional("reason");
         let detail = fields.optional("detail");
+        let units_inside = fields.optional("units_inside");
+        let undefined = fields.optional("undefined");
+        let of = fields.optional("of");
         let target = fields.optional("target");
         let reached = fields.optional("reached");
         Some(Self {
@@ -1034,6 +1348,9 @@ impl Record for AccuracyKeys {
             interval: interval?,
             reason: reason?,
             detail: detail?,
+            units_inside: units_inside?,
+            undefined: undefined?,
+            of: of?,
             target: target?,
             reached: reached?,
         })
@@ -1053,6 +1370,21 @@ impl Decode for Accuracy {
                 .reason
                 .zip(keys.detail)
                 .map(|(reason, detail)| AccuracyKind::None { reason, detail }),
+            "censored" => keys
+                .units_inside
+                .zip(keys.detail)
+                .map(|(units_inside, detail)| AccuracyKind::Censored {
+                    units_inside,
+                    detail,
+                }),
+            "partly_undefined" => match (keys.undefined, keys.of, keys.detail) {
+                (Some(undefined), Some(of), Some(detail)) => Some(AccuracyKind::PartlyUndefined {
+                    undefined,
+                    of,
+                    detail,
+                }),
+                (Some(_) | None, Some(_) | None, Some(_) | None) => None,
+            },
             _ => Some(AccuracyKind::Unknown {
                 kind: keys.kind.clone(),
             }),
@@ -1061,7 +1393,8 @@ impl Decode for Accuracy {
             cx.not_allowed(
                 node,
                 format!("`kind: {}` without its keys", keys.kind),
-                "`interval` with `sampling`, `reason` and `detail` with `none`",
+                "`interval` with `sampling`, `reason` and `detail` with `none`, `units_inside` and \
+                 `detail` with `censored`, `undefined`, `of` and `detail` with `partly_undefined`",
                 Self::EXAMPLE,
             );
             return None;
@@ -1105,6 +1438,8 @@ impl Decode for Accuracy {
                 &Json::Array(vec![
                     when("sampling", &["interval"]),
                     when("none", &["reason", "detail"]),
+                    when("censored", &["units_inside", "detail"]),
+                    when("partly_undefined", &["undefined", "of", "detail"]),
                 ]),
             )
     }
