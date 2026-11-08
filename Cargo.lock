@@ -927,7 +927,10 @@ dependencies = [
  "gungraun",
  "libm",
  "proptest",
+ "taktsim-components",
  "taktsim-core",
+ "taktsim-model",
+ "taktsim-trace",
  "taktsim-units",
 ]
 

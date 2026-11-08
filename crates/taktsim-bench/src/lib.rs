@@ -23,6 +23,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod line;
 pub mod queue;
 pub mod random;
 pub mod units;

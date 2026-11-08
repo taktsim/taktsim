@@ -728,3 +728,19 @@ mod queue {
         assert_eq!(ids, wanted.len());
     }
 }
+
+#[test]
+fn the_reference_line_does_the_events_it_says() {
+    use taktsim_bench::line;
+    let mut engine = line::engine(true).unwrap();
+    let ran = line::run_events(&mut engine, line::EVENTS).unwrap();
+    assert_eq!(ran.events, line::EVENTS);
+    assert!(engine.item_counts().delivered.get() > 100);
+    let mut unchecked = line::engine(false).unwrap();
+    assert_eq!(
+        line::run_events(&mut unchecked, line::EVENTS).unwrap().now,
+        ran.now
+    );
+    let mut traced = line::engine(true).unwrap();
+    assert!(line::run_traced(&mut traced, line::EVENTS).unwrap() > line::EVENTS);
+}

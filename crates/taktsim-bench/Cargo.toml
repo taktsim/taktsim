@@ -19,7 +19,10 @@ workspace = true
 bench = false
 
 [dependencies]
+taktsim-components.workspace = true
 taktsim-core.workspace = true
+taktsim-model.workspace = true
+taktsim-trace.workspace = true
 taktsim-units.workspace = true
 
 [dev-dependencies]
@@ -38,6 +41,10 @@ harness = false
 
 [[bench]]
 name = "instructions_queue"
+harness = false
+
+[[bench]]
+name = "instructions_line"
 harness = false
 
 [[bench]]
