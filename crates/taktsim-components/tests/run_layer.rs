@@ -241,8 +241,18 @@ fn parameters_of_another_type_are_refused_by_name() {
         ) -> Result<taktsim_components::FlowShared, BuildError> {
             Ok(taktsim_components::FlowShared::default())
         }
+        fn read_message(
+            _: &taktsim_components::FlowMessage,
+            _: &mut dyn FnMut(taktsim_components::MessageFact<'_>),
+        ) {
+        }
     }
     impl taktsim_components::ComponentType<Open> for taktsim_components::Sink {
+        const STATES: &'static [&'static str] = &[];
+        const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+        fn places(&self) -> u32 {
+            1
+        }
         fn build(
             &self,
             _: &taktsim_components::Wiring<'_, taktsim_components::FlowShared>,
@@ -372,6 +382,12 @@ impl taktsim_core::Component<taktsim_components::FlowMessage> for RogueBehaviour
 
 impl taktsim_components::ComponentType<taktsim_components::Flow> for Rogue {
     const PORTS: taktsim_components::Ports = taktsim_components::Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn build(
         &self,

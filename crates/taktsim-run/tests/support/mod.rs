@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use taktsim_components::{
-    BuildError, ComponentType, Flow, FlowMessage, FlowShared, ItemAttrs, Ports, Registry,
+    BuildError, ComponentType, Creation, Flow, FlowMessage, FlowShared, ItemAttrs, Ports, Registry,
     VariantId, Wiring, standard,
 };
 use taktsim_core::random::Stream;
@@ -152,6 +152,12 @@ impl ComponentParams for Burst {
 
 impl ComponentType<Flow> for Burst {
     const PORTS: Ports = Ports::Outlet;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::HeldUntilFirstMove;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -217,6 +223,12 @@ impl ComponentParams for Keep {
 
 impl ComponentType<Flow> for Keep {
     const PORTS: Ports = Ports::Inlet;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -279,6 +291,13 @@ impl ComponentParams for Relay {
 }
 
 impl ComponentType<Flow> for Relay {
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::InSystem;
+
+    fn places(&self) -> u32 {
+        1
+    }
+
     fn draws_random(&self) -> bool {
         false
     }
@@ -330,6 +349,12 @@ impl ComponentParams for Lonely {
 
 impl ComponentType<Flow> for Lonely {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::HeldUntilFirstMove;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -378,6 +403,12 @@ impl ComponentParams for Liar {
 
 impl ComponentType<Flow> for Liar {
     const PORTS: Ports = Ports::Outlet;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::HeldUntilFirstMove;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false

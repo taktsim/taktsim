@@ -59,8 +59,8 @@ pub use flow::{Flow, FlowShared, standard, standard_schema};
 pub use machine::{Machine, Setup};
 pub use message::{FlowMessage, ItemAttrs, MachineStateNote, SourceStateNote, VariantId};
 pub use run::{
-    BuildError, ComponentType, Domain, Ports, Prepared, Registry, Roles, RunFailure, RunOptions,
-    RunReport, Wiring,
+    BuildError, ComponentType, Creation, Domain, Kpi, MessageFact, Ports, Prepared, Registry,
+    Roles, RunFailure, RunOptions, RunReport, Wiring,
 };
 pub use sink::Sink;
 pub use source::Source;

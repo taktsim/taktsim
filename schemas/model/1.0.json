@@ -546,8 +546,8 @@
       "type": "object"
     },
     "Observable": {
-      "description": "An observable: a call of lead_time, state_shares, throughput, wip on component ids, e.g. `lead_time(sink)` (ADR-0009, ADR-0015). The loader checks its arguments and type.",
-      "pattern": "^[ \\t]*(lead_time|state_shares|throughput|wip)[ \\t]*\\(",
+      "description": "An observable: a call of held, lead_time, state_shares, throughput, utilization, wip on component ids, e.g. `held(<id>)` (ADR-0009, ADR-0015). The loader checks its arguments and type.",
+      "pattern": "^[ \\t]*(held|lead_time|state_shares|throughput|utilization|wip)[ \\t]*\\(",
       "type": "string"
     },
     "ObservableRef": {

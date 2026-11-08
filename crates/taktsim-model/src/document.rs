@@ -894,7 +894,7 @@ impl Decode for ObservableText {
             (
                 "description",
                 Json::from(format!(
-                    "An observable: a call of {} on component ids, e.g. `{first}(sink)` \
+                    "An observable: a call of {} on component ids, e.g. `{first}(<id>)` \
                      (ADR-0009, ADR-0015). The loader checks its arguments and type.",
                     functions.join(", "),
                 )),

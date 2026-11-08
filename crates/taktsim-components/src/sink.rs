@@ -6,7 +6,7 @@ use taktsim_model::{ComponentParams, Encode, Fields, Json};
 use crate::flow::Flow;
 use crate::message::FlowMessage;
 use crate::port::Inlet;
-use crate::run::{BuildError, ComponentType, Ports, Wiring};
+use crate::run::{BuildError, ComponentType, Creation, Ports, Wiring};
 
 /// `type: Sink`: the end of a line. No parameters.
 ///
@@ -44,6 +44,13 @@ impl ComponentParams for Sink {
 
 impl ComponentType<Flow> for Sink {
     const PORTS: Ports = Ports::Inlet;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::Never;
+
+    /// It does no work.
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false

@@ -31,7 +31,7 @@ use taktsim_units::SimTime;
 /// later domain brings its own).
 ///
 /// ```
-/// use taktsim_components::{BuildError, Domain, Flow, Roles};
+/// use taktsim_components::{BuildError, Domain, Flow, MessageFact, Roles};
 /// use taktsim_model::{Document, Findings};
 ///
 /// /// Flow's messages, with no rules of its own.
@@ -45,6 +45,7 @@ use taktsim_units::SimTime;
 ///     fn check(_: &Document, _: &Roles, _: &mut Findings) {}
 ///     fn prepare(_: &Document, _: &Roles) -> Result<(), BuildError> { Ok(()) }
 ///     fn draws_random(_: &Document) -> bool { false }
+///     fn read_message(_: &Self::Message, _: &mut dyn FnMut(MessageFact<'_>)) {}
 /// }
 ///
 /// let _ = taktsim_components::Registry::<Lax>::new();
@@ -79,6 +80,102 @@ pub trait Domain: 'static {
     /// component's parameters state, such as a split on an edge (ADR-0024 §5).
     /// Required, so a domain must answer for it.
     fn draws_random(document: &Document) -> bool;
+
+    /// What a message states for the KPIs (ADR-0025 §1), through a callback, since one
+    /// message can state several facts: a later item has a variant, a product and a
+    /// material at once. Required, and a domain should match every message without
+    /// `_`, so a new message does not compile until it answers.
+    fn read_message(message: &Self::Message, facts: &mut dyn FnMut(MessageFact<'_>));
+}
+
+/// What a message states for the KPIs: the domain's words, which `taktsim-run` maps to
+/// positions.
+///
+/// ```
+/// use taktsim_components::{Domain, Flow, FlowMessage, ItemAttrs, MessageFact, VariantId};
+///
+/// let mut facts = Vec::new();
+/// let arrive = FlowMessage::Arrive(ItemAttrs::new(VariantId::new(2), 0));
+/// Flow::read_message(&arrive, &mut |fact| facts.push(format!("{fact:?}")));
+/// assert_eq!(facts, ["Class { dimension: \"variant\", value: 2 }"]);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageFact<'a> {
+    /// The resource is in this state now, with this many units in progress. The name
+    /// is one of its type's [`STATES`](ComponentType::STATES).
+    State {
+        /// The state.
+        name: &'static str,
+        /// Units in progress.
+        in_progress: u32,
+    },
+    /// The item this message carries is of this class.
+    Class {
+        /// The dimension, such as `variant`.
+        dimension: &'static str,
+        /// The class.
+        value: u16,
+    },
+    /// This is the name of a class. A package that names every class of a dimension at
+    /// the start of a run gets the same class rows from every run, whatever each one
+    /// happened to deliver.
+    ClassName {
+        /// The dimension.
+        dimension: &'static str,
+        /// The class.
+        value: u16,
+        /// Its name.
+        name: &'a str,
+    },
+}
+
+/// When an item a component creates counts as work in progress (ADR-0025 §1).
+/// A type's ports do not say what its output means, so it says this itself.
+///
+/// ```
+/// use taktsim_components::{ComponentType, Creation, Flow, Source, Sink};
+///
+/// assert_eq!(<Source as ComponentType<Flow>>::CREATION, Creation::HeldUntilFirstMove);
+/// assert_eq!(<Sink as ComponentType<Flow>>::CREATION, Creation::Never);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Creation {
+    /// It never creates an item; a trace that says so breaks conservation.
+    Never,
+    /// An item waits here and is released at its first move, like a Source's part.
+    HeldUntilFirstMove,
+    /// An item is released as it is created, like an assembly's output.
+    InSystem,
+}
+
+/// What an observable computes, as data, so a package can give a KPI its own word
+/// (ADR-0025 §2). A new kind of computation is a new variant here and a change in
+/// `taktsim-stats` and `taktsim-run`.
+///
+/// ```
+/// use taktsim_components::{Flow, Kpi, Registry};
+/// use taktsim_model::expr::{Arity, Signature, Type};
+///
+/// let census = Signature::new(Arity::Exactly(1), Type::Number).accepting(["Bed"]);
+/// let registry = Registry::<Flow>::new().with_kpi("census", census, Kpi::Occupancy)?;
+/// assert_eq!(registry.kpis().next().map(|(name, _, kpi)| (name, kpi)), Some(("census", Kpi::Occupancy)));
+/// # Ok::<(), taktsim_model::CatalogError>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Kpi {
+    /// Delivered by it in the window, per time; per class too.
+    Deliveries,
+    /// The time-weighted mean of what is here; of the whole system with no argument.
+    Occupancy,
+    /// The share of the window in each of its type's states.
+    StateShares,
+    /// Time-weighted units in progress, over its places.
+    InProgress,
+    /// The time-weighted mean of what it created and has not released; of the whole
+    /// system with no argument.
+    AwaitingRelease,
+    /// Release to delivery, as a distribution.
+    Transit,
 }
 
 /// Which edges a component type may have (ADR-0022 §3). A type with inlets or
@@ -136,7 +233,7 @@ impl Ports {
 /// behaviour.
 ///
 /// ```
-/// use taktsim_components::{BuildError, ComponentType, Flow, FlowMessage, FlowShared, Ports, Wiring};
+/// use taktsim_components::{BuildError, ComponentType, Creation, Flow, FlowMessage, FlowShared, Ports, Wiring};
 /// use taktsim_core::{Component, ComponentError, Context, Delivery};
 /// use taktsim_model::{ComponentParams, Encode, Fields, Json};
 ///
@@ -161,6 +258,9 @@ impl Ports {
 ///
 /// impl ComponentType<Flow> for Calendar {
 ///     const PORTS: Ports = Ports::None;
+///     const STATES: &'static [&'static str] = &[];
+///     const CREATION: Creation = Creation::Never;
+///     fn places(&self) -> u32 { 1 }
 ///     fn build(&self, _: &Wiring<'_, FlowShared>) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
 ///         Ok(Box::new(Quiet))
 ///     }
@@ -175,6 +275,16 @@ pub trait ComponentType<D: Domain>: ComponentParams {
     const PORTS: Ports = Ports::Both;
     /// Whether it does work: a station a part waits for (ADR-0022 §5).
     const STATION: bool = false;
+    /// The states its notes can state, in the order of its `state_shares` rows. A
+    /// state on a new type adds no row to a line without that type (ADR-0025 §1).
+    const STATES: &'static [&'static str];
+    /// What creating an item here means. Required: a wrong default would miscount.
+    const CREATION: Creation;
+
+    /// The units it can hold in progress: what `utilization` divides by. 1 for a type
+    /// that does no work. Required, because a wrong default would state a wrong number
+    /// (ADR-0025 §2).
+    fn places(&self) -> u32;
 
     /// Whether a run of this entry draws random numbers (ADR-0024 §5). `true`
     /// unless the type says otherwise, because a false `false` labels one sample
@@ -212,7 +322,16 @@ pub trait ComponentType<D: Domain>: ComponentParams {
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct Roles {
-    types: BTreeMap<&'static str, (Ports, bool)>,
+    types: BTreeMap<&'static str, Role>,
+}
+
+/// What one type declares.
+#[derive(Debug, Clone, Copy)]
+struct Role {
+    ports: Ports,
+    station: bool,
+    states: &'static [&'static str],
+    creation: Creation,
 }
 
 impl Roles {
@@ -223,7 +342,7 @@ impl Roles {
     /// ```
     #[must_use]
     pub fn ports(&self, name: &str) -> Option<Ports> {
-        self.types.get(name).map(|role| role.0)
+        self.types.get(name).map(|role| role.ports)
     }
 
     /// Whether type `name` is a station.
@@ -233,7 +352,35 @@ impl Roles {
     /// ```
     #[must_use]
     pub fn is_station(&self, name: &str) -> bool {
-        self.types.get(name).is_some_and(|role| role.1)
+        self.types.get(name).is_some_and(|role| role.station)
+    }
+
+    /// The states type `name` declares; none if it is not registered.
+    ///
+    /// ```
+    /// let registry = taktsim_components::standard()?;
+    /// assert_eq!(registry.roles().states("Source"), ["waiting", "blocked"]);
+    /// assert!(registry.roles().states("Buffer").is_empty());
+    /// # Ok::<(), taktsim_model::CatalogError>(())
+    /// ```
+    #[must_use]
+    pub fn states(&self, name: &str) -> &'static [&'static str] {
+        self.types.get(name).map_or(&[], |role| role.states)
+    }
+
+    /// What creating an item means for type `name`, if it is registered.
+    ///
+    /// ```
+    /// use taktsim_components::Creation;
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// assert_eq!(registry.roles().creation("Source"), Some(Creation::HeldUntilFirstMove));
+    /// assert_eq!(registry.roles().creation("Nothing"), None);
+    /// # Ok::<(), taktsim_model::CatalogError>(())
+    /// ```
+    #[must_use]
+    pub fn creation(&self, name: &str) -> Option<Creation> {
+        self.types.get(name).map(|role| role.creation)
     }
 }
 
@@ -345,6 +492,13 @@ fn entry_draws<D: Domain, T: ComponentType<D>>(entry: &Entry) -> bool {
         .is_none_or(<T as ComponentType<D>>::draws_random)
 }
 
+/// The places of `entry`; an entry of another type has one.
+fn entry_places<D: Domain, T: ComponentType<D>>(entry: &Entry) -> u32 {
+    entry
+        .params::<T>()
+        .map_or(1, <T as ComponentType<D>>::places)
+}
+
 /// The component types of a domain: its catalog and one builder per type,
 /// filled by one call per type, so a type cannot be readable but not runnable.
 /// "Registered at compile time" (spec §4) through an ordinary call (ADR-0022
@@ -376,6 +530,8 @@ pub struct Registry<D: Domain> {
     catalog: Catalog,
     builders: BTreeMap<&'static str, Builder<D>>,
     drawing: BTreeMap<&'static str, fn(&Entry) -> bool>,
+    places: BTreeMap<&'static str, fn(&Entry) -> u32>,
+    kpis: BTreeMap<String, (Signature, Kpi)>,
     roles: Roles,
     _domain: PhantomData<fn() -> D>,
 }
@@ -409,6 +565,8 @@ impl<D: Domain> Registry<D> {
             catalog: Catalog::new(),
             builders: BTreeMap::new(),
             drawing: BTreeMap::new(),
+            places: BTreeMap::new(),
+            kpis: BTreeMap::new(),
             roles: Roles::default(),
             _domain: PhantomData,
         }
@@ -431,9 +589,18 @@ impl<D: Domain> Registry<D> {
     /// ```
     pub fn with<T: ComponentType<D>>(mut self) -> Result<Self, CatalogError> {
         let catalog = self.catalog.with::<T>()?;
-        self.roles.types.insert(T::TYPE, (T::PORTS, T::STATION));
+        self.roles.types.insert(
+            T::TYPE,
+            Role {
+                ports: T::PORTS,
+                station: T::STATION,
+                states: T::STATES,
+                creation: T::CREATION,
+            },
+        );
         self.builders.insert(T::TYPE, build_entry::<D, T>);
         self.drawing.insert(T::TYPE, entry_draws::<D, T>);
+        self.places.insert(T::TYPE, entry_places::<D, T>);
         let roles = Arc::new(self.roles.clone());
         self.catalog = catalog.with_check(Box::new(move |document, findings| {
             D::check(document, &roles, findings);
@@ -441,28 +608,74 @@ impl<D: Domain> Registry<D> {
         Ok(self)
     }
 
-    /// Adds an observable that `observe` and `experiment.precision` may name.
+    /// Adds a KPI: an observable that `observe` and `experiment.precision` may name,
+    /// with what computes it, so a registered observable always has an answer. Every
+    /// component its signature accepts gets its rows in each result, declared or not
+    /// (ADR-0025 §2). A signature that allows no argument adds a row for the whole
+    /// system, for [`Kpi::Occupancy`] and [`Kpi::AwaitingRelease`].
     ///
     /// # Errors
     ///
     /// A [`CatalogError`] if the catalog refuses it.
     ///
     /// ```
-    /// use taktsim_components::{Flow, Registry};
+    /// use taktsim_components::{Flow, Kpi, Registry};
     /// use taktsim_model::expr::{Arity, Signature, Type};
     ///
     /// let registry = Registry::<Flow>::new()
-    ///     .with_observable("wip", Signature::new(Arity::Exactly(1), Type::Number))?;
+    ///     .with_kpi("wip", Signature::new(Arity::Exactly(1), Type::Number), Kpi::Occupancy)?;
     /// assert_eq!(registry.catalog().observables().collect::<Vec<_>>(), ["wip"]);
     /// # Ok::<(), taktsim_model::CatalogError>(())
     /// ```
-    pub fn with_observable(
+    pub fn with_kpi(
         mut self,
         name: &str,
         signature: Signature,
+        kpi: Kpi,
     ) -> Result<Self, CatalogError> {
-        self.catalog = self.catalog.with_observable(name, signature)?;
+        self.catalog = self.catalog.with_observable(name, signature.clone())?;
+        self.kpis.insert(name.to_owned(), (signature, kpi));
         Ok(self)
+    }
+
+    /// The registered KPIs, sorted by name.
+    ///
+    /// ```
+    /// use taktsim_components::Kpi;
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// let names: Vec<_> = registry.kpis().map(|(name, _, _)| name).collect();
+    /// assert_eq!(names, ["held", "lead_time", "state_shares", "throughput", "utilization", "wip"]);
+    /// assert!(registry.kpis().any(|(_, _, kpi)| kpi == Kpi::Transit));
+    /// # Ok::<(), taktsim_model::CatalogError>(())
+    /// ```
+    pub fn kpis(&self) -> impl Iterator<Item = (&str, &Signature, Kpi)> {
+        self.kpis
+            .iter()
+            .map(|(name, (signature, kpi))| (name.as_str(), signature, *kpi))
+    }
+
+    /// The places of a component of `document`: what `utilization` divides by.
+    ///
+    /// ```
+    /// use taktsim_model::{Format, Loader};
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// let model = Loader::new(registry.catalog()).load_str(
+    ///     "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+    ///      components: [{id: source, type: Source}, {id: cut, type: Machine, cycle_time: 1min, capacity: 2 parts}, {id: sink, type: Sink}]\n\
+    ///      flow: [[source, cut, sink]]\n",
+    ///     Format::Yaml,
+    /// )?;
+    /// assert_eq!(registry.places(&model.document().components()[1]), 2);
+    /// assert_eq!(registry.places(&model.document().components()[2]), 1);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub fn places(&self, entry: &Entry) -> u32 {
+        self.places
+            .get(entry.type_name())
+            .map_or(1, |places| places(entry))
     }
 
     /// The catalog, for the loader and the schema generator.
