@@ -1,0 +1,12 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+error[model.wrong_type] components[1].cycle_time: expected a duration (a constant), or a distribution such as `{dist: exponential, mean: 12min}`, found the number 10
+  at: broken.yaml:6:42
+  found: the number 10
+  allowed: a duration (a constant), or a distribution such as `{dist: exponential, mean: 12min}`
+  example: {dist: lognormal, mean: 42s, sigma: 0.08}

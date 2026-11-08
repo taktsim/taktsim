@@ -1,0 +1,24 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 0
+--- stdout ---
+complete (horizon)
+engine: taktsim-core <version>
+package: taktsim-components <version>
+model hash: 1e37fe6b72fdb25f95346c0d47aafc69d0fba8920357ec652980a7af1671ba1a
+system hash: 4adcd1aed74b12bb5f9af262a013a2b92717adf3051cc9e21a68e46c75fa052b
+platform: <platform>
+experiment: <experiment id>
+run: seed none, ended at 1h, 424 events, 729 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+metrics:
+  created(source) = 61 items (0s to 1h; no error bound: no_random_draws)
+  delivered(sink) = 60 items (0s to 1h; no error bound: no_random_draws)
+  items_alive = 1 items (at 1h; no error bound: no_random_draws)
+--- stderr ---
+warning[run.seed_unused] --seed: this model draws nothing, so the seed 7 from --seed is not used
+  found: 7
+progress[run.store]: ran in the store <tmp>/.taktsim

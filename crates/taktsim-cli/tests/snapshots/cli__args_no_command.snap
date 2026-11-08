@@ -1,0 +1,11 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+error[args.missing_command] <command>: a command is missing
+  found: nothing
+  allowed: describe, schema, validate, run
+  example: taktsim describe

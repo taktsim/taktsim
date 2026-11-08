@@ -1,0 +1,8 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+{"allowed":"a duration such as `42s`, `12min`, `0.5h` or `8h`","example":"8h","found":"5","kind":"error","message":"`5` is not a value of --horizon","path":"--horizon","type":"args.invalid_value"}

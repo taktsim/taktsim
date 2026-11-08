@@ -1,0 +1,8 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+{"allowed":"`--seed` or `model.seed`, from 0 to 9007199254740991","example":"--seed 42","found":"no seed","kind":"error","message":"this model draws random numbers and no seed is given; a run never takes one from entropy","path":"model.seed","type":"run.no_seed"}

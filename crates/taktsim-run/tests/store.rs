@@ -340,6 +340,8 @@ fn a_model_file_that_cannot_be_read_is_an_io_failure() {
     .unwrap_err();
     assert_eq!(failure.class, FailureClass::Io);
     assert_eq!(failure.diagnostics[0].type_name, "model.io");
+    assert_eq!(failure.diagnostics[0].path.as_deref(), Some("<model>"));
+    assert_eq!(failure.diagnostics[0].example, None);
 }
 
 #[test]

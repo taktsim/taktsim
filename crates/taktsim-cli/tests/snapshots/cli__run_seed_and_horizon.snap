@@ -1,0 +1,22 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 0
+--- stdout ---
+complete (horizon)
+engine: taktsim-core <version>
+package: taktsim-components <version>
+model hash: d651fdcf79353474a6062079c0586c217011d69da236b0ce1df8c44c1c42f2a3
+system hash: e0e22c0f8cdadababc8602c28cd565ce8961b32491a47f65c71692ff8c01300a
+platform: <platform>
+experiment: <experiment id>
+run: seed 7, ended at 1h, 1156 events, 1819 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+metrics:
+  created(source) = 86 items (0s to 1h; no error bound: single_replication)
+  delivered(sink) = 79 items (0s to 1h; no error bound: single_replication)
+  items_alive = 7 items (at 1h; no error bound: single_replication)
+--- stderr ---
+progress[run.store]: ran in the store <tmp>/.taktsim

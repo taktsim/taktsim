@@ -1,0 +1,1159 @@
+{
+  "commands": [
+    {
+      "arguments": [
+        {
+          "allowed": [
+            "text",
+            "json"
+          ],
+          "default": "text",
+          "help": "How to print the result: `json` is one document on stdout and JSON Lines on stderr",
+          "name": "--format",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "enum"
+        }
+      ],
+      "example": "taktsim describe",
+      "exit_codes": [
+        {
+          "code": 0,
+          "error_types": []
+        },
+        {
+          "code": 1,
+          "error_types": [
+            "args.*"
+          ]
+        },
+        {
+          "code": 7,
+          "error_types": [
+            "store.write"
+          ]
+        }
+      ],
+      "input_schemas": [],
+      "long_running": false,
+      "name": "describe",
+      "needs_person": false,
+      "purpose": "Print every command with its inputs, outputs and errors, as one JSON document",
+      "result_schema": {
+        "description": "This document; its schema is its key `schema`.",
+        "type": "object"
+      },
+      "writes": "nothing"
+    },
+    {
+      "arguments": [
+        {
+          "allowed": [],
+          "help": "What to print the schema of",
+          "name": "<type>",
+          "positional": true,
+          "required": true,
+          "takes_value": true,
+          "type": "string"
+        },
+        {
+          "allowed": [
+            "text",
+            "json"
+          ],
+          "default": "text",
+          "help": "How to print the result: `json` is one document on stdout and JSON Lines on stderr",
+          "name": "--format",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "enum"
+        }
+      ],
+      "example": "taktsim schema Machine",
+      "exit_codes": [
+        {
+          "code": 0,
+          "error_types": []
+        },
+        {
+          "code": 1,
+          "error_types": [
+            "args.*"
+          ]
+        },
+        {
+          "code": 7,
+          "error_types": [
+            "store.write"
+          ]
+        }
+      ],
+      "input_schemas": [],
+      "long_running": false,
+      "name": "schema",
+      "needs_person": false,
+      "purpose": "Print a JSON Schema: `all` or `model`, a component type, `result`, `validation`, `error` or `describe`",
+      "result_schema": {
+        "description": "A JSON Schema, draft 2020-12.",
+        "type": "object"
+      },
+      "writes": "nothing"
+    },
+    {
+      "arguments": [
+        {
+          "allowed": [],
+          "help": "The model file, `.yaml`, `.yml` or `.json`",
+          "name": "<model>",
+          "positional": true,
+          "required": true,
+          "takes_value": true,
+          "type": "path"
+        },
+        {
+          "allowed": [
+            "text",
+            "json"
+          ],
+          "default": "text",
+          "help": "How to print the result: `json` is one document on stdout and JSON Lines on stderr",
+          "name": "--format",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "enum"
+        }
+      ],
+      "example": "taktsim validate line.yaml --format json",
+      "exit_codes": [
+        {
+          "code": 0,
+          "error_types": []
+        },
+        {
+          "code": 1,
+          "error_types": [
+            "args.*",
+            "model.*"
+          ]
+        },
+        {
+          "code": 7,
+          "error_types": [
+            "model.io",
+            "store.write"
+          ]
+        }
+      ],
+      "input_schemas": [
+        {
+          "argument": "<model>",
+          "schema_command": "taktsim schema model"
+        }
+      ],
+      "long_running": false,
+      "name": "validate",
+      "needs_person": false,
+      "purpose": "Check a model without running it",
+      "result_schema": {
+        "$defs": {
+          "Diagnostic": {
+            "description": "One line of stderr with `--format json`: an error, a warning or a progress report.",
+            "properties": {
+              "allowed": {
+                "type": "string"
+              },
+              "column": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "example": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              },
+              "found": {
+                "type": "string"
+              },
+              "items_alive": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "kind": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "progress"
+                ]
+              },
+              "line": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "recent": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "reused": {
+                "type": "boolean"
+              },
+              "store": {
+                "type": "string"
+              },
+              "time": {
+                "$ref": "#/$defs/Duration"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "type",
+              "message"
+            ],
+            "type": "object"
+          },
+          "Duration": {
+            "description": "A duration: a number and one of the units d, h, min, s, ms, with at most one space; exact to the nanosecond.",
+            "examples": [
+              "42s",
+              "12min",
+              "0.5h",
+              "8h"
+            ],
+            "pattern": "^[0-9]+(\\.[0-9]+)? ?(d|h|min|s|ms)$",
+            "type": "string"
+          },
+          "Sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "What `taktsim validate` found (ADR-0024 §9). Readers ignore unknown keys.",
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/$defs/Diagnostic"
+            },
+            "type": "array"
+          },
+          "format": {
+            "const": "taktsim-validation/1"
+          },
+          "model_hash": {
+            "$ref": "#/$defs/Sha256"
+          },
+          "system_hash": {
+            "$ref": "#/$defs/Sha256"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "format",
+          "valid",
+          "errors"
+        ],
+        "title": "taktsim-validation/1",
+        "type": "object"
+      },
+      "writes": "nothing"
+    },
+    {
+      "arguments": [
+        {
+          "allowed": [],
+          "help": "The model file, `.yaml`, `.yml` or `.json`",
+          "name": "<model>",
+          "positional": true,
+          "required": true,
+          "takes_value": true,
+          "type": "path"
+        },
+        {
+          "allowed": [],
+          "help": "The seed, over `model.seed`; a model that draws nothing has none",
+          "name": "--seed",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "seed"
+        },
+        {
+          "allowed": [],
+          "help": "Another horizon: a new version of the model, with its own hash",
+          "name": "--horizon",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "duration"
+        },
+        {
+          "allowed": [],
+          "help": "The run store; otherwise the nearest `.taktsim/` upward, else one here",
+          "name": "--store",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "path"
+        },
+        {
+          "allowed": [],
+          "help": "The most events to process; a run stopped by it is partial and exits 3",
+          "name": "--max-events",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "integer"
+        },
+        {
+          "allowed": [],
+          "help": "Run even if the store has this run, and compare; it is never overwritten",
+          "name": "--no-reuse",
+          "positional": false,
+          "required": false,
+          "takes_value": false,
+          "type": "boolean"
+        },
+        {
+          "allowed": [
+            "text",
+            "json"
+          ],
+          "default": "text",
+          "help": "How to print the result: `json` is one document on stdout and JSON Lines on stderr",
+          "name": "--format",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "enum"
+        }
+      ],
+      "example": "taktsim run line.yaml --seed 42 --horizon 8h --format json",
+      "exit_codes": [
+        {
+          "code": 0,
+          "error_types": []
+        },
+        {
+          "code": 1,
+          "error_types": [
+            "args.*",
+            "model.*",
+            "run.no_seed",
+            "run.seed_out_of_range",
+            "run.build"
+          ]
+        },
+        {
+          "code": 2,
+          "error_types": [
+            "run.component_failed",
+            "run.invariant_violated",
+            "run.conservation_violated",
+            "run.item_not_received",
+            "run.engine",
+            "run.failed",
+            "run.metrics_differ",
+            "run.stalled",
+            "run.no_draw_claim_false",
+            "run.store_differs",
+            "run.trace_format",
+            "run.replay_differs"
+          ]
+        },
+        {
+          "code": 3,
+          "error_types": []
+        },
+        {
+          "code": 7,
+          "error_types": [
+            "model.io",
+            "store.format",
+            "store.read",
+            "store.result",
+            "store.write"
+          ]
+        }
+      ],
+      "input_schemas": [
+        {
+          "argument": "<model>",
+          "schema_command": "taktsim schema model"
+        }
+      ],
+      "long_running": false,
+      "name": "run",
+      "needs_person": false,
+      "purpose": "Run a model and keep the run in the run store",
+      "result_schema": {
+        "$defs": {
+          "Accuracy": {
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "sampling"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "interval"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "none"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "reason",
+                    "detail"
+                  ]
+                }
+              }
+            ],
+            "description": "What can be said about a value's error. Read a kind you do not know as no statement, never as an error.",
+            "properties": {
+              "detail": {
+                "type": "string"
+              },
+              "interval": {
+                "$ref": "#/$defs/SamplingInterval"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "reached": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "target": {
+                "$ref": "#/$defs/AccuracyTarget"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "AccuracyTarget": {
+            "properties": {
+              "relative": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "Duration": {
+            "description": "A duration: a number and one of the units d, h, min, s, ms, with at most one space; exact to the nanosecond.",
+            "examples": [
+              "42s",
+              "12min",
+              "0.5h",
+              "8h"
+            ],
+            "pattern": "^[0-9]+(\\.[0-9]+)? ?(d|h|min|s|ms)$",
+            "type": "string"
+          },
+          "Metric": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "observable": {
+                "type": "string"
+              },
+              "over": {
+                "$ref": "#/$defs/Over"
+              },
+              "unit": {
+                "type": "string"
+              },
+              "values": {
+                "items": {
+                  "$ref": "#/$defs/MetricValue"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "name",
+              "unit",
+              "over",
+              "values"
+            ],
+            "type": "object"
+          },
+          "MetricValue": {
+            "properties": {
+              "accuracy": {
+                "items": {
+                  "$ref": "#/$defs/Accuracy"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "labels": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "accuracy"
+            ],
+            "type": "object"
+          },
+          "Over": {
+            "oneOf": [
+              {
+                "properties": {
+                  "from": {
+                    "$ref": "#/$defs/Duration"
+                  },
+                  "to": {
+                    "$ref": "#/$defs/Duration"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "at": {
+                    "$ref": "#/$defs/Duration"
+                  }
+                },
+                "required": [
+                  "at"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "Provenance": {
+            "properties": {
+              "engine": {
+                "type": "string"
+              },
+              "engine_version": {
+                "type": "string"
+              },
+              "model_hash": {
+                "$ref": "#/$defs/Sha256"
+              },
+              "package": {
+                "type": "string"
+              },
+              "package_version": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "seeds": {
+                "items": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "system_hash": {
+                "$ref": "#/$defs/Sha256"
+              }
+            },
+            "required": [
+              "engine",
+              "engine_version",
+              "package",
+              "package_version",
+              "model_hash",
+              "system_hash",
+              "platform",
+              "seeds"
+            ],
+            "type": "object"
+          },
+          "RunEntry": {
+            "properties": {
+              "complete": {
+                "type": "boolean"
+              },
+              "end_time": {
+                "$ref": "#/$defs/Duration"
+              },
+              "events": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "records": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "run_id": {
+                "pattern": "^[a-z0-9-]+-[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "seed": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stop_reason": {
+                "type": "string"
+              },
+              "trace": {
+                "$ref": "#/$defs/TraceRef"
+              }
+            },
+            "required": [
+              "complete",
+              "stop_reason",
+              "end_time",
+              "events",
+              "records"
+            ],
+            "type": "object"
+          },
+          "SamplingInterval": {
+            "properties": {
+              "half_width": {
+                "type": "number"
+              },
+              "level": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "replications": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "std_dev": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "mean",
+              "half_width",
+              "std_dev",
+              "replications",
+              "level"
+            ],
+            "type": "object"
+          },
+          "Sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "TraceRef": {
+            "properties": {
+              "bytes": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "message_format": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "record_format": {
+                "type": "string"
+              },
+              "stream_hash": {
+                "$ref": "#/$defs/Sha256"
+              },
+              "trace_format": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path",
+              "bytes",
+              "trace_format",
+              "record_format",
+              "message_format",
+              "stream_hash"
+            ],
+            "type": "object"
+          },
+          "Unreported": {
+            "properties": {
+              "observable": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "observable",
+              "reason"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "The result of a run (ADR-0024 §3). Readers use `complete` to decide and ignore unknown keys.",
+        "properties": {
+          "complete": {
+            "type": "boolean"
+          },
+          "experiment_id": {
+            "pattern": "^exp-[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "format": {
+            "const": "taktsim-result/1"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/$defs/Metric"
+            },
+            "type": "array"
+          },
+          "provenance": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/$defs/RunEntry"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "stop_reason": {
+            "type": "string"
+          },
+          "unreported": {
+            "items": {
+              "$ref": "#/$defs/Unreported"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "complete",
+          "stop_reason",
+          "provenance",
+          "runs",
+          "metrics",
+          "unreported"
+        ],
+        "title": "taktsim-result/1",
+        "type": "object"
+      },
+      "writes": "a run in the run store"
+    }
+  ],
+  "error_schema": {
+    "$defs": {
+      "Duration": {
+        "description": "A duration: a number and one of the units d, h, min, s, ms, with at most one space; exact to the nanosecond.",
+        "examples": [
+          "42s",
+          "12min",
+          "0.5h",
+          "8h"
+        ],
+        "pattern": "^[0-9]+(\\.[0-9]+)? ?(d|h|min|s|ms)$",
+        "type": "string"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "type": {
+              "pattern": "^args\\."
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "path",
+            "found",
+            "allowed",
+            "example"
+          ]
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "type": {
+              "pattern": "^model\\."
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "path",
+            "found",
+            "allowed"
+          ]
+        }
+      }
+    ],
+    "description": "One line of stderr with `--format json`: an error, a warning or a progress report.",
+    "properties": {
+      "allowed": {
+        "type": "string"
+      },
+      "column": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "example": {
+        "type": "string"
+      },
+      "file": {
+        "type": "string"
+      },
+      "found": {
+        "type": "string"
+      },
+      "items_alive": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "kind": {
+        "enum": [
+          "error",
+          "warning",
+          "progress"
+        ]
+      },
+      "line": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "message": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "recent": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "reused": {
+        "type": "boolean"
+      },
+      "store": {
+        "type": "string"
+      },
+      "time": {
+        "$ref": "#/$defs/Duration"
+      },
+      "type": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "type",
+      "message"
+    ],
+    "title": "taktsim error line",
+    "type": "object"
+  },
+  "exit_codes": [
+    {
+      "code": 0,
+      "meaning": "success"
+    },
+    {
+      "code": 1,
+      "meaning": "invalid input: arguments, model, data, unknown run id; nothing ran"
+    },
+    {
+      "code": 2,
+      "meaning": "run failed: invariant or conservation violation, engine error"
+    },
+    {
+      "code": 3,
+      "meaning": "budget exhausted: partial result printed, with the stop reason"
+    },
+    {
+      "code": 4,
+      "meaning": "interrupted: partial result printed, with the stop reason"
+    },
+    {
+      "code": 5,
+      "meaning": "check not passed; the result itself is complete and valid"
+    },
+    {
+      "code": 6,
+      "meaning": "a person's confirmation is required"
+    },
+    {
+      "code": 7,
+      "meaning": "I/O failure: a file or the run store cannot be read or written"
+    },
+    {
+      "code": 101,
+      "meaning": "internal bug: the single invariant-violation path"
+    }
+  ],
+  "format": "taktsim-describe/1",
+  "package_version": "0.0.0",
+  "schema": {
+    "$defs": {
+      "Argument": {
+        "properties": {
+          "allowed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default": {
+            "type": "string"
+          },
+          "help": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "positional": {
+            "type": "boolean"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "takes_value": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "help",
+          "type",
+          "required",
+          "positional",
+          "takes_value",
+          "allowed"
+        ],
+        "type": "object"
+      },
+      "Command": {
+        "properties": {
+          "arguments": {
+            "items": {
+              "$ref": "#/$defs/Argument"
+            },
+            "type": "array"
+          },
+          "example": {
+            "type": "string"
+          },
+          "exit_codes": {
+            "items": {
+              "$ref": "#/$defs/CommandExit"
+            },
+            "type": "array"
+          },
+          "input_schemas": {
+            "items": {
+              "$ref": "#/$defs/InputSchema"
+            },
+            "type": "array"
+          },
+          "long_running": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "needs_person": {
+            "type": "boolean"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "result_schema": {
+            "description": "Any JSON value."
+          },
+          "writes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "purpose",
+          "writes",
+          "long_running",
+          "needs_person",
+          "arguments",
+          "input_schemas",
+          "result_schema",
+          "exit_codes",
+          "example"
+        ],
+        "type": "object"
+      },
+      "CommandExit": {
+        "properties": {
+          "code": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "error_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "error_types"
+        ],
+        "type": "object"
+      },
+      "ExitCode": {
+        "properties": {
+          "code": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "meaning": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "meaning"
+        ],
+        "type": "object"
+      },
+      "InputSchema": {
+        "properties": {
+          "argument": {
+            "type": "string"
+          },
+          "schema_command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "argument",
+          "schema_command"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Every command of the CLI, its inputs, outputs and errors (ADR-0019). Generated from its types; do not edit.",
+    "properties": {
+      "commands": {
+        "items": {
+          "$ref": "#/$defs/Command"
+        },
+        "type": "array"
+      },
+      "error_schema": {
+        "description": "Any JSON value."
+      },
+      "exit_codes": {
+        "items": {
+          "$ref": "#/$defs/ExitCode"
+        },
+        "type": "array"
+      },
+      "format": {
+        "type": "string"
+      },
+      "package_version": {
+        "type": "string"
+      },
+      "schema": {
+        "description": "Any JSON value."
+      }
+    },
+    "required": [
+      "format",
+      "package_version",
+      "exit_codes",
+      "error_schema",
+      "schema",
+      "commands"
+    ],
+    "title": "taktsim-describe/1",
+    "type": "object"
+  }
+}
