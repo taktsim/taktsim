@@ -131,8 +131,11 @@ impl Decode for Priority {
     const EXAMPLE: &'static str = "1";
 
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
-        let number = u32::decode(node, cx)?;
-        let Ok(priority) = u8::try_from(number) else {
+        let Value::Int(number) = node.value() else {
+            cx.wrong_type::<Self>(node);
+            return None;
+        };
+        let Ok(priority) = u8::try_from(*number) else {
             cx.not_allowed(node, number.to_string(), Self::EXPECTED, Self::EXAMPLE);
             return None;
         };

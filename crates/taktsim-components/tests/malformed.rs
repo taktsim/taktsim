@@ -121,6 +121,34 @@ fn second_edge_from_a_component_is_rejected() {
 }
 
 #[test]
+fn a_priority_outside_its_range_is_told_its_own_range() {
+    for value in ["-1", "256", "4294967296", "1.5", "high", "[1]"] {
+        let yaml = document(
+            "1h",
+            &format!(
+                "  - {{id: source, type: Source, interarrival: 1min, priority: {value}}}\n  \
+                 - {{id: sink, type: Sink}}"
+            ),
+            "  - [source, sink]",
+        );
+        let errors = try_load(&yaml).unwrap_err();
+        assert_eq!(errors.len(), 1, "{errors}");
+        let kind = errors.first().kind();
+        assert_eq!(
+            errors.first().path().to_string(),
+            "components[0].priority",
+            "{errors}"
+        );
+        assert_eq!(
+            kind.allowed().as_deref(),
+            Some("a whole number from 0 to 255"),
+            "{value}"
+        );
+        assert_eq!(kind.example().as_deref(), Some("1"), "{value}");
+    }
+}
+
+#[test]
 fn a_default_variant_in_the_matrix_is_declared_by_a_source_without_variants() {
     let yaml = document(
         "1h",
