@@ -20,7 +20,7 @@ fn header_bytes() -> Vec<u8> {
     let header = Header::new::<Toy>(
         ModelHash::default(),
         SystemHash::default(),
-        1,
+        Some(1),
         vec!["a".into(), "b".into()],
     );
     let (bytes, _) = TraceWriter::<_, Toy>::new(Vec::new(), &header)
@@ -511,5 +511,41 @@ fn the_stated_end_of_a_run_is_checked() {
     ] {
         let e = read(stated).unwrap_err();
         assert!(e.to_string().starts_with(message), "{e}");
+    }
+}
+
+/// `header_bytes` with `has seed` and `seed` replaced, its CRC made correct.
+#[allow(clippy::unwrap_used)] // test helper
+fn with_seed_bytes(has_seed: u8, seed: u64) -> Vec<u8> {
+    let mut bytes = header_bytes();
+    // CRC 4, names 2 * (2 + 1), count 4, seed 8, has seed 1.
+    let at = bytes.len() - 4 - 6 - 4 - 8 - 1;
+    assert_eq!(bytes[at], 1);
+    bytes[at] = has_seed;
+    bytes[at + 1..at + 9].copy_from_slice(&seed.to_le_bytes());
+    let end = bytes.len() - 4;
+    let crc = crc32fast::hash(&bytes[..end]);
+    bytes[end..].copy_from_slice(&crc.to_le_bytes());
+    bytes
+}
+
+#[test]
+fn a_corrupt_seed_is_refused() {
+    // The form itself is fine.
+    let stated = with_seed_bytes(1, 7);
+    let ok = TraceReader::<_, Toy>::new(stated.as_slice()).unwrap();
+    assert_eq!(ok.header().seed, Some(7));
+    let absent = with_seed_bytes(0, 0);
+    let none = TraceReader::<_, Toy>::new(absent.as_slice()).unwrap();
+    assert_eq!(none.header().seed, None);
+    for (has, seed, what) in [
+        (0, 7, "seed of a trace that states none"),
+        (2, 0, "has seed"),
+    ] {
+        let e = TraceReader::<_, Toy>::new(with_seed_bytes(has, seed).as_slice()).unwrap_err();
+        assert!(
+            matches!(&e, ReadError::Invalid { what: w, .. } if *w == what),
+            "{e}"
+        );
     }
 }

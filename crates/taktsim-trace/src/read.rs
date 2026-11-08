@@ -41,7 +41,7 @@ use crate::write::{RunEnd, Summary};
 /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
 /// # }
 ///
-/// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec!["source".into()]);
+/// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), Some(1), vec!["source".into()]);
 /// let mut writer = TraceWriter::new(Vec::new(), &header)?;
 /// let source = ComponentId::from_index(0);
 /// writer.record(&TraceRecord::<Tick>::ItemCreated { time: "1s".parse()?, item: ItemId::from_raw(0), by: source });
@@ -127,7 +127,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
                 message_format: String::new(),
                 model_hash: ModelHash::default(),
                 system_hash: SystemHash::default(),
-                seed: 0,
+                seed: None,
                 components: Vec::new(),
             },
             chunk: Vec::new(),
@@ -173,9 +173,9 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::sha256(b"m"), SystemHash::default(), 42, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::sha256(b"m"), SystemHash::default(), Some(42), vec![]);
     /// let (bytes, _) = TraceWriter::<_, Tick>::new(Vec::new(), &header)?.finish()?;
-    /// assert_eq!(TraceReader::<_, Tick>::new(bytes.as_slice())?.header().seed, 42);
+    /// assert_eq!(TraceReader::<_, Tick>::new(bytes.as_slice())?.header().seed, Some(42));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[must_use]
@@ -196,7 +196,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), Some(1), vec![]);
     /// let (bytes, written) = TraceWriter::<_, Tick>::new(Vec::new(), &header)?.finish()?;
     /// let mut reader = TraceReader::<_, Tick>::new(bytes.as_slice())?;
     /// assert_eq!(reader.summary(), None);
@@ -232,7 +232,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), Some(1), vec![]);
     /// let (bytes, _) = TraceWriter::<_, Tick>::new(Vec::new(), &header)?.finish()?;
     /// // Cut off the end marker.
     /// let cut = &bytes[..bytes.len() - 10];
@@ -497,6 +497,8 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         let message_format = self.header_text(&mut bytes)?;
         let model_hash = self.header_bytes::<32>(&mut bytes)?;
         let system_hash = self.header_bytes::<32>(&mut bytes)?;
+        let seed_at = bytes.len() as u64;
+        let has_seed = self.header_bytes::<1>(&mut bytes)?[0];
         let seed = u64::from_le_bytes(self.header_bytes::<8>(&mut bytes)?);
         let count = u32::from_le_bytes(self.header_bytes::<4>(&mut bytes)?);
         // Not `with_capacity(count)`: the count is not checked yet.
@@ -528,7 +530,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
             message_format: text(message_format, "message format")?,
             model_hash: ModelHash::from_bytes(model_hash),
             system_hash: SystemHash::from_bytes(system_hash),
-            seed,
+            seed: stated_seed(has_seed, seed, seed_at)?,
             components: components
                 .into_iter()
                 .map(|range| text(range, "component id"))
@@ -614,6 +616,27 @@ pub(crate) const fn outcome_code(outcome: RunOutcome) -> u8 {
         RunOutcome::Idle => 1,
         RunOutcome::EventLimit => 2,
         RunOutcome::Cancelled => 3,
+    }
+}
+
+/// The header's statement of the seed, checked: `has seed` is 0 or 1, and 0
+/// goes with a seed of 0, so one run has one form.
+fn stated_seed(has_seed: u8, seed: u64, at: u64) -> Result<Option<u64>, ReadError> {
+    match has_seed {
+        0 if seed == 0 => Ok(None),
+        0 => Err(ReadError::Invalid {
+            offset: at,
+            what: "seed of a trace that states none",
+            found: seed.to_string(),
+            allowed: "0".to_owned(),
+        }),
+        1 => Ok(Some(seed)),
+        other => Err(ReadError::Invalid {
+            offset: at,
+            what: "has seed",
+            found: other.to_string(),
+            allowed: "0 or 1".to_owned(),
+        }),
     }
 }
 

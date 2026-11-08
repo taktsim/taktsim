@@ -539,7 +539,7 @@ impl<D: Domain> Registry<D> {
     ///     Format::Yaml,
     /// )?;
     /// let prepared = registry.prepare(&model, RunOptions::new())?;
-    /// assert_eq!(prepared.header().seed, 42);
+    /// assert_eq!(prepared.header().seed, Some(42));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn prepare<'a>(
@@ -825,7 +825,7 @@ impl<D: Domain> Prepared<'_, D> {
     ///     Format::Yaml,
     /// )?;
     /// let prepared = registry.prepare(&model, RunOptions::new().seed(9))?;
-    /// assert_eq!(prepared.header().seed, 9);
+    /// assert_eq!(prepared.header().seed, Some(9));
     /// assert_eq!(prepared.header().components, ["source", "sink"]);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
