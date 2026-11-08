@@ -17,8 +17,8 @@ accepted ADR, so the whole needs the owner's answer:
    runs that leave it undefined", ADR-0019 item 9, and how principle 4 is read.
 2. The trace header's seed can be absent: file format 3 (§7). Amends ADR-0021's
    table and ADR-0004's "the header carries … seed".
-3. The run id also covers the engine name and the two record formats (§6).
-   Amends spec §5 and ADR-0019 item 5.
+3. The run id also covers the engine name, the two record formats and the domain
+   package's name and version (§6). Amends spec §5 and ADR-0019 item 5.
 4. An error of exit code 2 or 7 has no "one valid example" (§9). Amends ADR-0019
    item 3 and spec §5.
 5. The run store moves from `taktsim-cli` to a new library crate (§1). Amends
@@ -77,7 +77,9 @@ pub enum FailureClass { Invalid, RunFailed, Io }   // exit 1, 2, 7
 command, because the roadmap lists replay as a test, not a command. Beside
 replaying, it checks the stored model against the header's model and system
 hashes, which replay itself does not (ADR-0021 checks version, seed and
-components).
+components), and the running package's version against `provenance`. A run with no
+seed is replayed under a different internal seed, so a false claim of drawing
+nothing diverges (§5).
 
 ## 2. Parser and how result types get a schema
 
@@ -117,13 +119,14 @@ cross-target gate compares traces.
 
 ```json
 {
+  "complete": true,
   "experiment_id": "exp-1f…",
   "format": "taktsim-result/1",
   "metrics": [
     {
       "name": "delivered(sink)",
       "over": { "from": "0s", "to": "8h" },
-      "unit": "parts",
+      "unit": "items",
       "values": [
         {
           "accuracy": [
@@ -139,12 +142,15 @@ cross-target gate compares traces.
     "engine": "taktsim-core",
     "engine_version": "0.1.0",
     "model_hash": "56d6…",
+    "package": "taktsim-components",
+    "package_version": "0.1.0",
     "platform": "x86_64-linux",
     "seeds": [42],
     "system_hash": "18c3…"
   },
   "runs": [
     {
+      "complete": true,
       "end_time": "8h",
       "events": 9585,
       "records": 11200,
@@ -175,14 +181,41 @@ Every number above is illustrative, none a measurement.
 | `format` | `taktsim-result/1`. A new major number only for a breaking change. |
 | `metrics[].name`, `unit` | Open strings. `unit` is required: ADR-0014 §6's one declared unit per KPI. |
 | `metrics[].over` | `{from, to}` for a window, `{at}` for a reading at one time, as duration strings. M9's warm-up is a `from` above `0s`. |
-| `metrics[].values` | A list, each with its own accuracy. One entry for a scalar. `state_shares` and a lead-time distribution (M8) are several entries, told apart by an optional `label`. `value` is a number or a boolean, since ADR-0015 lets an observable be declared yes or no; M7 writes numbers only. |
-| `runs` | At least one. `seed` absent if the run has none. `trace` absent if none was kept (§8). |
+| `metrics[].observable` | Optional: the declared text this metric answers, such as `state_shares(cut, weld)`. Several metrics may carry the same text. M7 writes none. |
+| `metrics[].values` | A list, each with its own accuracy. One entry for a scalar. `state_shares` and a lead-time distribution (M8) are several entries, told apart by an optional `labels` mapping, such as `{resource: cut, state: busy}`, so no reader splits a string. `value` is a number or a boolean, since ADR-0015 lets an observable be declared yes or no; M7 writes numbers only and no `labels`. |
+| `runs` | At least one. `seed` absent if the run has none. `run_id` and `trace` absent if the run was not kept (§8). |
+| `experiment_id` | Present exactly when every entry of `runs` has a `run_id` (§8). |
+| `complete`, `runs[].complete` | Required booleans, and **the only field a reader uses to decide.** `true`: the run, or the experiment, finished what was asked. `false`: it was cut short, the numbers hold only for the stated `over`, and they must not be compared with a complete result. |
 | `provenance.seeds` | The seeds used, empty allowed (§5). |
-| `stop_reason`, `runs[].stop_reason` | Open set. M7 writes `horizon`, `idle`, `event_limit`, `cancelled`, core's `RunOutcome`. **Reader rule:** only `horizon` and `idle` mean the run reached its end; any other value, known or not, means the numbers hold only for the stated `over` and must not be compared with a complete run. At the top it is the experiment's reason; M8 adds `precision_reached` and `budget_exhausted` there. |
-| `unreported` | What the model declares in `observe` or `experiment.precision` that this result does not hold, with an open `reason`. Required, empty allowed, so a missing KPI is stated in the result, where an agent reads it, not only on stderr. |
+| `stop_reason`, `runs[].stop_reason` | Open set, explanation only: it says why, and `complete` says what follows. At the top it is the experiment's reason. M8 adds `precision_reached` (with `complete: true`) and `budget_exhausted` (with `complete: false`) there, and a later clean ending adds its own word without a format change. |
+| `unreported` | What the model declares in `observe` or `experiment.precision` that this result does not hold, with an open `reason`. Required, empty allowed, so a missing KPI is stated in the result, where an agent reads it, not only on stderr. **Each declared observable is either the `observable` of some metric or in `unreported`,** so a reader can check that it got what it asked for. |
 
 Nested `provenance` follows spec §7 Layer 3, and `compare` (M11) can refuse a result
 without it. **Reader rule for the whole document:** ignore unknown keys.
+
+**How a run ends.** Core's `RunOutcome::Idle` says only that no events are left, and the
+clock then jumps to the horizon. Whether that is fine depends on what is still in the
+system, so `taktsim-run` reads it together with the item counts:
+
+| Core's outcome | Items alive | `stop_reason` | `complete` | Exit |
+| --- | --- | --- | --- | --- |
+| `Horizon` | any | `horizon` | `true` | 0 |
+| `Idle` | 0 | `drained` | `true` | 0 |
+| `Idle` | above 0 | no result: error `run.stalled` | | 2 |
+| `EventLimit` | any | `event_limit` | `false` | 3 |
+| `Cancelled` | any | `cancelled` | `false` | 4 (not from M7's CLI, §9) |
+
+`idle` is not a word of the result, because in the glossary it is a machine state that
+means no demand. The trace's end marker keeps core's word (§7).
+
+A stall is a failure in M7, not a finding. In the standard catalog a Source's interval, a
+cycle or a repair is always pending, and ADR-0022's no-deadlock argument rules out
+everything waiting, so items left with no event mean a lost wake-up or a broken type added
+with `Registry::with`. The error gives the time of the last event, `items_alive` and
+`recent`, read from the temporary trace, and nothing is stored, so the wrong numbers can
+never be reused. v0.2 brings stalls that belong to the model, such as an Assembly waiting
+on an empty Store. Whether those become a result with `complete: false` and `stop_reason:
+stalled` is for the ADR of those components; the word is reserved for it.
 
 **The horizon and `observe`.** `run --horizon` goes through `Model::with_horizon`
 before hashing, as ADR-0022 §2 says, so the stored model, its hash and the header
@@ -196,17 +229,28 @@ nothing.
 KPIs are M8's. M7 reports only what the trace states directly, read back from the
 stored file by one fold over core's records:
 
-| Metric | From | `over` |
-| --- | --- | --- |
-| `created(<id>)`, each component with `Ports::Outlet` | `ItemCreated` by it | `0s` to the end |
-| `delivered(<id>)`, each component with `Ports::Inlet` | `ItemDisposed` delivered by it | `0s` to the end |
-| `items_alive` | created minus disposed | `{at: end}` |
+| Metric | From | Listed for | `over` |
+| --- | --- | --- | --- |
+| `created(<id>)` | `ItemCreated` by it | any component that created one; always one with `Ports::Outlet` | `0s` to the end |
+| `delivered(<id>)` | `ItemDisposed` by it, `Disposal::Delivered` | any component that delivered one; always one with `Ports::Inlet` | `0s` to the end |
+| `scrapped(<id>)`, `consumed(<id>)` | `ItemDisposed` by it, the other two `Disposal`s | any component with one (none in M7's catalog) | `0s` to the end |
+| `items_alive` | created minus disposed | once | `{at: end}` |
+
+The fold is keyed on each record's `by` and matches `Disposal` exhaustively. `Ports` only
+decides which zero rows are shown, so `delivered(sink) = 0` is stated, not missing; it
+never decides who may create. A type with `Ports::Both` or `Ports::None` that creates items
+is counted like any other.
+
+The unit is `items`: these are the engine's items, in any domain. A part is one item, and
+a lot of a continuous material is one item (spec §4), so the word stays true for `kg` or
+`l`. A quantity in a material's own unit is a KPI, whose unit the model declares (M8 and
+v0.2), so the domain supplies nothing here.
 
 `items_alive` is deliberately not called WIP: it includes parts a blocked Source
 holds, which ADR-0022 §7 keeps out of WIP. The names do not collide with
 `throughput`, `lead_time`, `wip` or `state_shares`, so M8 adds metrics without
-changing these. The totals must equal the engine's `ItemCounts`; a difference is
-exit 2.
+changing these. Each of the four sums must equal its counter in the engine's `ItemCounts`;
+a difference is exit 2.
 
 ## 4. Accuracy
 
@@ -231,7 +275,8 @@ without changing a reader of `relative`.
 
 **A1.** M7's reasons: `single_replication` for a run with a seed, and
 `no_random_draws` for a model that draws nothing, where the number is exact for
-that model and says nothing about how well the model fits reality.
+that model and says nothing about how well the model fits reality. The claim behind
+`no_random_draws` is checked before the result is stored (§5).
 
 Principle 4 holds in this reading: the value carries a statement, and the statement
 is that there is no error bound. No number looks better than it is.
@@ -251,19 +296,36 @@ to replicate over, and M8 must keep it so.
    `--seed 42`. Never entropy and never an unstated default.
 
 **How the library knows.** A new `ComponentType::draws_random(&self) -> bool`,
-default `true`, so an unknown type must declare otherwise, and `Domain::draws_random(document)`,
-default `false`, for what a domain draws outside its components (M6's routing).
-`Registry::draws_random(&document)` is the union. `Source` is true with a
-non-constant `interarrival` or two or more variants; `Machine` with any non-constant
-time; `Buffer` and `Sink` never. `Distribution::Constant` draws nothing
-(`taktsim-core`'s `sample` returns before touching the stream). Taking a stream is
-not drawing. The test `no_draw_claim_is_true` runs each model that claims it with
-two engine seeds and compares stream hashes.
+default `true`, so an unknown type must declare otherwise, and a required
+`Domain::draws_random(document) -> bool` with no default, for what a domain draws
+outside its components' parameters (M6's `split`). `Registry::draws_random(&document)`
+is the union. `Source` is true with a non-constant `interarrival` or two or more
+variants; `Machine` with any non-constant time; `Buffer` and `Sink` never.
+`Distribution::Constant` draws nothing (`taktsim-core`'s `sample` returns before
+touching the stream). Taking a stream is not drawing.
+
+A false claim would be labelled exact while being one sample path, so it has three
+guards, and the first two are not enough alone:
+
+| Guard | What it catches | When |
+| --- | --- | --- |
+| Each `draws_random` destructures its parameters, and nested ones (`Setup`, its changes), without `..` | a new key nobody answered for: it does not compile | build |
+| `no_draw_claim_holds_on_generated_models`: a property test over generated models of the standard catalog, each that claims to draw nothing run under two seeds | a wrong answer in an implementation | CI |
+| **The check run:** a run that claims to draw nothing and reached its end is replayed, before it is stored, against an engine with a different internal seed | anything else, including a type added with `Registry::with` | every such run |
+
+A difference in the check run is exit 2, type `run.no_draw_claim_false`, and nothing is
+stored. `no_draw_claim_is_true` stays as the check on the reference models. The check run
+costs at most one more run of that model, once, because the result is then reused; a model
+that draws pays nothing. It needs no change to core and adds nothing to the path of a draw.
+It is a check, not a proof: a very rare draw may not show under one other seed in a short
+run, which is why the property test is there too. It asks what matters: whether the
+trace depends on the seed.
 
 `Registry::prepare` keeps ADR-0022's order, and `no_seed_is_an_error` stays as it
 is. A new `RunOptions::no_seed()` asks for a run without a seed: `prepare` refuses
 it for a model that draws, otherwise builds the engine with an internal seed of 0
-that no stream uses, and writes a header with no seed.
+and writes a header with no seed. `RunOptions::no_seed_check()` is the same with an
+internal seed of 1, for the check run and `replay_stored`.
 
 **`--seed` against a stated `model.seed`.**
 
@@ -287,7 +349,8 @@ most 2^53 − 1, as `model.seed` does (ADR-0020), so the run id has a canonical 
 ```text
 run_id        = <engine> "-" hex(SHA-256(JCS({
                   "engine", "engine_version", "message_format",
-                  "model_hash", "record_format", "run_id_format": 1,
+                  "model_hash", "package", "package_version",
+                  "record_format", "run_id_format": 1,
                   "seed": <integer or null> })))
 experiment_id = "exp-" hex(SHA-256(JCS({
                   "experiment_id_format": 1, "runs": [sorted run ids] })))
@@ -305,6 +368,21 @@ move with a format while the workspace is at `0.0.0`. The experiment id is over 
 run ids, so members may differ in more than the seed. It adds no field when a later
 experiment's members differ in something else.
 
+**The package.** The behaviour of a run comes from the domain package as much as from
+the engine, and the message format moves only when the encoding does. So a package that
+fixes its failure logic must get a new id, or the store returns the old numbers. A new
+`Domain::PACKAGE` and `Domain::PACKAGE_VERSION`, required with no default, give the name
+and the crate's `env!("CARGO_PKG_VERSION")`; `Flow` gives `taktsim-components` and the
+workspace version. Both go into the id and `provenance`. The test
+`message_format_names_the_package` pins that the name before `/` in `Flow`'s message
+format is its package.
+
+They do not go into the trace header. A bare trace is still checked record by record on
+replay, so a changed package shows as a divergence; `replay_stored` names the cause from
+`provenance`. A later header field costs a format version, not every store. What
+ADR-0022 says of a type added with `Registry::with` stays true: it is named by neither,
+and `--no-reuse` is how to check it.
+
 The id is opaque: compare it whole and do not parse it. Windows' path limit allows
 it: `runs/<id>/trace.takt` is 93 characters below the store.
 
@@ -314,7 +392,7 @@ it: `runs/<id>/trace.takt` is 93 characters below the store.
 | --- | --- | --- | --- |
 | A run with no seed says what is true | no: seeds 0 and 7 would look like two runs | yes | yes |
 | Pattern already in the format | | events' `has item`, the end marker's `has end` | |
-| Replay of a run with no seed | must invent a seed | no seed check; records still compared | |
+| Replay of a run with no seed | must invent a seed | no seed check; records still compared, under another internal seed (§5) | |
 | Cost after v0.1 | | a format version | |
 
 **H2,** before the format is public. `Header.seed` becomes `Option<u64>`; `FORMAT_VERSION`
@@ -328,8 +406,9 @@ Pinned file hashes change, stream hashes do not, since the header is not in the
 stream. No snapshot changes: each shows `seed: <n>` as before.
 
 **The end marker.** ADR-0022 §9's `has end`, `end time` and `outcome` cover what the
-result needs: `over.to` and `end_time` from the time, `stop_reason` from the outcome.
-Reading them back gives the same words. `run` always writes through `run_traced`, so
+result needs: `over.to` and `end_time` from the time, `stop_reason` and `complete` from the
+outcome and the item counts (§3). The marker keeps core's words; only the result maps
+them. `run` always writes through `run_traced`, so
 a stored trace always states its end. `outcome` is core's vocabulary, under the record
 format: another engine's words come with its own record format and reader. `events`
 in the marker counts records of kind 1 under that same format (one sentence for
@@ -355,13 +434,22 @@ directory, else `.taktsim/` here, `--store` overrides. Layout below it:
   into `runs/`. If the target appeared meanwhile, another process did the same run,
   and the temporary one is dropped. No half-written run is ever visible.
 - **Reuse.** If `runs/<id>/result.json` exists and reads, `run` returns it without
-  running (ADR-0019 item 5). `--no-reuse` runs anyway and compares the stream hash
-  with the stored one, never overwriting: a difference is exit 2 and means the engine
-  changed or determinism broke. This also matters while the version stays `0.0.0`.
-- **Partial runs are not kept.** A run stopped by a limit has `stop_reason:
-  event_limit` and no `trace`, because the run id does not cover the limit and a
-  later full run must not find it. The partial result is still printed (exit 3).
-- A failed run (exit 2) is not kept either; its error has the last events.
+  running (ADR-0019 item 5). With `--max-events` too: nothing runs, so no limit is
+  reached, and it is exit 0. `--no-reuse` runs anyway and, if the new run reached its
+  end, compares the stream hash with the stored one, never overwriting: a difference is
+  exit 2 and means the engine changed or determinism broke. This also matters while the
+  version stays `0.0.0`. A `--no-reuse` run stopped by a limit compares nothing, since a
+  shorter stream says nothing about the engine, and is exit 3.
+- **Partial runs are not kept and have no id.** The run id does not cover the limit, and
+  an id must name one document that later commands can find (spec §5, ADR-0019 item 5). So
+  a run stopped by a limit has `complete: false`, `stop_reason: event_limit`, and no
+  `run_id` and no `trace`, and its document has no `experiment_id`. It is still printed
+  (exit 3), and `provenance` and `runs[].seed` say what it was. **`runs[].run_id` is present
+  exactly when that run reached its end and is in the store; `experiment_id` exactly when
+  every run has a `run_id`.** So M8's `budget_exhausted`, 14 finished runs out of 20, has an
+  experiment id over those 14 and `complete: false` at the top.
+- A failed run (exit 2) is not kept either; its error has the last events. That includes a
+  stall (§3) and a false claim of drawing nothing (§5).
 - `trace.path` is relative to the store and uses `/` on every target. The stored
   document holds no absolute path, so a `progress` line on stderr states where the
   store is and whether the run was reused. A `store.json` with an unknown
@@ -384,7 +472,7 @@ The exit codes are ADR-0019's. Which appear in M7:
 | --- | --- |
 | 0 | success |
 | 1 | a bad flag or value, a model that fails to load, `run.no_seed`, a zero horizon. `validate` on an invalid model |
-| 2 | invariant or conservation violation, engine error, `--no-reuse` mismatch |
+| 2 | invariant or conservation violation, engine error, `--no-reuse` mismatch, `run.stalled` (§3), `run.no_draw_claim_false` (§5) |
 | 3 | `--max-events` reached, with the partial result on stdout |
 | 7 | the model file, an included file or the store cannot be read or written (`LoadErrorKind::is_io`) |
 | 101 | the invariant-violation path of ADR-0007; a panic hook writes it as one JSON line first when `--format json` was asked for |
@@ -474,7 +562,8 @@ compares the `reference_<stem>` snapshot, which also feeds `TAKTSIM_TRACE_HASHES
 `ci/trace-hashes.sh`; runs `replay_stored`; and checks `no_draw_claim_is_true`, where it
 applies. A new file with no committed snapshot fails, so it joins with a snapshot and no
 code. `branch_merge.yaml`, `rework_loop.yaml` and `pool.yaml` wait for M6, listed for
-the lead session in the pull request.
+the lead session in the pull request. `no_draw_claim_holds_on_generated_models` (§5) sits
+beside it, because a directory of chosen models says little about keys they do not use.
 
 Tests of the CLI, in `crates/taktsim-cli/tests/`, through the real binary: snapshots of
 stdout, stderr and the exit code, with platform and temporary paths masked; the examples
@@ -496,10 +585,16 @@ stores with byte-identical `result.json` and `trace.takt`.
   on `taktsim-run`.
 - M8 fills `sampling`, adds metrics, empties `unreported`, widens `--seed`, adds the signal
   handler and `experiments/`. Nothing here changes for that.
-- M6 must extend `Domain::draws_random` for its `route`, `priority` and `due_in` draws. If it
-  does not, a model that draws only for routing would be run as if it drew nothing.
-  `no_draw_claim_is_true` catches it only for models that are in the directory, so the lead
-  session has this on its list.
+- M6 must answer for its draws in the right place (ADR-0023 §6, §7, §11). `Source::draws_random`:
+  `due_in` when not constant, and `priority_mix`. `Machine::draws_random`: `cycle_time_by_variant`
+  with any non-constant entry, drawn from the `cycle_time` stream. `Flow`'s `Domain::draws_random`:
+  a `split` on any edge, on the `route` stream. `when` and the `choose` rules draw nothing. The
+  first two fail to compile until answered, since the parameters are destructured; `split` does
+  not, so the generator of `no_draw_claim_holds_on_generated_models` must add it, and until then
+  the check run (§5) refuses such a model instead of storing it. The lead session has this on its
+  list.
+- `Domain` gains three required items in M5's API (`PACKAGE`, `PACKAGE_VERSION`, `draws_random`),
+  so M6's branch needs them when the two merge.
 - A model that declares `experiment.precision` runs once in M7, with the KPI under
   `unreported`. From M8 it needs a budget (ADR-0019 item 4). Both ship in v0.1, so no
   released behaviour changes.
@@ -515,15 +610,16 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | Commands and flags | every script and agent | semver major (ADR-0019) | `describe_is_fresh`, `walkthrough_uses_only_describe`, CLI snapshots |
 | Exit code use per command | every caller's error handling | semver major | `documented_exit_codes`, `malformed_models_exit_1_with_a_path` |
 | Error line (`kind`, `type`, `path`, `found`, `allowed`, `example`; none for exit 2 and 7) | every agent's error handling | semver major | `error_lines_match_their_schema`, CLI snapshots |
-| Result document: fields and `taktsim-result/1` | M8, M11, M12, every reader | a new format; every stored result | `result_round_trips`, `emitted_results_match_the_schema`, `unknown_keys_are_ignored`, CLI snapshots |
+| Result document: fields and `taktsim-result/1`, including `labels` and `observable` | M8, M11, M12, every reader | a new format; every stored result | `result_round_trips`, `emitted_results_match_the_schema`, `unknown_keys_are_ignored`, `labels_and_observable_round_trip`, `declared_observable_is_answered_or_unreported`, CLI snapshots |
 | Accuracy: required list, tags, reader rule, `none` | what every number claims | a new format | `every_value_has_accuracy`, `unknown_kind_reads_as_no_statement`, `single_run_states_no_interval`, `sampling_wraps_the_interval` |
-| `stop_reason` as an open set, and its reader rule | every reader of partial results | a new format | `unknown_stop_reason_reads_as_incomplete`, `event_limit_is_partial_and_exits_3` |
-| Metric names `created`, `delivered`, `items_alive` | scripts reading M7's result | a deprecation | `metrics_equal_item_counts`, CLI snapshots |
-| Run id and experiment id definition | every stored run, every later reference | all stores go stale | `run_id_is_pinned`, `horizon_changes_the_run_id`, `run_id_names_the_engine`, `experiment_id_is_over_sorted_runs` |
-| Store layout, `store_format`, reuse rule | every store, `trace query`, `compare` | a store migration | `store_layout_is_pinned`, `second_run_is_reused`, `no_reuse_detects_a_different_trace`, `partial_run_is_not_kept`, `model_json_hashes_to_the_model_hash`, `unknown_store_format_is_refused` |
+| `complete` as the reader's only test, `stop_reason` as an open explanation | every reader of partial results | a new format | `complete_decides_and_stop_reason_only_explains`, `event_limit_is_partial_and_exits_3` |
+| A stall is exit 2 in M7; `drained` for an empty system; `stalled` reserved | every reader's idea of a finished run; v0.2's stalls | an exit code's use (semver major) | `stall_is_exit_2_and_not_kept`, `drained_is_complete` |
+| Metric names `created`, `delivered`, `scrapped`, `consumed`, `items_alive`, unit `items` | scripts reading M7's result | a deprecation | `metrics_equal_item_counts`, `any_component_may_create_items`, CLI snapshots |
+| Run id and experiment id definition, ids only on stored runs | every stored run, every later reference | all stores go stale | `run_id_is_pinned`, `horizon_changes_the_run_id`, `run_id_names_the_engine`, `package_version_changes_the_run_id`, `experiment_id_is_over_sorted_runs`, `partial_document_has_no_ids` |
+| Store layout, `store_format`, reuse rule | every store, `trace query`, `compare` | a store migration | `store_layout_is_pinned`, `second_run_is_reused`, `no_reuse_detects_a_different_trace`, `truncated_no_reuse_exits_3_without_comparing`, `partial_run_is_not_kept`, `model_json_hashes_to_the_model_hash`, `unknown_store_format_is_refused` |
 | Trace header: `has seed`, file format 3 | every trace reader | a format version | `header_bytes_are_pinned`, `absent_seed_round_trips`, `run_without_seed_replays`, the unchanged stream hashes in the snapshots |
-| Seed rules: no-draw models have none, K2, refusal | which runs count as the same; replication counts | different ids and refusals | `no_seed_refused_when_the_model_draws`, `draws_nothing_runs_with_empty_seeds`, `seed_option_is_recorded_over_model_seed`, `no_draw_claim_is_true` |
-| `ComponentType::draws_random`, `Domain::draws_random`, `RunOptions::no_seed`, `ENGINE_NAME` | every later package; core's public API | every package | `no_draw_claim_is_true`, doc tests, `record_format_names_the_engine` |
+| Seed rules: no-draw models have none, K2, refusal | which runs count as the same; replication counts | different ids and refusals | `no_seed_refused_when_the_model_draws`, `draws_nothing_runs_with_empty_seeds`, `seed_option_is_recorded_over_model_seed`, `no_draw_claim_is_true`, `no_draw_claim_holds_on_generated_models`, `false_no_draw_claim_exits_2_and_is_not_kept` |
+| `ComponentType::draws_random`, `Domain::draws_random`, `Domain::PACKAGE`, `Domain::PACKAGE_VERSION`, `RunOptions::no_seed`, `RunOptions::no_seed_check`, `ENGINE_NAME` | every later package; core's public API | every package | `no_draw_claim_is_true`, doc tests, `record_format_names_the_engine`, `message_format_names_the_package` |
 | `taktsim-run` API and direction | M12, every later client | every client | doc tests, `ci/check-crates.sh`, `cargo deny check` |
 | No serde in the shipped binary | bill of materials | adding is easy; removing is not | `cargo deny check`, `Cargo.lock` review |
 
@@ -541,6 +637,7 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | 8 | Today's binary exits 2 on a bad argument, and `unknown_arguments_fail_with_usage_on_stderr` pins it; ADR-0019's code is 1 | `crates/taktsim-cli/tests/cli.rs` | that test pins the placeholder, so it is replaced by stricter ones that assert exit 1, an empty stdout and a typed error; the commit says why |
 | 9 | Roadmap M7 lists branch/merge, rework and pool models, which need M6 | roadmap M7, M6 | they join from the directory after M6 (§11) |
 | 10 | CLAUDE.md: a milestone does not start while an ADR it depends on is proposed | ADR-0022 | the owner's instruction this time; M7 merges after M5 |
+| 11 | "A registry with a type from outside is not named by the header or the run id" still holds for `Registry::with`, but a whole `Domain` is now named by the run id | ADR-0022 §11 | a note there when M7 merges (§6) |
 
 ## Questions for the owner
 
@@ -564,7 +661,14 @@ merges.
    *Recommended:* yes.
 9. **`--no-reuse` (§8).** Rerun and compare, never overwrite? *Recommended:* yes. Without it a
    store can hide an engine change while the version stays `0.0.0`.
-10. **Partial runs not kept (§8).** *Recommended:* yes. Keeping them needs the limit in the id,
-    which can be added later.
+10. **Partial runs not kept, and without an id (§8).** *Recommended:* yes. Keeping them needs the
+    limit in the id, which can be added later.
 11. **`validate` on an invalid model prints the report on stdout and the errors on stderr
     (§9).** *Recommended:* yes.
+12. **A stall in M7 (§3).** Items left with no event is exit 2, with nothing stored? *Recommended:*
+    yes, since the standard catalog cannot reach it unless something is broken. The alternative is
+    a stored result with `complete: false`, which is what v0.2's own stalls may need; its ADR decides.
+13. **The check run (§5).** A model that claims to draw nothing runs twice the first time?
+    *Recommended:* yes. "Exact" is a strong word, and a declaration alone should not earn it.
+14. **The domain package in the run id (§6).** *Recommended:* yes. It costs two constants now and
+    every store later.
