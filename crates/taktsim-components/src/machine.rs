@@ -1036,7 +1036,8 @@ impl Component<FlowMessage> for MachineBehaviour {
                     detail: format!("{taken} places taken, capacity {}", self.capacity),
                 });
             }
-            if taken < self.capacity && self.inlet.has_waiting() {
+            if taken < self.capacity && self.inlet.has_waiting() && !self.inlet.waits_for_a_reply()
+            {
                 return Err(Violation {
                     invariant: "unless down, a free place and a waiting offer never coexist",
                     detail: format!("{taken} places taken, capacity {}", self.capacity),

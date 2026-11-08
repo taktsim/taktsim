@@ -689,6 +689,7 @@ after v0.1 ships.
 | 14 | §9 corrects the chosen entry "to the unit that came", on the grounds that a Buffer's `Accept` may give a better one. It may also give a worse one: the unit described left for another target at that instant, a new description is on its way, and the `Accept` answers the old one. The record would then not recompute | §6, §9 here | a holder answers `Decline` when the unit an `Accept` answers has gone. An `Accept` carries no number, so the holder takes it to answer the oldest description of this instant it has not yet counted as answered. Each is answered once, so an instant ends, and §5's argument covers it: a `Decline` answers an offer sent before its part left | no |
 | 15 | §13's table lists `takes_rule` as what a dispatching rule needs, but a station ranks what its upstreams describe, and a type that does not state `routes` sends a bare `Offer` | §13 here | a station with a rule also needs upstreams that state `routes`, an error at load naming type, fact and rule. Relaxing it later breaks no model | no |
 | 16 | §10's table lists `Status`, `OfferOf` and the two decisions as messages with their fields; in Rust they are boxed, and `FlowMessage` keeps its size, so a model without rules moves no larger message (`a_model_without_rules_moves_no_larger_message_than_it_did`). The bytes in a trace are as the table says | §10 here | keep; no reader sees it | no |
+| 17 | §6 has a Buffer rank by `follows` when `Accept` arrives, and `follows` is the newest reserved place. With two places free in one event, the first `Accept` lands after a `Status` already naming the second pick, so the Buffer gives a unit that ranks worse than what the station passed over | §6, §9 here | `minimum_setup` takes one place at a time, the next when this one's reply has landed at this instant. No other rule reads `follows`, and throughput does not change, since a reservation ends within its instant. The invariant on free places and waiting offers makes that one exception | no |
 
 ## Consequences
 
@@ -760,6 +761,9 @@ request merges.
 13. **A station told of a unit that has gone (disagreement 14).** The holder answers `Decline`, and
     the station picks again, so a record always recomputes. The alternative keeps the part moving
     and lets a record list a chosen unit that ranks after another. *Recommended:* `Decline`.
-14. **A rule needs upstreams that describe (disagreement 15).** A station with a rule rejects a
+14. **One place at a time under `minimum_setup` (disagreement 17).** A station with this rule takes
+    one place at a time at an instant, so that what its upstream ranks by is the unit each `Accept`
+    follows? *Recommended:* yes; it costs one more event per place taken at one instant.
+15. **A rule needs upstreams that describe (disagreement 15).** A station with a rule rejects a
     feeder whose type does not state `routes`, at load? *Recommended:* yes; relaxing later breaks
     nothing.
