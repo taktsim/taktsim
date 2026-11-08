@@ -102,5 +102,5 @@ pub use hash::{ModelHash, ParseHashError, SYSTEM_SECTIONS, SystemHash};
 pub use include::{DirResolver, Included, Resolver};
 pub use json::{Encode, Json};
 pub use load::{Loader, Model, decode_str, parse};
-pub use schema::model_schema;
+pub use schema::{model_schema, record_schema};
 pub use syntax::{Entry, Format, MAX_NESTING, Node, Value};
