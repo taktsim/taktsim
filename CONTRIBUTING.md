@@ -48,7 +48,7 @@ CI runs these gates; all must be green:
 | test | unit, property, golden-trace and doc tests on Windows x86-64, Linux x86-64 and ARM64, macOS ARM64 |
 | trace hashes | every golden-trace case has the same stream and file SHA-256 on all four targets (ADR-0021) |
 | msrv | the workspace builds with the minimum supported Rust version |
-| schemas | the JSON Schemas under `schemas/` are what the Rust types generate (regenerate with `cargo run -p taktsim-components --example schemas -- schemas` and commit them with the types) |
+| schemas | the JSON Schemas under `schemas/` are what the Rust types generate (regenerate with `cargo run -p taktsim-components --example schemas -- schemas` and `cargo run -p taktsim-cli -- describe > schemas/cli/describe.json`, and commit them with the types) |
 | coverage | ≥ 90 % lines overall, 100 % branches in `taktsim-core` |
 | python | pytest, ruff, pyright strict (warnings fail) on Python 3.13, 3.14, 3.15 |
 | docs | rustdoc without warnings; a code example on every public item; `compile_fail` examples fail with the stated error code |

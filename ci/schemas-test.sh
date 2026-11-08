@@ -55,6 +55,27 @@ dir=$(copy empty)
 rm -rf "${dir:?}/model"
 expect "a missing directory fails" 1 "$dir"
 
+dir=$(copy cli-changed)
+file=$dir/cli/describe.json
+sed -i.bak 's/"format": "taktsim-describe/"format": "stale-describe/' "$file" && rm -f "$file.bak"
+if cmp -s "$file" schemas/cli/describe.json; then
+  echo "FAIL setup: the edit did not change $file"
+  failures=$((failures + 1))
+fi
+expect "a changed CLI description fails" 1 "$dir"
+
+dir=$(copy cli-extra)
+echo '{}' >"$dir/cli/old.json"
+expect "an extra file beside the CLI description fails" 1 "$dir"
+
+dir=$(copy cli-missing)
+rm -f "$dir/cli/describe.json"
+expect "a missing CLI description fails" 1 "$dir"
+
+dir=$(copy cli-empty)
+rm -rf "${dir:?}/cli"
+expect "a missing CLI directory fails" 1 "$dir"
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures case(s) failed" >&2
   exit 1
