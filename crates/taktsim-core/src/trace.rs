@@ -1,7 +1,7 @@
 //! Trace records: what happened in a run, in order (ADR-0004).
 //!
 //! The engine emits a record for every delivered event, every item created
-//! or disposed of, and every note a component writes. It writes them to a [`TraceSink`] the caller
+//! or disposed of, and every note and decision a component writes. It writes them to a [`TraceSink`] the caller
 //! provides; the core itself does no I/O. Storage and replay live in
 //! `taktsim-trace` (ADR-0004, ADR-0021).
 
@@ -73,6 +73,18 @@ pub enum TraceRecord<'a, M> {
         /// The simulation time.
         time: SimTime,
         /// The component that wrote it.
+        by: ComponentId,
+        /// The message.
+        message: &'a M,
+    },
+    /// `by` wrote down a control decision: a rule and what it chose from
+    /// (spec §4, ADR-0023 §9). Shaped like a note, and apart from notes so that a
+    /// reader framing records finds decisions without decoding a message. The
+    /// engine never looks inside.
+    Decision {
+        /// The simulation time.
+        time: SimTime,
+        /// The component that decided.
         by: ComponentId,
         /// The message.
         message: &'a M,

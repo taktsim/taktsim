@@ -3,7 +3,7 @@ source: crates/taktsim-components/tests/golden.rs
 expression: golden.snapshot()
 ---
 case: m5_same_instant_chain
-records: taktsim-core/2
+records: taktsim-core/3
 messages: taktsim-components/1
 model hash: 54bb6a040236813c125e97a1c3304e3b2ab422e485725757f95569aaaaae24b9
 system hash: 99d78176375e0868682ca1ee3855f0f3933fee27d8bbd7bb3a18b30a8b0d8054

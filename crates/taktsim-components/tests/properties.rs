@@ -335,7 +335,7 @@ fn check_trace(shape: &Shape, r: &support::Run) -> Result<(), TestCaseError> {
                     books.down.contains(machine)
                 );
             }
-            Record::Note { .. } => {}
+            Record::Note { .. } | Record::Decision { .. } => {}
         }
     }
     if let Some(last) = now {

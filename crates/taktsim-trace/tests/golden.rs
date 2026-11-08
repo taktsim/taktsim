@@ -114,21 +114,21 @@ fn hashes_are_pinned_for_this_layout() {
             "1h",
             b"toy single server: source 1min, station 45s, sink",
             "208cda594606f9c0962eaf11b248a4aeb5b50ae09093fba036f434c93c01adad",
-            "6cebd0cbed04f1669ba67d6e576db29db3830ac4c77684de0984893e52ebc9f3",
+            "473ba532f50b6602ea71fa4d1cba83481b8d0dfaa7020fbf6fb51aff9cf10a07",
         ),
         (
             || support::tandem(7),
             "4h",
             b"toy tandem: source 1min, cut 40s mtbf 20min mttr 3min, weld 50s scrap 1/7, sink",
             "744ef2b5754faccc360ca0bef9f3300a49163501a3fd7d3db34cc92ddd46d4f9",
-            "3499cdf7ceda553f34f85007b43e01b8766d83b676f4c248093ab152b757c25d",
+            "fb5c2cc331fda926e55770447f442ec2e41e69ee8097fd5928ead8aaa45be69a",
         ),
         (
             || support::line(2026, 20),
             "8h",
             b"toy line: source 1min, 20 stations 40s, sink",
             "1e4383e4188daeeb3fc7ca8f44a34b45c348c52d621f0039a40742399bd251f3",
-            "35ca1c08705ff169dda00231d5d394cea7a83fe4a41d47cd2cfed9121aca8d28",
+            "39f474a6afe6df3d77249d0f9c19bef1e5f77b0cd2ab907f68ce074b2c56440d",
         ),
     ];
     for (build, until, model, stream, file) in cases {

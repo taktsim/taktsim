@@ -15,6 +15,7 @@
 //! | item created | 2 | item u64, by u32 |
 //! | item disposed | 3 | item u64, by u32, how u8 (0 delivered, 1 scrapped, 2 consumed) |
 //! | note | 4 | by u32, message |
+//! | decision | 5 | by u32, message |
 
 use std::fmt;
 
@@ -27,6 +28,7 @@ pub(crate) const EVENT: u8 = 1;
 pub(crate) const ITEM_CREATED: u8 = 2;
 pub(crate) const ITEM_DISPOSED: u8 = 3;
 pub(crate) const NOTE: u8 = 4;
+pub(crate) const DECISION: u8 = 5;
 
 /// The prefix every record starts with: kind u8, length u16, time u64.
 pub(crate) const PREFIX: usize = 1 + 2 + 8;
@@ -93,6 +95,15 @@ pub enum Record<M> {
         /// The message.
         message: M,
     },
+    /// `by` wrote down a control decision.
+    Decision {
+        /// The simulation time.
+        time: SimTime,
+        /// The component that decided.
+        by: ComponentId,
+        /// The message.
+        message: M,
+    },
 }
 
 impl<M> Record<M> {
@@ -146,6 +157,11 @@ impl<M> Record<M> {
                 by: *by,
                 message,
             },
+            Self::Decision { time, by, message } => TraceRecord::Decision {
+                time: *time,
+                by: *by,
+                message,
+            },
         }
     }
 
@@ -167,7 +183,8 @@ impl<M> Record<M> {
             Self::Event { time, .. }
             | Self::ItemCreated { time, .. }
             | Self::ItemDisposed { time, .. }
-            | Self::Note { time, .. } => *time,
+            | Self::Note { time, .. }
+            | Self::Decision { time, .. } => *time,
         }
     }
 
@@ -265,6 +282,9 @@ impl<M: fmt::Debug> fmt::Display for Line<'_, '_, M> {
             TraceRecord::Note { time, by, message } => {
                 write!(f, "{time} note by {} {message:?}", name(by))
             }
+            TraceRecord::Decision { time, by, message } => {
+                write!(f, "{time} decision by {} {message:?}", name(by))
+            }
         }
     }
 }
@@ -296,6 +316,7 @@ pub(crate) fn encode<M: TraceMessage>(
         TraceRecord::ItemCreated { time, .. } => (ITEM_CREATED, *time),
         TraceRecord::ItemDisposed { time, .. } => (ITEM_DISPOSED, *time),
         TraceRecord::Note { time, .. } => (NOTE, *time),
+        TraceRecord::Decision { time, .. } => (DECISION, *time),
     };
     encoder.u8(kind);
     // The length, filled in below.
@@ -330,7 +351,7 @@ pub(crate) fn encode<M: TraceMessage>(
                 Disposal::Consumed => 2,
             });
         }
-        TraceRecord::Note { by, message, .. } => {
+        TraceRecord::Note { by, message, .. } | TraceRecord::Decision { by, message, .. } => {
             encoder.component(*by);
             message.encode(&mut encoder);
         }
@@ -389,11 +410,11 @@ pub(crate) fn decode<M: TraceMessage>(
 ) -> Result<Record<M>, DecodeError> {
     let mut input = Decoder::new(bytes);
     let kind = input.u8()?;
-    if !matches!(kind, EVENT | ITEM_CREATED | ITEM_DISPOSED | NOTE) {
+    if !matches!(kind, EVENT | ITEM_CREATED | ITEM_DISPOSED | NOTE | DECISION) {
         return Err(input.invalid(
             "record kind",
             kind.into(),
-            format_args!("1, 2, 3 or 4 ({})", crate::RECORD_FORMAT),
+            format_args!("1 to 5 ({})", crate::RECORD_FORMAT),
         ));
     }
     // The length framed the record already ([`frame`]); the decoder's
@@ -451,8 +472,13 @@ pub(crate) fn decode<M: TraceMessage>(
             let message = crate::codec::decode_message(input.slice(bytes.len() - input.offset())?)?;
             Record::Note { time, by, message }
         }
+        DECISION => {
+            let by = component(&mut input, components)?;
+            let message = crate::codec::decode_message(input.slice(bytes.len() - input.offset())?)?;
+            Record::Decision { time, by, message }
+        }
         // Refused above.
-        _ => return Err(input.invalid("record kind", kind.into(), "1, 2, 3 or 4")),
+        _ => return Err(input.invalid("record kind", kind.into(), "1 to 5")),
     };
     input.finish()?;
     Ok(record)
