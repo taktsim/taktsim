@@ -453,6 +453,8 @@ struct Routed {
     rules: Vec<u8>,
     /// With a loop: the share in percent that goes round.
     rework: Option<u32>,
+    /// Constant times, so many things happen at one instant.
+    ties: bool,
     seed: u64,
 }
 
@@ -464,10 +466,11 @@ fn routed() -> impl Strategy<Value = Routed> {
         proptest::collection::vec(0_u8..6, 16),
         proptest::collection::vec(0_u8..8, 16),
         prop_oneof![Just(None), (5_u32..80).prop_map(Some)],
+        any::<bool>(),
         any::<u64>(),
     )
         .prop_map(
-            |(on_demand, interval, mut layers, kinds, rules, rework, seed)| {
+            |(on_demand, interval, mut layers, kinds, rules, rework, ties, seed)| {
                 if rework.is_some() {
                     // New parts enter a loop only at its return target, a machine.
                     let first = Node::Machine {
@@ -485,6 +488,7 @@ fn routed() -> impl Strategy<Value = Routed> {
                     kinds,
                     rules,
                     rework,
+                    ties,
                     seed,
                 }
             },
@@ -577,7 +581,7 @@ fn write_edges(
 fn component_line(
     name: &str,
     node: &Node,
-    rule: u8,
+    (rule, ties): (u8, bool),
     model: &mut RoutedModel,
     control: &mut Vec<String>,
 ) -> String {
@@ -588,10 +592,12 @@ fn component_line(
             failing,
             variant_setup,
         } => {
-            let failures = if *failing {
-                ", mtbf: {dist: exponential, mean: 200s}, mttr: {dist: exponential, mean: 20s}"
-            } else {
-                ""
+            let failures = match (*failing, ties) {
+                (false, _) => "",
+                (true, false) => {
+                    ", mtbf: {dist: exponential, mean: 200s}, mttr: {dist: exponential, mean: 20s}"
+                }
+                (true, true) => ", mtbf: 60s, mttr: 20s",
             };
             let setup = if *variant_setup {
                 ", setup: {per_variant: 5s, matrix: [{from: red, to: blue, time: 0s}]}"
@@ -611,10 +617,22 @@ fn component_line(
             if !word.is_empty() {
                 control.push(format!("{name}: {word}"));
             }
+            let times = if ties {
+                // Multiples of a few seconds, so stations finish together.
+                format!(
+                    "cycle_time: {}s, cycle_time_by_variant: {{red: {}s}}",
+                    2 * (cycle % 5 + 1),
+                    2 * (cycle % 3 + 1)
+                )
+            } else {
+                format!(
+                    "cycle_time: {{dist: exponential, mean: {cycle}s}}, \
+                     cycle_time_by_variant: {{red: {{dist: uniform, min: 1s, max: {}s}}}}",
+                    cycle + 1
+                )
+            };
             format!(
-                "  - {{id: {name}, type: Machine, cycle_time: {{dist: exponential, mean: {cycle}s}}, \
-                 cycle_time_by_variant: {{red: {{dist: uniform, min: 1s, max: {}s}}}}, capacity: {capacity} parts{failures}{setup}}}\n",
-                cycle + 1
+                "  - {{id: {name}, type: Machine, {times}, capacity: {capacity} parts{failures}{setup}}}\n"
             )
         }
         Node::Buffer {
@@ -704,24 +722,43 @@ fn routed_model(shape: &Routed) -> RoutedModel {
     let source = if shape.on_demand {
         "{id: source, type: Source, variants: {red: 70%, blue: 30%}}".to_owned()
     } else {
+        let interarrival = if shape.ties {
+            format!("{}s", 2 * (shape.interval % 5 + 1))
+        } else {
+            format!("{{dist: exponential, mean: {}s}}", shape.interval)
+        };
         format!(
-            "{{id: source, type: Source, interarrival: {{dist: exponential, mean: {}s}}, batch: 2 parts, \
+            "{{id: source, type: Source, interarrival: {interarrival}, batch: 2 parts, \
              variants: {{red: 70%, blue: 30%}}, due_in: {{dist: uniform, min: 1min, max: 1h}}, \
-             priority_mix: [{{priority: 3, share: 40%}}, {{priority: 1, share: 60%}}]}}",
-            shape.interval
+             priority_mix: [{{priority: 3, share: 40%}}, {{priority: 1, share: 60%}}]}}"
         )
     };
     let _ = writeln!(components, "  - {source}");
-    components
-        .push_str("  - {id: other, type: Source, interarrival: 17s, variants: {red: 100%}}\n");
-    components
-        .push_str("  - {id: guard, type: Machine, cycle_time: {dist: exponential, mean: 5s}}\n");
+    let (other, guard) = if shape.ties {
+        ("8s", "4s".to_owned())
+    } else {
+        ("17s", "{dist: exponential, mean: 5s}".to_owned())
+    };
+    let _ = writeln!(
+        components,
+        "  - {{id: other, type: Source, interarrival: {other}, variants: {{red: 100%}}}}"
+    );
+    let _ = writeln!(
+        components,
+        "  - {{id: guard, type: Machine, cycle_time: {guard}}}"
+    );
     for (l, layer) in shape.layers.iter().enumerate() {
         let mut layer_names = Vec::new();
         for (i, node) in layer.iter().enumerate() {
             let name = format!("n{l}-{i}");
             let rule = rules.next().unwrap_or(0);
-            components.push_str(&component_line(&name, node, rule, &mut model, &mut control));
+            components.push_str(&component_line(
+                &name,
+                node,
+                (rule, shape.ties),
+                &mut model,
+                &mut control,
+            ));
             layer_names.push(name);
         }
         names.push(layer_names);

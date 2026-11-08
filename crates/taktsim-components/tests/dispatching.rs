@@ -537,3 +537,45 @@ fn an_on_demand_source_with_a_rule_downstream_offers_what_it_drew() {
     assert_eq!(came[..], said[..came.len()]);
     assert!(came.contains(&3) && came.contains(&1), "{came:?}");
 }
+
+/// Two stations with rules behind one Buffer, free at one instant: the second was told
+/// of the unit the first takes.
+#[test]
+fn a_station_told_of_a_unit_that_has_gone_picks_again() {
+    let text = format!(
+        "{}control:\n  dispatch: {{t1: fifo, t2: fifo}}\n",
+        document(
+            "60s",
+            "  - {id: source, type: Source, interarrival: 1s, batch: 2 parts}\n  \
+             - {id: buf, type: Buffer, capacity: 30 parts}\n  \
+             - {id: t1, type: Machine, cycle_time: 10s}\n  \
+             - {id: t2, type: Machine, cycle_time: 10s}\n  - {id: sink, type: Sink}",
+            "  - [source, buf]\n  - {from: buf, to: [t1, t2]}\n  - {from: [t1, t2], to: sink}",
+        )
+    );
+    let model = support::load(&text);
+    let registry = support::registry();
+    // A run that cannot end an instant would go on for ever: a limit tells it apart.
+    let prepared = registry
+        .prepare(
+            &model,
+            taktsim_components::RunOptions::new()
+                .seed(1)
+                .max_events(100_000),
+        )
+        .unwrap();
+    let (bytes, report) = prepared.run_traced(Vec::new()).unwrap();
+    assert_eq!(report.summary.outcome, taktsim_core::RunOutcome::Horizon);
+    let r = support::read(bytes, report);
+    // Both take a unit at each instant they free, and neither takes the same.
+    let times = |name: &str| -> Vec<_> { r.arrivals(name).iter().map(|e| e.time).collect() };
+    assert_eq!(times("t1")[..3], [t("1s"), t("11s"), t("21s")]);
+    assert_eq!(times("t2")[..3], [t("1s"), t("11s"), t("21s")]);
+    // The stale answer was declined, and the pick after it went on record.
+    assert!(
+        r.events()
+            .iter()
+            .any(|e| e.from == "buf" && matches!(e.message, FlowMessage::Decline))
+    );
+    support::check_records(&r);
+}

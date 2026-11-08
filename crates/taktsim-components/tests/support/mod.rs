@@ -71,8 +71,9 @@ pub fn run(yaml: &str, seed: u64) -> Run {
 
 pub fn run_model(model: &Model, seed: u64) -> Run {
     let registry = registry();
+    // A limit no test comes near, so an instant that never ends fails the test.
     let (bytes, report) = registry
-        .prepare(model, RunOptions::new().seed(seed))
+        .prepare(model, RunOptions::new().seed(seed).max_events(20_000_000))
         .unwrap()
         .run_traced(Vec::new())
         .unwrap();
