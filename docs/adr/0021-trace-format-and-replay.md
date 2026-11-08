@@ -1,6 +1,6 @@
 # ADR-0021: Trace format, message encoding and replay
 
-- Status: proposed (accepted when the M3 pull request is merged)
+- Status: accepted (2026-11-05, by the owner, by merging the M3 pull request #21)
 - Date: 2026-10-26
 - Blocks: M3; used by M5 and M7 (golden traces of reference models), M11
   (CSV export), v0.2 (`trace query`, Arrow reader)

@@ -226,10 +226,10 @@ schemas/  committed JSON Schemas, one per format version
 
 ## Status
 
-M0, M1 and M2 (engine core, without the queue benchmark) done; the four
-parallel tracks are merged: statistics (M8/M9 part), expressions (M6
-part), benchmarks and the regression gate, CSV adapter (M11 part).
-ADR-0001 to ADR-0019 accepted. `main` is protected: PRs only, rebase
-merge, all CI jobs except mutants and benchmarks required.
+M0 to M4 done; the four parallel tracks are merged: statistics (M8/M9
+part), expressions (M6 part), benchmarks and the regression gate, CSV
+adapter (M11 part). ADR-0001 to ADR-0021 accepted. `main` is protected: PRs
+only, rebase merge, all CI jobs except mutants, benchmarks, schema freshness
+and trace hashes required.
 
 What to do next, and what waits for the owner: roadmap, "Next steps".

@@ -1,6 +1,7 @@
 # ADR-0020: Model loader: parsing, decoding, component entries, canonical hashing and schema
 
-- Status: proposed (accepted when the M4 pull requests are merged);
+- Status: accepted (2026-11-05, by the owner, by merging the M4 pull requests
+  #23, 2026-11-04, and #24, 2026-11-05);
   section 8's SHA-256 source amended by ADR-0021 (owner, 2026-11-05:
   `sha2` stays, `taktsim_core::digest` is withdrawn)
 - Date: 2026-10-26

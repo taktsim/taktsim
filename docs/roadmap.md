@@ -6,8 +6,9 @@ benchmark report. Milestones are ordered: each builds only on the ones
 before it, and each ends with green CI on every tier-1 platform
 (ADR-0010: Windows x86-64, Linux x86-64 and ARM64, macOS ARM64).
 
-Status: ADR-0001 to ADR-0010 accepted 2026-10-25. A milestone does not
-start while an ADR it depends on is proposed.
+Status: ADR-0001 to ADR-0021 accepted, the latest on 2026-11-05; each ADR's
+status line has its date. A milestone does not start while an ADR it depends
+on is proposed.
 
 ## v0.1 Engine
 
@@ -82,7 +83,7 @@ two instants, cannot be combined; error messages name the allowed units.
 
 ### M2 — Engine core (`taktsim-core`)
 
-Delivered in two pull requests:
+Delivered in three pull requests:
 
 - **M2a, randomness** (done, PR #3; ADR-0013 accepted): Philox4x64-10 streams keyed by component and purpose, the
   ADR-0003 duration distributions, `libm` for all transcendental math
@@ -91,9 +92,12 @@ Delivered in two pull requests:
 - **M2b, the engine** (done, PR #5; ADR-0018 accepted): event queue, clock, run
   loop with horizon, event and cancellation limits, items and
   conservation, the component trait and context, invariant checks, error
-  reports with the last 32 events, trace records. The queue benchmark that
-  finalises ADR-0001 is still open (see "Next steps"); the regression
-  gate itself is track C.
+  reports with the last 32 events, trace records. The regression gate
+  itself is track C.
+- **Queue benchmark** (done, PR #19): synthetic workloads in
+  `taktsim-bench`, with numbers from the CI runner in ADR-0001. They do not
+  finish ADR-0001's validation plan: the queue structure stays provisional
+  (ADR-0001, "M2 measurements").
 
 - Event queue per ADR-0001, with deterministic tie-breaking and
   cancellation (needed for failures that interrupt a cycle).
@@ -107,8 +111,7 @@ Delivered in two pull requests:
   event; violation aborts with the event trace that led to it.
 - Trace events emitted through a sink trait; core does no I/O.
 - Event-queue benchmark on synthetic workloads; ADR-0001 updated with
-  numbers. Still open; the benchmark infrastructure it needs (track C) is
-  merged.
+  numbers. Done (PR #19).
 
 **Proves:** A6 reached (100 % branch coverage in core). **Tests:** unit
 tests per primitive; proptest: queue pops in non-decreasing time with
@@ -136,21 +139,16 @@ M8, M9, M6 and M11 still finish after M2b and the milestones they depend
 on: the engine-facing parts (KPIs over traces, routing with conditions,
 result and trace export) come with them.
 
-### Next steps (2026-10-26)
+### Next steps (2026-11-08)
 
-In this order; each is its own pull request:
+M0 to M4 are done. In this order:
 
-1. **Expression follow-ups (ADR-0015, answers 4 and 6):** allow `==` on
-   counts; make list elements `unary` so `[-1]` parses. Update the tests
-   and ADR-0015's operator table.
-2. **Accepted-regressions file for the benchmark gate (ADR-0016,
-   answer 1):** a committed list (benchmark, new limit, reason) read by
-   `ci/bench-compare.sh`, with tests in `ci/bench-test.sh`. It loosens a
-   gate: its own PR, `gate-change` label.
-3. **Queue benchmark (M2):** synthetic workloads in `taktsim-bench`;
-   update ADR-0001 with numbers from the CI runner (decides whether
-   generation numbers replace the cancelled set, ADR-0018 deviation 3).
-4. **M3**, trace format and replay.
+1. **M5**, components: Source, Machine, Buffer, Sink.
+2. **M6**, routing and control. Its expression language is merged (track B,
+   with follow-ups in PR #18).
+3. **M7**, CLI `validate` and `run`, first end-to-end runs.
+4. **M8 onward**, in the order below, to the v0.1 release (M13). Parts of
+   M8, M9 and M11 are merged (tracks A and D).
 
 ADR-0019 (CLI as the agent interface, no MCP server; issue #14) is
 accepted; M7 builds the first part of its contract.
@@ -161,6 +159,8 @@ check in the `main` ruleset; reserving the names on crates.io and PyPI;
 trademark search; legal entity; adding `taktsim render` (Mermaid) to M7.
 
 ### M3 — Trace format and replay
+
+Status: done (PR #21, 2026-11-05). Format and replay: ADR-0021.
 
 - Trace writer and reader per ADR-0004 in a new `taktsim-trace` crate,
   streaming to disk (never fully in memory).
@@ -176,6 +176,9 @@ snapshot; the cross-platform hash job fails if one target differs.
 **Depends on:** ADR-0004.
 
 ### M4 — Model format and loader (`taktsim-model`)
+
+Status: done (PRs #23, 2026-11-04, and #24, 2026-11-05; fixes in #36,
+2026-11-05). Loader and schema: ADR-0020.
 
 - Model document types: header (`format: "1.0"`, ADR-0008), `model`, `experiment`,
   `components`, `flow` (chain shorthand plus edge list with branch, merge
