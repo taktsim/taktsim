@@ -807,7 +807,10 @@ as Rust code") and §11 (contributors merge through the proposal template), and
 question 15 asks whether it is enough. The determinism promise (same model, seed,
 engine version) covers `standard()` and in-tree types, whose versions move with the
 workspace. A registry with a type from outside is not named by the header or the
-run id, and `Registry::with`'s documentation says so.
+run id, and `Registry::with`'s documentation says so. (Note from ADR-0024 §6, proposed: a run
+id also names the whole `Domain`, by its package name and version. A type added
+with `Registry::with` is still named by neither, and `--no-reuse` is how to check
+it.)
 
 **R2.** It is still "registered at compile time" (spec §4). One `with::<T>()`
 fills both the catalog and the builder, so a type cannot be readable but not
