@@ -35,6 +35,8 @@ measurements.
 | [0017](0017-csv-adapter-and-observation-table.md) | CSV adapter and the observation table | accepted | M11 |
 | [0018](0018-engine-architecture.md) | Engine architecture | accepted | M2b |
 | [0019](0019-cli-agent-interface.md) | The CLI is the agent interface; no MCP server | accepted | M7, v0.2 |
+| [0020](0020-model-loader.md) | Model loader: parsing, decoding, component entries, canonical hashing and schema | accepted | M4 |
+| [0021](0021-trace-format-and-replay.md) | Trace format, message encoding and replay | accepted | M3 |
 
 Open decisions from spec §15 that do **not** block v0.1, to be written
 before the tier that needs them: async boundary (v0.2), viewer rendering
