@@ -19,7 +19,7 @@ use taktsim_units::SimDuration;
 use crate::component::{Catalog, Component, Findings};
 use crate::decode::{Decode, Decoder, Fields, Schemas};
 use crate::document::{
-    Document, Edge, MainFile, Observable, Parts, Precision, RawExpr, read_main, read_parts,
+    Control, Document, Edge, MainFile, Observable, Parts, Precision, RawExpr, read_main, read_parts,
 };
 use crate::error::{
     FieldPath, LoadError, LoadErrorKind, LoadErrors, Location, Place, Segment, suggest,
@@ -30,6 +30,10 @@ use crate::include::{DirResolver, Included, Resolver};
 use crate::jcs::canonicalize;
 use crate::json::Json;
 use crate::syntax::{self, Format, Node};
+
+/// The longest condition on an edge in bytes (ADR-0023 §1), so its note always
+/// fits a record.
+const MAX_CONDITION: usize = 4096;
 
 /// A model that loaded: its typed document, canonical form and hashes.
 ///
@@ -105,9 +109,9 @@ impl Model {
 
     /// The system hash: SHA-256 of the canonical JSON of only the
     /// [`SYSTEM_SECTIONS`](crate::SYSTEM_SECTIONS) (`format`, `components`,
-    /// `flow`). It identifies the system, and stays the same when the
-    /// model's name, seed, time unit, experiment or observables change
-    /// (ADR-0020 §8).
+    /// `flow`, and `control` if present). It identifies the system, and stays
+    /// the same when the model's name, seed, time unit, experiment or
+    /// observables change (ADR-0020 §8, ADR-0023 §2).
     ///
     /// ```
     /// fn same_system(a: &taktsim_model::Model, b: &taktsim_model::Model) -> bool {
@@ -205,7 +209,12 @@ impl Model {
             )
         })?;
         let canonical = canonical_text(&json)?;
-        let system = Json::object(SYSTEM_SECTIONS.map(|key| (key, json[key].clone())));
+        let system = Json::object(
+            SYSTEM_SECTIONS
+                .into_iter()
+                .filter(|key| json[*key] != Json::Null)
+                .map(|key| (key, json[key].clone())),
+        );
         let system_canonical = canonical_text(&system)?;
         Ok(Self {
             hash: ModelHash::of(canonical.as_bytes()),
@@ -504,6 +513,7 @@ impl Run<'_> {
         let MainFile {
             model,
             experiment,
+            control,
             parts: own,
             start,
             ..
@@ -512,14 +522,16 @@ impl Run<'_> {
         let main_place = Place::new(self.sources[0].name.clone(), start);
         let Merged {
             components,
-            flow,
+            mut flow,
             flow_places,
             observe,
         } = self.merge(parts, &main_place)?;
 
+        let control = control.unwrap_or_default();
         self.check_ids(&components);
-        self.check_references(&components, &flow);
+        self.check_references(&components, &flow, &control);
         self.check_flow(&flow, &flow_places);
+        self.parse_conditions(&mut flow);
         let env = self.environment(&components);
         let observe = self.observables(&observe, &env, Expected::Any);
         let (model, experiment) = (model?, experiment?);
@@ -545,6 +557,7 @@ impl Run<'_> {
             components,
             flow,
             observe,
+            control,
         };
         self.finish(document, included, &main_place)
     }
@@ -731,12 +744,13 @@ impl Run<'_> {
     }
 
     /// Every reference names a component.
-    fn check_references(&mut self, components: &[Component], flow: &[Edge]) {
+    fn check_references(&mut self, components: &[Component], flow: &[Edge], control: &Control) {
         let known: Vec<&str> = components.iter().map(Component::id).collect();
         let references = flow
             .iter()
             .flat_map(|e| e.from().iter().chain(e.to()))
-            .chain(components.iter().flat_map(Component::references));
+            .chain(components.iter().flat_map(Component::references))
+            .chain(control.dispatch().iter().map(|(station, _)| station));
         // A chain's inner ids belong to two edges: report each place once.
         let mut unknown: Vec<crate::component::ComponentRef> = Vec::new();
         for r in references {
@@ -757,9 +771,10 @@ impl Run<'_> {
         }
     }
 
-    /// No edge from a component to itself; each edge once.
+    /// No edge from a component to itself; each edge once, unless the earlier
+    /// one has a condition: first-match can use the pair again (ADR-0023 §1).
     fn check_flow(&mut self, flow: &[Edge], places: &[Vec<(Place, FieldPath)>]) {
-        let mut seen: BTreeMap<(&str, &str), Place> = BTreeMap::new();
+        let mut seen: BTreeMap<(&str, &str), (Place, bool)> = BTreeMap::new();
         for (edge, places) in flow.iter().zip(places) {
             for (i, to) in edge.to().iter().enumerate() {
                 // The place of each `to` reference follows the entry's.
@@ -773,7 +788,7 @@ impl Run<'_> {
                             id: to.id().to_owned(),
                         };
                         self.error(&place, path.clone(), kind);
-                    } else if let Some(first) = seen.get(&(from.id(), to.id())) {
+                    } else if let Some((first, false)) = seen.get(&(from.id(), to.id())) {
                         let kind = LoadErrorKind::DuplicateEdge {
                             from: from.id().to_owned(),
                             to: to.id().to_owned(),
@@ -781,8 +796,40 @@ impl Run<'_> {
                         };
                         self.error(&place, path.clone(), kind);
                     } else {
-                        seen.insert((from.id(), to.id()), place.clone());
+                        seen.insert((from.id(), to.id()), (place.clone(), edge.has_when()));
                     }
+                }
+            }
+        }
+    }
+
+    /// Parses each edge's condition, so its canonical text is its normalized form
+    /// (ADR-0023 §2). Its type is the domain's to check: the variant names come
+    /// from the document.
+    fn parse_conditions(&mut self, flow: &mut [Edge]) {
+        for edge in flow {
+            let Some((written, expr, place, path)) = edge.take_when() else {
+                continue;
+            };
+            if written.len() > MAX_CONDITION {
+                let kind = LoadErrorKind::NotAllowed {
+                    found: format!("a condition of {} bytes", written.len()),
+                    allowed: format!("at most {MAX_CONDITION} bytes"),
+                    example: "variant == 'premium'".to_owned(),
+                };
+                self.error(place, path.clone(), kind);
+                continue;
+            }
+            match parse_expr(written) {
+                Ok(parsed) => *expr = Some(parsed),
+                Err(error) => {
+                    let at = self.expression_location(place, written, error.span().start);
+                    let kind = LoadErrorKind::Expression {
+                        text: written.to_owned(),
+                        error,
+                    };
+                    let place = Place::new(place.file().map(str::to_owned), at);
+                    self.error(&place, path.clone(), kind);
                 }
             }
         }

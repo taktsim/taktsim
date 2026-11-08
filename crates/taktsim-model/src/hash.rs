@@ -64,16 +64,18 @@ impl fmt::Display for ModelHash {
 
 /// The sections of the normalized model that the system hash covers: what
 /// the system is. Everything else (`model`, `experiment`, `observe`) is
-/// what is asked of it, and only the model hash covers it.
+/// what is asked of it, and only the model hash covers it. A section that is
+/// absent is left out, so `control` moves no hash of a model without one
+/// (ADR-0023 §2).
 ///
 /// ```
-/// assert_eq!(taktsim_model::SYSTEM_SECTIONS, ["format", "components", "flow"]);
+/// assert_eq!(taktsim_model::SYSTEM_SECTIONS, ["format", "components", "flow", "control"]);
 /// ```
-pub const SYSTEM_SECTIONS: [&str; 3] = ["format", "components", "flow"];
+pub const SYSTEM_SECTIONS: [&str; 4] = ["format", "components", "flow", "control"];
 
 /// The SHA-256 of a model's system: the canonical JSON (RFC 8785) of the
 /// object holding only the [`SYSTEM_SECTIONS`] of the normalized model
-/// (ADR-0020 §8; owner's decision, 2026-11-04).
+/// (ADR-0020 §8; owner's decision, 2026-11-04; ADR-0023 §2).
 ///
 /// The model hash ([`ModelHash`]) answers "is this exactly the run I can
 /// redo?"; the system hash answers "is this the same system?". Changing the

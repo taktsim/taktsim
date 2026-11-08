@@ -25,7 +25,7 @@ use crate::error::{
 };
 use crate::expr::{ComponentId, Signature, TypeEnv};
 use crate::json::{Encode, Json};
-use crate::syntax::{Node, Value};
+use crate::syntax::{Entry, Node, Value};
 
 /// The keys of a component entry that belong to the entry itself, the
 /// envelope every domain shares, and not to its component type (owner's
@@ -126,6 +126,63 @@ impl ComponentRef {
     #[must_use]
     pub const fn path(&self) -> &FieldPath {
         &self.path
+    }
+}
+
+impl ComponentRef {
+    /// A reference written as the key of a mapping, at the path `cx` is at: for a
+    /// mapping from component to something, such as `split` or
+    /// `control.dispatch`. `None` if the key is not of the form of an id, with
+    /// the error recorded.
+    ///
+    /// ```
+    /// use taktsim_model::{ComponentRef, Decode, Decoder, Format, Json, Node, Schemas, Segment, Value, decode_str};
+    ///
+    /// /// A mapping from component to a count.
+    /// struct Counts(Vec<(ComponentRef, u32)>);
+    ///
+    /// impl Decode for Counts {
+    ///     const EXPECTED: &'static str = "a mapping from component to count";
+    ///     const EXAMPLE: &'static str = "{weld-1: 3}";
+    ///     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
+    ///         let Value::Map(entries) = node.value() else {
+    ///             cx.wrong_type::<Self>(node);
+    ///             return None;
+    ///         };
+    ///         let mut out = Vec::new();
+    ///         for entry in entries {
+    ///             cx.within(Segment::Key(entry.key().to_owned()), |cx| {
+    ///                 let id = ComponentRef::from_key(entry, cx)?;
+    ///                 out.push((id, u32::decode(entry.value(), cx)?));
+    ///                 Some(())
+    ///             })?;
+    ///         }
+    ///         Some(Self(out))
+    ///     }
+    ///     fn schema(_: &mut Schemas) -> Json {
+    ///         Json::object([("type", Json::from("object"))])
+    ///     }
+    /// }
+    ///
+    /// let counts: Counts = decode_str("{weld-1: 3}", Format::Yaml)?;
+    /// assert_eq!(counts.0[0].0.path().to_string(), "[\"weld-1\"]");
+    /// assert!(decode_str::<Counts>("{\"weld 1\": 3}", Format::Yaml).is_err());
+    /// # Ok::<(), taktsim_model::LoadErrors>(())
+    /// ```
+    pub fn from_key(entry: &Entry, cx: &mut Decoder) -> Option<Self> {
+        if ComponentId::new(entry.key()).is_none() {
+            let kind = LoadErrorKind::InvalidId {
+                what: "component id",
+                found: entry.key().to_owned(),
+            };
+            cx.error(entry.key_start(), kind);
+            return None;
+        }
+        Some(Self {
+            id: entry.key().to_owned(),
+            place: Place::new(cx.file().map(str::to_owned), entry.key_start()),
+            path: cx.path().clone(),
+        })
     }
 }
 
@@ -279,6 +336,50 @@ pub trait ComponentParams: Encode + fmt::Debug + Send + Sync + Sized + 'static {
     fn references(&self) -> Vec<&ComponentRef> {
         Vec::new()
     }
+}
+
+/// Which routing words a catalog honours (ADR-0023 §2). Where a flag is absent the
+/// loader reports the key as unknown at its path and the schema leaves it out, so
+/// a domain without routing cannot load a rule it ignores, and `control` cannot move
+/// a hash with no change in results. The default is none.
+///
+/// ```
+/// use taktsim_model::{Catalog, RoutingWords};
+///
+/// assert_eq!(Catalog::new().routing(), RoutingWords::NONE);
+/// let catalog = Catalog::new().with_routing(RoutingWords::ALL);
+/// assert!(catalog.routing().when && catalog.routing().dispatch);
+/// ```
+// Four words, each on or off by itself: the names are the point (ADR-0023 §2).
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RoutingWords {
+    /// `when` on an edge.
+    pub when: bool,
+    /// `choose` on an edge.
+    pub choose: bool,
+    /// `split` on an edge.
+    pub split: bool,
+    /// The `control` section with `dispatch`.
+    pub dispatch: bool,
+}
+
+impl RoutingWords {
+    /// None of the words.
+    pub const NONE: Self = Self {
+        when: false,
+        choose: false,
+        split: false,
+        dispatch: false,
+    };
+
+    /// All of the words.
+    pub const ALL: Self = Self {
+        when: true,
+        choose: true,
+        split: true,
+        dispatch: true,
+    };
 }
 
 /// A component type with its parameter type erased.
@@ -444,6 +545,8 @@ pub struct Catalog {
     env: TypeEnv,
     /// The check across the document, if the domain has one.
     check: Option<DocumentCheck>,
+    /// The routing words the domain honours.
+    routing: RoutingWords,
 }
 
 /// A check over a whole document that a catalog's domain supplies
@@ -540,6 +643,7 @@ impl fmt::Debug for Catalog {
             .field("types", &self.kinds.keys().collect::<Vec<_>>())
             .field("observables", &self.observables)
             .field("check", &self.check.is_some())
+            .field("routing", &self.routing)
             .finish_non_exhaustive()
     }
 }
@@ -696,6 +800,34 @@ impl Catalog {
     pub fn with_check(mut self, check: DocumentCheck) -> Self {
         self.check = Some(check);
         self
+    }
+
+    /// Honours these routing words: `when`, `choose` and `split` on an edge, and
+    /// `control.dispatch` (ADR-0023 §2). Setting them again replaces the earlier
+    /// ones.
+    ///
+    /// ```
+    /// use taktsim_model::{Catalog, Format, Loader, RoutingWords, model_schema};
+    ///
+    /// let words = RoutingWords { when: true, ..RoutingWords::NONE };
+    /// let schema = model_schema(&Catalog::new().with_routing(words));
+    /// assert!(schema["$defs"]["FlowEntry"].to_string().contains("\"when\""));
+    /// assert!(!schema["$defs"]["FlowEntry"].to_string().contains("\"choose\""));
+    /// ```
+    #[must_use]
+    pub const fn with_routing(mut self, words: RoutingWords) -> Self {
+        self.routing = words;
+        self
+    }
+
+    /// The routing words it honours.
+    ///
+    /// ```
+    /// assert!(!taktsim_model::Catalog::new().routing().split);
+    /// ```
+    #[must_use]
+    pub const fn routing(&self) -> RoutingWords {
+        self.routing
     }
 
     /// Runs the check of [`with_check`](Self::with_check), if there is one,

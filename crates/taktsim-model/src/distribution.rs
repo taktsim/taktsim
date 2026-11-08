@@ -136,6 +136,57 @@ impl Distribution {
         })
     }
 
+    /// The mean of what the sampler draws, rounded down to a nanosecond, ignoring
+    /// only the rounding of each draw (ADR-0023 §6). The declared `mean` for
+    /// `exponential`, `lognormal`, `gamma` and `erlang`; `min + max` over 2 or
+    /// `min + mode + max` over 3 in integers; `scale × Γ(1 + 1/shape)` for
+    /// `weibull`.
+    ///
+    /// For `normal` it is not the declared `mean`: the sampler rejects negative
+    /// draws (ADR-0013), so the drawn mean is `mean + sd × φ(z) / Φ(z)` with `z =
+    /// mean / sd`, and the declared `mean` if `sd` is 0. Every result is the same
+    /// on every platform: `exp`, `erfc` and `tgamma` come from `libm` (ADR-0013).
+    ///
+    /// `None` if the mean is beyond what a duration holds.
+    ///
+    /// ```
+    /// use taktsim_model::Distribution;
+    /// use taktsim_units::SimDuration;
+    ///
+    /// let d = Distribution::Uniform { min: "1s".parse()?, max: "2s".parse()? };
+    /// assert_eq!(d.mean(), Some("1.5s".parse()?));
+    /// // Truncated at zero, so its draws average more than its parameter.
+    /// let d = Distribution::Normal { mean: "10s".parse()?, sd: "20s".parse()? };
+    /// let mean = d.mean().ok_or("a mean")?.as_secs_f64();
+    /// assert!((mean - 20.18).abs() < 0.01, "{mean}");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub fn mean(&self) -> Option<SimDuration> {
+        match *self {
+            Self::Constant(mean)
+            | Self::Exponential { mean }
+            | Self::LogNormal { mean, .. }
+            | Self::Gamma { mean, .. }
+            | Self::Erlang { mean, .. } => Some(mean),
+            Self::Uniform { min, max } => exact_mean(&[min, max]),
+            Self::Triangular { min, mode, max } => exact_mean(&[min, mode, max]),
+            Self::Weibull { scale, shape } => {
+                nanos(float_nanos(scale) * libm::tgamma(1.0 + 1.0 / shape))
+            }
+            Self::Normal { mean, sd } => {
+                if sd == SimDuration::ZERO {
+                    return Some(mean);
+                }
+                let (m, s) = (float_nanos(mean), float_nanos(sd));
+                let z = m / s;
+                let density = libm::exp(-z * z / 2.0) / core::f64::consts::TAU.sqrt();
+                let below = libm::erfc(-z / core::f64::consts::SQRT_2) / 2.0;
+                nanos(m + s * density / below)
+            }
+        }
+    }
+
     /// The sampler for this distribution.
     ///
     /// # Errors
@@ -225,6 +276,34 @@ impl Encode for Distribution {
             }
         }
     }
+}
+
+/// The integer mean of `values`, rounded down.
+fn exact_mean(values: &[SimDuration]) -> Option<SimDuration> {
+    let total: u128 = values.iter().map(|d| u128::from(d.as_nanos())).sum();
+    let mean = total / u128::from(u32::try_from(values.len()).ok()?);
+    u64::try_from(mean).ok().map(SimDuration::from_nanos)
+}
+
+/// A duration in nanoseconds as a float, for the means that need one.
+fn float_nanos(duration: SimDuration) -> f64 {
+    // Rounds above 2^53 ns (104 days), as every float computation of a mean does.
+    #[allow(clippy::cast_precision_loss)]
+    let nanos = duration.as_nanos() as f64;
+    nanos
+}
+
+/// Nanoseconds as a duration, rounded down; `None` if a duration cannot hold them.
+fn nanos(value: f64) -> Option<SimDuration> {
+    // 2^64 as a float: every value below it fits a `u64`.
+    const LIMIT: f64 = 18_446_744_073_709_551_616.0;
+    if !value.is_finite() || !(0.0..LIMIT).contains(&value) {
+        return None;
+    }
+    // Checked above: finite, not negative and below 2^64.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let whole = value as u64;
+    Some(SimDuration::from_nanos(whole))
 }
 
 /// The `dist` value.

@@ -1,0 +1,24 @@
+# Every routing word of ADR-0023 at once: conditions, choice rules, a split and
+# `control.dispatch`. Valid for a catalog that offers the words, and rejected for
+# exactly those keys by one that does not.
+format: "1.0"
+model: {name: routed}
+experiment: {type: terminating, horizon: 8h}
+components:
+  - {id: source, type: Source, interarrival: {dist: exponential, mean: 40s}}
+  - {id: cut, type: Machine, cycle_time: 42s}
+  - {id: weld-1, type: Machine, cycle_time: 45s}
+  - {id: weld-2, type: Machine, cycle_time: 45s}
+  - {id: qc, type: Machine, cycle_time: 30s}
+  - {id: paint, type: Machine, cycle_time: 1min}
+  - {id: pack, type: Machine, cycle_time: 20s}
+  - {id: sink, type: Sink}
+flow:
+  - {from: source, to: cut}
+  - {from: cut, to: [weld-1, weld-2], choose: shortest_queue}
+  - {from: [weld-1, weld-2], to: qc}
+  - {from: qc, to: paint, when: "variant == 'premium'"}
+  - {from: qc, split: {pack: 95%, cut: 5%}}
+  - [paint, pack, sink]
+control:
+  dispatch: {weld-2: earliest_due_date, weld-1: minimum_setup}

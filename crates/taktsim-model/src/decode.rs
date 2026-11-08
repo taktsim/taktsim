@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 
 use taktsim_units::{Count, Rate, Ratio, SimDuration, UnitError};
 
+use crate::component::RoutingWords;
 use crate::error::{FieldPath, LoadError, LoadErrorKind, Location, MAX_INTEGER, Segment, suggest};
 use crate::json::Json;
 use crate::syntax::{Entry, Node, Value};
@@ -166,14 +167,21 @@ pub struct Schemas {
     defs: BTreeMap<String, Json>,
     observables: Vec<String>,
     components: Vec<Json>,
+    routing: RoutingWords,
 }
 
 impl Schemas {
-    pub(crate) fn new(observables: Vec<String>) -> Self {
+    pub(crate) fn new(observables: Vec<String>, routing: RoutingWords) -> Self {
         Self {
             observables,
+            routing,
             ..Self::default()
         }
+    }
+
+    /// The routing words the catalog honours.
+    pub(crate) const fn routing(&self) -> RoutingWords {
+        self.routing
     }
 
     /// The schema of `T`: a reference into `$defs` if `T` has a
