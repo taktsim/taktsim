@@ -12,7 +12,7 @@ use taktsim_units::{Count, Ratio};
 
 use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, SourceStateNote, VariantId};
-use crate::params::{Interarrival, Units, VARIANT_NAME_RULE, is_variant_name};
+use crate::params::{Interarrival, Units, VARIANT_NAME_RULE, draws, is_variant_name};
 use crate::port::Outlet;
 use crate::run::{BuildError, ComponentType, Ports, Wiring};
 use crate::state::SourceState;
@@ -271,6 +271,17 @@ impl ComponentParams for Source {
 
 impl ComponentType<Flow> for Source {
     const PORTS: Ports = Ports::Outlet;
+
+    fn draws_random(&self) -> bool {
+        let Self {
+            interarrival,
+            batch: _,
+            variants,
+            priority: _,
+        } = self;
+        interarrival.as_ref().is_some_and(draws)
+            || variants.as_ref().is_some_and(|mix| mix.0.len() >= 2)
+    }
 
     fn build(
         &self,
