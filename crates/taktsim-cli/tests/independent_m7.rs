@@ -1125,7 +1125,7 @@ fn broken_pipe() -> Stdio {
     Stdio::from(writer)
 }
 
-/// `describe` lists exit 7 for all four commands, with `store.write`: printing can fail. A consumer that
+/// `describe` lists exit 7 for all four commands, with `io.stdout`: printing can fail. A consumer that
 /// went away (`| head -1`) gets that, not a panic: exit 101 is reserved for a bug in the engine (§9).
 #[test]
 fn a_broken_stdout_is_exit_7() {

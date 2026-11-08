@@ -474,7 +474,7 @@ The exit codes are ADR-0019's. Which appear in M7:
 | 1 | a bad flag or value, a model that fails to load, `run.no_seed`, a zero horizon. `validate` on an invalid model |
 | 2 | invariant or conservation violation, engine error, `--no-reuse` mismatch, `run.stalled` (§3), `run.no_draw_claim_false` (§5) |
 | 3 | `--max-events` reached, with the partial result on stdout |
-| 7 | the model file, an included file or the store cannot be read or written (`LoadErrorKind::is_io`) |
+| 7 | the model file, an included file or the store cannot be read or written (`LoadErrorKind::is_io`), or stdout cannot be written (`io.stdout`) |
 | 101 | the invariant-violation path of ADR-0007; a panic hook writes it as one JSON line first when `--format json` was asked for |
 
 Codes 4, 5 and 6 are in the table of `describe` but on no M7 command. Code 4 needs a
@@ -492,7 +492,8 @@ An error line on stderr, with `--format json`, is one JSON object per line:
 ```
 
 - `type` is a stable word in a namespace: `args.*`, `model.*`, `run.*`, `store.*`,
-  `internal.*`. Model errors take it from a new `LoadErrorKind::name()`, an exhaustive
+  `io.*`, `internal.*`. `io.stdout` is a consumer that went away, on any command, so it
+  sends no reader to look at a store. Model errors take it from a new `LoadErrorKind::name()`, an exhaustive
   match.
 - `path` is a model path, or the flag or argument (`--horizon`, `<model>`). A value that
   came from a flag is reported at the flag, as is a value with a leading hyphen
@@ -642,6 +643,7 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | 11 | "A registry with a type from outside is not named by the header or the run id" still holds for `Registry::with`, but a whole `Domain` is now named by the run id | ADR-0022 §11 | a note there when M7 merges (§6) |
 | 12 | §9 requires `example` for exit 1, but `LoadErrorKind::example` returns none for about twenty kinds (a syntax error, a duplicate, a self-loop), and has since ADR-0020 | §9, ADR-0020, `crates/taktsim-model/src/error.rs` | the error schema requires `example` for `args.*` only; a `model.*` error has one where the loader has one. Giving every kind an example is a later change that adds a key, so it breaks nothing |
 | 13 | A docs-only pull request skips the gates (`ci/changes.sh`), but `every_yaml_block_of_the_docs_validates`, like the older `docs_examples.rs`, reads `docs/` and `README.md`, so a broken example in a page fails only the next full run | `ci/changes.sh`, `crates/taktsim-cli/tests/examples.rs` | decide separately; narrowing what may skip is a gate change of its own |
+| 14 | §9 did not list a stdout that cannot be written, and had no namespace for it; `store.write` blamed a store on commands that touch none | §9 | `io.stdout`, still exit 7 |
 
 ## Questions for the owner
 
