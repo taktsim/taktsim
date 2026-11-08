@@ -107,7 +107,9 @@ jobs:
     # (ADR-0010, ADR-0021). Fails if any target's hashes differ.
     name: trace hashes (identical on every target)
     needs: test
-    if: ${{ !cancelled() }}
+    # Skipped with the tests when a change cannot affect them: there are no
+    # hashes to compare then. A failed test job still reaches the comparison.
+    if: ${{ !cancelled() && needs.test.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
