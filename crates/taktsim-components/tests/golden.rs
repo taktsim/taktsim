@@ -5,7 +5,7 @@
 
 mod support;
 
-use support::{document, load, registry, run_model, t};
+use support::{check_records, document, load, registry, run_model, t};
 use taktsim_core::EngineConfig;
 use taktsim_trace::golden::{self, Case};
 use taktsim_trace::{ModelHash, Record, SystemHash, TraceHash};
@@ -58,8 +58,10 @@ fn case(name: &str, seed: u64, horizon: &str, yaml: &str) {
     })
     .unwrap();
     insta::assert_snapshot!(name, golden.snapshot());
+    // Every record of every case explains itself (ADR-0023 §9).
+    let run = run_model(&model, seed);
+    check_records(&run);
     if let Some((_, pinned)) = M5_EVENT_LINES.iter().find(|(case, _)| *case == name) {
-        let run = run_model(&model, seed);
         let mut lines = String::new();
         for record in &run.records {
             // A decision is what M6 adds; everything else stays as it was.
@@ -177,4 +179,68 @@ fn same_instant_chain() {
         "  - {from: source, to: [a, b]}\n  - {from: [a, b], to: buf}\n  - [buf, c, d, sink]",
     );
     case("m5_same_instant_chain", 1, "4min", &yaml);
+}
+
+/// Every word at once, with constant times that tie often: conditions, a split, a
+/// pool, a rule on a Buffer's taker, due dates and priorities.
+#[test]
+fn m6_branch_merge() {
+    let yaml = format!(
+        "{}control:\n  dispatch: {{a: earliest_due_date, b: priority_class, c: minimum_setup}}\n",
+        document(
+            "1h",
+            "  - {id: s1, type: Source, interarrival: {dist: exponential, mean: 20s}, variants: {red: 50%, blue: 50%}, due_in: {dist: uniform, min: 1h, max: 2h}, priority_mix: [{priority: 2, share: 25%}, {priority: 0, share: 75%}]}\n  \
+             - {id: s2, type: Source, interarrival: 30s, variants: {green: 100%}, priority: 1}\n  \
+             - {id: buf, type: Buffer, capacity: 6 parts, discipline: lifo}\n  \
+             - {id: a, type: Machine, cycle_time: {dist: exponential, mean: 25s}, cycle_time_by_variant: {red: 20s}}\n  \
+             - {id: b, type: Machine, cycle_time: 30s, mtbf: {dist: exponential, mean: 15min}, mttr: 1min}\n  \
+             - {id: c, type: Machine, cycle_time: {dist: uniform, min: 10s, max: 20s}, setup: {per_variant: 30s, matrix: [{from: red, to: blue, time: 0s}]}}\n  \
+             - {id: sink1, type: Sink}\n  - {id: sink2, type: Sink}",
+            "  - {from: [s1, s2], to: buf}\n  \
+             - {from: buf, to: a, when: \"variant == 'red'\"}\n  \
+             - {from: buf, split: {a: 40%, b: 60%}}\n  \
+             - {from: [a, b], to: c}\n  - {from: c, to: [sink1, sink2], choose: preferred}",
+        )
+    );
+    case("m6_branch_merge", 61, "1h", &yaml);
+}
+
+/// A pool of each rule, with failures and a merge, so offers move and `Accept`s cross.
+#[test]
+fn m6_pool() {
+    let yaml = document(
+        "1h",
+        "  - {id: source, type: Source, interarrival: 4s}\n  \
+         - {id: other, type: Source, interarrival: {dist: exponential, mean: 9s}}\n  \
+         - {id: a, type: Machine, cycle_time: 13s}\n  \
+         - {id: b, type: Machine, cycle_time: 22s, mtbf: {dist: exponential, mean: 10min}, mttr: 30s}\n  \
+         - {id: c, type: Machine, cycle_time: 7s, capacity: 2 parts}\n  \
+         - {id: buf, type: Buffer, capacity: 3 parts}\n  \
+         - {id: d, type: Machine, cycle_time: 5s}\n  \
+         - {id: e, type: Machine, cycle_time: 6s}\n  - {id: sink, type: Sink}",
+        "  - {from: source, to: [a, b], choose: preferred}\n  \
+         - {from: other, to: [c, b], choose: shortest_queue}\n  \
+         - {from: [a, b, c], to: buf}\n  \
+         - {from: buf, to: [d, e], choose: lowest_utilization}\n  - {from: [d, e], to: sink}",
+    );
+    case("m6_pool", 62, "1h", &yaml);
+}
+
+/// A rework loop with a return target that fails, and a rule on it.
+#[test]
+fn m6_rework() {
+    let yaml = format!(
+        "{}control:\n  dispatch: {{weld: fifo}}\n",
+        document(
+            "1h",
+            "  - {id: source, type: Source}\n  \
+             - {id: other, type: Source, interarrival: 12s}\n  \
+             - {id: weld, type: Machine, cycle_time: {dist: exponential, mean: 6s}, mtbf: {dist: exponential, mean: 10min}, mttr: 40s}\n  \
+             - {id: buf, type: Buffer, capacity: 2 parts}\n  \
+             - {id: qc, type: Machine, cycle_time: 3s, capacity: 2 parts}\n  - {id: sink, type: Sink}",
+            "  - {from: [source, other], to: weld}\n  - [weld, buf, qc]\n  \
+             - {from: qc, split: {weld: 30%, sink: 70%}}",
+        )
+    );
+    case("m6_rework", 63, "1h", &yaml);
 }

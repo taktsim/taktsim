@@ -153,3 +153,70 @@ fn spellings_of_one_value_have_one_hash() {
     assert_eq!(a.hash(), b.hash());
     assert!(try_load(FULL).is_ok());
 }
+
+/// Spec §4's routing example, completed: `paint` needs a way out and `pack` an entry
+/// (ADR-0023, disagreement 6). The rest is as the spec writes it.
+#[test]
+fn spec_routing_example_loads() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("docs")
+        .join("spec.md");
+    let spec = std::fs::read_to_string(path).unwrap();
+    let start = spec
+        .find("flow:\n  - { from: source, to: cut }")
+        .expect("the example is in the spec");
+    let end = spec[start..].find("```").unwrap();
+    let routing = &spec[start..start + end];
+    assert!(routing.contains("choose: shortest_queue"));
+    assert!(routing.contains("when: \"variant == 'premium'\""));
+    assert!(routing.contains("dispatch: { weld-1: earliest_due_date"));
+    let completed = routing.replace("control:", "  - [paint, pack, sink]\ncontrol:");
+    // `qc` has its last edge to `pack`, so `pack` has its way in, and `paint` joins it.
+    let yaml = format!(
+        "format: \"1.0\"\nmodel: {{name: routing, seed: 1}}\nexperiment: {{type: terminating, horizon: 2h}}\n\
+         components:\n  \
+         - {{id: source, type: Source, interarrival: {{dist: exponential, mean: 40s}}, variants: {{basic: 80%, premium: 20%}}, due_in: {{dist: uniform, min: 2h, max: 8h}}}}\n  \
+         - {{id: cut, type: Machine, cycle_time: 30s}}\n  \
+         - {{id: weld-1, type: Machine, cycle_time: 45s, cycle_time_by_variant: {{premium: 60s}}}}\n  \
+         - {{id: weld-2, type: Machine, cycle_time: 45s}}\n  \
+         - {{id: qc, type: Machine, cycle_time: 10s}}\n  \
+         - {{id: paint, type: Machine, cycle_time: 1min}}\n  \
+         - {{id: pack, type: Machine, cycle_time: 20s}}\n  \
+         - {{id: sink, type: Sink}}\n{completed}"
+    );
+    let model = load(&yaml);
+    let flow = model.document().flow();
+    assert_eq!(
+        flow[1].choose(),
+        Some(taktsim_model::ChoiceRule::ShortestQueue)
+    );
+    assert!(flow[3].when().is_some());
+    assert_eq!(model.document().control().dispatch().len(), 2);
+    // It runs, every branch is used, and a premium part goes to `paint`.
+    let r = support::run_model(&model, 3);
+    assert!(r.report.items.delivered.get() > 50);
+    for name in ["weld-1", "weld-2", "paint", "pack"] {
+        assert_ne!(r.arrivals(name).len(), 0, "{name}");
+    }
+    assert!(r.arrival_variants("paint").iter().all(|v| v == "premium"));
+    support::check_records(&r);
+    // The ADR's own form of it: a split on `qc`'s last edge sends rework back to `cut`.
+    let rework = yaml.replace(
+        "{ from: qc, to: pack }",
+        "{ from: qc, split: { cut: 5%, pack: 95% } }",
+    );
+    assert_ne!(rework, yaml);
+    let r = support::run(&rework, 3);
+    assert!(r.report.items.delivered.get() > 50);
+    assert_ne!(
+        r.times("cut", |m| matches!(
+            m,
+            taktsim_components::FlowMessage::Return(_)
+        ))
+        .len(),
+        0
+    );
+    support::check_records(&r);
+}

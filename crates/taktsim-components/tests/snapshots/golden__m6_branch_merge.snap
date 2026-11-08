@@ -1,0 +1,516 @@
+---
+source: crates/taktsim-components/tests/golden.rs
+expression: golden.snapshot()
+---
+case: m6_branch_merge
+records: taktsim-core/3
+messages: taktsim-components/2
+model hash: 53fb0cff68a3c5cfc03588871f3e9634fb7516c342224ac1e9f4d75795ba97b3
+system hash: 7d63886da0b6fa97cda69979717e828d16f617640e51d1683079ed16807bb5d8
+seed: 61
+components: s1, s2, buf, a, b, c, sink1, sink2
+records: 4436 (2708 events) in 4 chunks
+stream sha256: df865561bc3dbc7925993053c75e8ebf0484cf2963532848bc3582613f0ed773
+end: 1h (horizon)
+---
+0s note by s1 VariantName { id: VariantId(0), name: "blue" }
+0s note by s1 VariantName { id: VariantId(2), name: "red" }
+0s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by s2 VariantName { id: VariantId(1), name: "green" }
+0s note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by buf EdgeCondition { edge: 0, text: "variant == 'red'" }
+0s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+30s event #1 s2 -> s2 NextArrival
+30s item 0 created by s2
+30s note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+30s event #3 s2 -> buf Offer
+30s event #4 buf -> s2 Accept
+30s note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+30s event #5 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 0
+30s event #7 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(0)), variant: VariantId(1), priority: 1, due: None, since: SimTime(30000000000) })
+30s event #8 b -> buf Accept
+30s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(0), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+30s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(0), edge: 1, chosen: 1, crossed: false, detail: 4601426976870893242, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+30s event #9 buf -> b Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 0
+30s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+48.73852369s event #0 s1 -> s1 NextArrival
+48.73852369s item 1 created by s1
+48.73852369s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+48.73852369s event #11 s1 -> buf Offer
+48.73852369s event #12 buf -> s1 Accept
+48.73852369s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+48.73852369s event #13 s1 -> buf Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4845450939557)) }), item 1
+48.73852369s event #15 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(1)), variant: VariantId(2), priority: 0, due: Some(SimTime(4845450939557)), since: SimTime(48738523690) })
+48.73852369s event #16 a -> buf Accept
+48.73852369s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(1), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 1 }] })
+48.73852369s event #17 buf -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4845450939557)) }), item 1
+48.73852369s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+1min event #10 b -> b CycleDone { item: ItemId(0) }
+1min note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+1min event #6 s2 -> s2 NextArrival
+1min item 2 created by s2
+1min note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+1min event #19 b -> c OfferOf(OfferedUnit { item: Some(ItemId(0)), variant: VariantId(1), priority: 1, due: None, since: SimTime(60000000000) })
+1min event #22 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 0, follows: Some(VariantId(1)) })
+1min event #23 c -> b Status(TargetStatus { room: false, accept_follows: true, queue: 1, running: 0, worked: 0, follows: Some(VariantId(1)) })
+1min event #21 c -> b Accept
+1min note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+1min event #24 b -> c Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 0
+1min note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+1min event #26 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 0, follows: Some(VariantId(1)) })
+1min event #27 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 0, follows: Some(VariantId(1)) })
+1min event #20 s2 -> buf Offer
+1min event #28 buf -> s2 Accept
+1min note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+1min event #29 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 2
+1min event #31 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(2)), variant: VariantId(1), priority: 1, due: None, since: SimTime(60000000000) })
+68.73852369s event #18 a -> a CycleDone { item: ItemId(1) }
+68.73852369s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+68.73852369s event #32 a -> c OfferOf(OfferedUnit { item: Some(ItemId(1)), variant: VariantId(2), priority: 0, due: Some(SimTime(4845450939557)), since: SimTime(68738523690) })
+68.73852369s event #33 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 8738523690, follows: Some(VariantId(1)) })
+74.780434871s event #14 s1 -> s1 NextArrival
+74.780434871s item 3 created by s1
+74.780434871s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+74.780434871s event #34 s1 -> buf Offer
+74.780434871s event #35 buf -> s1 Accept
+74.780434871s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+74.780434871s event #36 s1 -> buf Arrive(ItemAttrs { variant: VariantId(2), priority: 2, due: Some(SimTime(4273204992434)) }), item 3
+74.780434871s event #38 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(3)), variant: VariantId(2), priority: 2, due: Some(SimTime(4273204992434)), since: SimTime(74780434871) })
+75.126930652s event #25 c -> c CycleDone { item: ItemId(0) }
+75.126930652s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+75.126930652s event #40 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 15126930652, follows: Some(VariantId(1)) })
+75.126930652s event #41 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 15126930652, follows: Some(VariantId(1)) })
+75.126930652s event #39 c -> sink1 Offer
+75.126930652s event #42 sink1 -> c Accept
+75.126930652s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(0), edge: 0, chosen: 0, crossed: false, detail: 75126930652, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+75.126930652s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+75.126930652s event #43 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 0
+75.126930652s item 0 delivered by sink1
+75.126930652s event #45 c -> a Status(TargetStatus { room: false, accept_follows: true, queue: 1, running: 0, worked: 15126930652, follows: Some(VariantId(2)) })
+75.126930652s event #46 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 15126930652, follows: Some(VariantId(2)) })
+75.126930652s event #44 c -> a Accept
+75.126930652s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+75.126930652s event #47 a -> c Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4845450939557)) }), item 1
+75.126930652s note by c MachineState(MachineStateNote { state: Setup, units_in_cycle: 0, setup_variant: Some(VariantId(2)) })
+75.126930652s event #48 a -> buf Accept
+75.126930652s decision by buf DispatchDecision(DispatchDecision { rule: EarliestDueDate, taker: ComponentId(3), total: 2, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(3)), key: 4273204992434, since: SimTime(74780434871) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(2)), key: 18446744073709551615, since: SimTime(60000000000) }] })
+75.126930652s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(3), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 1 }] })
+75.126930652s event #50 buf -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 2, due: Some(SimTime(4273204992434)) }), item 3
+75.126930652s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+75.126930652s event #51 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(2)), variant: VariantId(1), priority: 1, due: None, since: SimTime(60000000000) })
+90s event #30 s2 -> s2 NextArrival
+90s item 4 created by s2
+90s note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+90s event #53 s2 -> buf Offer
+90s event #54 buf -> s2 Accept
+90s note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+90s event #55 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 4
+90s event #57 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(4)), variant: VariantId(1), priority: 1, due: None, since: SimTime(90000000000) })
+90s event #58 b -> buf Accept
+90s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(4), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+90s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(4), edge: 1, chosen: 1, crossed: false, detail: 4605373221379086465, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+90s event #59 buf -> b Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 4
+90s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+95.126930652s event #52 a -> a CycleDone { item: ItemId(3) }
+95.126930652s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+95.126930652s event #61 a -> c OfferOf(OfferedUnit { item: Some(ItemId(3)), variant: VariantId(2), priority: 2, due: Some(SimTime(4273204992434)), since: SimTime(95126930652) })
+95.126930652s event #62 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 15126930652, follows: Some(VariantId(2)) })
+105.126930652s event #49 c -> c SetupDone
+105.126930652s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+105.126930652s event #64 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 15126930652, follows: Some(VariantId(2)) })
+105.126930652s event #65 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 15126930652, follows: Some(VariantId(2)) })
+119.930456329s event #63 c -> c CycleDone { item: ItemId(1) }
+119.930456329s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+119.930456329s event #67 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 29930456329, follows: Some(VariantId(2)) })
+119.930456329s event #68 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 29930456329, follows: Some(VariantId(2)) })
+119.930456329s event #66 c -> sink1 Offer
+119.930456329s event #69 sink1 -> c Accept
+119.930456329s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(1), edge: 0, chosen: 0, crossed: false, detail: 119930456329, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+119.930456329s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+119.930456329s event #70 c -> sink1 Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4845450939557)) }), item 1
+119.930456329s item 1 delivered by sink1
+119.930456329s event #72 c -> a Status(TargetStatus { room: false, accept_follows: true, queue: 1, running: 0, worked: 29930456329, follows: Some(VariantId(2)) })
+119.930456329s event #73 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 29930456329, follows: Some(VariantId(2)) })
+119.930456329s event #71 c -> a Accept
+119.930456329s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+119.930456329s event #74 a -> c Arrive(ItemAttrs { variant: VariantId(2), priority: 2, due: Some(SimTime(4273204992434)) }), item 3
+119.930456329s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+119.930456329s event #77 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 29930456329, follows: Some(VariantId(2)) })
+119.930456329s event #78 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 29930456329, follows: Some(VariantId(2)) })
+119.930456329s event #75 a -> buf Accept
+119.930456329s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(2), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+119.930456329s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(2), edge: 1, chosen: 0, crossed: false, detail: 4596875418893743308, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+119.930456329s event #79 buf -> a Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 2
+119.930456329s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+2min event #60 b -> b CycleDone { item: ItemId(4) }
+2min note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+2min event #56 s2 -> s2 NextArrival
+2min item 5 created by s2
+2min note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+2min event #81 b -> c OfferOf(OfferedUnit { item: Some(ItemId(4)), variant: VariantId(1), priority: 1, due: None, since: SimTime(120000000000) })
+2min event #83 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 30000000000, follows: Some(VariantId(2)) })
+2min event #82 s2 -> buf Offer
+2min event #84 buf -> s2 Accept
+2min note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+2min event #85 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 5
+2min event #87 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(5)), variant: VariantId(1), priority: 1, due: None, since: SimTime(120000000000) })
+131.038597332s event #37 s1 -> s1 NextArrival
+131.038597332s item 6 created by s1
+131.038597332s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+131.038597332s event #88 s1 -> buf Offer
+131.038597332s event #89 buf -> s1 Accept
+131.038597332s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+131.038597332s event #90 s1 -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(3925023133755)) }), item 6
+131.038597332s event #92 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(6)), variant: VariantId(0), priority: 2, due: Some(SimTime(3925023133755)), since: SimTime(131038597332) })
+134.990271372s event #76 c -> c CycleDone { item: ItemId(3) }
+134.990271372s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+134.990271372s event #94 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 44990271372, follows: Some(VariantId(2)) })
+134.990271372s event #95 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 44990271372, follows: Some(VariantId(2)) })
+134.990271372s event #93 c -> sink1 Offer
+134.990271372s event #96 sink1 -> c Accept
+134.990271372s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(3), edge: 0, chosen: 0, crossed: false, detail: 134990271372, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+134.990271372s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+134.990271372s event #97 c -> sink1 Arrive(ItemAttrs { variant: VariantId(2), priority: 2, due: Some(SimTime(4273204992434)) }), item 3
+134.990271372s item 3 delivered by sink1
+134.990271372s event #99 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 44990271372, follows: Some(VariantId(1)) })
+134.990271372s event #100 c -> b Status(TargetStatus { room: false, accept_follows: true, queue: 1, running: 0, worked: 44990271372, follows: Some(VariantId(1)) })
+134.990271372s event #98 c -> b Accept
+134.990271372s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+134.990271372s event #101 b -> c Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 4
+134.990271372s note by c MachineState(MachineStateNote { state: Setup, units_in_cycle: 0, setup_variant: Some(VariantId(1)) })
+134.990271372s event #102 b -> buf Accept
+134.990271372s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(5), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+134.990271372s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(5), edge: 1, chosen: 1, crossed: false, detail: 4606900926041633337, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+134.990271372s event #104 buf -> b Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 5
+134.990271372s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+138.54326065s event #91 s1 -> s1 NextArrival
+138.54326065s item 7 created by s1
+138.54326065s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+138.54326065s event #106 s1 -> buf Offer
+138.54326065s event #107 buf -> s1 Accept
+138.54326065s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+138.54326065s event #108 s1 -> buf Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4364031598240)) }), item 7
+144.49113841s event #109 s1 -> s1 NextArrival
+144.49113841s item 8 created by s1
+144.49113841s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+144.49113841s event #110 s1 -> buf Offer
+144.49113841s event #111 buf -> s1 Accept
+144.49113841s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+144.49113841s event #112 s1 -> buf Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4988441696542)) }), item 8
+150s event #86 s2 -> s2 NextArrival
+150s item 9 created by s2
+150s note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+150s event #114 s2 -> buf Offer
+150s event #115 buf -> s2 Accept
+150s note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+150s event #116 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 9
+150s event #118 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(9)), variant: VariantId(1), priority: 1, due: None, since: SimTime(150000000000) })
+154.476877622s event #80 a -> a CycleDone { item: ItemId(2) }
+154.476877622s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+154.476877622s event #119 a -> c OfferOf(OfferedUnit { item: Some(ItemId(2)), variant: VariantId(1), priority: 1, due: None, since: SimTime(154476877622) })
+154.476877622s event #120 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 44990271372, follows: Some(VariantId(1)) })
+155.140913071s event #113 s1 -> s1 NextArrival
+155.140913071s item 10 created by s1
+155.140913071s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+155.140913071s event #121 s1 -> buf Offer
+155.140913071s event #122 buf -> s1 Accept
+155.140913071s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+155.140913071s event #123 s1 -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: Some(SimTime(5060942409830)) }), item 10
+164.990271372s event #103 c -> c SetupDone
+164.990271372s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+164.990271372s event #105 b -> b CycleDone { item: ItemId(5) }
+164.990271372s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+164.990271372s event #126 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 44990271372, follows: Some(VariantId(1)) })
+164.990271372s event #127 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 44990271372, follows: Some(VariantId(1)) })
+164.990271372s event #128 b -> c OfferOf(OfferedUnit { item: Some(ItemId(5)), variant: VariantId(1), priority: 1, due: None, since: SimTime(164990271372) })
+164.990271372s event #129 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 44990271372, follows: Some(VariantId(1)) })
+176.897107191s event #125 c -> c CycleDone { item: ItemId(4) }
+176.897107191s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+176.897107191s event #131 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 56897107191, follows: Some(VariantId(1)) })
+176.897107191s event #132 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 56897107191, follows: Some(VariantId(1)) })
+176.897107191s event #130 c -> sink1 Offer
+176.897107191s event #133 sink1 -> c Accept
+176.897107191s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(4), edge: 0, chosen: 0, crossed: false, detail: 176897107191, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+176.897107191s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+176.897107191s event #134 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 4
+176.897107191s item 4 delivered by sink1
+176.897107191s event #136 c -> a Status(TargetStatus { room: false, accept_follows: true, queue: 2, running: 0, worked: 56897107191, follows: Some(VariantId(1)) })
+176.897107191s event #137 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 56897107191, follows: Some(VariantId(1)) })
+176.897107191s event #135 c -> a Accept
+176.897107191s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+176.897107191s event #138 a -> c Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 2
+176.897107191s decision by c DispatchDecision(DispatchDecision { rule: MinimumSetup, taker: ComponentId(5), total: 2, candidates: [DispatchCandidate { from: ComponentId(3), item: Some(ItemId(2)), key: 0, since: SimTime(154476877622) }, DispatchCandidate { from: ComponentId(4), item: Some(ItemId(5)), key: 0, since: SimTime(164990271372) }] })
+176.897107191s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+176.897107191s event #141 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 56897107191, follows: Some(VariantId(1)) })
+176.897107191s event #142 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 56897107191, follows: Some(VariantId(1)) })
+176.897107191s event #139 a -> buf Accept
+176.897107191s decision by buf DispatchDecision(DispatchDecision { rule: EarliestDueDate, taker: ComponentId(3), total: 3, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(6)), key: 3925023133755, since: SimTime(131038597332) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(7)), key: 4364031598240, since: SimTime(138543260650) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(8)), key: 4988441696542, since: SimTime(144491138410) }] })
+176.897107191s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(6), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+176.897107191s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(6), edge: 1, chosen: 0, crossed: false, detail: 4581698791167982560, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+176.897107191s event #143 buf -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(3925023133755)) }), item 6
+176.897107191s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+176.897107191s event #144 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(7)), variant: VariantId(2), priority: 0, due: Some(SimTime(4364031598240)), since: SimTime(138543260650) })
+3min event #117 s2 -> s2 NextArrival
+3min item 11 created by s2
+3min note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+3min event #146 s2 -> buf Offer
+3min event #147 buf -> s2 Accept
+3min note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+3min event #148 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 11
+187.838231247s event #140 c -> c CycleDone { item: ItemId(2) }
+187.838231247s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+187.838231247s event #151 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 67838231247, follows: Some(VariantId(1)) })
+187.838231247s event #152 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 67838231247, follows: Some(VariantId(1)) })
+187.838231247s event #150 c -> sink1 Offer
+187.838231247s event #153 sink1 -> c Accept
+187.838231247s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(2), edge: 0, chosen: 0, crossed: false, detail: 187838231247, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+187.838231247s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+187.838231247s event #154 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 2
+187.838231247s item 2 delivered by sink1
+187.838231247s event #156 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 67838231247, follows: Some(VariantId(1)) })
+187.838231247s event #157 c -> b Status(TargetStatus { room: false, accept_follows: true, queue: 1, running: 0, worked: 67838231247, follows: Some(VariantId(1)) })
+187.838231247s event #155 c -> b Accept
+187.838231247s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+187.838231247s event #158 b -> c Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 5
+187.838231247s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+187.838231247s event #161 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 67838231247, follows: Some(VariantId(1)) })
+187.838231247s event #162 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 67838231247, follows: Some(VariantId(1)) })
+187.838231247s event #159 b -> buf Accept
+187.838231247s decision by buf DispatchDecision(DispatchDecision { rule: PriorityClass, taker: ComponentId(4), total: 2, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(9)), key: 254, since: SimTime(150000000000) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(10)), key: 255, since: SimTime(155140913071) }] })
+187.838231247s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(9), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+187.838231247s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(9), edge: 1, chosen: 1, crossed: false, detail: 4605931015892554713, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+187.838231247s event #163 buf -> b Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 9
+187.838231247s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+187.838231247s event #164 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(10)), variant: VariantId(0), priority: 0, due: Some(SimTime(5060942409830)), since: SimTime(155140913071) })
+193.573404877s event #145 a -> a CycleDone { item: ItemId(6) }
+193.573404877s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+193.573404877s event #166 a -> c OfferOf(OfferedUnit { item: Some(ItemId(6)), variant: VariantId(0), priority: 2, due: Some(SimTime(3925023133755)), since: SimTime(193573404877) })
+193.573404877s event #167 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 73573404877, follows: Some(VariantId(1)) })
+201.920001061s event #160 c -> c CycleDone { item: ItemId(5) }
+201.920001061s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+201.920001061s event #169 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 81920001061, follows: Some(VariantId(1)) })
+201.920001061s event #170 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 81920001061, follows: Some(VariantId(1)) })
+201.920001061s event #168 c -> sink1 Offer
+201.920001061s event #171 sink1 -> c Accept
+201.920001061s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(5), edge: 0, chosen: 0, crossed: false, detail: 201920001061, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+201.920001061s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+201.920001061s event #172 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 5
+201.920001061s item 5 delivered by sink1
+201.920001061s event #174 c -> a Status(TargetStatus { room: false, accept_follows: true, queue: 1, running: 0, worked: 81920001061, follows: Some(VariantId(0)) })
+201.920001061s event #175 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 81920001061, follows: Some(VariantId(0)) })
+201.920001061s event #173 c -> a Accept
+201.920001061s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+201.920001061s event #176 a -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(3925023133755)) }), item 6
+201.920001061s note by c MachineState(MachineStateNote { state: Setup, units_in_cycle: 0, setup_variant: Some(VariantId(0)) })
+201.920001061s event #177 a -> buf Accept
+201.920001061s decision by buf DispatchDecision(DispatchDecision { rule: EarliestDueDate, taker: ComponentId(3), total: 3, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(7)), key: 4364031598240, since: SimTime(138543260650) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(8)), key: 4988441696542, since: SimTime(144491138410) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(11)), key: 18446744073709551615, since: SimTime(180000000000) }] })
+201.920001061s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(7), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 1 }] })
+201.920001061s event #179 buf -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4364031598240)) }), item 7
+201.920001061s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+201.920001061s event #180 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(8)), variant: VariantId(2), priority: 0, due: Some(SimTime(4988441696542)), since: SimTime(144491138410) })
+210s event #149 s2 -> s2 NextArrival
+210s item 12 created by s2
+210s note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+210s event #182 s2 -> buf Offer
+210s event #183 buf -> s2 Accept
+210s note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+210s event #184 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 12
+217.838231247s event #165 b -> b CycleDone { item: ItemId(9) }
+217.838231247s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+217.838231247s event #186 b -> c OfferOf(OfferedUnit { item: Some(ItemId(9)), variant: VariantId(1), priority: 1, due: None, since: SimTime(217838231247) })
+217.838231247s event #187 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 81920001061, follows: Some(VariantId(0)) })
+221.920001061s event #181 a -> a CycleDone { item: ItemId(7) }
+221.920001061s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+221.920001061s event #188 a -> c OfferOf(OfferedUnit { item: Some(ItemId(7)), variant: VariantId(2), priority: 0, due: Some(SimTime(4364031598240)), since: SimTime(221920001061) })
+221.920001061s event #189 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 81920001061, follows: Some(VariantId(0)) })
+231.920001061s event #178 c -> c SetupDone
+231.920001061s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+231.920001061s event #191 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 81920001061, follows: Some(VariantId(0)) })
+231.920001061s event #192 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 81920001061, follows: Some(VariantId(0)) })
+4min event #185 s2 -> s2 NextArrival
+4min item 13 created by s2
+4min note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+4min event #193 s2 -> buf Offer
+4min event #194 buf -> s2 Accept
+4min note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+4min event #195 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 13
+4min event #197 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(13)), variant: VariantId(1), priority: 1, due: None, since: SimTime(240000000000) })
+240.328869294s event #124 s1 -> s1 NextArrival
+240.328869294s item 14 created by s1
+240.328869294s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+240.328869294s event #198 s1 -> buf Offer
+240.328869294s event #199 buf -> s1 Accept
+240.328869294s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+240.328869294s event #200 s1 -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(6522051905488)) }), item 14
+240.328869294s event #202 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(14)), variant: VariantId(0), priority: 2, due: Some(SimTime(6522051905488)), since: SimTime(240328869294) })
+251.632140047s event #190 c -> c CycleDone { item: ItemId(6) }
+251.632140047s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+251.632140047s event #204 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 101632140047, follows: Some(VariantId(0)) })
+251.632140047s event #205 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 101632140047, follows: Some(VariantId(0)) })
+251.632140047s event #203 c -> sink1 Offer
+251.632140047s event #206 sink1 -> c Accept
+251.632140047s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(6), edge: 0, chosen: 0, crossed: false, detail: 251632140047, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+251.632140047s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+251.632140047s event #207 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(3925023133755)) }), item 6
+251.632140047s item 6 delivered by sink1
+251.632140047s event #209 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 101632140047, follows: Some(VariantId(1)) })
+251.632140047s event #210 c -> b Status(TargetStatus { room: false, accept_follows: true, queue: 2, running: 0, worked: 101632140047, follows: Some(VariantId(1)) })
+251.632140047s event #208 c -> b Accept
+251.632140047s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+251.632140047s event #211 b -> c Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 9
+251.632140047s decision by c DispatchDecision(DispatchDecision { rule: MinimumSetup, taker: ComponentId(5), total: 2, candidates: [DispatchCandidate { from: ComponentId(4), item: Some(ItemId(9)), key: 60000000001, since: SimTime(217838231247) }, DispatchCandidate { from: ComponentId(3), item: Some(ItemId(7)), key: 60000000001, since: SimTime(221920001061) }] })
+251.632140047s note by c MachineState(MachineStateNote { state: Setup, units_in_cycle: 0, setup_variant: Some(VariantId(1)) })
+251.632140047s event #212 b -> buf Accept
+251.632140047s decision by buf DispatchDecision(DispatchDecision { rule: PriorityClass, taker: ComponentId(4), total: 3, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(14)), key: 253, since: SimTime(240328869294) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(13)), key: 254, since: SimTime(240000000000) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(10)), key: 255, since: SimTime(155140913071) }] })
+251.632140047s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(14), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+251.632140047s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(14), edge: 1, chosen: 1, crossed: false, detail: 4607015160753739289, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+251.632140047s event #214 buf -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(6522051905488)) }), item 14
+251.632140047s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+251.632140047s event #215 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(13)), variant: VariantId(1), priority: 1, due: None, since: SimTime(240000000000) })
+265.774935399s event #201 s1 -> s1 NextArrival
+265.774935399s item 15 created by s1
+265.774935399s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+265.774935399s event #217 s1 -> buf Offer
+265.774935399s event #218 buf -> s1 Accept
+265.774935399s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+265.774935399s event #219 s1 -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: Some(SimTime(4101286242690)) }), item 15
+269.74935357s event #220 s1 -> s1 NextArrival
+269.74935357s item 16 created by s1
+269.74935357s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+269.74935357s event #221 s1 -> buf Offer
+270s event #196 s2 -> s2 NextArrival
+270s item 17 created by s2
+270s note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+270s event #222 s2 -> buf Offer
+281.632140047s event #213 c -> c SetupDone
+281.632140047s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+281.632140047s event #216 b -> b CycleDone { item: ItemId(14) }
+281.632140047s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+281.632140047s event #224 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 101632140047, follows: Some(VariantId(1)) })
+281.632140047s event #225 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 101632140047, follows: Some(VariantId(1)) })
+281.632140047s event #226 b -> c OfferOf(OfferedUnit { item: Some(ItemId(14)), variant: VariantId(0), priority: 2, due: Some(SimTime(6522051905488)), since: SimTime(281632140047) })
+281.632140047s event #227 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 101632140047, follows: Some(VariantId(1)) })
+291.700065812s event #223 c -> c CycleDone { item: ItemId(9) }
+291.700065812s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+291.700065812s event #229 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 111700065812, follows: Some(VariantId(1)) })
+291.700065812s event #230 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 111700065812, follows: Some(VariantId(1)) })
+291.700065812s event #228 c -> sink1 Offer
+291.700065812s event #231 sink1 -> c Accept
+291.700065812s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(9), edge: 0, chosen: 0, crossed: false, detail: 291700065812, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+291.700065812s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+291.700065812s event #232 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 9
+291.700065812s item 9 delivered by sink1
+291.700065812s event #234 c -> a Status(TargetStatus { room: false, accept_follows: true, queue: 2, running: 0, worked: 111700065812, follows: Some(VariantId(2)) })
+291.700065812s event #235 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 111700065812, follows: Some(VariantId(2)) })
+291.700065812s event #233 c -> a Accept
+291.700065812s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+291.700065812s event #236 a -> c Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4364031598240)) }), item 7
+291.700065812s decision by c DispatchDecision(DispatchDecision { rule: MinimumSetup, taker: ComponentId(5), total: 2, candidates: [DispatchCandidate { from: ComponentId(3), item: Some(ItemId(7)), key: 60000000001, since: SimTime(221920001061) }, DispatchCandidate { from: ComponentId(4), item: Some(ItemId(14)), key: 60000000001, since: SimTime(281632140047) }] })
+291.700065812s note by c MachineState(MachineStateNote { state: Setup, units_in_cycle: 0, setup_variant: Some(VariantId(2)) })
+291.700065812s event #237 a -> buf Accept
+291.700065812s decision by buf DispatchDecision(DispatchDecision { rule: EarliestDueDate, taker: ComponentId(3), total: 3, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(8)), key: 4988441696542, since: SimTime(144491138410) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(11)), key: 18446744073709551615, since: SimTime(180000000000) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(12)), key: 18446744073709551615, since: SimTime(210000000000) }] })
+291.700065812s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(8), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 1 }] })
+291.700065812s event #239 buf -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(4988441696542)) }), item 8
+... 3936 records not shown ...
+3546.179034763s event #2652 c -> sink1 Offer
+3546.179034763s event #2655 sink1 -> c Accept
+3546.179034763s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(117), edge: 0, chosen: 0, crossed: false, detail: 3546179034763, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+3546.179034763s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3546.179034763s event #2656 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: Some(SimTime(9598727505053)) }), item 117
+3546.179034763s item 117 delivered by sink1
+3546.179034763s event #2658 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 1698729030383, follows: Some(VariantId(1)) })
+3546.179034763s event #2659 c -> b Status(TargetStatus { room: false, accept_follows: true, queue: 2, running: 0, worked: 1698729030383, follows: Some(VariantId(1)) })
+3546.179034763s event #2657 c -> b Accept
+3546.179034763s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3546.179034763s event #2660 b -> c Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 114
+3546.179034763s decision by c DispatchDecision(DispatchDecision { rule: MinimumSetup, taker: ComponentId(5), total: 2, candidates: [DispatchCandidate { from: ComponentId(4), item: Some(ItemId(114)), key: 60000000001, since: SimTime(3505153532157) }, DispatchCandidate { from: ComponentId(3), item: Some(ItemId(95)), key: 60000000001, since: SimTime(3533668526599) }] })
+3546.179034763s note by c MachineState(MachineStateNote { state: Setup, units_in_cycle: 0, setup_variant: Some(VariantId(1)) })
+3546.179034763s event #2661 b -> buf Accept
+3546.179034763s decision by buf DispatchDecision(DispatchDecision { rule: PriorityClass, taker: ComponentId(4), total: 3, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(119)), key: 253, since: SimTime(3485399571815) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(116)), key: 254, since: SimTime(3379473954167) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(103)), key: 255, since: SimTime(2958865665622) }] })
+3546.179034763s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(119), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+3546.179034763s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(119), edge: 1, chosen: 1, crossed: false, detail: 4603738266951947453, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+3546.179034763s event #2663 buf -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(8014801277803)) }), item 119
+3546.179034763s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3546.179034763s event #2664 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(116)), variant: VariantId(1), priority: 1, due: None, since: SimTime(3379473954167) })
+3549.859816134s event #2621 s1 -> s1 NextArrival
+3549.859816134s item 121 created by s1
+3549.859816134s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+3549.859816134s event #2666 s1 -> buf Offer
+3549.859816134s event #2667 buf -> s1 Accept
+3549.859816134s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+3549.859816134s event #2668 s1 -> buf Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(7503475450122)) }), item 121
+3549.859816134s event #2670 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(121)), variant: VariantId(2), priority: 0, due: Some(SimTime(7503475450122)), since: SimTime(3549859816134) })
+3550.484169512s event #2669 s1 -> s1 NextArrival
+3550.484169512s item 122 created by s1
+3550.484169512s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
+3550.484169512s event #2671 s1 -> buf Offer
+3558.078227632s event #2649 s2 -> s2 NextArrival
+3558.078227632s item 123 created by s2
+3558.078227632s note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
+3558.078227632s event #2672 s2 -> buf Offer
+3576.179034763s event #2662 c -> c SetupDone
+3576.179034763s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3576.179034763s event #2665 b -> b CycleDone { item: ItemId(119) }
+3576.179034763s note by b MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3576.179034763s event #2674 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 1698729030383, follows: Some(VariantId(1)) })
+3576.179034763s event #2675 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 1698729030383, follows: Some(VariantId(1)) })
+3576.179034763s event #2676 b -> c OfferOf(OfferedUnit { item: Some(ItemId(119)), variant: VariantId(0), priority: 2, due: Some(SimTime(8014801277803)), since: SimTime(3576179034763) })
+3576.179034763s event #2677 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 1698729030383, follows: Some(VariantId(1)) })
+3587.409144242s event #2673 c -> c CycleDone { item: ItemId(114) }
+3587.409144242s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3587.409144242s event #2679 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 1709959139862, follows: Some(VariantId(1)) })
+3587.409144242s event #2680 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 1709959139862, follows: Some(VariantId(1)) })
+3587.409144242s event #2678 c -> sink1 Offer
+3587.409144242s event #2681 sink1 -> c Accept
+3587.409144242s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(114), edge: 0, chosen: 0, crossed: false, detail: 3587409144242, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+3587.409144242s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3587.409144242s event #2682 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 114
+3587.409144242s item 114 delivered by sink1
+3587.409144242s event #2684 c -> a Status(TargetStatus { room: false, accept_follows: true, queue: 2, running: 0, worked: 1709959139862, follows: Some(VariantId(1)) })
+3587.409144242s event #2685 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 1709959139862, follows: Some(VariantId(1)) })
+3587.409144242s event #2683 c -> a Accept
+3587.409144242s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3587.409144242s event #2686 a -> c Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 95
+3587.409144242s decision by c DispatchDecision(DispatchDecision { rule: MinimumSetup, taker: ComponentId(5), total: 2, candidates: [DispatchCandidate { from: ComponentId(3), item: Some(ItemId(95)), key: 0, since: SimTime(3533668526599) }, DispatchCandidate { from: ComponentId(4), item: Some(ItemId(119)), key: 60000000001, since: SimTime(3576179034763) }] })
+3587.409144242s note by c MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3587.409144242s event #2689 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 1, worked: 1709959139862, follows: Some(VariantId(1)) })
+3587.409144242s event #2690 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 1, worked: 1709959139862, follows: Some(VariantId(1)) })
+3587.409144242s event #2687 a -> buf Accept
+3587.409144242s decision by buf DispatchDecision(DispatchDecision { rule: EarliestDueDate, taker: ComponentId(3), total: 4, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(121)), key: 7503475450122, since: SimTime(3549859816134) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(106)), key: 18446744073709551615, since: SimTime(3069794022083) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(118)), key: 18446744073709551615, since: SimTime(3475153532157) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(120)), key: 18446744073709551615, since: SimTime(3528078227632) }] })
+3587.409144242s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(121), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 1 }] })
+3587.409144242s event #2691 buf -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: Some(SimTime(7503475450122)) }), item 121
+3587.409144242s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3587.409144242s event #2692 buf -> s1 Accept
+3587.409144242s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
+3587.409144242s event #2695 s1 -> buf Arrive(ItemAttrs { variant: VariantId(2), priority: 2, due: Some(SimTime(9044236844223)) }), item 122
+3587.409144242s event #2693 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(106)), variant: VariantId(1), priority: 1, due: None, since: SimTime(3069794022083) })
+3587.409144242s event #2697 buf -> a OfferOf(OfferedUnit { item: Some(ItemId(122)), variant: VariantId(2), priority: 2, due: Some(SimTime(9044236844223)), since: SimTime(3587409144242) })
+3598.146300591s event #2688 c -> c CycleDone { item: ItemId(95) }
+3598.146300591s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+3598.146300591s event #2699 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 2, running: 0, worked: 1720696296211, follows: Some(VariantId(1)) })
+3598.146300591s event #2700 c -> b Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 1720696296211, follows: Some(VariantId(1)) })
+3598.146300591s event #2698 c -> sink1 Offer
+3598.146300591s event #2701 sink1 -> c Accept
+3598.146300591s decision by c RouteDecision(RouteDecision { rule: Preferred, item: ItemId(95), edge: 0, chosen: 0, crossed: false, detail: 3598146300591, candidates: [RouteCandidate { id: 6, room: Some(true), key: 0 }, RouteCandidate { id: 7, room: Some(true), key: 1 }] })
+3598.146300591s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
+3598.146300591s event #2702 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 95
+3598.146300591s item 95 delivered by sink1
+3598.146300591s event #2704 c -> a Status(TargetStatus { room: false, accept_follows: false, queue: 1, running: 0, worked: 1720696296211, follows: Some(VariantId(0)) })
+3598.146300591s event #2705 c -> b Status(TargetStatus { room: false, accept_follows: true, queue: 1, running: 0, worked: 1720696296211, follows: Some(VariantId(0)) })
+3598.146300591s event #2703 c -> b Accept
+3598.146300591s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+3598.146300591s event #2706 b -> c Arrive(ItemAttrs { variant: VariantId(0), priority: 2, due: Some(SimTime(8014801277803)) }), item 119
+3598.146300591s note by c MachineState(MachineStateNote { state: Setup, units_in_cycle: 0, setup_variant: Some(VariantId(0)) })
+3598.146300591s event #2707 b -> buf Accept
+3598.146300591s decision by buf DispatchDecision(DispatchDecision { rule: PriorityClass, taker: ComponentId(4), total: 2, candidates: [DispatchCandidate { from: ComponentId(2), item: Some(ItemId(116)), key: 254, since: SimTime(3379473954167) }, DispatchCandidate { from: ComponentId(2), item: Some(ItemId(103)), key: 255, since: SimTime(2958865665622) }] })
+3598.146300591s decision by buf RouteDecision(RouteDecision { rule: When, item: ItemId(116), edge: 1, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 0, room: None, key: 0 }, RouteCandidate { id: 1, room: None, key: 1 }] })
+3598.146300591s decision by buf RouteDecision(RouteDecision { rule: Split, item: ItemId(116), edge: 1, chosen: 1, crossed: false, detail: 4606717351233515993, candidates: [RouteCandidate { id: 3, room: None, key: 4600877379321698714 }, RouteCandidate { id: 4, room: None, key: 4603579539098121011 }] })
+3598.146300591s event #2709 buf -> b Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 116
+3598.146300591s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+3598.146300591s event #2710 buf -> s2 Accept
+3598.146300591s note by s2 SourceState(SourceStateNote { state: Waiting, held: 0 })
+3598.146300591s event #2713 s2 -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 1, due: None }), item 123
+3598.146300591s event #2711 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(103)), variant: VariantId(0), priority: 0, due: Some(SimTime(8479079514491)), since: SimTime(2958865665622) })
+3598.146300591s event #2715 buf -> b OfferOf(OfferedUnit { item: Some(ItemId(123)), variant: VariantId(1), priority: 1, due: None, since: SimTime(3598146300591) })
