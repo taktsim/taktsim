@@ -373,6 +373,64 @@ fn discover_finds_the_nearest_store_upward() {
     );
 }
 
+/// Run ids are computed, so a result that belongs to another run is refused where it would
+/// be returned as this one: on reuse and after a `--no-reuse` run.
+#[test]
+fn a_result_filed_under_another_run_is_not_returned() {
+    let dir = TempDir::new();
+    let store = dir.store();
+    let first = run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    let second = run_text(&drawing_model(", seed: 2"), &RunRequest::new(), &store).unwrap();
+    let second_id = second.result.runs[0].run_id.as_ref().unwrap();
+    let file = store
+        .root()
+        .join("runs")
+        .join(second_id.as_str())
+        .join("result.json");
+    std::fs::write(&file, &first.text).unwrap();
+    let no_reuse = RunRequest {
+        reuse: false,
+        ..RunRequest::new()
+    };
+    for request in [RunRequest::new(), no_reuse] {
+        let failure = run_text(&drawing_model(", seed: 2"), &request, &store).unwrap_err();
+        assert_eq!(failure.class, FailureClass::RunFailed);
+        assert_eq!(failure.diagnostics[0].type_name, "run.stored_run_differs");
+    }
+    // The first run's own result is still its own.
+    let again = run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    assert!(again.reused);
+}
+
+/// The result states the records and events of its trace, as it states its hash.
+#[test]
+fn replay_refuses_a_result_with_other_counts_than_its_trace() {
+    let dir = TempDir::new();
+    let store = dir.store();
+    let registry = standard().unwrap();
+    let response = run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    let id = response.result.runs[0].run_id.clone().unwrap();
+    let file = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("result.json");
+    let run = &response.result.runs[0];
+    for (key, count) in [("events", run.events), ("records", run.records)] {
+        let forged = response.text.replace(
+            &format!("\"{key}\": {count},"),
+            &format!("\"{key}\": {},", count + 1),
+        );
+        assert_ne!(forged, response.text, "{key}");
+        std::fs::write(&file, forged).unwrap();
+        let failure = replay_stored(&registry, &store, &id).unwrap_err();
+        assert_eq!(failure.class, FailureClass::RunFailed, "{key}");
+        assert_eq!(failure.diagnostics[0].type_name, "run.stored_run_differs");
+    }
+    std::fs::write(&file, &response.text).unwrap();
+    assert!(replay_stored(&registry, &store, &id).is_ok());
+}
+
 /// A kept run's text is the stored file, and a partial run's is its only copy.
 #[test]
 fn the_text_of_a_response_is_the_document() {

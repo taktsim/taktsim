@@ -215,6 +215,7 @@ fn facts(command: &Command) -> Facts {
                         "run.stalled",
                         "run.no_draw_claim_false",
                         "run.store_differs",
+                        "run.stored_run_differs",
                         "run.trace_format",
                         "run.replay_differs",
                     ],
