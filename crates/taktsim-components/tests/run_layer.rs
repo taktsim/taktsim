@@ -66,7 +66,7 @@ fn the_model_hashes_are_in_the_header() {
         model.system_hash().as_bytes()
     );
     assert_eq!(header.components, ["source", "sink"]);
-    assert_eq!(header.message_format, "taktsim-components/1");
+    assert_eq!(header.message_format, "taktsim-components/2");
 }
 
 #[test]
@@ -224,6 +224,7 @@ fn parameters_of_another_type_are_refused_by_name() {
     impl taktsim_components::Domain for Open {
         type Message = taktsim_components::FlowMessage;
         type Shared = taktsim_components::FlowShared;
+        type Facts = ();
         fn check(
             _: &taktsim_model::Document,
             _: &taktsim_components::Roles,

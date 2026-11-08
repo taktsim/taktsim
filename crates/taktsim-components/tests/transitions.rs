@@ -159,7 +159,13 @@ fn state_equals_what_the_machine_holds() {
                             | FlowMessage::Withdraw
                             | FlowMessage::MachineState(_)
                             | FlowMessage::SourceState(_)
-                            | FlowMessage::VariantName { .. } => holds.down,
+                            | FlowMessage::VariantName { .. }
+                            | FlowMessage::Status(_)
+                            | FlowMessage::OfferOf(_)
+                            | FlowMessage::Return(_)
+                            | FlowMessage::RouteDecision(_)
+                            | FlowMessage::DispatchDecision(_)
+                            | FlowMessage::EdgeCondition { .. } => holds.down,
                         };
                         if matches!(message, FlowMessage::SetupDone) {
                             setups_open = false;

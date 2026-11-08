@@ -56,9 +56,12 @@ mod source;
 mod state;
 
 pub use buffer::{Buffer, Discipline};
-pub use flow::{Flow, FlowShared, standard};
+pub use flow::{Flow, FlowShared, MeanTimes, SetupMeans, StationFacts, StatusFact, standard};
 pub use machine::{Machine, Setup};
-pub use message::{FlowMessage, ItemAttrs, MachineStateNote, SourceStateNote, VariantId};
+pub use message::{
+    DispatchCandidate, DispatchDecision, FlowMessage, ItemAttrs, MachineStateNote, OfferedUnit,
+    RouteCandidate, RouteDecision, RouteRule, SourceStateNote, TargetStatus, VariantId,
+};
 pub use run::{
     BuildError, ComponentType, Domain, Ports, Prepared, Registry, Roles, RunFailure, RunOptions,
     RunReport, Wiring,

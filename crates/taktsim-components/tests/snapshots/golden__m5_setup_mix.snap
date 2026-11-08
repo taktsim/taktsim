@@ -4,7 +4,7 @@ expression: golden.snapshot()
 ---
 case: m5_setup_mix
 records: taktsim-core/3
-messages: taktsim-components/1
+messages: taktsim-components/2
 model hash: 649ba37dc18dfc7d1386a92dc1ea02d1832432604b92036774cc7d1ff00a874e
 system hash: bb63f7a952aecad55fe8da542b1c948e21f662519064234b29ce8925ef78fd2e
 seed: 2026

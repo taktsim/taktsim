@@ -19,7 +19,7 @@ use taktsim_core::{
 use taktsim_model::expr::Signature;
 use taktsim_model::{
     Catalog, CatalogError, Component as Entry, ComponentParams, Document, FieldPath, Findings,
-    LoadErrors, Model, Segment,
+    LoadErrors, Model, RoutingWords, Segment,
 };
 use taktsim_trace::{
     Header, ModelHash, Summary, SystemHash, TraceMessage, TraceWriter, WriteError,
@@ -39,6 +39,7 @@ use taktsim_units::SimTime;
 /// impl Domain for Lax {
 ///     type Message = taktsim_components::FlowMessage;
 ///     type Shared = ();
+///     type Facts = ();
 ///     fn check(_: &Document, _: &Roles, _: &mut Findings) {}
 ///     fn prepare(_: &Document, _: &Roles) -> Result<(), BuildError> { Ok(()) }
 /// }
@@ -51,17 +52,26 @@ pub trait Domain: 'static {
     type Message: TraceMessage;
     /// What every builder reads, such as the model's variants.
     type Shared;
+    /// What a component type states about one component, for what spans a
+    /// document: a rule on a type that does not state what it needs is an error
+    /// at load (ADR-0023 §13).
+    type Facts: Default;
+
+    /// The routing words this domain honours (ADR-0023 §2). A word it does not is
+    /// an unknown key in its models and absent from its schema.
+    const ROUTING: RoutingWords = RoutingWords::NONE;
 
     /// What it checks across a document, reported at a place and field path.
     /// Run at load time, and again when building.
-    fn check(document: &Document, roles: &Roles, findings: &mut Findings);
+    fn check(document: &Document, roles: &Roles<Self::Facts>, findings: &mut Findings);
 
     /// What every builder of `document` reads.
     ///
     /// # Errors
     ///
     /// A [`BuildError`] with the field path of what cannot be prepared.
-    fn prepare(document: &Document, roles: &Roles) -> Result<Self::Shared, BuildError>;
+    fn prepare(document: &Document, roles: &Roles<Self::Facts>)
+    -> Result<Self::Shared, BuildError>;
 }
 
 /// Which edges a component type may have (ADR-0022 §3). A type with inlets or
@@ -159,6 +169,12 @@ pub trait ComponentType<D: Domain>: ComponentParams {
     /// Whether it does work: a station a part waits for (ADR-0022 §5).
     const STATION: bool = false;
 
+    /// What this component states for the domain's rules (ADR-0023 §13). By
+    /// default nothing, so it cannot be given a rule that needs a fact.
+    fn facts(&self) -> D::Facts {
+        D::Facts::default()
+    }
+
     /// Its behaviour in one run.
     ///
     /// # Errors
@@ -184,30 +200,100 @@ pub trait ComponentType<D: Domain>: ComponentParams {
 /// assert_eq!(roles.ports("Nothing"), None);
 /// # Ok::<(), taktsim_model::CatalogError>(())
 /// ```
-#[derive(Debug, Clone, Default)]
-pub struct Roles {
-    types: BTreeMap<&'static str, (Ports, bool)>,
+pub struct Roles<F = ()> {
+    types: BTreeMap<&'static str, Role<F>>,
 }
 
-impl Roles {
+/// What one type declares, and how to ask a component of it for its facts.
+struct Role<F> {
+    ports: Ports,
+    station: bool,
+    facts: fn(&Entry) -> F,
+}
+
+impl<F> Clone for Role<F> {
+    fn clone(&self) -> Self {
+        Self {
+            ports: self.ports,
+            station: self.station,
+            facts: self.facts,
+        }
+    }
+}
+
+impl<F> Clone for Roles<F> {
+    fn clone(&self) -> Self {
+        Self {
+            types: self.types.clone(),
+        }
+    }
+}
+
+impl<F> Default for Roles<F> {
+    fn default() -> Self {
+        Self {
+            types: BTreeMap::new(),
+        }
+    }
+}
+
+impl<F> fmt::Debug for Roles<F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let types: Vec<(&str, Ports, bool)> = self
+            .types
+            .iter()
+            .map(|(name, role)| (*name, role.ports, role.station))
+            .collect();
+        f.debug_struct("Roles").field("types", &types).finish()
+    }
+}
+
+impl<F> Roles<F> {
     /// The ports of type `name`, if it is registered.
     ///
     /// ```
-    /// assert!(taktsim_components::Roles::default().ports("Sink").is_none());
+    /// assert!(taktsim_components::Roles::<()>::default().ports("Sink").is_none());
     /// ```
     #[must_use]
     pub fn ports(&self, name: &str) -> Option<Ports> {
-        self.types.get(name).map(|role| role.0)
+        self.types.get(name).map(|role| role.ports)
     }
 
     /// Whether type `name` is a station.
     ///
     /// ```
-    /// assert!(!taktsim_components::Roles::default().is_station("Machine"));
+    /// assert!(!taktsim_components::Roles::<()>::default().is_station("Machine"));
     /// ```
     #[must_use]
     pub fn is_station(&self, name: &str) -> bool {
-        self.types.get(name).is_some_and(|role| role.1)
+        self.types.get(name).is_some_and(|role| role.station)
+    }
+}
+
+impl<F: Default> Roles<F> {
+    /// What `component` states (ADR-0023 §13). A component of a type this registry
+    /// does not know states nothing.
+    ///
+    /// ```
+    /// use taktsim_components::{StatusFact, StationFacts};
+    /// use taktsim_model::{Format, Loader};
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// let model = Loader::new(registry.catalog()).load_str(
+    ///     "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+    ///      components: [{id: source, type: Source, interarrival: 1min}, {id: sink, type: Sink}]\n\
+    ///      flow: [[source, sink]]\n",
+    ///     Format::Yaml,
+    /// )?;
+    /// let facts: StationFacts = registry.roles().facts(&model.document().components()[1]);
+    /// assert_eq!(facts.status, StatusFact::AlwaysRoom);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub fn facts(&self, component: &Entry) -> F {
+        self.types
+            .get(component.type_name())
+            .map_or_else(F::default, |role| (role.facts)(component))
     }
 }
 
@@ -268,7 +354,8 @@ impl<'a, S> Wiring<'a, S> {
         self.upstream
     }
 
-    /// The ids of the components it feeds, in declared order.
+    /// The ids of the components it feeds, each once, in the order `flow` first
+    /// names them.
     ///
     /// ```
     /// fn targets(wiring: &taktsim_components::Wiring<'_, ()>) -> usize {
@@ -298,6 +385,10 @@ type Builder<D> = fn(
     &Entry,
     &Wiring<'_, <D as Domain>::Shared>,
 ) -> Result<Box<dyn Behaviour<<D as Domain>::Message>>, BuildError>;
+
+fn facts_of<D: Domain, T: ComponentType<D>>(entry: &Entry) -> D::Facts {
+    entry.params::<T>().map_or_else(D::Facts::default, T::facts)
+}
 
 fn build_entry<D: Domain, T: ComponentType<D>>(
     entry: &Entry,
@@ -342,7 +433,7 @@ fn build_entry<D: Domain, T: ComponentType<D>>(
 pub struct Registry<D: Domain> {
     catalog: Catalog,
     builders: BTreeMap<&'static str, Builder<D>>,
-    roles: Roles,
+    roles: Roles<D::Facts>,
     _domain: PhantomData<fn() -> D>,
 }
 
@@ -372,7 +463,7 @@ impl<D: Domain> Registry<D> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            catalog: Catalog::new(),
+            catalog: Catalog::new().with_routing(D::ROUTING),
             builders: BTreeMap::new(),
             roles: Roles::default(),
             _domain: PhantomData,
@@ -396,7 +487,14 @@ impl<D: Domain> Registry<D> {
     /// ```
     pub fn with<T: ComponentType<D>>(mut self) -> Result<Self, CatalogError> {
         let catalog = self.catalog.with::<T>()?;
-        self.roles.types.insert(T::TYPE, (T::PORTS, T::STATION));
+        self.roles.types.insert(
+            T::TYPE,
+            Role {
+                ports: T::PORTS,
+                station: T::STATION,
+                facts: facts_of::<D, T>,
+            },
+        );
         self.builders.insert(T::TYPE, build_entry::<D, T>);
         let roles = Arc::new(self.roles.clone());
         self.catalog = catalog.with_check(Box::new(move |document, findings| {
@@ -449,7 +547,7 @@ impl<D: Domain> Registry<D> {
     /// # Ok::<(), taktsim_model::CatalogError>(())
     /// ```
     #[must_use]
-    pub const fn roles(&self) -> &Roles {
+    pub const fn roles(&self) -> &Roles<D::Facts> {
         &self.roles
     }
 
@@ -586,14 +684,15 @@ fn neighbours(document: &Document) -> (Neighbours<'_>, Neighbours<'_>) {
     for edge in document.flow() {
         for from in edge.from() {
             for to in edge.to() {
-                downstream
-                    .entry(from.id())
-                    .or_default()
-                    .push(to.id().to_owned());
-                upstream
-                    .entry(to.id())
-                    .or_default()
-                    .push(from.id().to_owned());
+                // A pair can repeat after a condition (ADR-0023 §1).
+                let targets: &mut Vec<String> = downstream.entry(from.id()).or_default();
+                if !targets.iter().any(|t| t == to.id()) {
+                    targets.push(to.id().to_owned());
+                }
+                let feeders: &mut Vec<String> = upstream.entry(to.id()).or_default();
+                if !feeders.iter().any(|f| f == from.id()) {
+                    feeders.push(from.id().to_owned());
+                }
             }
         }
     }

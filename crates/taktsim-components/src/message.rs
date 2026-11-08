@@ -1,7 +1,8 @@
 //! The messages of a flow model: what components say to each other, and what
-//! they write in the trace (ADR-0022 §4, §8, §9).
+//! they write in the trace (ADR-0022 §4, §8, §9; ADR-0023 §9, §10).
 
-use taktsim_core::{ItemId, Message};
+use taktsim_core::{ComponentId, ItemId, Message};
+use taktsim_model::DispatchRule;
 use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
 use taktsim_units::SimTime;
 
@@ -64,8 +65,7 @@ pub struct ItemAttrs {
     /// The priority: higher goes first, absent in the model is 0. Unrelated to
     /// a message's priority, where lower goes first.
     pub priority: u8,
-    /// The due date. Always absent in M5; carrying it spares M6 a format
-    /// change.
+    /// The due date: when a Source with `due_in` says so.
     pub due: Option<SimTime>,
 }
 
@@ -122,6 +122,238 @@ pub struct SourceStateNote {
     pub held: u32,
 }
 
+/// What a target tells an upstream that uses a rule on it, at the end of any event
+/// that changed it (ADR-0023 §5). Each receiver gets its own value.
+///
+/// ```
+/// use taktsim_components::TargetStatus;
+///
+/// let status = TargetStatus { room: false, accept_follows: true, queue: 3, running: 1, worked: 90, follows: None };
+/// assert_eq!(status.queue, 3);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TargetStatus {
+    /// A place is free, the target is not down and its return lane is empty.
+    pub room: bool,
+    /// The receiver's own offer has just taken a place here, and the `Accept`
+    /// follows this message at this instant. So the part is on its way, and a
+    /// loss of room here is no reason to move it. See `docs/adr/0023`, the
+    /// implementation notes.
+    pub accept_follows: bool,
+    /// Units at the target, reserved places and waiting offers, other than an
+    /// offer from the receiver.
+    pub queue: u64,
+    /// Units now in their cycle.
+    pub running: u32,
+    /// Unit-nanoseconds worked up to the time of this message.
+    pub worked: u128,
+    /// The variant the next accepted unit follows; `None` before the first, and
+    /// always unless the target's rule is `minimum_setup`.
+    pub follows: Option<VariantId>,
+}
+
+/// What an offer to a station with a rule says about the unit it stands for
+/// (ADR-0023 §6).
+///
+/// ```
+/// use taktsim_components::{OfferedUnit, VariantId};
+/// use taktsim_units::SimTime;
+///
+/// let unit = OfferedUnit { item: None, variant: VariantId::new(1), priority: 0, due: None, since: SimTime::START };
+/// assert_eq!(unit.variant.get(), 1);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OfferedUnit {
+    /// The item; `None` at an on-demand Source, which creates it when accepted.
+    pub item: Option<ItemId>,
+    /// The variant.
+    pub variant: VariantId,
+    /// The priority.
+    pub priority: u8,
+    /// The due date, if it has one.
+    pub due: Option<SimTime>,
+    /// When it became ready in its holder.
+    pub since: SimTime,
+}
+
+/// The rule a [`RouteDecision`] states. Codes 128 to 255 stay reserved for package
+/// rules (ADR-0023 §2).
+///
+/// ```
+/// use taktsim_components::RouteRule;
+///
+/// assert_eq!(RouteRule::Split.code(), 1);
+/// assert_eq!(RouteRule::from_code(5), Some(RouteRule::Preferred));
+/// assert_eq!(RouteRule::from_code(128), None);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RouteRule {
+    /// A condition chose the edge.
+    When,
+    /// A draw chose the target.
+    Split,
+    /// The first `Accept` took the part: event order chose.
+    FirstFree,
+    /// Has room, then the fewest units, then list order.
+    ShortestQueue,
+    /// Has room, then the least work per place, then list order.
+    LowestUtilization,
+    /// Has room, then list order.
+    Preferred,
+}
+
+impl RouteRule {
+    /// The rule's code in the trace (ADR-0023 §9).
+    ///
+    /// ```
+    /// assert_eq!(taktsim_components::RouteRule::When.code(), 0);
+    /// ```
+    #[must_use]
+    pub const fn code(self) -> u8 {
+        match self {
+            Self::When => 0,
+            Self::Split => 1,
+            Self::FirstFree => 2,
+            Self::ShortestQueue => 3,
+            Self::LowestUtilization => 4,
+            Self::Preferred => 5,
+        }
+    }
+
+    /// The rule with `code`, if there is one.
+    ///
+    /// ```
+    /// use taktsim_components::RouteRule;
+    ///
+    /// assert_eq!(RouteRule::from_code(2), Some(RouteRule::FirstFree));
+    /// assert_eq!(RouteRule::from_code(6), None);
+    /// ```
+    #[must_use]
+    pub const fn from_code(code: u8) -> Option<Self> {
+        Some(match code {
+            0 => Self::When,
+            1 => Self::Split,
+            2 => Self::FirstFree,
+            3 => Self::ShortestQueue,
+            4 => Self::LowestUtilization,
+            5 => Self::Preferred,
+            _ => return None,
+        })
+    }
+}
+
+/// One candidate of a [`RouteDecision`]. For `when`, `id` is a leaving edge and
+/// `key` 1 if it matched. Otherwise `id` is the target's component number, in list
+/// order or sorted for `split`, and `key` is the rule's: the share's `f64` bits, 0,
+/// the queue, the ns worked per place or the position (ADR-0023 §9).
+///
+/// ```
+/// use taktsim_components::RouteCandidate;
+///
+/// let c = RouteCandidate { id: 3, room: Some(true), key: 2 };
+/// assert_eq!(c.room, Some(true));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RouteCandidate {
+    /// The edge or the target.
+    pub id: u32,
+    /// Whether the target had room; `None` if the rule does not know.
+    pub room: Option<bool>,
+    /// The rule's key.
+    pub key: u64,
+}
+
+/// A routing choice, written when the part leaves (ADR-0023 §9).
+///
+/// ```
+/// use taktsim_components::{RouteCandidate, RouteDecision, RouteRule};
+/// use taktsim_core::ItemId;
+///
+/// let record = RouteDecision {
+///     rule: RouteRule::Preferred,
+///     item: ItemId::from_raw(4),
+///     edge: 0,
+///     chosen: 1,
+///     crossed: false,
+///     detail: 0,
+///     candidates: vec![
+///         RouteCandidate { id: 2, room: Some(false), key: 0 },
+///         RouteCandidate { id: 3, room: Some(true), key: 1 },
+///     ],
+/// };
+/// assert_eq!(record.candidates[usize::from(record.chosen)].id, 3);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteDecision {
+    /// The rule.
+    pub rule: RouteRule,
+    /// The part.
+    pub item: ItemId,
+    /// Which of the holder's leaving edges, in written order.
+    pub edge: u32,
+    /// The position of the chosen candidate.
+    pub chosen: u16,
+    /// An `Accept` from the earlier target crossed a move, so the part went to
+    /// `chosen` although the ranking favoured the target it had just moved to.
+    pub crossed: bool,
+    /// For `split` the draw's `f64` bits, for a status rule the time of the
+    /// ranking, otherwise 0.
+    pub detail: u64,
+    /// What it chose from.
+    pub candidates: Vec<RouteCandidate>,
+}
+
+/// One candidate of a [`DispatchDecision`].
+///
+/// ```
+/// use taktsim_components::DispatchCandidate;
+/// use taktsim_core::ComponentId;
+/// use taktsim_units::SimTime;
+///
+/// let c = DispatchCandidate { from: ComponentId::from_index(1), item: None, key: 9, since: SimTime::START };
+/// assert_eq!(c.key, 9);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DispatchCandidate {
+    /// Who holds it.
+    pub from: ComponentId,
+    /// The item; `None` at an on-demand Source.
+    pub item: Option<ItemId>,
+    /// The rule's key: lower wins.
+    pub key: u64,
+    /// When it became ready in its holder.
+    pub since: SimTime,
+}
+
+/// A declared dispatching rule's choice, written when it took effect
+/// (ADR-0023 §9). Best first, so the chosen unit comes first; at most 1,024 are
+/// listed, and every unit left out ranks after the last one listed.
+///
+/// ```
+/// use taktsim_components::{DispatchCandidate, DispatchDecision};
+/// use taktsim_core::ComponentId;
+/// use taktsim_model::DispatchRule;
+///
+/// let record = DispatchDecision {
+///     rule: DispatchRule::Fifo,
+///     taker: ComponentId::from_index(2),
+///     total: 2000,
+///     candidates: Vec::new(),
+/// };
+/// assert_eq!(record.total, 2000);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DispatchDecision {
+    /// The rule of the station taking the unit.
+    pub rule: DispatchRule,
+    /// The station taking the unit.
+    pub taker: ComponentId,
+    /// How many candidates there were.
+    pub total: u64,
+    /// The best of them, best first.
+    pub candidates: Vec<DispatchCandidate>,
+}
+
 /// The messages of a flow model. Timers and protocol messages are delivered;
 /// the notes only go to the trace. The enum is closed: a new one changes this
 /// crate and its [`FORMAT`](TraceMessage::FORMAT) (ADR-0022 §11).
@@ -174,6 +406,29 @@ pub enum FlowMessage {
         /// The name.
         name: String,
     },
+    /// Target → upstream: what a rule needs to know. In a box, like the other
+    /// messages larger than the rest, so a model without rules moves no larger
+    /// message than it did.
+    Status(Box<TargetStatus>),
+    /// Upstream → downstream: I have a part for you, and this is the unit. Only to
+    /// a station with a rule; sent again when the unit changes, and then the offer
+    /// keeps its place.
+    OfferOf(Box<OfferedUnit>),
+    /// Upstream → its loop's return target, with the item: a part coming back. It
+    /// never waits (ADR-0023 §8).
+    Return(ItemAttrs),
+    /// Decision: a routing choice.
+    RouteDecision(Box<RouteDecision>),
+    /// Decision: a declared dispatching rule's choice.
+    DispatchDecision(Box<DispatchDecision>),
+    /// Note: the canonical text of a holder's leaving edge's condition, so a trace
+    /// reads on its own.
+    EdgeCondition {
+        /// Which of the holder's leaving edges, in written order.
+        edge: u32,
+        /// The condition.
+        text: String,
+    },
 }
 
 impl Message for FlowMessage {
@@ -184,11 +439,16 @@ impl Message for FlowMessage {
             Self::Repaired => 1,
             Self::CycleDone { .. } | Self::SetupDone => 2,
             Self::NextArrival => 3,
-            Self::Arrive(_) => 4,
+            Self::Arrive(_) | Self::Status(_) | Self::Return(_) => 4,
             Self::Accept => 5,
             Self::Decline => 6,
-            Self::Offer | Self::Withdraw => 7,
-            Self::MachineState(_) | Self::SourceState(_) | Self::VariantName { .. } => 8,
+            Self::Offer | Self::Withdraw | Self::OfferOf(_) => 7,
+            Self::MachineState(_)
+            | Self::SourceState(_)
+            | Self::VariantName { .. }
+            | Self::RouteDecision(_)
+            | Self::DispatchDecision(_)
+            | Self::EdgeCondition { .. } => 8,
         }
     }
 }
@@ -206,10 +466,254 @@ const MACHINE_STATE: u8 = 9;
 const SOURCE_STATE: u8 = 10;
 const VARIANT_NAME: u8 = 11;
 const WITHDRAW: u8 = 12;
+const STATUS: u8 = 13;
+const OFFER_OF: u8 = 14;
+const RETURN: u8 = 15;
+const ROUTE_DECISION: u8 = 16;
+const DISPATCH_DECISION: u8 = 17;
+const EDGE_CONDITION: u8 = 18;
+
+/// The code of a dispatching rule in the trace (ADR-0023 §9). Codes 128 to 255 stay
+/// reserved for package rules.
+const fn dispatch_code(rule: DispatchRule) -> u8 {
+    match rule {
+        DispatchRule::Fifo => 0,
+        DispatchRule::EarliestDueDate => 1,
+        DispatchRule::ShortestProcessingTime => 2,
+        DispatchRule::MinimumSetup => 3,
+        DispatchRule::PriorityClass => 4,
+    }
+}
+
+const fn dispatch_rule(code: u8) -> Option<DispatchRule> {
+    Some(match code {
+        0 => DispatchRule::Fifo,
+        1 => DispatchRule::EarliestDueDate,
+        2 => DispatchRule::ShortestProcessingTime,
+        3 => DispatchRule::MinimumSetup,
+        4 => DispatchRule::PriorityClass,
+        _ => return None,
+    })
+}
+
+/// A list's length: every list here is at most 1,024 long (ADR-0023 §1, §9).
+fn count(len: usize) -> u16 {
+    u16::try_from(len).unwrap_or(u16::MAX)
+}
+
+fn encode_attrs(attrs: &ItemAttrs, out: &mut Encoder<'_>) {
+    out.u16(attrs.variant.get());
+    out.u8(attrs.priority);
+    out.bool(attrs.due.is_some());
+    out.time(attrs.due.unwrap_or(SimTime::START));
+}
+
+fn decode_attrs(input: &mut Decoder<'_>) -> Result<ItemAttrs, DecodeError> {
+    let variant = VariantId::new(input.u16()?);
+    let priority = input.u8()?;
+    let has_due = input.bool()?;
+    let raw = input.time()?;
+    let due = if has_due {
+        Some(raw)
+    } else if raw == SimTime::START {
+        None
+    } else {
+        return Err(input.invalid("due date of a part without one", raw.as_nanos(), 0));
+    };
+    Ok(ItemAttrs {
+        variant,
+        priority,
+        due,
+    })
+}
+
+fn encode_status(status: &TargetStatus, out: &mut Encoder<'_>) {
+    out.u8(u8::from(status.room) | u8::from(status.accept_follows) << 1);
+    out.u64(status.queue);
+    out.u32(status.running);
+    // The low and the high half of the 128 bits.
+    let worked = status.worked.to_le_bytes();
+    let (low, high) = worked.split_at(8);
+    let half = |bytes: &[u8]| {
+        let mut word = [0; 8];
+        word.copy_from_slice(bytes);
+        u64::from_le_bytes(word)
+    };
+    out.u64(half(low));
+    out.u64(half(high));
+    out.bool(status.follows.is_some());
+    out.u16(status.follows.map_or(0, VariantId::get));
+}
+
+fn decode_status(input: &mut Decoder<'_>) -> Result<TargetStatus, DecodeError> {
+    let room = input.u8()?;
+    if room > 3 {
+        return Err(input.invalid("room", room.into(), "0 to 3"));
+    }
+    let queue = input.u64()?;
+    let running = input.u32()?;
+    let low = u128::from(input.u64()?);
+    let high = u128::from(input.u64()?);
+    let has_follows = input.bool()?;
+    let raw = input.u16()?;
+    let follows = if has_follows {
+        Some(VariantId::new(raw))
+    } else if raw == 0 {
+        None
+    } else {
+        return Err(input.invalid("variant of a status that follows none", raw.into(), 0));
+    };
+    Ok(TargetStatus {
+        room: room & 1 == 1,
+        accept_follows: room & 2 == 2,
+        queue,
+        running,
+        worked: high << 64 | low,
+        follows,
+    })
+}
+
+fn encode_offered(unit: &OfferedUnit, out: &mut Encoder<'_>) {
+    out.bool(unit.item.is_some());
+    out.u64(unit.item.map_or(0, ItemId::as_u64));
+    out.u16(unit.variant.get());
+    out.u8(unit.priority);
+    out.bool(unit.due.is_some());
+    out.time(unit.due.unwrap_or(SimTime::START));
+    out.time(unit.since);
+}
+
+fn decode_offered(input: &mut Decoder<'_>) -> Result<OfferedUnit, DecodeError> {
+    let item = optional_item(input)?;
+    let variant = VariantId::new(input.u16()?);
+    let priority = input.u8()?;
+    let has_due = input.bool()?;
+    let raw = input.time()?;
+    let due = if has_due {
+        Some(raw)
+    } else if raw == SimTime::START {
+        None
+    } else {
+        return Err(input.invalid("due date of a part without one", raw.as_nanos(), 0));
+    };
+    Ok(OfferedUnit {
+        item,
+        variant,
+        priority,
+        due,
+        since: input.time()?,
+    })
+}
+
+fn optional_item(input: &mut Decoder<'_>) -> Result<Option<ItemId>, DecodeError> {
+    let has_item = input.bool()?;
+    let raw = input.u64()?;
+    if has_item {
+        Ok(Some(ItemId::from_raw(raw)))
+    } else if raw == 0 {
+        Ok(None)
+    } else {
+        Err(input.invalid("item of a unit without one", raw, 0))
+    }
+}
+
+fn encode_route(record: &RouteDecision, out: &mut Encoder<'_>) {
+    out.u8(record.rule.code());
+    out.item(record.item);
+    out.u32(record.edge);
+    out.u16(record.chosen);
+    out.bool(record.crossed);
+    out.u64(record.detail);
+    out.u16(count(record.candidates.len()));
+    for candidate in &record.candidates {
+        out.u32(candidate.id);
+        out.u8(match candidate.room {
+            Some(false) => 0,
+            Some(true) => 1,
+            None => 2,
+        });
+        out.u64(candidate.key);
+    }
+}
+
+fn decode_route(input: &mut Decoder<'_>) -> Result<RouteDecision, DecodeError> {
+    let code = input.u8()?;
+    let Some(rule) = RouteRule::from_code(code) else {
+        return Err(input.invalid("route rule", code.into(), "0 to 5"));
+    };
+    let item = input.item()?;
+    let edge = input.u32()?;
+    let chosen = input.u16()?;
+    let crossed = input.bool()?;
+    let detail = input.u64()?;
+    let mut candidates = Vec::new();
+    for _ in 0..input.u16()? {
+        let id = input.u32()?;
+        let room = match input.u8()? {
+            0 => Some(false),
+            1 => Some(true),
+            2 => None,
+            other => return Err(input.invalid("room of a candidate", other.into(), "0 to 2")),
+        };
+        let key = input.u64()?;
+        candidates.push(RouteCandidate { id, room, key });
+    }
+    Ok(RouteDecision {
+        rule,
+        item,
+        edge,
+        chosen,
+        crossed,
+        detail,
+        candidates,
+    })
+}
+
+fn encode_dispatch(record: &DispatchDecision, out: &mut Encoder<'_>) {
+    out.u8(dispatch_code(record.rule));
+    out.component(record.taker);
+    out.u64(record.total);
+    out.u16(count(record.candidates.len()));
+    for candidate in &record.candidates {
+        out.component(candidate.from);
+        out.bool(candidate.item.is_some());
+        out.u64(candidate.item.map_or(0, ItemId::as_u64));
+        out.u64(candidate.key);
+        out.time(candidate.since);
+    }
+}
+
+fn decode_dispatch(input: &mut Decoder<'_>) -> Result<DispatchDecision, DecodeError> {
+    let code = input.u8()?;
+    let Some(rule) = dispatch_rule(code) else {
+        return Err(input.invalid("dispatching rule", code.into(), "0 to 4"));
+    };
+    let taker = input.component()?;
+    let total = input.u64()?;
+    let mut candidates = Vec::new();
+    for _ in 0..input.u16()? {
+        let from = input.component()?;
+        let item = optional_item(input)?;
+        let key = input.u64()?;
+        let since = input.time()?;
+        candidates.push(DispatchCandidate {
+            from,
+            item,
+            key,
+            since,
+        });
+    }
+    Ok(DispatchDecision {
+        rule,
+        taker,
+        total,
+        candidates,
+    })
+}
 
 impl TraceMessage for FlowMessage {
-    /// The encoding of ADR-0022 §9: a tag `u8`, then its fields.
-    const FORMAT: &'static str = "taktsim-components/1";
+    /// The encoding of ADR-0022 §9 and ADR-0023 §10: a tag `u8`, then its fields.
+    const FORMAT: &'static str = "taktsim-components/2";
 
     fn encode(&self, out: &mut Encoder<'_>) {
         match self {
@@ -223,10 +727,7 @@ impl TraceMessage for FlowMessage {
             Self::NextArrival => out.u8(NEXT_ARRIVAL),
             Self::Arrive(attrs) => {
                 out.u8(ARRIVE);
-                out.u16(attrs.variant.get());
-                out.u8(attrs.priority);
-                out.bool(attrs.due.is_some());
-                out.time(attrs.due.unwrap_or(SimTime::START));
+                encode_attrs(attrs, out);
             }
             Self::Accept => out.u8(ACCEPT),
             Self::Decline => out.u8(DECLINE),
@@ -249,6 +750,31 @@ impl TraceMessage for FlowMessage {
                 out.u16(id.get());
                 out.str(name);
             }
+            Self::Status(status) => {
+                out.u8(STATUS);
+                encode_status(status, out);
+            }
+            Self::OfferOf(unit) => {
+                out.u8(OFFER_OF);
+                encode_offered(unit, out);
+            }
+            Self::Return(attrs) => {
+                out.u8(RETURN);
+                encode_attrs(attrs, out);
+            }
+            Self::RouteDecision(record) => {
+                out.u8(ROUTE_DECISION);
+                encode_route(record, out);
+            }
+            Self::DispatchDecision(record) => {
+                out.u8(DISPATCH_DECISION);
+                encode_dispatch(record, out);
+            }
+            Self::EdgeCondition { edge, text } => {
+                out.u8(EDGE_CONDITION);
+                out.u32(*edge);
+                out.str(text);
+            }
         }
     }
 
@@ -262,24 +788,7 @@ impl TraceMessage for FlowMessage {
             },
             SETUP_DONE => Self::SetupDone,
             NEXT_ARRIVAL => Self::NextArrival,
-            ARRIVE => {
-                let variant = VariantId::new(input.u16()?);
-                let priority = input.u8()?;
-                let has_due = input.bool()?;
-                let raw = input.time()?;
-                let due = if has_due {
-                    Some(raw)
-                } else if raw == SimTime::START {
-                    None
-                } else {
-                    return Err(input.invalid("due date of a part without one", raw.as_nanos(), 0));
-                };
-                Self::Arrive(ItemAttrs {
-                    variant,
-                    priority,
-                    due,
-                })
-            }
+            ARRIVE => Self::Arrive(decode_attrs(input)?),
             ACCEPT => Self::Accept,
             DECLINE => Self::Decline,
             OFFER => Self::Offer,
@@ -323,7 +832,16 @@ impl TraceMessage for FlowMessage {
                 id: VariantId::new(input.u16()?),
                 name: input.str()?.to_owned(),
             },
-            other => return Err(input.invalid("FlowMessage tag", other.into(), "0 to 12")),
+            STATUS => Self::Status(Box::new(decode_status(input)?)),
+            OFFER_OF => Self::OfferOf(Box::new(decode_offered(input)?)),
+            RETURN => Self::Return(decode_attrs(input)?),
+            ROUTE_DECISION => Self::RouteDecision(Box::new(decode_route(input)?)),
+            DISPATCH_DECISION => Self::DispatchDecision(Box::new(decode_dispatch(input)?)),
+            EDGE_CONDITION => Self::EdgeCondition {
+                edge: input.u32()?,
+                text: input.str()?.to_owned(),
+            },
+            other => return Err(input.invalid("FlowMessage tag", other.into(), "0 to 18")),
         })
     }
 }

@@ -8,7 +8,7 @@ use taktsim_model::{
 };
 use taktsim_units::Count;
 
-use crate::flow::{Flow, FlowShared};
+use crate::flow::{Flow, FlowShared, StationFacts, StatusFact};
 use crate::message::{FlowMessage, ItemAttrs};
 use crate::params::Places;
 use crate::port::{Inlet, Outlet};
@@ -142,6 +142,15 @@ impl ComponentParams for Buffer {
 }
 
 impl ComponentType<Flow> for Buffer {
+    fn facts(&self) -> StationFacts {
+        StationFacts {
+            routes: true,
+            status: StatusFact::Reports,
+            places: Some(self.capacity.get()),
+            ..StationFacts::default()
+        }
+    }
+
     fn build(
         &self,
         wiring: &Wiring<'_, FlowShared>,
@@ -243,7 +252,13 @@ impl Component<FlowMessage> for BufferBehaviour {
             | FlowMessage::NextArrival
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
-            | FlowMessage::VariantName { .. }) => return Err(unexpected(message)),
+            | FlowMessage::VariantName { .. }
+            | FlowMessage::Status(_)
+            | FlowMessage::OfferOf(_)
+            | FlowMessage::Return(_)
+            | FlowMessage::RouteDecision(_)
+            | FlowMessage::DispatchDecision(_)
+            | FlowMessage::EdgeCondition { .. }) => return Err(unexpected(message)),
         }
         self.settle(ctx)
     }
