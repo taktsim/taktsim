@@ -4,11 +4,12 @@
 
 use std::sync::Arc;
 
-use taktsim_core::ComponentError;
+use taktsim_core::{ComponentError, ItemId};
 use taktsim_model::expr::{Condition, Input, Value, Values};
+use taktsim_units::SimTime;
 
 use crate::dispatch::TakerPlan;
-use crate::message::{ItemAttrs, RouteRule};
+use crate::message::{ItemAttrs, OfferedUnit, RouteRule};
 
 /// How a part leaves a component whose edges are not plain.
 #[derive(Debug, Clone)]
@@ -76,8 +77,6 @@ impl StatusRule {
 /// What a holder knows about one of its targets, built from facts.
 #[derive(Debug, Clone)]
 pub(crate) struct TargetPlan {
-    /// The component's id.
-    pub(crate) name: String,
     /// Its declared dispatching rule, if it has one.
     pub(crate) taker: Option<Arc<TakerPlan>>,
     /// How many places it has, for `lowest_utilization`.
@@ -97,6 +96,29 @@ pub(crate) struct Route {
     pub(crate) target: Option<u32>,
     /// A split's draw, as `f64` bits, for the record.
     pub(crate) draw: u64,
+}
+
+/// A part ready to leave, in a holder: it keeps its route and the time it became
+/// ready (ADR-0023 §3, §6).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Part {
+    pub(crate) item: ItemId,
+    pub(crate) attrs: ItemAttrs,
+    pub(crate) since: SimTime,
+    pub(crate) route: Route,
+}
+
+impl Part {
+    /// The part as an offer to a station with a rule describes it.
+    pub(crate) const fn offered(&self) -> OfferedUnit {
+        OfferedUnit {
+            item: Some(self.item),
+            variant: self.attrs.variant,
+            priority: self.attrs.priority,
+            due: self.attrs.due,
+            since: self.since,
+        }
+    }
 }
 
 /// A part's attributes as a condition reads them (ADR-0023 §2).

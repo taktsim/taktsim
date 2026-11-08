@@ -9,8 +9,8 @@ model hash: 282346086f92e170c6592284037474eb9b637f6c3aef864b3b13350bf925b9c6
 system hash: 0e6f6303820c3e4787c4022056ec378c7503611626f09e71d21eb8ab21f15c76
 seed: 3
 components: s1, s2, a, b, buf, c, sink1, sink2
-records: 11036 (7412 events) in 6 chunks
-stream sha256: 234a12f7ba5312d398e668f2ea85ab9fd632925f9b6900e65d684a66a6220e9b
+records: 11665 (7412 events) in 7 chunks
+stream sha256: 1c97ac22537507598df1dbddee4dba7a15b615da1df942c20db4c0930c33b413
 end: 2h (horizon)
 ---
 0s note by s1 VariantName { id: VariantId(0), name: "blue" }
@@ -26,6 +26,7 @@ end: 2h (horizon)
 5.985792278s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
 5.985792278s event #3 s1 -> a Offer
 5.985792278s event #5 a -> s1 Accept
+5.985792278s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(0), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 5.985792278s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 5.985792278s event #6 s1 -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
 5.985792278s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -39,6 +40,7 @@ end: 2h (horizon)
 6.008457488s event #12 s1 -> a Offer
 6.008457488s event #13 s1 -> b Offer
 6.008457488s event #14 b -> s1 Accept
+6.008457488s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(1), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 6.008457488s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 6.008457488s event #15 s1 -> b Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 1
 6.008457488s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -58,6 +60,7 @@ end: 2h (horizon)
 11.555923074s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
 11.555923074s event #26 s1 -> a Offer
 11.555923074s event #28 a -> s1 Accept
+11.555923074s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(2), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 11.555923074s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 11.555923074s event #29 s1 -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 2
 11.555923074s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -72,6 +75,7 @@ end: 2h (horizon)
 31.888737794s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 31.888737794s event #35 c -> sink1 Offer
 31.888737794s event #37 sink1 -> c Accept
+31.888737794s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(0), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 31.888737794s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 31.888737794s event #38 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
 31.888737794s item 0 delivered by sink1
@@ -86,6 +90,7 @@ end: 2h (horizon)
 31.964476232s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 31.964476232s event #44 a -> buf Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 2
 31.964476232s event #45 a -> s1 Accept
+31.964476232s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(3), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 31.964476232s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 31.964476232s event #47 s1 -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 3
 31.964476232s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -109,6 +114,7 @@ end: 2h (horizon)
 51.476454957s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 51.476454957s event #59 c -> sink1 Offer
 51.476454957s event #61 sink1 -> c Accept
+51.476454957s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(2), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 51.476454957s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 51.476454957s event #62 c -> sink1 Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 2
 51.476454957s item 2 delivered by sink1
@@ -124,6 +130,7 @@ end: 2h (horizon)
 65.933949533s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
 65.933949533s event #69 s1 -> a Offer
 65.933949533s event #71 a -> s1 Accept
+65.933949533s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(5), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 65.933949533s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 65.933949533s event #72 s1 -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 5
 65.933949533s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -133,6 +140,7 @@ end: 2h (horizon)
 66.47698431s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 66.47698431s event #76 c -> sink1 Offer
 66.47698431s event #78 sink1 -> c Accept
+66.47698431s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(3), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 66.47698431s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 66.47698431s event #79 c -> sink1 Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 3
 66.47698431s item 3 delivered by sink1
@@ -155,6 +163,7 @@ end: 2h (horizon)
 93.386901557s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
 93.386901557s event #90 s1 -> a Offer
 93.386901557s event #92 a -> s1 Accept
+93.386901557s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(6), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 93.386901557s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 93.386901557s event #93 s1 -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
 93.386901557s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -164,6 +173,7 @@ end: 2h (horizon)
 98.207016964s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 98.207016964s event #97 c -> sink1 Offer
 98.207016964s event #99 sink1 -> c Accept
+98.207016964s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(5), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 98.207016964s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 98.207016964s event #100 c -> sink1 Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 5
 98.207016964s item 5 delivered by sink1
@@ -197,6 +207,7 @@ end: 2h (horizon)
 137.636901391s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 137.636901391s event #119 b -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 0, due: None }), item 4
 137.636901391s event #120 b -> s1 Accept
+137.636901391s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(7), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 137.636901391s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 137.636901391s event #122 s1 -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
 137.636901391s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -218,6 +229,7 @@ end: 2h (horizon)
 169.548342009s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 169.548342009s event #131 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
 169.548342009s event #132 a -> s1 Accept
+169.548342009s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(8), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 169.548342009s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 169.548342009s event #133 s1 -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
 169.548342009s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -234,6 +246,7 @@ end: 2h (horizon)
 206.173465051s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 206.173465051s event #140 c -> sink1 Offer
 206.173465051s event #142 sink1 -> c Accept
+206.173465051s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(1), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 206.173465051s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 206.173465051s event #143 c -> sink1 Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 1
 206.173465051s item 1 delivered by sink1
@@ -256,6 +269,7 @@ end: 2h (horizon)
 206.921522824s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 206.921522824s event #157 c -> sink1 Offer
 206.921522824s event #159 sink1 -> c Accept
+206.921522824s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(4), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 206.921522824s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 206.921522824s event #160 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 0, due: None }), item 4
 206.921522824s item 4 delivered by sink1
@@ -274,6 +288,7 @@ end: 2h (horizon)
 208.380872814s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 208.380872814s event #170 b -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 0, due: None }), item 9
 208.380872814s event #171 b -> s1 Accept
+208.380872814s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(10), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 208.380872814s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 208.380872814s event #172 s1 -> b Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
 208.380872814s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -297,6 +312,7 @@ end: 2h (horizon)
 271.512822701s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 271.512822701s event #181 c -> sink1 Offer
 271.512822701s event #183 sink1 -> c Accept
+271.512822701s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(6), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 271.512822701s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 271.512822701s event #184 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
 271.512822701s item 6 delivered by sink1
@@ -307,6 +323,7 @@ end: 2h (horizon)
 271.512822701s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 271.512822701s event #191 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
 271.512822701s event #192 a -> s1 Accept
+271.512822701s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(12), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 271.512822701s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 271.512822701s event #193 s1 -> a Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 12
 271.512822701s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -320,6 +337,7 @@ end: 2h (horizon)
 271.860470984s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 271.860470984s event #199 c -> sink1 Offer
 271.860470984s event #201 sink1 -> c Accept
+271.860470984s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(7), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 271.860470984s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 271.860470984s event #202 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
 271.860470984s item 7 delivered by sink1
@@ -345,6 +363,7 @@ end: 2h (horizon)
 282.505643837s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 282.505643837s event #217 c -> sink1 Offer
 282.505643837s event #219 sink1 -> c Accept
+282.505643837s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(9), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 282.505643837s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 282.505643837s event #220 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 0, due: None }), item 9
 282.505643837s item 9 delivered by sink1
@@ -364,6 +383,7 @@ end: 2h (horizon)
 291.449742371s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
 291.449742371s event #230 s1 -> a Offer
 291.449742371s event #232 a -> s1 Accept
+291.449742371s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(13), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 291.449742371s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 291.449742371s event #233 s1 -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
 291.449742371s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -373,6 +393,7 @@ end: 2h (horizon)
 296.692180677s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 296.692180677s event #237 c -> sink1 Offer
 296.692180677s event #239 sink1 -> c Accept
+296.692180677s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(8), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 296.692180677s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 296.692180677s event #240 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
 296.692180677s item 8 delivered by sink1
@@ -392,33 +413,7 @@ end: 2h (horizon)
 302.516901058s event #250 b -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 0, due: None }), item 11
 311.414061302s event #234 s1 -> s1 NextArrival
 311.414061302s item 14 created by s1
-311.414061302s note by s1 SourceState(SourceStateNote { state: Blocked, held: 1 })
-311.414061302s event #251 s1 -> a Offer
-311.414061302s event #252 s1 -> b Offer
-311.414061302s event #253 b -> s1 Accept
-311.414061302s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
-311.414061302s event #254 s1 -> b Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 14
-311.414061302s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
-311.414061302s event #256 s1 -> a Withdraw
-315.171190899s event #212 s2 -> s2 NextArrival
-315.171190899s item 15 created by s2
-315.171190899s note by s2 SourceState(SourceStateNote { state: Blocked, held: 1 })
-315.171190899s event #258 s2 -> b Offer
-318.542427598s event #236 a -> a CycleDone { item: ItemId(13) }
-318.542427598s note by a MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
-318.542427598s event #259 a -> buf Offer
-319.989453918s event #245 c -> c CycleDone { item: ItemId(10) }
-319.989453918s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
-319.989453918s event #260 c -> sink1 Offer
-319.989453918s event #262 sink1 -> c Accept
-319.989453918s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
-319.989453918s event #263 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
-... 10536 records not shown ...
-7109.252048058s event #7360 a -> buf Offer
-7109.252048058s event #7361 buf -> a Accept
-7109.252048058s note by a MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
-7109.252048058s event #7362 a -> buf Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 356
-7109.252048058s event #7363 a -> s1 Accept
+... 11165 records not shown ...
 7109.252048058s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 7109.252048058s event #7365 s1 -> a Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 357
 7109.252048058s note by a MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -433,6 +428,7 @@ end: 2h (horizon)
 7125.580905637s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 7125.580905637s event #7371 c -> sink1 Offer
 7125.580905637s event #7373 sink1 -> c Accept
+7125.580905637s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(355), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 7125.580905637s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 7125.580905637s event #7374 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 355
 7125.580905637s item 355 delivered by sink1
@@ -451,6 +447,7 @@ end: 2h (horizon)
 7138.304951235s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 7138.304951235s event #7382 c -> sink1 Offer
 7138.304951235s event #7384 sink1 -> c Accept
+7138.304951235s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(356), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 7138.304951235s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 7138.304951235s event #7385 c -> sink1 Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 356
 7138.304951235s item 356 delivered by sink1
@@ -465,6 +462,7 @@ end: 2h (horizon)
 7138.773331074s note by b MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
 7138.773331074s event #7391 b -> buf Arrive(ItemAttrs { variant: VariantId(1), priority: 0, due: None }), item 352
 7138.773331074s event #7392 b -> s1 Accept
+7138.773331074s decision by s1 RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(358), edge: 0, chosen: 1, crossed: false, detail: 0, candidates: [RouteCandidate { id: 2, room: None, key: 0 }, RouteCandidate { id: 3, room: None, key: 0 }] })
 7138.773331074s note by s1 SourceState(SourceStateNote { state: Waiting, held: 0 })
 7138.773331074s event #7394 s1 -> b Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 358
 7138.773331074s note by b MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
@@ -482,6 +480,7 @@ end: 2h (horizon)
 7153.487000345s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 7153.487000345s event #7403 c -> sink1 Offer
 7153.487000345s event #7405 sink1 -> c Accept
+7153.487000345s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(352), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 7153.487000345s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 7153.487000345s event #7406 c -> sink1 Arrive(ItemAttrs { variant: VariantId(1), priority: 0, due: None }), item 352
 7153.487000345s item 352 delivered by sink1
@@ -507,6 +506,7 @@ end: 2h (horizon)
 7183.602622348s note by c MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
 7183.602622348s event #7421 c -> sink1 Offer
 7183.602622348s event #7423 sink1 -> c Accept
+7183.602622348s decision by c RouteDecision(RouteDecision { rule: FirstFree, item: ItemId(358), edge: 0, chosen: 0, crossed: false, detail: 0, candidates: [RouteCandidate { id: 6, room: None, key: 0 }, RouteCandidate { id: 7, room: None, key: 0 }] })
 7183.602622348s note by c MachineState(MachineStateNote { state: Starved, units_in_cycle: 0, setup_variant: None })
 7183.602622348s event #7424 c -> sink1 Arrive(ItemAttrs { variant: VariantId(2), priority: 0, due: None }), item 358
 7183.602622348s item 358 delivered by sink1

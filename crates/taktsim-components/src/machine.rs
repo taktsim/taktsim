@@ -16,7 +16,8 @@ use crate::message::{FlowMessage, ItemAttrs, MachineStateNote, VariantId};
 use crate::params::{
     CycleTime, Mtbf, Mttr, PerVariant, Units, VARIANT_NAME_RULE, VariantRef, is_variant_name,
 };
-use crate::port::{Inlet, Outlet};
+use crate::port::{Inlet, Outlet, TargetView};
+use crate::route::Part;
 use crate::run::{BuildError, ComponentType, Wiring};
 use crate::state::MachineState;
 
@@ -488,9 +489,18 @@ impl ComponentType<Flow> for Machine {
                 matrix.insert(pair, time);
             }
         }
+        let mut cycle_times = BTreeMap::new();
+        for (name, time) in self.cycle_time_by_variant.iter().flat_map(|t| t.0.iter()) {
+            cycle_times.insert(
+                variant_id(wiring.shared(), name.id(), path)?,
+                sampler(time)?,
+            );
+        }
+        let shared = wiring.shared();
         Ok(Box::new(MachineBehaviour {
             capacity: self.capacity.map_or(1, Count::get),
             cycle_time: sampler(&self.cycle_time)?,
+            cycle_times,
             cycle_stream: None,
             failures,
             per_variant,
@@ -499,14 +509,19 @@ impl ComponentType<Flow> for Machine {
             has_setup: self.setup.is_some(),
             source_near: wiring.shared().is_idle_when_empty(wiring.id()),
             downstream: wiring.downstream().to_vec(),
-            inlet: Inlet::default(),
-            outlet: Outlet::default(),
+            inlet: Inlet::new(shared.taker(wiring.id()), shared.subscribers(wiring.id())),
+            outlet: Outlet::new(shared.route_table(wiring.id())),
+            lane: VecDeque::new(),
+            lane_bound: shared.return_bound(wiring.id()).unwrap_or(0),
             waiting: VecDeque::new(),
             cycles: BTreeMap::new(),
             finished: VecDeque::new(),
             changeover: None,
             ready_for: None,
             down: false,
+            worked: 0,
+            running: 0,
+            worked_at: SimTime::START,
             noted: None,
             bad_transition: None,
         }))
@@ -604,6 +619,8 @@ struct Changeover {
 struct MachineBehaviour {
     capacity: u64,
     cycle_time: DurationDistribution,
+    /// By variant, from the same stream; empty without `cycle_time_by_variant`.
+    cycle_times: BTreeMap<VariantId, DurationDistribution>,
     cycle_stream: Option<Stream>,
     failures: Option<FailureProcess>,
     per_variant: Option<DurationDistribution>,
@@ -617,18 +634,29 @@ struct MachineBehaviour {
     downstream: Vec<String>,
     inlet: Inlet,
     outlet: Outlet,
+    /// Parts come back from a gate of a loop, ahead of new parts: not places, so
+    /// they never wait for one (ADR-0023 §8).
+    lane: VecDeque<(ItemId, ItemAttrs)>,
+    /// C: the places of the loop this machine is the return target of.
+    lane_bound: u64,
     /// Arrived and not started, in arrival order.
     waiting: VecDeque<(ItemId, ItemAttrs)>,
     /// Each unit in its cycle, found by id for its timer only: no order a part
     /// sees follows from this id.
     cycles: BTreeMap<ItemId, (ItemAttrs, Timer)>,
     /// Finished, in the order they finished; they keep their places.
-    finished: VecDeque<(ItemId, ItemAttrs)>,
+    finished: VecDeque<Part>,
     changeover: Option<Changeover>,
     /// The variant it is set up for; `None` until the first unit, which costs
     /// no setup.
     ready_for: Option<VariantId>,
     down: bool,
+    /// Unit-nanoseconds worked, exact, up to `worked_at`; kept only if someone
+    /// hears about it (ADR-0023 §5).
+    worked: u128,
+    /// Units in their cycle, as of `worked_at`; not while down.
+    running: u32,
+    worked_at: SimTime,
     noted: Option<MachineStateNote>,
     /// A change of state the table of ADR-0022 §5 does not allow.
     bad_transition: Option<(MachineState, MachineState)>,
@@ -700,7 +728,11 @@ impl MachineBehaviour {
                     event: "start".to_owned(),
                 });
             };
-            let after = self.cycle_time.sample(stream)?;
+            let after = self
+                .cycle_times
+                .get(&variant)
+                .unwrap_or(&self.cycle_time)
+                .sample(stream)?;
             let timer = Timer::start(after, FlowMessage::CycleDone { item }, ctx)?;
             self.cycles.insert(item, (attrs, timer));
         }
@@ -711,17 +743,85 @@ impl MachineBehaviour {
     /// note if the state or the count of units in a cycle changed.
     fn settle(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         if !self.down {
+            // The lane fills free places first, before any offer (ADR-0023 §8).
+            while self.taken() < self.capacity {
+                let Some(unit) = self.lane.pop_front() else {
+                    break;
+                };
+                self.waiting.push_back(unit);
+            }
             self.start_units(ctx)?;
-            self.inlet
-                .accept(self.capacity.saturating_sub(self.taken()), ctx)?;
-            if self.finished.is_empty() {
+            let free = self.capacity.saturating_sub(self.taken());
+            if self.inlet.has_rule() {
+                let follows = self.committed_variant();
+                self.inlet.accept_by_rule(free, follows, ctx)?;
+            } else {
+                self.inlet.accept(free, ctx)?;
+            }
+            if self.outlet.is_routed() {
+                let (outlet, finished) = (&mut self.outlet, &self.finished);
+                outlet.settle_routed(ctx, |asking| {
+                    // The first finished unit meant for this target.
+                    let meant = finished.iter().find(|p| asking.wants(p.route));
+                    meant.map(|part| (part.offered(), part.item.as_u64()))
+                })?;
+            } else if self.finished.is_empty() {
                 self.outlet.withdraw(ctx)?;
             } else {
                 self.outlet.offer(ctx)?;
             }
         }
         self.write_note(ctx);
-        Ok(())
+        self.report(ctx)
+    }
+
+    /// What the next accepted unit follows, not counting reserved places: the back
+    /// of `waiting`, otherwise the changeover's target, otherwise what it is set up
+    /// for, otherwise none (ADR-0023 §6).
+    fn committed_variant(&self) -> Option<VariantId> {
+        self.waiting
+            .back()
+            .map(|(_, attrs)| attrs.variant)
+            .or_else(|| self.changeover.as_ref().map(|c| c.to))
+            .or(self.ready_for)
+    }
+
+    /// Brings the exact count of work up to now, and tells whoever hears from this
+    /// machine what changed (ADR-0023 §5).
+    fn report(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
+        if self.inlet.is_plain() {
+            return Ok(());
+        }
+        if self.inlet.reports() {
+            let now = ctx.now();
+            let elapsed = now.checked_duration_since(self.worked_at)?;
+            self.worked += u128::from(self.running) * u128::from(elapsed.as_nanos());
+            self.worked_at = now;
+            self.running = if self.down {
+                0
+            } else {
+                u32::try_from(self.cycles.len()).unwrap_or(u32::MAX)
+            };
+        }
+        self.inlet.end_event(self.view(), ctx)
+    }
+
+    /// What this machine states as a target.
+    fn view(&self) -> TargetView {
+        let held = self.waiting.len() + self.cycles.len() + self.finished.len() + self.lane.len();
+        TargetView {
+            room: !self.down && self.lane.is_empty() && self.taken() < self.capacity,
+            units: held as u64,
+            running: self.running,
+            worked: self.worked,
+            follows: if self.inlet.states_follows() {
+                self.inlet
+                    .newest_reserved()
+                    .or_else(|| self.committed_variant())
+            } else {
+                None
+            },
+        }
     }
 
     /// One note after an event, if anything changed.
@@ -773,6 +873,7 @@ impl MachineBehaviour {
     /// time is drawn.
     fn repaired(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         self.down = false;
+        self.outlet.repaired();
         for (item, (_, timer)) in &mut self.cycles {
             timer.resume(FlowMessage::CycleDone { item: *item }, ctx)?;
         }
@@ -789,6 +890,7 @@ impl MachineBehaviour {
 impl Component<FlowMessage> for MachineBehaviour {
     fn start(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         self.outlet.connect(&self.downstream, ctx)?;
+        self.inlet.connect(ctx)?;
         self.cycle_stream = Some(ctx.stream("cycle_time")?);
         if self.has_setup {
             self.setup_stream = Some(ctx.stream("setup")?);
@@ -812,7 +914,21 @@ impl Component<FlowMessage> for MachineBehaviour {
                 let Some((attrs, _)) = self.cycles.remove(item) else {
                     return Err(self.unexpected(d.message));
                 };
-                self.finished.push_back((*item, attrs));
+                let route = self.outlet.route(attrs)?;
+                self.finished.push_back(Part {
+                    item: *item,
+                    attrs,
+                    since: ctx.now(),
+                    route,
+                });
+                if let Some((position, to)) = self.outlet.returns_to(route) {
+                    // A way back into a loop never waits. A finished unit still
+                    // passes through `blocked`, for zero time (ADR-0022 §5).
+                    self.write_note(ctx);
+                    self.finished.pop_back();
+                    self.outlet.leaving(route, position, *item, ctx);
+                    ctx.transfer(*item, to, FlowMessage::Return(attrs))?;
+                }
             }
             FlowMessage::SetupDone => {
                 let Some(changeover) = self.changeover.take() else {
@@ -821,26 +937,33 @@ impl Component<FlowMessage> for MachineBehaviour {
                 self.ready_for = Some(changeover.to);
             }
             FlowMessage::Offer => self.inlet.offered(d.from),
+            FlowMessage::OfferOf(unit) => self.inlet.offered_unit(d.from, **unit),
             FlowMessage::Withdraw => self.inlet.withdrawn(d.from),
-            FlowMessage::Decline => self.inlet.release("Decline")?,
+            FlowMessage::Decline => self.inlet.declined(d.from)?,
+            FlowMessage::Status(status) => self.outlet.status(d.from, status, ctx.now()),
             FlowMessage::Arrive(attrs) => {
                 self.inlet.release("Arrive")?;
                 let Some(item) = d.item else {
                     return Err(self.unexpected(d.message));
                 };
+                self.inlet.confirm_pick(d.from, item, *attrs, ctx);
                 ctx.receive(item)?;
                 self.waiting.push_back((item, *attrs));
             }
-            FlowMessage::Accept => {
-                self.outlet.accepted(d.from, ctx)?;
-                let finished = if self.down {
-                    None
-                } else {
-                    self.finished.pop_front()
+            FlowMessage::Return(attrs) => {
+                let Some(item) = d.item else {
+                    return Err(self.unexpected(d.message));
                 };
+                ctx.receive(item)?;
+                self.lane.push_back((item, *attrs));
+            }
+            FlowMessage::Accept => {
+                let position = self.outlet.accepted(d.from, ctx)?;
+                let finished = self.give(position, ctx.now());
                 match finished {
-                    Some((item, attrs)) => {
-                        ctx.transfer(item, d.from, FlowMessage::Arrive(attrs))?;
+                    Some(part) => {
+                        self.outlet.leaving(part.route, position, part.item, ctx);
+                        ctx.transfer(part.item, d.from, FlowMessage::Arrive(part.attrs))?;
                     }
                     None => ctx.send(d.from, FlowMessage::Decline)?,
                 }
@@ -849,9 +972,6 @@ impl Component<FlowMessage> for MachineBehaviour {
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
             | FlowMessage::VariantName { .. }
-            | FlowMessage::Status(_)
-            | FlowMessage::OfferOf(_)
-            | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
             | FlowMessage::DispatchDecision(_)
             | FlowMessage::EdgeCondition { .. }) => return Err(self.unexpected(message)),
@@ -866,7 +986,10 @@ impl Component<FlowMessage> for MachineBehaviour {
         for item in self.cycles.keys() {
             visit(*item);
         }
-        for (item, _) in &self.finished {
+        for part in &self.finished {
+            visit(part.item);
+        }
+        for (item, _) in &self.lane {
             visit(*item);
         }
     }
@@ -897,19 +1020,32 @@ impl Component<FlowMessage> for MachineBehaviour {
                 detail: format!("{} units in a cycle", self.cycles.len()),
             });
         }
+        if self.lane.len() as u64 > self.lane_bound {
+            return Err(Violation {
+                invariant: "lane <= C",
+                detail: format!("{} on the lane, C {}", self.lane.len(), self.lane_bound),
+            });
+        }
         if !self.down {
+            if taken < self.capacity && !self.lane.is_empty() {
+                return Err(Violation {
+                    invariant: "unless down, a free place and a non-empty lane never coexist",
+                    detail: format!("{taken} places taken, capacity {}", self.capacity),
+                });
+            }
             if taken < self.capacity && self.inlet.has_waiting() {
                 return Err(Violation {
                     invariant: "unless down, a free place and a waiting offer never coexist",
                     detail: format!("{taken} places taken, capacity {}", self.capacity),
                 });
             }
-            if !self.finished.is_empty() && !self.outlet.all_offered() {
+            if !self.finished.is_empty() && !self.outlet.parts_offered() {
                 return Err(Violation {
                     invariant: "unless down, a finished unit and no outstanding offer never coexist",
                     detail: format!("{} finished", self.finished.len()),
                 });
             }
+            self.outlet.check_standing_offers()?;
             if !self.waiting.is_empty() && self.cycles.is_empty() && self.changeover.is_none() {
                 return Err(Violation {
                     invariant: "unless down, a unit waits to start only behind a cycle or a changeover",
@@ -922,6 +1058,29 @@ impl Component<FlowMessage> for MachineBehaviour {
 }
 
 impl MachineBehaviour {
+    /// What an `Accept` from the target at `position` gets: nothing while down; the
+    /// first finished unit, or the first meant for that target when routed; nothing if
+    /// the unit it was told of has gone (ADR-0023 §3, §6).
+    fn give(&mut self, position: usize, now: SimTime) -> Option<Part> {
+        if self.down {
+            return None;
+        }
+        if !self.outlet.is_routed() {
+            return self.finished.pop_front();
+        }
+        let finished = &self.finished;
+        let gone = self.outlet.answers_a_unit_gone(position, now, |token| {
+            finished.iter().any(|p| p.item.as_u64() == token)
+        });
+        if gone {
+            return None;
+        }
+        let at = finished
+            .iter()
+            .position(|p| self.outlet.meant_for(p.route, position))?;
+        self.finished.remove(at)
+    }
+
     fn unexpected(&self, message: &FlowMessage) -> ComponentError {
         ComponentError::Unexpected {
             state: self.state().as_str(),
@@ -940,6 +1099,7 @@ mod tests {
         let mut m = MachineBehaviour {
             capacity,
             cycle_time: DurationDistribution::constant(SimDuration::ZERO),
+            cycle_times: BTreeMap::new(),
             cycle_stream: None,
             failures: None,
             per_variant: None,
@@ -950,12 +1110,17 @@ mod tests {
             downstream: Vec::new(),
             inlet: Inlet::default(),
             outlet: Outlet::default(),
+            lane: VecDeque::new(),
+            lane_bound: 0,
             waiting: VecDeque::new(),
             cycles: BTreeMap::new(),
             finished: VecDeque::new(),
             changeover: None,
             ready_for: None,
             down: false,
+            worked: 0,
+            running: 0,
+            worked_at: SimTime::START,
             noted: None,
             bad_transition: None,
         };
@@ -984,6 +1149,16 @@ mod tests {
         m.cycles.insert(item, (attrs, timer));
     }
 
+    fn done(n: u64) -> Part {
+        let (item, attrs) = unit(n);
+        Part {
+            item,
+            attrs,
+            since: SimTime::START,
+            route: crate::route::Route::default(),
+        }
+    }
+
     fn violated(m: &MachineBehaviour) -> &'static str {
         m.check_invariants().unwrap_err().invariant
     }
@@ -993,8 +1168,8 @@ mod tests {
         assert!(machine(1).check_invariants().is_ok());
 
         let mut m = machine(1);
-        m.finished.push_back(unit(0));
-        m.finished.push_back(unit(1));
+        m.finished.push_back(done(0));
+        m.finished.push_back(done(1));
         note(&mut m);
         assert_eq!(
             violated(&m),
@@ -1041,7 +1216,7 @@ mod tests {
         assert!(m.check_invariants().is_ok());
 
         let mut m = machine(1);
-        m.finished.push_back(unit(0));
+        m.finished.push_back(done(0));
         m.outlet = Outlet::with_unoffered_target();
         note(&mut m);
         assert_eq!(
@@ -1056,6 +1231,22 @@ mod tests {
             violated(&m),
             "unless down, a unit waits to start only behind a cycle or a changeover"
         );
+
+        let mut m = machine(1);
+        m.lane.push_back(unit(0));
+        assert_eq!(violated(&m), "lane <= C");
+
+        let mut m = machine(1);
+        m.lane_bound = 3;
+        m.lane.push_back(unit(0));
+        assert_eq!(
+            violated(&m),
+            "unless down, a free place and a non-empty lane never coexist"
+        );
+        // A down machine takes returns and moves nothing.
+        m.down = true;
+        note(&mut m);
+        assert!(m.check_invariants().is_ok());
     }
 
     #[test]
@@ -1064,7 +1255,7 @@ mod tests {
         assert_eq!(m.state(), MachineState::Idle);
         m.source_near = false;
         assert_eq!(m.state(), MachineState::Starved);
-        m.finished.push_back(unit(0));
+        m.finished.push_back(done(0));
         assert_eq!(m.state(), MachineState::Blocked);
         running(&mut m, 1);
         assert_eq!(m.state(), MachineState::Busy);
