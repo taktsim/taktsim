@@ -119,3 +119,46 @@ fn complete_decides_and_stop_reason_only_explains() {
     assert!(!read.complete);
     assert_eq!(read.stop_reason, "a_later_word");
 }
+
+/// An error of exit code 2 has no valid example. It says where, when and what came
+/// last, and nothing is kept (ADR-0024 §8, §9).
+#[test]
+fn a_failed_run_says_where_when_and_what_came_last() {
+    let registry = test_registry();
+    for (how, type_name) in [
+        ("error", "run.component_failed"),
+        ("invariant", "run.invariant_violated"),
+        ("lost", "run.conservation_violated"),
+        ("unreceived", "run.item_not_received"),
+    ] {
+        let yaml = model(
+            "",
+            &format!(
+                "  - {{id: burst, type: Burst, count: 1}}\n  - {{id: keep, type: Keep, how: delivered}}\n  \
+                 - {{id: faulty, type: Faulty, how: {how}}}"
+            ),
+            "  - [burst, keep]",
+        );
+        let dir = TempDir::new();
+        let store = dir.store();
+        let failure = run_with(&registry, &yaml, &RunRequest::new(), &store).unwrap_err();
+        assert_eq!(failure.class, FailureClass::RunFailed, "{how}");
+        let error = &failure.diagnostics[0];
+        assert_eq!(error.type_name, type_name, "{how}: {}", error.message);
+        assert_eq!(error.path.as_deref(), Some("components[2]"), "{how}");
+        assert_eq!(
+            error.time.map(|t| t.to_string()).as_deref(),
+            Some("1min"),
+            "{how}"
+        );
+        assert_eq!(error.example, None, "{how}");
+        assert!(error.recent.len() > 1, "{how}");
+        assert!(error.recent.last().unwrap().contains("faulty"), "{how}");
+        let runs = std::fs::read_dir(store.root().join("runs"))
+            .unwrap()
+            .count();
+        assert_eq!(runs, 0, "{how}: not kept");
+        let temp = std::fs::read_dir(store.root().join("tmp")).unwrap().count();
+        assert_eq!(temp, 0, "{how}: nothing left behind");
+    }
+}
