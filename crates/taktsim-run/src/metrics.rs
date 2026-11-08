@@ -1,18 +1,22 @@
-//! What M7 reports (ADR-0024 §3): one fold over core's records of a stored trace.
-//! The fold is keyed on each record's `by` and matches `Disposal` exhaustively, so
-//! any component may create or dispose of items. `Ports` only chooses which zero
-//! rows are shown.
+//! What a result reports: one fold over core's records of a trace (ADR-0024 §3,
+//! ADR-0025 §2). The counts are keyed on each record's `by` and match `Disposal`
+//! exhaustively, so any component may create or dispose of items. `Ports` only chooses
+//! which zero rows are shown. The KPI rows take their names from the registry and match
+//! [`Kpi`] exhaustively, so nothing here names a throughput or a buffer.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::io::Read;
 
-use taktsim_components::{Ports, Roles};
+use taktsim_components::{Domain, Kpi, Ports, Registry, Roles};
 use taktsim_core::{Disposal, ItemCounts};
 use taktsim_model::Document;
-use taktsim_trace::{ReadError, Record, TraceMessage, TraceReader};
-use taktsim_units::{SimDuration, SimTime};
+use taktsim_model::expr::ExprKind;
+use taktsim_stats::{LeadTimes, PlaceKpis};
+use taktsim_trace::{ReadError, Record, TraceReader};
+use taktsim_units::{Ratio, SimDuration, SimTime};
 
-use crate::result::{Accuracy, Metric, MetricValue, Over, Scalar};
+use crate::facts::{Bridge, BridgeError, KpiFacts, Places};
+use crate::result::{Accuracy, AccuracyTarget, Metric, MetricValue, Over, Scalar};
 
 /// The events an error shows.
 const RECENT: usize = 32;
@@ -20,6 +24,16 @@ const RECENT: usize = 32;
 /// continuous material is one item (spec §4); a quantity in a material's own unit
 /// is a declared KPI.
 const ITEMS: &str = "items";
+/// The unit of a rate of delivery.
+const ITEMS_PER_SECOND: &str = "items/s";
+/// The unit of a share of the window.
+const SHARE: &str = "share";
+/// The unit of a lead time.
+const SECONDS: &str = "s";
+/// The label of a lead time's statistic.
+const STATISTIC: &str = "statistic";
+/// The statistic a target on a lead time is about.
+const MEAN: &str = "mean";
 
 /// What one component did.
 #[derive(Debug, Clone, Copy, Default)]
@@ -38,17 +52,61 @@ pub(crate) struct Fold {
     pub(crate) last_event: SimTime,
     /// The last records, as text, oldest first.
     pub(crate) recent: Vec<String>,
+    /// What the records say about the KPIs.
+    kpis: KpiFacts,
 }
 
-/// Folds every record of `reader`.
-pub(crate) fn fold<R: Read, M: TraceMessage>(
-    mut reader: TraceReader<R, M>,
-) -> Result<Fold, ReadError> {
+impl Fold {
+    /// Where the trace says the run ended.
+    pub(crate) const fn end_time(&self) -> SimTime {
+        self.kpis.report.end()
+    }
+}
+
+/// Why a trace cannot be folded.
+#[derive(Debug)]
+pub(crate) enum FoldError {
+    /// It cannot be read.
+    Read(ReadError),
+    /// It reads, and states something impossible.
+    Kpi {
+        /// The word on the error line.
+        type_name: &'static str,
+        /// What is wrong.
+        message: String,
+        /// The time of the last event before it.
+        last_event: SimTime,
+        /// The last records, as text.
+        recent: Vec<String>,
+    },
+}
+
+/// The type of an error line for what the bridge found.
+const fn bridge_type(error: &BridgeError) -> &'static str {
+    match error {
+        BridgeError::Stats(_) => "run.kpi_conservation",
+        BridgeError::UndeclaredState { .. } => "run.kpi_undeclared_state",
+    }
+}
+
+/// Folds every record of `reader`, with the components `places`, up to the end its
+/// marker states. A trace with no end marker is refused (ADR-0022 §9).
+pub(crate) fn fold<R: Read, D: Domain>(
+    mut reader: TraceReader<R, D::Message>,
+    places: &Places,
+) -> Result<Fold, FoldError> {
     let names = reader.header().components.clone();
     let mut rows = vec![Row::default(); names.len()];
-    let mut last_event = SimTime::from_nanos(0);
+    let mut last_event = SimTime::START;
     let mut recent = VecDeque::with_capacity(RECENT);
-    while let Some(record) = reader.next_record()? {
+    let mut bridge = Bridge::new(places);
+    let as_text = |recent: &VecDeque<Record<D::Message>>| -> Vec<String> {
+        recent
+            .iter()
+            .map(|record| record.display(&names).to_string())
+            .collect()
+    };
+    while let Some(record) = reader.next_record().map_err(FoldError::Read)? {
         match &record {
             Record::Event { time, .. } => last_event = *time,
             Record::ItemCreated { by, .. } => {
@@ -67,19 +125,42 @@ pub(crate) fn fold<R: Read, M: TraceMessage>(
             }
             Record::Note { .. } => {}
         }
+        let pushed = bridge.push::<D>(&record);
         if recent.len() == RECENT {
             recent.pop_front();
         }
         recent.push_back(record);
+        if let Err(error) = pushed {
+            return Err(FoldError::Kpi {
+                type_name: bridge_type(&error),
+                message: error.to_string(),
+                last_event,
+                recent: as_text(&recent),
+            });
+        }
     }
-    let recent = recent
-        .iter()
-        .map(|record: &Record<M>| record.display(&names).to_string())
-        .collect();
+    let recent_text = as_text(&recent);
+    let Some(end) = reader.summary().and_then(|summary| summary.end) else {
+        return Err(FoldError::Kpi {
+            type_name: "run.kpi_no_end",
+            message:
+                "the trace does not state how the run ended, so a time-weighted value has no window"
+                    .to_owned(),
+            last_event,
+            recent: recent_text,
+        });
+    };
+    let kpis = bridge.finish(end.time).map_err(|error| FoldError::Kpi {
+        type_name: bridge_type(&error),
+        message: error.to_string(),
+        last_event,
+        recent: recent_text.clone(),
+    })?;
     Ok(Fold {
         rows,
         last_event,
-        recent,
+        recent: recent_text,
+        kpis,
     })
 }
 
@@ -122,13 +203,16 @@ impl Fold {
     }
 
     /// The metrics of the run: each component's rows in document order, then
-    /// `items_alive`.
+    /// `items_alive`, then the KPIs. `accuracy` is what can be said of each value,
+    /// and `targets` the precision to state on the rows it covers: a model that draws
+    /// nothing has no interval to compare, so it states a target and no `reached`.
     pub(crate) fn metrics(
         &self,
         document: &Document,
         roles: &Roles,
+        kpis: &[KpiSpec],
         end: SimDuration,
-        accuracy: &Accuracy,
+        (accuracy, targets): (&Accuracy, Option<&Targets>),
     ) -> Vec<Metric> {
         let window = Over::Window {
             from: SimDuration::ZERO,
@@ -167,6 +251,333 @@ impl Fold {
             Over::At { at: end },
             self.items_alive(),
         ));
+        for spec in kpis {
+            let values = self.kpi_values(spec, accuracy, targets);
+            if !values.is_empty() {
+                metrics.push(Metric {
+                    name: spec.metric.clone(),
+                    unit: spec.unit().to_owned(),
+                    over: window,
+                    observables: spec.observables.clone(),
+                    values,
+                });
+            }
+        }
         metrics
     }
+
+    /// The rows of one KPI: none if it has no value in this run (ADR-0025 §2).
+    fn kpi_values(
+        &self,
+        spec: &KpiSpec,
+        accuracy: &Accuracy,
+        targets: Option<&Targets>,
+    ) -> Vec<MetricValue> {
+        let inside = self.kpis.report.wip_end();
+        let target = targets.and_then(|targets| targets.get(&spec.metric));
+        kpi_rows(spec, &self.kpis)
+            .into_iter()
+            .map(|(labels, value)| {
+                let mut first = accuracy.clone();
+                if spec.is_target_row(labels.as_ref()) {
+                    first.target = target.map(|ratio| AccuracyTarget {
+                        relative: Some(ratio.as_fraction()),
+                    });
+                }
+                let mut statements = vec![first];
+                if spec.kpi == Kpi::Transit && inside > 0 {
+                    #[allow(clippy::cast_precision_loss)] // A count of units in a line.
+                    statements.push(Accuracy::censored(inside as f64));
+                }
+                MetricValue {
+                    value: Scalar::measured(value),
+                    labels,
+                    accuracy: statements,
+                }
+            })
+            .collect()
+    }
+}
+
+/// The labels of a row.
+pub(crate) type Labels = std::collections::BTreeMap<String, String>;
+
+/// One row: its labels and its value.
+type KpiRow = (Option<Labels>, f64);
+
+fn single_label(key: &str, value: &str) -> Labels {
+    BTreeMap::from([(key.to_owned(), value.to_owned())])
+}
+
+/// The rows of a KPI in this run.
+fn kpi_rows(spec: &KpiSpec, facts: &KpiFacts) -> Vec<KpiRow> {
+    let report = &facts.report;
+    let place = spec.place.and_then(|index| report.place(index));
+    match spec.kpi {
+        Kpi::Deliveries => {
+            let (Some(index), Some(place)) = (spec.place, place) else {
+                return Vec::new();
+            };
+            let span = report.span();
+            if span.as_nanos() == 0 {
+                return Vec::new();
+            }
+            let per_second = |count: u64| {
+                #[allow(clippy::cast_precision_loss)] // A count of delivered items.
+                let count = count as f64;
+                count / span.as_secs_f64()
+            };
+            let mut rows = vec![(None, per_second(place.delivered()))];
+            rows.extend(facts.class_rows(index).into_iter().map(|row| {
+                (
+                    Some(single_label(row.dimension, &row.name)),
+                    per_second(row.delivered),
+                )
+            }));
+            rows
+        }
+        Kpi::Occupancy => {
+            let mean = match spec.place {
+                Some(_) => place.and_then(|place| place.mean_level(report)),
+                None => report.mean_wip(),
+            };
+            mean.map(|value| (None, value)).into_iter().collect()
+        }
+        Kpi::AwaitingRelease => {
+            let mean = match spec.place {
+                Some(_) => place.and_then(|place| place.mean_held(report)),
+                None => report.mean_held(),
+            };
+            mean.map(|value| (None, value)).into_iter().collect()
+        }
+        Kpi::StateShares => {
+            let Some(place) = place else {
+                return Vec::new();
+            };
+            spec.states
+                .iter()
+                .enumerate()
+                .filter_map(|(state, name)| {
+                    let state = u16::try_from(state).ok()?;
+                    let share = place.state_share(report, state)?;
+                    let labels = Labels::from([
+                        ("resource".to_owned(), spec.subject.clone()),
+                        ("state".to_owned(), (*name).to_owned()),
+                    ]);
+                    Some((Some(labels), share))
+                })
+                .collect()
+        }
+        Kpi::InProgress => {
+            let Some(place) = place else {
+                return Vec::new();
+            };
+            place
+                .mean_in_progress(report)
+                .map(|mean| (None, mean / f64::from(spec.places)))
+                .into_iter()
+                .collect()
+        }
+        Kpi::Transit => place.map_or_else(Vec::new, transit_rows),
+    }
+}
+
+/// The statistics of a lead time, in the order of its rows.
+const STATISTICS: [(&str, Option<u8>); 7] = [
+    (MEAN, None),
+    ("min", None),
+    ("p50", Some(50)),
+    ("p90", Some(90)),
+    ("p95", Some(95)),
+    ("p99", Some(99)),
+    ("max", None),
+];
+
+fn transit_rows(place: &PlaceKpis) -> Vec<KpiRow> {
+    let times: &LeadTimes = place.lead_times();
+    let Some(mean) = times.mean_secs() else {
+        return Vec::new();
+    };
+    STATISTICS
+        .iter()
+        .filter_map(|(word, percent)| {
+            let value = match (*word, percent) {
+                (MEAN, _) => mean,
+                (_, Some(percent)) => times.percentile(*percent)?.as_secs_f64(),
+                ("min", None) => times.min()?.as_secs_f64(),
+                (_, None) => times.max()?.as_secs_f64(),
+            };
+            Some((Some(single_label(STATISTIC, word)), value))
+        })
+        .collect()
+}
+
+/// What the model declares: each text in `observe` or `experiment.precision`, once.
+#[derive(Debug, Clone)]
+pub(crate) struct Declared {
+    pub(crate) text: String,
+    function: String,
+    args: Vec<String>,
+    target: Option<Ratio>,
+}
+
+impl Declared {
+    /// The metrics it asks for.
+    pub(crate) fn metric_names(&self) -> Vec<String> {
+        if self.args.is_empty() {
+            vec![format!("{}()", self.function)]
+        } else {
+            self.args
+                .iter()
+                .map(|arg| format!("{}({arg})", self.function))
+                .collect()
+        }
+    }
+}
+
+/// Everything `document` declares, sorted by text.
+pub(crate) fn declared(document: &Document) -> Vec<Declared> {
+    let mut all: BTreeMap<String, Declared> = BTreeMap::new();
+    let read = |observable: &taktsim_model::Observable, target: Option<Ratio>| {
+        let ExprKind::Call(call) = observable.expr().clone().into_kind() else {
+            return None;
+        };
+        Some(Declared {
+            text: observable.text().to_owned(),
+            function: call.name.value.as_str().to_owned(),
+            args: call
+                .args
+                .iter()
+                .map(|arg| arg.value.as_str().to_owned())
+                .collect(),
+            target,
+        })
+    };
+    for observable in document.observe() {
+        if let Some(entry) = read(observable, None) {
+            all.insert(entry.text.clone(), entry);
+        }
+    }
+    for precision in document.experiment().precision() {
+        if let Some(entry) = read(precision.observable(), Some(precision.target())) {
+            all.insert(entry.text.clone(), entry);
+        }
+    }
+    all.into_values().collect()
+}
+
+/// The metric a KPI gives for one component, or for the whole system.
+#[derive(Debug, Clone)]
+pub(crate) struct KpiSpec {
+    /// Its name, the canonical text of an observable that answers it.
+    pub(crate) metric: String,
+    pub(crate) kpi: Kpi,
+    /// The component's id; empty for the system.
+    subject: String,
+    /// The component's position; `None` for the system.
+    place: Option<usize>,
+    /// The states of its type.
+    states: &'static [&'static str],
+    /// What `utilization` divides by.
+    places: u32,
+    /// Every declared text it answers, sorted.
+    pub(crate) observables: Vec<String>,
+}
+
+impl KpiSpec {
+    /// The unit of its rows.
+    pub(crate) const fn unit(&self) -> &'static str {
+        match self.kpi {
+            Kpi::Deliveries => ITEMS_PER_SECOND,
+            Kpi::Occupancy | Kpi::AwaitingRelease => ITEMS,
+            Kpi::StateShares | Kpi::InProgress => SHARE,
+            Kpi::Transit => SECONDS,
+        }
+    }
+
+    /// Whether a row with these labels is one a declared precision covers (ADR-0025 §5).
+    pub(crate) fn is_target_row(&self, labels: Option<&Labels>) -> bool {
+        match self.kpi {
+            Kpi::Deliveries => labels.is_none(),
+            Kpi::Occupancy | Kpi::AwaitingRelease | Kpi::StateShares | Kpi::InProgress => true,
+            Kpi::Transit => labels.is_some_and(|l| l.get(STATISTIC).is_some_and(|s| s == MEAN)),
+        }
+    }
+}
+
+/// The tightest target on each metric: a half-width within it is within the others
+/// (ADR-0025 §5).
+pub(crate) type Targets = BTreeMap<String, Ratio>;
+
+/// Every KPI's metrics for `document`: sorted by KPI name, then the system's, then in
+/// model order. Whether a component has a KPI is its signature's word, so this names no
+/// component type (ADR-0025 §2).
+pub(crate) fn kpi_specs<D: Domain>(registry: &Registry<D>, document: &Document) -> Vec<KpiSpec> {
+    let declared = declared(document);
+    let answering = |metric: &str| -> Vec<String> {
+        declared
+            .iter()
+            .filter(|entry| entry.metric_names().iter().any(|name| name == metric))
+            .map(|entry| entry.text.clone())
+            .collect()
+    };
+    let mut specs = Vec::new();
+    for (name, signature, kpi) in registry.kpis() {
+        let has_system_row = match kpi {
+            Kpi::Occupancy | Kpi::AwaitingRelease => true,
+            Kpi::Deliveries | Kpi::StateShares | Kpi::InProgress | Kpi::Transit => false,
+        };
+        if has_system_row && signature.arity().allows(0) {
+            let metric = format!("{name}()");
+            specs.push(KpiSpec {
+                observables: answering(&metric),
+                metric,
+                kpi,
+                subject: String::new(),
+                place: None,
+                states: &[],
+                places: 1,
+            });
+        }
+        if !signature.arity().allows(1) {
+            continue;
+        }
+        for (position, entry) in document.components().iter().enumerate() {
+            let accepted = signature
+                .accepts()
+                .is_none_or(|types| types.contains(entry.type_name()));
+            if accepted {
+                let metric = format!("{name}({})", entry.id());
+                specs.push(KpiSpec {
+                    observables: answering(&metric),
+                    metric,
+                    kpi,
+                    subject: entry.id().to_owned(),
+                    place: Some(position),
+                    states: registry.roles().states(entry.type_name()),
+                    places: registry.places(entry),
+                });
+            }
+        }
+    }
+    specs
+}
+
+/// The tightest declared target on each metric.
+pub(crate) fn targets(document: &Document) -> Targets {
+    let mut targets = Targets::new();
+    for entry in declared(document) {
+        let Some(target) = entry.target else {
+            continue;
+        };
+        for metric in entry.metric_names() {
+            let tighter = targets
+                .get(&metric)
+                .is_none_or(|known| target.as_fraction() < known.as_fraction());
+            if tighter {
+                targets.insert(metric, target);
+            }
+        }
+    }
+    targets
 }

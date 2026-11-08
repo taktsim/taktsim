@@ -206,8 +206,9 @@ fn run(args: &RunArgs, format: Format) -> u8 {
         Ok(store) => store,
         Err(failure) => return fail(&failure, format),
     };
+    let seeds: Vec<u64> = args.seed.iter().copied().collect();
     let request = RunRequest {
-        seed: args.seed,
+        seeds: &seeds,
         horizon: args.horizon,
         max_events: args.max_events,
         reuse: !args.no_reuse,

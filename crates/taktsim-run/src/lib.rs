@@ -37,15 +37,15 @@
 
 mod diagnostic;
 mod ending;
+mod facts;
 mod id;
 mod metrics;
 mod result;
 mod seeds;
 mod store;
 
-use std::collections::BTreeSet;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
@@ -69,7 +69,8 @@ pub use result::{
 pub use store::Store;
 
 use crate::ending::Ending;
-use crate::metrics::Fold;
+use crate::facts::Places;
+use crate::metrics::{Fold, FoldError};
 use crate::store::{Commit, MODEL_FILE, RESULT_FILE, TRACE_FILE, TempRun, io_failure};
 
 /// Where a model comes from.
@@ -105,12 +106,12 @@ impl ModelSource<'_> {
 /// ```
 /// let request = taktsim_run::RunRequest::new();
 /// assert!(request.reuse);
-/// assert_eq!(request.seed, None);
+/// assert!(request.seeds.is_empty());
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct RunRequest<'a> {
-    /// The seed; `None` takes the model's (ADR-0024 §5).
-    pub seed: Option<u64>,
+    /// The seeds; empty takes the model's (ADR-0024 §5, ADR-0025 §4).
+    pub seeds: &'a [u64],
     /// Another horizon: a new version of the model, with its own hash.
     pub horizon: Option<SimDuration>,
     /// The most events the run processes. A run stopped by it is partial.
@@ -131,7 +132,7 @@ impl RunRequest<'_> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            seed: None,
+            seeds: &[],
             horizon: None,
             max_events: None,
             reuse: true,
@@ -238,25 +239,20 @@ fn platform() -> String {
     format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS)
 }
 
-/// Each declared observable that this result does not hold: M7 computes none.
-fn unreported(document: &Document) -> Vec<Unreported> {
-    let declared: BTreeSet<&str> = document
-        .observe()
-        .iter()
-        .map(taktsim_model::Observable::text)
-        .chain(
-            document
-                .experiment()
-                .precision()
-                .iter()
-                .map(|p| p.observable().text()),
-        )
-        .collect();
-    declared
+/// Each declared observable that these metrics do not answer: only a value that does
+/// not exist (ADR-0025 §2).
+fn unreported(document: &Document, metrics: &[Metric]) -> Vec<Unreported> {
+    metrics::declared(document)
         .into_iter()
-        .map(|observable| Unreported {
-            observable: observable.to_owned(),
-            reason: "not_computed".to_owned(),
+        .filter(|entry| {
+            !entry
+                .metric_names()
+                .iter()
+                .all(|name| metrics.iter().any(|metric| metric.name == *name))
+        })
+        .map(|entry| Unreported {
+            observable: entry.text,
+            reason: "undefined".to_owned(),
         })
         .collect()
 }
@@ -313,17 +309,120 @@ fn run_failed(type_name: &str, message: String, fold: &Fold) -> Failure {
     Failure::one(FailureClass::RunFailed, line)
 }
 
+/// The failure of a trace that cannot be folded.
+fn from_fold_error(
+    error: FoldError,
+    unreadable: impl Fn(&taktsim_trace::ReadError) -> Failure,
+) -> Failure {
+    match error {
+        FoldError::Read(error) => unreadable(&error),
+        FoldError::Kpi {
+            type_name,
+            message,
+            last_event,
+            recent,
+        } => {
+            let mut line = Diagnostic::error(type_name, message).at_time(last_event);
+            line.recent = recent;
+            Failure::one(FailureClass::RunFailed, line)
+        }
+    }
+}
+
 /// Folds the trace at `path`.
-fn fold_trace<D: Domain>(path: &Path) -> Result<Fold, Failure> {
+fn fold_trace<D: Domain>(path: &Path, places: &Places) -> Result<Fold, Failure> {
     let file = File::open(path).map_err(|e| io_failure("store.read", path, &e))?;
-    let unreadable = |e: taktsim_trace::ReadError| {
+    let unreadable = |e: &taktsim_trace::ReadError| {
         Failure::one(
             FailureClass::Io,
             Diagnostic::error("store.read", format!("{}: {e}", path.display())).at("--store"),
         )
     };
-    let reader = TraceReader::<_, D::Message>::new(BufReader::new(file)).map_err(unreadable)?;
-    metrics::fold(reader).map_err(unreadable)
+    let reader =
+        TraceReader::<_, D::Message>::new(BufReader::new(file)).map_err(|e| unreadable(&e))?;
+    metrics::fold::<_, D>(reader, places).map_err(|e| from_fold_error(e, unreadable))
+}
+
+/// The metrics of a trace, however it was written: the fold of a run, with no engine
+/// (ADR-0025 §1). A trace that states no seed says that the model draws nothing. The
+/// second list is what the model declares and these metrics do not answer.
+///
+/// # Errors
+///
+/// A [`Failure`]: `Io` if the trace cannot be read, `RunFailed` if it states something
+/// impossible (`run.kpi_conservation`), a state its type does not declare
+/// (`run.kpi_undeclared_state`) or no end (`run.kpi_no_end`).
+///
+/// ```
+/// use taktsim_components::RunOptions;
+/// use taktsim_model::{Format, Loader};
+///
+/// let registry = taktsim_components::standard()?;
+/// let model = Loader::new(registry.catalog()).load_str(
+///     "format: \"1.0\"\nmodel: {name: m, seed: 1}\nexperiment: {type: terminating, horizon: 1h}\n\
+///      components: [{id: source, type: Source, interarrival: 1min}, {id: sink, type: Sink}]\n\
+///      flow: [[source, sink]]\n",
+///     Format::Yaml,
+/// )?;
+/// let (trace, _) = registry.prepare(&model, RunOptions::new())?.run_traced(Vec::new())?;
+/// let (metrics, unreported) = taktsim_run::metrics_of_trace(&registry, &model, trace.as_slice())?;
+/// assert!(metrics.iter().any(|m| m.name == "throughput(sink)"));
+/// assert!(unreported.is_empty());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn metrics_of_trace<D: Domain, R: Read>(
+    registry: &Registry<D>,
+    model: &Model,
+    trace: R,
+) -> Result<(Vec<Metric>, Vec<Unreported>), Failure> {
+    let unreadable = |e: &taktsim_trace::ReadError| {
+        Failure::one(
+            FailureClass::Io,
+            Diagnostic::error("store.read", format!("the trace: {e}")).at("<trace>"),
+        )
+    };
+    let document = model.document();
+    let reader = TraceReader::<_, D::Message>::new(trace).map_err(|e| unreadable(&e))?;
+    let seed = reader.header().seed;
+    let places = Places::of(registry, document);
+    let fold =
+        metrics::fold::<_, D>(reader, &places).map_err(|e| from_fold_error(e, unreadable))?;
+    let end = SimDuration::from_nanos(fold.end_time().as_nanos());
+    let metrics = run_metrics(registry, document, &fold, seed, end);
+    let unreported = unreported(document, &metrics);
+    Ok((metrics, unreported))
+}
+
+/// What can be said of a run with this seed (ADR-0024 §4).
+fn run_accuracy(seed: Option<u64>) -> Accuracy {
+    if seed.is_some() {
+        Accuracy::none(
+            "single_replication",
+            "one replication has no interval; run several seeds",
+        )
+    } else {
+        Accuracy::none(
+            "no_random_draws",
+            "the model draws nothing, so the number is exact for this model; it says nothing about how well the model fits reality",
+        )
+    }
+}
+
+/// The metrics of one fold.
+fn run_metrics<D: Domain>(
+    registry: &Registry<D>,
+    document: &Document,
+    fold: &Fold,
+    seed: Option<u64>,
+    end: SimDuration,
+) -> Vec<Metric> {
+    let accuracy = run_accuracy(seed);
+    let specs = metrics::kpi_specs(registry, document);
+    let targets = metrics::targets(document);
+    // With no seed there is no interval to compare: the target is stated, and `reached`
+    // left out (ADR-0025 §5).
+    let stated = seed.is_none().then_some(&targets);
+    fold.metrics(document, registry.roles(), &specs, end, (&accuracy, stated))
 }
 
 /// Runs into the temporary directory, returning the report and its trace's summary.
@@ -412,17 +511,6 @@ fn result_document<D: Domain>(
     } = finished;
     let document = model.document();
     let end = SimDuration::from_nanos(report.summary.now.as_nanos());
-    let accuracy = if seed.is_some() {
-        Accuracy::none(
-            "single_replication",
-            "one replication has no interval; run several seeds",
-        )
-    } else {
-        Accuracy::none(
-            "no_random_draws",
-            "the model draws nothing, so the number is exact for this model; it says nothing about how well the model fits reality",
-        )
-    };
     let experiment_id = id
         .map(|id| ExperimentId::over([(*id).clone()]))
         .transpose()
@@ -440,6 +528,7 @@ fn result_document<D: Domain>(
         message_format: <D::Message as TraceMessage>::FORMAT.to_owned(),
         stream_hash: written.hash,
     });
+    let metrics = run_metrics(registry, document, fold, *seed, end);
     Ok(ResultDocument {
         complete: *complete,
         experiment_id,
@@ -464,8 +553,8 @@ fn result_document<D: Domain>(
             seed: *seed,
             trace,
         }],
-        metrics: fold.metrics(document, registry.roles(), end, &accuracy),
-        unreported: unreported(document),
+        unreported: unreported(document, &metrics),
+        metrics,
     })
 }
 
@@ -529,7 +618,7 @@ pub fn run<D: Domain>(
     let document = model.document();
     let seeding = seeds::effective(
         registry.draws_random(document),
-        request.seed,
+        request.seeds.first().copied(),
         document.model().seed(),
     )?;
     let id = run_id::<D>(&model, seeding.seed)?;
@@ -549,7 +638,8 @@ pub fn run<D: Domain>(
         .map_err(|e| io_failure("store.write", &model_path, &e))?;
     let (report, written) = write_trace(registry, &model, options(request, seeding.seed), &temp)?;
     let trace_path = temp.file(TRACE_FILE);
-    let fold = fold_trace::<D>(&trace_path)?;
+    let places = Places::of(registry, document);
+    let fold = fold_trace::<D>(&trace_path, &places)?;
     if let Some((what, sum, counter)) = fold.differs_from(&report.items) {
         return Err(run_failed(
             "run.metrics_differ",

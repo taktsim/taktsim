@@ -70,11 +70,15 @@ fn a_zero_row_is_stated_and_units_are_items() {
     // A Machine is shown only if it did something itself.
     assert_eq!(value(metrics, "created(cut)"), None);
     assert_eq!(value(metrics, "scrapped(sink)"), None);
-    for metric in metrics {
+    // M7's rows, then the KPIs of tests/kpis.rs, which have units of their own.
+    let names: Vec<&str> = metrics.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(
+        names[..3],
+        ["created(source)", "delivered(sink)", "items_alive"]
+    );
+    for metric in &metrics[..3] {
         assert_eq!(metric.unit, "items", "{}", metric.name);
     }
-    let names: Vec<&str> = metrics.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(names, ["created(source)", "delivered(sink)", "items_alive"]);
     assert!(matches!(metrics[0].over, Over::Window { .. }));
     assert!(matches!(metrics[2].over, Over::At { .. }));
 }

@@ -66,6 +66,392 @@ exit: 3
           "value": 1
         }
       ]
+    },
+    {
+      "name": "held(source)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "state_shares(source)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "source",
+            "state": "waiting"
+          },
+          "value": 1
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "source",
+            "state": "blocked"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "state_shares(cut)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "idle"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "busy"
+          },
+          "value": 1
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "blocked"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "starved"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "down"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "setup"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "state_shares(weld)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "idle"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "busy"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "blocked"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "starved"
+          },
+          "value": 1
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "down"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "setup"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "throughput(sink)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items/s",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "utilization(cut)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "name": "utilization(weld)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "wip()",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "name": "wip(cut)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "name": "wip(buf1)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "wip(weld)",
+      "over": {
+        "from": "0s",
+        "to": "46.355978034s"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "one replication has no interval; run several seeds",
+              "kind": "none",
+              "reason": "single_replication"
+            }
+          ],
+          "value": 0
+        }
+      ]
     }
   ],
   "provenance": {
