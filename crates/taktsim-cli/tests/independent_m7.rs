@@ -679,6 +679,10 @@ fn a_limit_is_exit_3_with_a_partial_document() {
     let text = taktsim(&dir, &["run", "m.yaml", "--seed", "1", "--max-events", "5"]);
     assert_eq!(text.code, 3);
     assert!(text.stdout.contains("event_limit"), "{}", text.stdout);
+    // The first word says what a reader may do with the numbers; `event_limit` only says why.
+    let first = text.stdout.lines().next().unwrap();
+    assert!(first.starts_with("partial"), "{}", text.stdout);
+    assert!(!text.stdout.contains("complete ("), "{}", text.stdout);
 }
 
 /// Exit 2, `--no-reuse` mismatch: stdout empty (§9: "other commands that fail print nothing"), one
