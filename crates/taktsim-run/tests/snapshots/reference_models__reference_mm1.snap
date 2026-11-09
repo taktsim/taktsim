@@ -1,0 +1,516 @@
+---
+source: crates/taktsim-run/tests/reference_models.rs
+expression: golden.snapshot()
+---
+case: reference_mm1
+records: taktsim-core/2
+messages: taktsim-components/1
+model hash: a8c971c706bbf4714cec45818b08d565d0b5588fdf94352e18f00fa7f56e25e3
+system hash: 26853a75b01e263e78cfff03111e26060278f28a72c19cb92beedf554f82ae7a
+seed: 1
+components: source, queue, server, sink
+records: 5170 (3158 events) in 3 chunks
+stream sha256: 15d8d0595954b3f277a9bcc9bb47ce49dfef850cac7463a739281fe2a956efa4
+end: 10min (horizon)
+---
+0s note by source VariantName { id: VariantId(0), name: "default" }
+0s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+0s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+0.863827341s event #0 source -> source NextArrival
+0.863827341s item 0 created by source
+0.863827341s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+0.863827341s event #1 source -> queue Offer
+0.863827341s event #2 queue -> source Accept
+0.863827341s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+0.863827341s event #3 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+0.863827341s event #5 queue -> server Offer
+0.863827341s event #6 server -> queue Accept
+0.863827341s event #7 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+0.863827341s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+1.75258734s event #8 server -> server CycleDone { item: ItemId(0) }
+1.75258734s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+1.75258734s event #9 server -> sink Offer
+1.75258734s event #10 sink -> server Accept
+1.75258734s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+1.75258734s event #11 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 0
+1.75258734s item 0 delivered by sink
+3.46075294s event #4 source -> source NextArrival
+3.46075294s item 1 created by source
+3.46075294s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+3.46075294s event #12 source -> queue Offer
+3.46075294s event #13 queue -> source Accept
+3.46075294s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+3.46075294s event #14 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+3.46075294s event #16 queue -> server Offer
+3.46075294s event #17 server -> queue Accept
+3.46075294s event #18 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+3.46075294s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+4.12023818s event #15 source -> source NextArrival
+4.12023818s item 2 created by source
+4.12023818s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+4.12023818s event #20 source -> queue Offer
+4.12023818s event #21 queue -> source Accept
+4.12023818s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+4.12023818s event #22 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+4.12023818s event #24 queue -> server Offer
+5.14800301s event #19 server -> server CycleDone { item: ItemId(1) }
+5.14800301s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+5.14800301s event #25 server -> sink Offer
+5.14800301s event #26 sink -> server Accept
+5.14800301s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+5.14800301s event #27 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 1
+5.14800301s item 1 delivered by sink
+5.14800301s event #28 server -> queue Accept
+5.14800301s event #29 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+5.14800301s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+5.366990573s event #30 server -> server CycleDone { item: ItemId(2) }
+5.366990573s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+5.366990573s event #31 server -> sink Offer
+5.366990573s event #32 sink -> server Accept
+5.366990573s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+5.366990573s event #33 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 2
+5.366990573s item 2 delivered by sink
+8.567148724s event #23 source -> source NextArrival
+8.567148724s item 3 created by source
+8.567148724s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+8.567148724s event #34 source -> queue Offer
+8.567148724s event #35 queue -> source Accept
+8.567148724s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+8.567148724s event #36 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+8.567148724s event #38 queue -> server Offer
+8.567148724s event #39 server -> queue Accept
+8.567148724s event #40 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+8.567148724s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+9.097169081s event #41 server -> server CycleDone { item: ItemId(3) }
+9.097169081s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+9.097169081s event #42 server -> sink Offer
+9.097169081s event #43 sink -> server Accept
+9.097169081s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+9.097169081s event #44 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 3
+9.097169081s item 3 delivered by sink
+9.614302741s event #37 source -> source NextArrival
+9.614302741s item 4 created by source
+9.614302741s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+9.614302741s event #45 source -> queue Offer
+9.614302741s event #46 queue -> source Accept
+9.614302741s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+9.614302741s event #47 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+9.614302741s event #49 queue -> server Offer
+9.614302741s event #50 server -> queue Accept
+9.614302741s event #51 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+9.614302741s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+10.375693143s event #48 source -> source NextArrival
+10.375693143s item 5 created by source
+10.375693143s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+10.375693143s event #53 source -> queue Offer
+10.375693143s event #54 queue -> source Accept
+10.375693143s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+10.375693143s event #55 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+10.375693143s event #57 queue -> server Offer
+10.491361096s event #52 server -> server CycleDone { item: ItemId(4) }
+10.491361096s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+10.491361096s event #58 server -> sink Offer
+10.491361096s event #59 sink -> server Accept
+10.491361096s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+10.491361096s event #60 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 4
+10.491361096s item 4 delivered by sink
+10.491361096s event #61 server -> queue Accept
+10.491361096s event #62 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+10.491361096s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+10.991645143s event #63 server -> server CycleDone { item: ItemId(5) }
+10.991645143s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+10.991645143s event #64 server -> sink Offer
+10.991645143s event #65 sink -> server Accept
+10.991645143s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+10.991645143s event #66 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 5
+10.991645143s item 5 delivered by sink
+17.007478859s event #56 source -> source NextArrival
+17.007478859s item 6 created by source
+17.007478859s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+17.007478859s event #67 source -> queue Offer
+17.007478859s event #68 queue -> source Accept
+17.007478859s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+17.007478859s event #69 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+17.007478859s event #71 queue -> server Offer
+17.007478859s event #72 server -> queue Accept
+17.007478859s event #73 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+17.007478859s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+17.640012593s event #70 source -> source NextArrival
+17.640012593s item 7 created by source
+17.640012593s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+17.640012593s event #75 source -> queue Offer
+17.640012593s event #76 queue -> source Accept
+17.640012593s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+17.640012593s event #77 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+17.640012593s event #79 queue -> server Offer
+18.17159704s event #78 source -> source NextArrival
+18.17159704s item 8 created by source
+18.17159704s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+18.17159704s event #80 source -> queue Offer
+18.17159704s event #81 queue -> source Accept
+18.17159704s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+18.17159704s event #82 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+18.400090136s event #83 source -> source NextArrival
+18.400090136s item 9 created by source
+18.400090136s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+18.400090136s event #84 source -> queue Offer
+18.400090136s event #85 queue -> source Accept
+18.400090136s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+18.400090136s event #86 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+20.13440816s event #74 server -> server CycleDone { item: ItemId(6) }
+20.13440816s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+20.13440816s event #88 server -> sink Offer
+20.13440816s event #89 sink -> server Accept
+20.13440816s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+20.13440816s event #90 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 6
+20.13440816s item 6 delivered by sink
+20.13440816s event #91 server -> queue Accept
+20.13440816s event #92 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+20.13440816s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+20.13440816s event #93 queue -> server Offer
+20.422149238s event #94 server -> server CycleDone { item: ItemId(7) }
+20.422149238s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+20.422149238s event #95 server -> sink Offer
+20.422149238s event #96 sink -> server Accept
+20.422149238s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+20.422149238s event #97 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 7
+20.422149238s item 7 delivered by sink
+20.422149238s event #98 server -> queue Accept
+20.422149238s event #99 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+20.422149238s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+20.422149238s event #100 queue -> server Offer
+20.753063447s event #87 source -> source NextArrival
+20.753063447s item 10 created by source
+20.753063447s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+20.753063447s event #102 source -> queue Offer
+20.753063447s event #103 queue -> source Accept
+20.753063447s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+20.753063447s event #104 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+21.421013615s event #105 source -> source NextArrival
+21.421013615s item 11 created by source
+21.421013615s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+21.421013615s event #106 source -> queue Offer
+21.421013615s event #107 queue -> source Accept
+21.421013615s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+21.421013615s event #108 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+21.576068195s event #101 server -> server CycleDone { item: ItemId(8) }
+21.576068195s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+21.576068195s event #110 server -> sink Offer
+21.576068195s event #111 sink -> server Accept
+21.576068195s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+21.576068195s event #112 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 8
+21.576068195s item 8 delivered by sink
+21.576068195s event #113 server -> queue Accept
+21.576068195s event #114 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+21.576068195s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+21.576068195s event #115 queue -> server Offer
+21.889889597s event #109 source -> source NextArrival
+21.889889597s item 12 created by source
+21.889889597s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+21.889889597s event #117 source -> queue Offer
+21.889889597s event #118 queue -> source Accept
+21.889889597s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+21.889889597s event #119 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+23.501637144s event #116 server -> server CycleDone { item: ItemId(9) }
+23.501637144s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+23.501637144s event #121 server -> sink Offer
+23.501637144s event #122 sink -> server Accept
+23.501637144s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+23.501637144s event #123 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 9
+23.501637144s item 9 delivered by sink
+23.501637144s event #124 server -> queue Accept
+23.501637144s event #125 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+23.501637144s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+23.501637144s event #126 queue -> server Offer
+24.590095842s event #127 server -> server CycleDone { item: ItemId(10) }
+24.590095842s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+24.590095842s event #128 server -> sink Offer
+24.590095842s event #129 sink -> server Accept
+24.590095842s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+24.590095842s event #130 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 10
+24.590095842s item 10 delivered by sink
+24.590095842s event #131 server -> queue Accept
+24.590095842s event #132 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+24.590095842s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+24.590095842s event #133 queue -> server Offer
+24.819375452s event #120 source -> source NextArrival
+24.819375452s item 13 created by source
+24.819375452s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+24.819375452s event #135 source -> queue Offer
+24.819375452s event #136 queue -> source Accept
+24.819375452s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+24.819375452s event #137 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+25.764621631s event #138 source -> source NextArrival
+25.764621631s item 14 created by source
+25.764621631s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+25.764621631s event #139 source -> queue Offer
+25.764621631s event #140 queue -> source Accept
+25.764621631s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+25.764621631s event #141 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+26.62177831s event #134 server -> server CycleDone { item: ItemId(11) }
+26.62177831s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+26.62177831s event #143 server -> sink Offer
+26.62177831s event #144 sink -> server Accept
+26.62177831s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+26.62177831s event #145 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 11
+26.62177831s item 11 delivered by sink
+26.62177831s event #146 server -> queue Accept
+26.62177831s event #147 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+26.62177831s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+26.62177831s event #148 queue -> server Offer
+26.877792185s event #149 server -> server CycleDone { item: ItemId(12) }
+26.877792185s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+26.877792185s event #150 server -> sink Offer
+26.877792185s event #151 sink -> server Accept
+26.877792185s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+26.877792185s event #152 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 12
+26.877792185s item 12 delivered by sink
+26.877792185s event #153 server -> queue Accept
+26.877792185s event #154 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+26.877792185s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+26.877792185s event #155 queue -> server Offer
+27.492973316s event #156 server -> server CycleDone { item: ItemId(13) }
+27.492973316s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+27.492973316s event #157 server -> sink Offer
+27.492973316s event #158 sink -> server Accept
+27.492973316s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+27.492973316s event #159 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 13
+27.492973316s item 13 delivered by sink
+27.492973316s event #160 server -> queue Accept
+27.492973316s event #161 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+27.492973316s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+27.881945038s event #142 source -> source NextArrival
+27.881945038s item 15 created by source
+27.881945038s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+27.881945038s event #163 source -> queue Offer
+27.881945038s event #164 queue -> source Accept
+27.881945038s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+27.881945038s event #165 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+27.881945038s event #167 queue -> server Offer
+27.983434359s event #162 server -> server CycleDone { item: ItemId(14) }
+27.983434359s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+27.983434359s event #168 server -> sink Offer
+27.983434359s event #169 sink -> server Accept
+27.983434359s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+27.983434359s event #170 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 14
+27.983434359s item 14 delivered by sink
+27.983434359s event #171 server -> queue Accept
+27.983434359s event #172 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+27.983434359s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+28.315720791s event #173 server -> server CycleDone { item: ItemId(15) }
+28.315720791s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+28.315720791s event #174 server -> sink Offer
+28.315720791s event #175 sink -> server Accept
+28.315720791s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+28.315720791s event #176 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 15
+28.315720791s item 15 delivered by sink
+29.78424113s event #166 source -> source NextArrival
+29.78424113s item 16 created by source
+29.78424113s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+29.78424113s event #177 source -> queue Offer
+29.78424113s event #178 queue -> source Accept
+29.78424113s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+29.78424113s event #179 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 16
+29.78424113s event #181 queue -> server Offer
+29.78424113s event #182 server -> queue Accept
+29.78424113s event #183 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 16
+29.78424113s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+30.984742792s event #184 server -> server CycleDone { item: ItemId(16) }
+30.984742792s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+30.984742792s event #185 server -> sink Offer
+30.984742792s event #186 sink -> server Accept
+30.984742792s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+30.984742792s event #187 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 16
+30.984742792s item 16 delivered by sink
+32.773152381s event #180 source -> source NextArrival
+32.773152381s item 17 created by source
+32.773152381s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+32.773152381s event #188 source -> queue Offer
+32.773152381s event #189 queue -> source Accept
+32.773152381s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+32.773152381s event #190 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 17
+32.773152381s event #192 queue -> server Offer
+32.773152381s event #193 server -> queue Accept
+32.773152381s event #194 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 17
+32.773152381s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+33.04618038s event #195 server -> server CycleDone { item: ItemId(17) }
+33.04618038s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+33.04618038s event #196 server -> sink Offer
+33.04618038s event #197 sink -> server Accept
+33.04618038s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+33.04618038s event #198 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 17
+33.04618038s item 17 delivered by sink
+33.495209196s event #191 source -> source NextArrival
+33.495209196s item 18 created by source
+33.495209196s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+33.495209196s event #199 source -> queue Offer
+33.495209196s event #200 queue -> source Accept
+33.495209196s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+33.495209196s event #201 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 18
+33.495209196s event #203 queue -> server Offer
+33.495209196s event #204 server -> queue Accept
+33.495209196s event #205 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 18
+33.495209196s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+34.465163706s event #206 server -> server CycleDone { item: ItemId(18) }
+34.465163706s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+34.465163706s event #207 server -> sink Offer
+34.465163706s event #208 sink -> server Accept
+34.465163706s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+34.465163706s event #209 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 18
+34.465163706s item 18 delivered by sink
+37.025404934s event #202 source -> source NextArrival
+37.025404934s item 19 created by source
+37.025404934s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+37.025404934s event #210 source -> queue Offer
+37.025404934s event #211 queue -> source Accept
+37.025404934s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+37.025404934s event #212 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 19
+37.025404934s event #214 queue -> server Offer
+37.025404934s event #215 server -> queue Accept
+37.025404934s event #216 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 19
+37.025404934s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+37.370764032s event #217 server -> server CycleDone { item: ItemId(19) }
+37.370764032s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+37.370764032s event #218 server -> sink Offer
+37.370764032s event #219 sink -> server Accept
+37.370764032s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+37.370764032s event #220 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 19
+37.370764032s item 19 delivered by sink
+39.688596498s event #213 source -> source NextArrival
+39.688596498s item 20 created by source
+39.688596498s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+39.688596498s event #221 source -> queue Offer
+39.688596498s event #222 queue -> source Accept
+39.688596498s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+39.688596498s event #223 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 20
+39.688596498s event #225 queue -> server Offer
+39.688596498s event #226 server -> queue Accept
+39.688596498s event #227 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 20
+39.688596498s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+39.698671325s event #228 server -> server CycleDone { item: ItemId(20) }
+39.698671325s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+39.698671325s event #229 server -> sink Offer
+39.698671325s event #230 sink -> server Accept
+39.698671325s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+39.698671325s event #231 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 20
+39.698671325s item 20 delivered by sink
+39.706499044s event #224 source -> source NextArrival
+39.706499044s item 21 created by source
+39.706499044s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+39.706499044s event #232 source -> queue Offer
+39.706499044s event #233 queue -> source Accept
+39.706499044s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+39.706499044s event #234 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 21
+39.706499044s event #236 queue -> server Offer
+39.706499044s event #237 server -> queue Accept
+39.706499044s event #238 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 21
+39.706499044s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+39.770259886s event #235 source -> source NextArrival
+39.770259886s item 22 created by source
+39.770259886s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+39.770259886s event #240 source -> queue Offer
+39.770259886s event #241 queue -> source Accept
+39.770259886s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+39.770259886s event #242 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 22
+39.770259886s event #244 queue -> server Offer
+... 4670 records not shown ...
+581.217959978s event #3098 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 281
+581.217959978s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+581.789799961s event #3099 server -> server CycleDone { item: ItemId(281) }
+581.789799961s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+581.789799961s event #3100 server -> sink Offer
+581.789799961s event #3101 sink -> server Accept
+581.789799961s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+581.789799961s event #3102 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 281
+581.789799961s item 281 delivered by sink
+583.734062399s event #3095 source -> source NextArrival
+583.734062399s item 282 created by source
+583.734062399s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+583.734062399s event #3103 source -> queue Offer
+583.734062399s event #3104 queue -> source Accept
+583.734062399s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+583.734062399s event #3105 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 282
+583.734062399s event #3107 queue -> server Offer
+583.734062399s event #3108 server -> queue Accept
+583.734062399s event #3109 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 282
+583.734062399s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+584.999169844s event #3110 server -> server CycleDone { item: ItemId(282) }
+584.999169844s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+584.999169844s event #3111 server -> sink Offer
+584.999169844s event #3112 sink -> server Accept
+584.999169844s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+584.999169844s event #3113 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 282
+584.999169844s item 282 delivered by sink
+586.164533304s event #3106 source -> source NextArrival
+586.164533304s item 283 created by source
+586.164533304s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+586.164533304s event #3114 source -> queue Offer
+586.164533304s event #3115 queue -> source Accept
+586.164533304s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+586.164533304s event #3116 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 283
+586.164533304s event #3118 queue -> server Offer
+586.164533304s event #3119 server -> queue Accept
+586.164533304s event #3120 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 283
+586.164533304s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+590.381629759s event #3121 server -> server CycleDone { item: ItemId(283) }
+590.381629759s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+590.381629759s event #3122 server -> sink Offer
+590.381629759s event #3123 sink -> server Accept
+590.381629759s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+590.381629759s event #3124 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 283
+590.381629759s item 283 delivered by sink
+592.360616578s event #3117 source -> source NextArrival
+592.360616578s item 284 created by source
+592.360616578s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+592.360616578s event #3125 source -> queue Offer
+592.360616578s event #3126 queue -> source Accept
+592.360616578s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+592.360616578s event #3127 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 284
+592.360616578s event #3129 queue -> server Offer
+592.360616578s event #3130 server -> queue Accept
+592.360616578s event #3131 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 284
+592.360616578s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+592.574117695s event #3132 server -> server CycleDone { item: ItemId(284) }
+592.574117695s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+592.574117695s event #3133 server -> sink Offer
+592.574117695s event #3134 sink -> server Accept
+592.574117695s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+592.574117695s event #3135 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 284
+592.574117695s item 284 delivered by sink
+594.392692151s event #3128 source -> source NextArrival
+594.392692151s item 285 created by source
+594.392692151s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+594.392692151s event #3136 source -> queue Offer
+594.392692151s event #3137 queue -> source Accept
+594.392692151s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+594.392692151s event #3138 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 285
+594.392692151s event #3140 queue -> server Offer
+594.392692151s event #3141 server -> queue Accept
+594.392692151s event #3142 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 285
+594.392692151s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+596.214466677s event #3143 server -> server CycleDone { item: ItemId(285) }
+596.214466677s note by server MachineState(MachineStateNote { state: Blocked, units_in_cycle: 0, setup_variant: None })
+596.214466677s event #3144 server -> sink Offer
+596.214466677s event #3145 sink -> server Accept
+596.214466677s note by server MachineState(MachineStateNote { state: Idle, units_in_cycle: 0, setup_variant: None })
+596.214466677s event #3146 server -> sink Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 285
+596.214466677s item 285 delivered by sink
+598.591825165s event #3139 source -> source NextArrival
+598.591825165s item 286 created by source
+598.591825165s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+598.591825165s event #3147 source -> queue Offer
+598.591825165s event #3148 queue -> source Accept
+598.591825165s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+598.591825165s event #3149 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 286
+598.591825165s event #3151 queue -> server Offer
+598.591825165s event #3152 server -> queue Accept
+598.591825165s event #3153 queue -> server Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 286
+598.591825165s note by server MachineState(MachineStateNote { state: Busy, units_in_cycle: 1, setup_variant: None })
+598.78039887s event #3150 source -> source NextArrival
+598.78039887s item 287 created by source
+598.78039887s note by source SourceState(SourceStateNote { state: Blocked, held: 1 })
+598.78039887s event #3155 source -> queue Offer
+598.78039887s event #3156 queue -> source Accept
+598.78039887s note by source SourceState(SourceStateNote { state: Waiting, held: 0 })
+598.78039887s event #3157 source -> queue Arrive(ItemAttrs { variant: VariantId(0), priority: 0, due: None }), item 287
+598.78039887s event #3159 queue -> server Offer
