@@ -502,6 +502,61 @@ fn replay_refuses_a_trace_whose_header_names_another_run() {
     assert!(replay_stored(&registry, &store, &b_id).is_ok());
 }
 
+/// A result whose stated run id alone, or whose `provenance.seeds` alone, disagrees
+/// is not the run it is filed under, though its other fields still compute to that
+/// id: neither reuse nor replay accepts it (ADR-0024 §6).
+#[test]
+fn a_result_that_disagrees_with_itself_in_one_field_is_refused() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let store = dir.store();
+    let yaml = drawing_model(", seed: 1");
+    let response = run_text(&yaml, &RunRequest::new(), &store).unwrap();
+    let id = response.result.runs[0].run_id.clone().unwrap();
+    let file = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("result.json");
+    let text = std::fs::read_to_string(&file).unwrap();
+    let other_id = format!("taktsim-core-{}", "a".repeat(64));
+    let cases = [
+        (
+            "run id",
+            text.replace(
+                &format!("\"run_id\": \"{id}\""),
+                &format!("\"run_id\": \"{other_id}\""),
+            ),
+        ),
+        (
+            "seeds",
+            text.replace(
+                "\"seeds\": [\n      1\n    ]",
+                "\"seeds\": [\n      43\n    ]",
+            ),
+        ),
+    ];
+    for (name, forged) in cases {
+        assert_ne!(forged, text, "{name}");
+        std::fs::write(&file, &forged).unwrap();
+        let reused = run_text(&yaml, &RunRequest::new(), &store);
+        let replayed = replay_stored(&registry, &store, &id);
+        std::fs::write(&file, &text).unwrap();
+        for (how, outcome) in [
+            ("reuse", reused.map(|_| ())),
+            ("replay", replayed.map(|_| ())),
+        ] {
+            let failure = outcome.expect_err(&format!("{how} accepted a forged {name}"));
+            assert_eq!(failure.class, FailureClass::RunFailed, "{how} {name}");
+            assert_eq!(
+                failure.diagnostics[0].type_name, "run.stored_run_differs",
+                "{how} {name}"
+            );
+        }
+    }
+    assert!(run_text(&yaml, &RunRequest::new(), &store).unwrap().reused);
+}
+
 /// The result states the records and events of its trace, as it states its hash.
 #[test]
 fn replay_refuses_a_result_with_other_counts_than_its_trace() {
