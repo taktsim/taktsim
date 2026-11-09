@@ -173,6 +173,8 @@ impl Fold {
 
 #[cfg(test)]
 mod tests {
+    use taktsim_components::{FlowMessage, RunOptions, standard};
+    use taktsim_model::{Format, Loader};
     use taktsim_units::Count;
 
     use super::*;
@@ -249,5 +251,36 @@ mod tests {
         for (counts, expected) in cases {
             assert_eq!(fold.differs_from(&counts), Some(expected), "{expected:?}");
         }
+    }
+
+    /// `recent` is the last `RECENT` records, oldest first, however long the trace:
+    /// every run folds its whole trace, which must stream, not stay in memory.
+    #[test]
+    fn recent_is_the_last_records_oldest_first() {
+        let registry = standard().unwrap();
+        let model = Loader::new(registry.catalog())
+            .load_str(
+                "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+                 components: [{id: source, type: Source}, {id: cut, type: Machine, cycle_time: 1min}, {id: sink, type: Sink}]\n\
+                 flow: [[source, cut, sink]]\n",
+                Format::Yaml,
+            )
+            .unwrap();
+        let (trace, _) = registry
+            .prepare(&model, RunOptions::new().no_seed())
+            .unwrap()
+            .run_traced(Vec::new())
+            .unwrap();
+        let folded = fold(TraceReader::<_, FlowMessage>::new(trace.as_slice()).unwrap()).unwrap();
+
+        let mut reader = TraceReader::<_, FlowMessage>::new(trace.as_slice()).unwrap();
+        let names = reader.header().components.clone();
+        let mut every = Vec::new();
+        while let Some(record) = reader.next_record().unwrap() {
+            every.push(record.display(&names).to_string());
+        }
+        assert!(every.len() > 2 * RECENT, "{} records", every.len());
+        assert_eq!(folded.recent.len(), RECENT);
+        assert_eq!(folded.recent, every[every.len() - RECENT..]);
     }
 }
