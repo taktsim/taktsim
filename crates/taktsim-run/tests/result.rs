@@ -456,3 +456,42 @@ fn diagnostic_lines_match_their_schema() {
     let read: Diagnostic = decode_str(&run.encode().to_string(), Format::Json).unwrap();
     assert_eq!(read, run);
 }
+
+/// `taktsim schema` and the Python bindings pick a schema by name in this crate, so
+/// the two cannot drift (ADR-0024 §1, §10): every name listed gives a schema, and a
+/// component type gives its entry with the `$defs` its references need.
+#[test]
+fn every_listed_schema_name_gives_a_schema() {
+    let model = taktsim_components::standard_schema().unwrap();
+    let names = taktsim_run::schema_names(&model);
+    assert_eq!(
+        names,
+        [
+            "all",
+            "model",
+            "result",
+            "validation",
+            "error",
+            "Buffer",
+            "Machine",
+            "Sink",
+            "Source"
+        ]
+    );
+    for name in names {
+        let schema = taktsim_run::schema_named(&model, name).unwrap();
+        assert!(schema.as_object().is_some(), "{name}");
+    }
+    let named = |name| taktsim_run::schema_named(&model, name);
+    assert_eq!(named("all"), Some(model.clone()));
+    assert_eq!(named("model"), Some(model.clone()));
+    assert_eq!(named("result"), Some(result_schema()));
+    assert_eq!(named("validation"), Some(validation_schema()));
+    assert_eq!(named("error"), Some(diagnostic_schema()));
+    let source = named("Source").unwrap();
+    assert_eq!(source["properties"]["type"]["const"], "Source");
+    assert_eq!(source["title"], "Source");
+    assert_eq!(source["$defs"], model["$defs"]);
+    assert_eq!(named("Conveyor"), None);
+    assert_eq!(named("describe"), None, "the CLI's own");
+}
