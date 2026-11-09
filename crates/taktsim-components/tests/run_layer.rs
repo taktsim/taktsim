@@ -485,3 +485,85 @@ fn the_protocol_is_checked() {
     assert!(rogue_error("m", 1, false).contains("CycleDone"));
     assert!(rogue_error("m", 2, false).contains("SetupDone"));
 }
+
+/// A component whose invariant never holds: for whether a run checks them.
+#[derive(Debug)]
+struct Broken {}
+
+impl Encode for Broken {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
+
+impl ComponentParams for Broken {
+    const TYPE: &'static str = "Broken";
+    const EXAMPLE: &'static str = "{id: b, type: Broken}";
+    fn decode(_: &mut Fields<'_, '_>) -> Option<Self> {
+        Some(Self {})
+    }
+}
+
+struct BrokenBehaviour;
+
+impl taktsim_core::Component<taktsim_components::FlowMessage> for BrokenBehaviour {
+    fn handle(
+        &mut self,
+        _: taktsim_core::Delivery<'_, taktsim_components::FlowMessage>,
+        _: &mut taktsim_core::Context<'_, taktsim_components::FlowMessage>,
+    ) -> Result<(), taktsim_core::ComponentError> {
+        Ok(())
+    }
+
+    fn check_invariants(&self) -> Result<(), taktsim_core::Violation> {
+        Err(taktsim_core::Violation {
+            invariant: "never holds",
+            detail: "a stand-in".to_owned(),
+        })
+    }
+}
+
+impl taktsim_components::ComponentType<taktsim_components::Flow> for Broken {
+    const PORTS: taktsim_components::Ports = taktsim_components::Ports::None;
+
+    fn build(
+        &self,
+        _: &taktsim_components::Wiring<'_, taktsim_components::FlowShared>,
+    ) -> Result<Box<dyn taktsim_core::Component<taktsim_components::FlowMessage>>, BuildError> {
+        Ok(Box::new(BrokenBehaviour))
+    }
+}
+
+#[test]
+fn a_prepared_run_checks_invariants_unless_told_not_to() {
+    // The default is checks on (spec §7 Layer 3): a broken invariant fails the
+    // run. Only `without_checks` turns them off.
+    let registry = taktsim_components::standard()
+        .unwrap()
+        .with::<Broken>()
+        .unwrap();
+    let yaml = "format: \"1.0\"\nmodel: {name: m, seed: 1}\nexperiment: {type: terminating, horizon: 1min}\n\
+                components:\n  - {id: source, type: Source, interarrival: 10s}\n  \
+                - {id: sink, type: Sink}\n  - {id: b, type: Broken}\nflow: [[source, sink]]\n";
+    let model = Loader::new(registry.catalog())
+        .load_str(yaml, Format::Yaml)
+        .unwrap();
+    let failure = registry
+        .prepare(&model, RunOptions::new())
+        .unwrap()
+        .run(&mut NoTrace)
+        .unwrap_err();
+    let RunFailure::Run(error) = &failure else {
+        panic!("{failure}");
+    };
+    assert!(
+        matches!(**error, taktsim_core::RunError::Invariant { ref component, .. } if component == "b"),
+        "{error}"
+    );
+    let report = registry
+        .prepare(&model, RunOptions::new().without_checks())
+        .unwrap()
+        .run(&mut NoTrace)
+        .unwrap();
+    assert_eq!(report.summary.outcome, RunOutcome::Horizon);
+}
