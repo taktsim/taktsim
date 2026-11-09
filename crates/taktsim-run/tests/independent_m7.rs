@@ -1190,7 +1190,9 @@ fn replay_refuses_a_changed_stored_model() {
     assert_eq!(failure.class, FailureClass::RunFailed);
 }
 
-/// One flipped byte in the records of a trace: a CRC error, or a difference. Never a pass.
+/// One flipped byte in the records of a trace: never a pass. The block's CRC catches it, so the
+/// trace cannot be read: "`Io` if a stored file cannot be read" (doc comment of `replay_stored`),
+/// as in the check run, and not a replay that diverged.
 #[test]
 fn replay_refuses_a_damaged_trace() {
     let (root, store, id) = stored_run("replay_trace");
@@ -1200,7 +1202,13 @@ fn replay_refuses_a_damaged_trace() {
     bytes[middle] ^= 0x40;
     fs::write(&file, bytes).unwrap();
     let failure = replay_stored(&standard().unwrap(), &store, &id).unwrap_err();
-    assert_eq!(failure.class, FailureClass::RunFailed);
+    assert_eq!(failure.class, FailureClass::Io, "{failure:?}");
+    assert_eq!(failure.diagnostics[0].type_name, "store.read");
+    assert!(
+        failure.diagnostics[0].message.contains("CRC"),
+        "{}",
+        failure.diagnostics[0].message
+    );
 }
 
 /// The running package differs from the stored `provenance`: `RunFailed`.
