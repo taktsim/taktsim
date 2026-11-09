@@ -279,7 +279,9 @@ The number of parts that leave the line per unit of time.
 
 ### Utilization
 
-The share of time a station is working. [Page 2](02-bottleneck.md),
+The share of time a station is working. For a station that works on several
+parts at once, it is the share of its places in use, so it can be below the
+share of time it is busy. [Page 2](02-bottleneck.md),
 [page 5](05-utilization.md).
 
 ### Validation
