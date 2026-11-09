@@ -389,6 +389,12 @@ rule really acts. Window for the count: [900, 970], fixed here. It is no A2 clai
 edge says that coverage must not collapse, and the measured count joins this ADR beside
 ADR-0014's. It does not move the window.
 
+**Measured** (`crates/taktsim-run/tests/coverage.rs`; the seeds are fixed, so the counts are the same on
+every target): A2 covers 299/600 in 948 of 1,000 fixed-n experiments. The sequential procedure covers it
+in 930 of 1,000, with a mean of 16.32 replications per experiment, near the estimate of 15. Beside
+ADR-0014's 94.35 % on normal results at γ = 5 %, 93.0 % here at γ = 3 % is consistent with the
+shortfall §7 expects from stopping soon after n₀.
+
 **Where they run.** Each A2 experiment is 10 runs of about 300 parts: about 3·10⁷ events in all
 (estimate). They go through `prepare`, `run_traced` to memory, the fold and
 `Accuracy::from_replications`, so 10,000 store directories are not created, and a smaller test
