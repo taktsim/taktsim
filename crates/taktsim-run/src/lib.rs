@@ -40,6 +40,7 @@ mod ending;
 mod experiment;
 mod facts;
 mod id;
+mod memory;
 mod metrics;
 mod result;
 mod schemas;
@@ -62,7 +63,7 @@ use taktsim_trace::{
 use taktsim_units::SimDuration;
 
 pub use diagnostic::{Diagnostic, DiagnosticKind, Failure, FailureClass};
-pub use experiment::{Budget, Ended};
+pub use experiment::{Budget, Ended, Progress, Spent};
 pub use id::{ExperimentId, ParseIdError, RunId, RunIdInputs};
 pub use result::{
     Accuracy, AccuracyKind, AccuracyPlan, AccuracyTarget, Metric, MetricValue, Over, Provenance,
@@ -193,6 +194,9 @@ pub struct RunResponse {
     pub warnings: Vec<Diagnostic>,
     /// How it ended; the exit code follows from this, never from `stop_reason`.
     pub ended: Ended,
+    /// What an experiment over several seeds did beside its document; `None` for one
+    /// run.
+    pub progress: Option<Progress>,
 }
 
 /// What [`replay_stored`] compared.
@@ -675,6 +679,7 @@ pub fn run<D: Domain>(
                 reused: one.reused,
                 warnings: seeding.warnings,
                 ended,
+                progress: None,
             })
         }
         Mode::List { seeds } => {
@@ -705,6 +710,45 @@ pub(crate) struct One {
     pub(crate) partial: Option<RunOutcome>,
 }
 
+/// A run that reached its end and waits in `tmp/` to be committed (ADR-0025 §8).
+/// Dropped, it leaves nothing behind.
+#[derive(Debug)]
+pub(crate) struct Ready {
+    temp: TempRun,
+    id: RunId,
+    written: Summary,
+    pub(crate) result: ResultDocument,
+    /// What one replication like this takes in memory, in bytes.
+    pub(crate) memory: u64,
+}
+
+/// What running one replication gave, before anything is committed.
+#[derive(Debug)]
+pub(crate) enum Worked {
+    /// It reached its end: commit it to keep it.
+    Ready(Box<Ready>),
+    /// A limit or the cancel flag stopped it: it is not kept.
+    Partial(Box<One>),
+}
+
+/// The stored run of `model` with `seed`, if the request reuses one.
+fn stored<D: Domain>(
+    model: &Model,
+    seed: Option<u64>,
+    request: &RunRequest<'_>,
+    store: &Store,
+) -> Result<Option<One>, Failure> {
+    if !request.reuse {
+        return Ok(None);
+    }
+    let id = run_id::<D>(model, seed)?;
+    Ok(store.read_result(&id)?.map(|result| One {
+        result,
+        reused: true,
+        partial: None,
+    }))
+}
+
 /// One run of `model` with `seed`, from the store or run and kept (ADR-0024 §3, §8).
 fn run_one<D: Domain>(
     registry: &Registry<D>,
@@ -713,25 +757,36 @@ fn run_one<D: Domain>(
     request: &RunRequest<'_>,
     store: &Store,
 ) -> Result<One, Failure> {
+    if let Some(one) = stored::<D>(model, seed, request, store)? {
+        return Ok(one);
+    }
+    match work_one(registry, model, seed, request, request.cancel, store)? {
+        Worked::Partial(one) => Ok(*one),
+        Worked::Ready(ready) => Ok(One {
+            result: commit(store, *ready)?,
+            reused: false,
+            partial: None,
+        }),
+    }
+}
+
+/// Runs `model` with `seed` into `tmp/`, folds it and writes its result there; a
+/// worker's part (ADR-0025 §8). `cancel` cuts it.
+fn work_one<D: Domain>(
+    registry: &Registry<D>,
+    model: &Model,
+    seed: Option<u64>,
+    request: &RunRequest<'_>,
+    cancel: Option<&AtomicBool>,
+    store: &Store,
+) -> Result<Worked, Failure> {
     let document = model.document();
     let id = run_id::<D>(model, seed)?;
-    if request.reuse
-        && let Some(stored) = store.read_result(&id)?
-    {
-        check_filed_under(&stored.document, &id, model)?;
-        return Ok(One {
-            result: stored.document,
-            text: stored.text,
-            reused: true,
-            partial: None,
-        });
-    }
-
     let temp = store.begin()?;
     let model_path = temp.file(MODEL_FILE);
     std::fs::write(&model_path, model.canonical_json())
         .map_err(|e| io_failure("store.write", &model_path, &e))?;
-    let (report, written) = write_trace(registry, model, options(request, seed), &temp)?;
+    let (report, written) = write_trace(registry, model, options(request, seed, cancel), &temp)?;
     let trace_path = temp.file(TRACE_FILE);
     let places = Places::of(registry, document);
     let fold = fold_trace::<D>(&trace_path, &places)?;
@@ -772,13 +827,11 @@ fn run_one<D: Domain>(
         fold: &fold,
     };
     if !complete {
-        let result = result_document(registry, model, &finished(None))?;
-        return Ok(One {
-            text: result.to_text(),
-            result,
+        return Ok(Worked::Partial(Box::new(One {
+            result: result_document(registry, model, &finished(None))?,
             reused: false,
             partial: Some(report.summary.outcome),
-        });
+        })));
     }
     if seed.is_none() {
         check_no_draw_claim(registry, model, &trace_path, &fold)?;
@@ -787,23 +840,30 @@ fn run_one<D: Domain>(
     let text = result.to_text();
     let result_path = temp.file(RESULT_FILE);
     std::fs::write(&result_path, &text).map_err(|e| io_failure("store.write", &result_path, &e))?;
-    let stored = match store.commit(&temp, &id)? {
-        Commit::Stored => StoredResult {
-            document: result,
-            text,
-        },
-        Commit::AlreadyThere => compare_with_stored(store, &id, model, &result, &written)?,
-    };
-    Ok(One {
-        result: stored.document,
-        text: stored.text,
-        reused: false,
-        partial: None,
-    })
+    Ok(Worked::Ready(Box::new(Ready {
+        memory: fold.memory_estimate(),
+        temp,
+        id,
+        written,
+        result,
+    })))
 }
 
-/// The options of a run with this seed.
-fn options<'a>(request: &RunRequest<'a>, seed: Option<u64>) -> RunOptions<'a> {
+/// Renames a finished run into the store: the coordinator's part. A run with its id
+/// already there is compared and never overwritten.
+fn commit(store: &Store, ready: Ready) -> Result<ResultDocument, Failure> {
+    match store.commit(&ready.temp, &ready.id)? {
+        Commit::Stored => Ok(ready.result),
+        Commit::AlreadyThere => compare_with_stored(store, &ready.id, &ready.written),
+    }
+}
+
+/// The options of a run with this seed, cut by `cancel`.
+fn options<'a>(
+    request: &RunRequest<'_>,
+    seed: Option<u64>,
+    cancel: Option<&'a AtomicBool>,
+) -> RunOptions<'a> {
     let mut options = match seed {
         Some(seed) => RunOptions::new().seed(seed),
         None => RunOptions::new().no_seed(),
@@ -811,7 +871,7 @@ fn options<'a>(request: &RunRequest<'a>, seed: Option<u64>) -> RunOptions<'a> {
     if let Some(max_events) = request.max_events {
         options = options.max_events(max_events);
     }
-    if let Some(cancel) = request.cancel {
+    if let Some(cancel) = cancel {
         options = options.cancel_on(cancel);
     }
     options

@@ -62,6 +62,10 @@ clap = { version = "4.6.7", default-features = false, features = ["std", "derive
 # Ctrl+C and Ctrl+Break set one flag. New in the lock with it: `nix` (unix) and
 # `windows-sys`, at the version already locked.
 ctrlc = { version = "3.5.1", features = ["termination"] }
+# Parallel replications, in taktsim-run only (ADR-0025 §8): a thread pool with an
+# explicit size, so `RAYON_NUM_THREADS` changes nothing. New in the lock with it:
+# `rayon-core`, `crossbeam-deque`, `crossbeam-epoch`, `crossbeam-utils`.
+rayon = { version = "1.12.0", default-features = false }
 # Golden-trace snapshots (ADR-0021), tests only, without colors or extra
 # formats.
 insta = { version = "1.49.0", default-features = false }
