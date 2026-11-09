@@ -3157,8 +3157,23 @@ fn a_limited_run_with_no_seed_is_partial_like_any_other() {
     assert_eq!(runs_in(&root), 0);
 }
 
+/// The bytes of trace written so far by a run in progress below `root/tmp/`.
+fn trace_bytes_in_progress(root: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(root.join("tmp")) else {
+        return 0;
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| fs::metadata(entry.path().join("trace.takt")).ok())
+        .map(|meta| meta.len())
+        .max()
+        .unwrap_or(0)
+}
+
 /// Cancelling while it runs: the flag stops a long run, which would otherwise take far longer than this
-/// test does. It is partial, not kept, and the temporary files are gone.
+/// test does. It is partial, not kept, and the temporary files are gone. The flag is set once the run
+/// has written events to its trace, not after a fixed sleep: on a slow or loaded machine the work before
+/// the first event can take longer than any sleep, and a flag set before then stops the run at 0 events.
 #[test]
 fn cancelling_from_outside_stops_a_running_run() {
     let (root, store) = fresh_store("cancel_running");
@@ -3175,7 +3190,13 @@ fn cancelling_from_outside_stops_a_running_run() {
     let flag = AtomicBool::new(false);
     let doc = std::thread::scope(|scope| {
         scope.spawn(|| {
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            // Far more than a header: buffered records have reached the file. A run that never
+            // writes is stopped after a minute, and fails below.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            while trace_bytes_in_progress(&root) < 64 * 1024 && std::time::Instant::now() < deadline
+            {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         });
         let mut request = RunRequest::new();
