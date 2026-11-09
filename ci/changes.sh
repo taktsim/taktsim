@@ -13,12 +13,17 @@
 set -euo pipefail
 base=$1 head=$2
 
-# README.md is python/pyproject.toml's readme; maturin copies it into the
-# package metadata and never fails on its content.
+# Some documents are read by tests, which load and run the models they show
+# and pin results taken from them: README.md and docs/spec.md
+# (taktsim-model's examples.rs), README.md, docs/introduction.md and the
+# concept pages (taktsim-components' docs_examples.rs). Changing one runs the
+# gates, so a docs-only pull request cannot leave main failing for the next.
+# A test that reads another document adds it here.
 skippable() {
   case "$1" in
+    README.md | docs/spec.md | docs/introduction.md | docs/concepts/*) return 1 ;;
     docs/* | website/*) return 0 ;;
-    README.md | CONTRIBUTING.md | CLAUDE.md | CODE_OF_CONDUCT.md | SECURITY.md) return 0 ;;
+    CONTRIBUTING.md | CLAUDE.md | CODE_OF_CONDUCT.md | SECURITY.md) return 0 ;;
     LICENSE-APACHE | LICENSE-MIT | .nvmrc | cliff.toml) return 0 ;;
     .github/ISSUE_TEMPLATE/* | .github/pull_request_template.md) return 0 ;;
     .github/CODEOWNERS | .github/dependabot.yml) return 0 ;;

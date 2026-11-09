@@ -15,9 +15,12 @@ git init -q -b main
 git config user.name test
 git config user.email test@example.com
 git config commit.gpgsign false
-mkdir -p crates/core/src docs website
+mkdir -p crates/core/src docs/concepts docs/adr website
 echo 'fn main() {}' >crates/core/src/lib.rs
 echo '# Spec' >docs/spec.md
+echo '# Roadmap' >docs/roadmap.md
+echo '# Introduction' >docs/introduction.md
+echo '# Page 1' >docs/concepts/01-production-line.md
 echo '# Read me' >crates/core/README.md
 echo 'root' >README.md
 git add -A
@@ -43,13 +46,18 @@ change() {
   fi
 }
 
-change false "docs only" sh -c 'echo more >>docs/spec.md'
+change false "docs only" sh -c 'echo more >>docs/roadmap.md; echo x >docs/adr/0001-x.md'
 change false "site only" sh -c 'echo x >website/book.toml'
-change false "top-level Markdown" sh -c 'echo more >>README.md; echo x >CONTRIBUTING.md'
+change false "top-level Markdown" sh -c 'echo x >CONTRIBUTING.md; echo x >CLAUDE.md'
+change true "the README, which tests read" sh -c 'echo more >>README.md'
+change true "the spec, which tests read" sh -c 'echo more >>docs/spec.md'
+change true "the introduction, which tests read" sh -c 'echo more >>docs/introduction.md'
+change true "a concept page, which tests read" sh -c 'echo more >>docs/concepts/01-production-line.md'
+change true "a new concept page" sh -c 'echo x >docs/concepts/09-new.md'
 change false "site and PR workflows" sh -c 'mkdir -p .github/workflows; echo x >.github/workflows/site.yml; echo x >.github/workflows/pr.yml'
 change false "no change at all" true
 change true "Rust source" sh -c 'echo "// x" >>crates/core/src/lib.rs'
-change true "docs and Rust together" sh -c 'echo more >>docs/spec.md; echo "// x" >>crates/core/src/lib.rs'
+change true "docs and Rust together" sh -c 'echo more >>docs/roadmap.md; echo "// x" >>crates/core/src/lib.rs'
 change true "Markdown inside a crate" sh -c 'echo more >>crates/core/README.md'
 change true "the ci workflow" sh -c 'mkdir -p .github/workflows; echo x >.github/workflows/ci.yml'
 change true "the bench workflow" sh -c 'mkdir -p .github/workflows; echo x >.github/workflows/bench.yml'
