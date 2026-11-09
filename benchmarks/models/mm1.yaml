@@ -1,0 +1,15 @@
+# Reference model: M/M/1 (ADR-0025 §7), the model of the A2 coverage test.
+# λ = 0.5/s, μ = 1/s, ρ = 0.5, starting empty. The buffer never fills (the
+# chance of 1,000 waiting is about 2^-1000), so arrivals are Poisson and the
+# expected delivered count by 600 s is λT − ρ/(1 − ρ) = 299, a throughput of
+# 299/600 items/s, with the transient below e^-50.
+format: "1.0"
+model: {name: mm1, seed: 1}
+experiment: {type: terminating, horizon: 600s}
+components:
+  - {id: source, type: Source, interarrival: {dist: exponential, mean: 2s}}
+  - {id: queue, type: Buffer, capacity: 1000 parts}
+  - {id: server, type: Machine, cycle_time: {dist: exponential, mean: 1s}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, queue, server, sink]
