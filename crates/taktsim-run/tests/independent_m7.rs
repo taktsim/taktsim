@@ -2927,9 +2927,11 @@ fn replay_refuses_a_result_that_disagrees_with_its_trace() {
     let doc: ResultDocument = decode_str(&text, Format::Json).unwrap();
     let stream = doc.runs[0].trace.as_ref().unwrap().stream_hash.to_string();
     let hash = doc.provenance.model_hash.to_string();
+    let system = doc.provenance.system_hash.to_string();
     let cases = [
         ("stream hash", text.replace(&stream, &"0".repeat(64))),
         ("model hash", text.replace(&hash, &"0".repeat(64))),
+        ("system hash", text.replace(&system, &"0".repeat(64))),
         (
             "seeds",
             text.replace("\"seed\": 42", "\"seed\": 43").replace(
