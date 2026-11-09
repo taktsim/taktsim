@@ -14,19 +14,36 @@ use taktsim_model::{Decode, Decoder, Format, Json, Node, Schemas, decode_str};
 pub struct Dir(PathBuf);
 
 impl Dir {
+    /// A new directory below the system's temporary directory.
     pub fn new() -> Self {
+        Self::new_in(&std::env::temp_dir())
+    }
+
+    /// A new directory below `base`, with an empty `.taktsim/` of its own. `run`
+    /// without `--store` takes the nearest `.taktsim/` upward, like `.git`, and what
+    /// sits above the temporary directory is the machine's, not the test's: without
+    /// this, a store in a home directory would be read and written by the tests.
+    pub fn new_in(base: &Path) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let dir = std::env::temp_dir().join(format!(
+        let dir = base.join(format!(
             "taktsim-cli-test-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".taktsim")).unwrap();
         Self(dir)
     }
 
     pub fn path(&self) -> &Path {
         &self.0
+    }
+
+    /// Whether this directory's store holds nothing: no command wrote to it.
+    pub fn store_is_empty(&self) -> bool {
+        std::fs::read_dir(self.0.join(".taktsim"))
+            .unwrap()
+            .next()
+            .is_none()
     }
 
     /// Writes a file below the directory.
