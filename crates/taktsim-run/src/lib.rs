@@ -725,8 +725,63 @@ fn compare_with_stored(
     }
 }
 
+/// The header of the stored trace at `path` must name the stored model and the
+/// result's seed (ADR-0024 §1). Replay compares the records, which two models
+/// that differ only in, say, their name share, and it skips the seed of a trace
+/// that states none; so a trace copied from another run would replay.
+fn check_trace_header<D: Domain>(
+    path: &Path,
+    model: &Model,
+    seed: Option<u64>,
+    id: &RunId,
+) -> Result<(), Failure> {
+    let file = File::open(path).map_err(|e| io_failure("store.read", path, &e))?;
+    let reader = TraceReader::<_, D::Message>::new(BufReader::new(file)).map_err(|e| {
+        from_run_failure(
+            RunFailure::Replay(Box::new(ReplayError::Trace(e))),
+            model.document(),
+        )
+    })?;
+    let header = reader.header();
+    let seed_text =
+        |seed: Option<u64>| seed.map_or_else(|| "no seed".to_owned(), |s| s.to_string());
+    let differs = if header.model_hash.as_bytes() != model.hash().as_bytes() {
+        Some((
+            "model hash",
+            header.model_hash.to_string(),
+            model.hash().to_string(),
+        ))
+    } else if header.system_hash.as_bytes() != model.system_hash().as_bytes() {
+        Some((
+            "system hash",
+            header.system_hash.to_string(),
+            model.system_hash().to_string(),
+        ))
+    } else if header.seed != seed {
+        Some(("seed", seed_text(header.seed), seed_text(seed)))
+    } else {
+        None
+    };
+    let Some((what, found, allowed)) = differs else {
+        return Ok(());
+    };
+    Err(Failure::one(
+        FailureClass::RunFailed,
+        Diagnostic::error(
+            "run.stored_run_differs",
+            format!(
+                "the trace of run {id} states another {what} than its stored model and result: it is another run's trace"
+            ),
+        )
+        .at("--store")
+        .found(found)
+        .allowed(allowed),
+    ))
+}
+
 /// Replays the stored run `id` against this registry, after checking the stored
-/// model against the trace's hashes, the running package against the result's
+/// model against the trace header's hashes and the result's seed, the stored model
+/// against the result's hashes, the running package against the result's
 /// provenance and the result against the id it is filed under; the replay's stream
 /// hash, records and events must then be what the result states. A run with no seed
 /// is replayed under a different internal seed, so a false claim of drawing nothing
@@ -796,13 +851,14 @@ pub fn replay_stored<D: Domain>(
     }
     check_filed_under(&result, id)?;
     let trace_path = store.run_file(id, TRACE_FILE);
-    let file = File::open(&trace_path).map_err(|e| io_failure("store.read", &trace_path, &e))?;
     let seed = result.runs.first().and_then(|run| run.seed);
+    let document = model.document();
+    check_trace_header::<D>(&trace_path, &model, seed, id)?;
+    let file = File::open(&trace_path).map_err(|e| io_failure("store.read", &trace_path, &e))?;
     let options = seed.map_or_else(
         || RunOptions::new().no_seed_check(),
         |seed| RunOptions::new().seed(seed),
     );
-    let document = model.document();
     let replayed = registry
         .prepare(&model, options)
         .and_then(|prepared| prepared.replay(BufReader::new(file)))

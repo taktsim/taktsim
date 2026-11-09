@@ -417,6 +417,91 @@ fn a_result_filed_under_another_run_is_not_returned() {
     assert!(again.reused);
 }
 
+/// A trace whose header names another model, or another seed, is not that run's
+/// trace, even when its records are the same, as they are for two models that differ
+/// only in their name (ADR-0024 §1). Replay compares records, so only the header
+/// tells these apart.
+#[test]
+fn replay_refuses_a_trace_whose_header_names_another_run() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let store = dir.store();
+    let a = run_text(&drawing_model("a, seed: 1"), &RunRequest::new(), &store).unwrap();
+    let b = run_text(&drawing_model("b, seed: 1"), &RunRequest::new(), &store).unwrap();
+    let a_id = a.result.runs[0].run_id.clone().unwrap();
+    let b_id = b.result.runs[0].run_id.clone().unwrap();
+    assert_ne!(a_id, b_id);
+    assert_ne!(
+        a.result.provenance.model_hash,
+        b.result.provenance.model_hash
+    );
+    let trace_of = |id: &taktsim_run::RunId| {
+        store
+            .root()
+            .join("runs")
+            .join(id.as_str())
+            .join("trace.takt")
+    };
+    let a_trace = std::fs::read(trace_of(&a_id)).unwrap();
+    let b_trace = std::fs::read(trace_of(&b_id)).unwrap();
+    assert_ne!(a_trace, b_trace, "the headers name other model hashes");
+
+    // Run A's trace filed as run B's.
+    std::fs::write(trace_of(&b_id), &a_trace).unwrap();
+    let failure = replay_stored(&registry, &store, &b_id).unwrap_err();
+    assert_eq!(failure.class, FailureClass::RunFailed);
+    let line = &failure.diagnostics[0];
+    assert_eq!(line.type_name, "run.stored_run_differs");
+    assert!(line.message.contains("model hash"), "{}", line.message);
+    assert_eq!(
+        line.found.as_deref(),
+        Some(a.result.provenance.model_hash.to_string().as_str())
+    );
+    assert_eq!(
+        line.allowed.as_deref(),
+        Some(b.result.provenance.model_hash.to_string().as_str())
+    );
+
+    // Run B's own records, under a header that states no seed: replay checks a seed
+    // only where the header states one, and the records do not show it.
+    let model = taktsim_model::Loader::new(registry.catalog())
+        .load_str(&drawing_model("b, seed: 1"), taktsim_model::Format::Yaml)
+        .unwrap();
+    let mut engine = registry
+        .build(model.document(), taktsim_core::EngineConfig::new(1))
+        .unwrap();
+    let mut header = taktsim_trace::Header::for_engine(
+        &engine,
+        taktsim_trace::ModelHash::from_bytes(*model.hash().as_bytes()),
+        taktsim_trace::SystemHash::from_bytes(*model.system_hash().as_bytes()),
+    );
+    header.seed = None;
+    let mut writer =
+        taktsim_trace::TraceWriter::<_, taktsim_components::FlowMessage>::new(Vec::new(), &header)
+            .unwrap();
+    let horizon = model.document().experiment().horizon().as_nanos();
+    let summary = engine
+        .run(
+            taktsim_core::RunLimits::until(taktsim_units::SimTime::from_nanos(horizon)),
+            &mut writer,
+        )
+        .unwrap();
+    writer.run_ended(&summary);
+    let (unseeded, _) = writer.finish().unwrap();
+    assert_ne!(unseeded, b_trace);
+    std::fs::write(trace_of(&b_id), &unseeded).unwrap();
+    let failure = replay_stored(&registry, &store, &b_id).unwrap_err();
+    assert_eq!(failure.class, FailureClass::RunFailed);
+    let line = &failure.diagnostics[0];
+    assert!(line.message.contains("seed"), "{}", line.message);
+    assert_eq!(line.found.as_deref(), Some("no seed"));
+    assert_eq!(line.allowed.as_deref(), Some("1"));
+
+    // Its own trace replays.
+    std::fs::write(trace_of(&b_id), &b_trace).unwrap();
+    assert!(replay_stored(&registry, &store, &b_id).is_ok());
+}
+
 /// The result states the records and events of its trace, as it states its hash.
 #[test]
 fn replay_refuses_a_result_with_other_counts_than_its_trace() {
