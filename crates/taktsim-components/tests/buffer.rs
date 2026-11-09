@@ -100,7 +100,8 @@ fn priority_gives_the_highest_then_the_first_into_the_buffer() {
             | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
             | FlowMessage::DispatchDecision(_)
-            | FlowMessage::EdgeCondition { .. } => None,
+            | FlowMessage::EdgeCondition { .. }
+            | FlowMessage::Pick => None,
         })
         .collect();
     assert_eq!(leaving[..3], [0, 1, 1]);

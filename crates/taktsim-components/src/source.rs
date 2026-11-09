@@ -843,7 +843,8 @@ impl Component<FlowMessage> for SourceBehaviour {
             | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
             | FlowMessage::DispatchDecision(_)
-            | FlowMessage::EdgeCondition { .. }) => {
+            | FlowMessage::EdgeCondition { .. }
+            | FlowMessage::Pick) => {
                 return Err(ComponentError::Unexpected {
                     state: "source",
                     event: format!("{message:?}"),

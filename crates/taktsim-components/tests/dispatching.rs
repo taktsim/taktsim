@@ -275,17 +275,19 @@ fn a_free_change_comes_after_the_same_variant_and_before_a_paid_one() {
 
 #[test]
 fn minimum_setup_follows_the_last_committed_unit() {
-    // Two places. `red` is in its cycle from 1 s until 11 s, and `blue` waits behind it
-    // from 2 s. Offers of `red` (from 2 s) and `blue` (from 4 s) queue. At 11 s the `red`
-    // leaves, a changeover to `blue` starts, and a place is free: the `blue` wins although
-    // the machine is set up for `red` until the change ends, and although the `red` waited
-    // longer. Taking it spares a change to `red` and back.
+    // Two places. `red` is in its cycle from 3 s until 13 s, and `blue`, offered alone at
+    // 4 s, waits behind it. Offers of `red` (from 6 s) and `blue` (from 8 s) queue. At 13 s
+    // the `red` leaves, a changeover to `blue` starts, and a place is free: the `blue` wins
+    // although the machine is set up for `red` until the change ends, and although the
+    // `red` waited longer. Taking it spares a change to `red` and back. (No two offers
+    // come at one instant before 13 s: the rule would take a `red` offered beside the
+    // first `blue`.)
     let text = format!(
         "{}control:\n  dispatch: {{m: minimum_setup}}\n",
         document(
-            "12s",
-            "  - {id: sx, type: Source, interarrival: 1s, variants: {red: 100%}}\n  \
-             - {id: sy, type: Source, interarrival: 2s, variants: {blue: 100%}}\n  \
+            "14s",
+            "  - {id: sx, type: Source, interarrival: 3s, variants: {red: 100%}}\n  \
+             - {id: sy, type: Source, interarrival: 4s, variants: {blue: 100%}}\n  \
              - {id: m, type: Machine, cycle_time: 10s, capacity: 2 parts, setup: {per_variant: 20s}}\n  \
              - {id: sink, type: Sink}",
             "  - {from: [sx, sy], to: m}\n  - [m, sink]",
@@ -300,9 +302,9 @@ fn minimum_setup_follows_the_last_committed_unit() {
     assert_eq!(
         order,
         [
-            ("red".to_owned(), t("1s")),
-            ("blue".to_owned(), t("2s")),
-            ("blue".to_owned(), t("11s")),
+            ("red".to_owned(), t("3s")),
+            ("blue".to_owned(), t("4s")),
+            ("blue".to_owned(), t("13s")),
         ]
     );
     let dispatches = r.dispatches();

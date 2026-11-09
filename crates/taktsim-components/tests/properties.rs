@@ -834,7 +834,8 @@ impl RoutedBooks {
             | FlowMessage::VariantName { .. }
             | FlowMessage::RouteDecision(_)
             | FlowMessage::DispatchDecision(_)
-            | FlowMessage::EdgeCondition { .. } => {}
+            | FlowMessage::EdgeCondition { .. }
+            | FlowMessage::Pick => {}
         }
     }
 

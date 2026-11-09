@@ -742,9 +742,14 @@ impl MachineBehaviour {
         Ok(())
     }
 
-    /// Does what can be done now: a down machine moves nothing. Then writes a
-    /// note if the state or the count of units in a cycle changed.
-    fn settle(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
+    /// Does what can be done now: a down machine moves nothing. A declared rule picks
+    /// only when its `Pick` comes (`picking`). Then writes a note if the state or the
+    /// count of units in a cycle changed.
+    fn settle(
+        &mut self,
+        picking: bool,
+        ctx: &mut Context<'_, FlowMessage>,
+    ) -> Result<(), ComponentError> {
         if !self.down {
             // The lane fills free places first, before any offer (ADR-0023 §8).
             while self.taken() < self.capacity {
@@ -757,7 +762,7 @@ impl MachineBehaviour {
             let free = self.capacity.saturating_sub(self.taken());
             if self.inlet.has_rule() {
                 let follows = self.committed_variant();
-                self.inlet.accept_by_rule(free, follows, ctx)?;
+                self.inlet.settle_by_rule(picking, free, follows, ctx)?;
             } else {
                 self.inlet.accept(free, ctx)?;
             }
@@ -910,6 +915,7 @@ impl Component<FlowMessage> for MachineBehaviour {
         d: Delivery<'_, FlowMessage>,
         ctx: &mut Context<'_, FlowMessage>,
     ) -> Result<(), ComponentError> {
+        let picking = matches!(d.message, FlowMessage::Pick);
         match d.message {
             FlowMessage::Failure => self.fail(ctx)?,
             FlowMessage::Repaired => self.repaired(ctx)?,
@@ -939,6 +945,7 @@ impl Component<FlowMessage> for MachineBehaviour {
                 };
                 self.ready_for = Some(changeover.to);
             }
+            FlowMessage::Pick => self.inlet.pick_came(),
             FlowMessage::Offer => self.inlet.offered(d.from),
             FlowMessage::OfferOf(unit) => self.inlet.offered_unit(d.from, **unit),
             FlowMessage::Withdraw => self.inlet.withdrawn(d.from),
@@ -979,7 +986,7 @@ impl Component<FlowMessage> for MachineBehaviour {
             | FlowMessage::DispatchDecision(_)
             | FlowMessage::EdgeCondition { .. }) => return Err(self.unexpected(message)),
         }
-        self.settle(ctx)
+        self.settle(picking, ctx)
     }
 
     fn held_items(&self, visit: &mut dyn FnMut(ItemId)) {
@@ -1036,8 +1043,7 @@ impl Component<FlowMessage> for MachineBehaviour {
                     detail: format!("{taken} places taken, capacity {}", self.capacity),
                 });
             }
-            if taken < self.capacity && self.inlet.has_waiting() && !self.inlet.waits_for_a_reply()
-            {
+            if taken < self.capacity && self.inlet.has_waiting() && !self.inlet.waits_for_a_pick() {
                 return Err(Violation {
                     invariant: "unless down, a free place and a waiting offer never coexist",
                     detail: format!("{taken} places taken, capacity {}", self.capacity),

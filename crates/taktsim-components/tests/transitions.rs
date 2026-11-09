@@ -165,7 +165,8 @@ fn state_equals_what_the_machine_holds() {
                             | FlowMessage::Return(_)
                             | FlowMessage::RouteDecision(_)
                             | FlowMessage::DispatchDecision(_)
-                            | FlowMessage::EdgeCondition { .. } => holds.down,
+                            | FlowMessage::EdgeCondition { .. }
+                            | FlowMessage::Pick => holds.down,
                         };
                         if matches!(message, FlowMessage::SetupDone) {
                             setups_open = false;

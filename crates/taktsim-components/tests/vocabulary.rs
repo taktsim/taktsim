@@ -99,7 +99,8 @@ impl Component<FlowMessage> for PassOn {
             | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
             | FlowMessage::DispatchDecision(_)
-            | FlowMessage::EdgeCondition { .. }) => {
+            | FlowMessage::EdgeCondition { .. }
+            | FlowMessage::Pick) => {
                 return Err(ComponentError::Unexpected {
                     state: "pass-on",
                     event: format!("{other:?}"),

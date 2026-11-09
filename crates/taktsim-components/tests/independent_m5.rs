@@ -4588,7 +4588,8 @@ impl<'a> ProtocolWalk<'a> {
             | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
             | FlowMessage::DispatchDecision(_)
-            | FlowMessage::EdgeCondition { .. } => {
+            | FlowMessage::EdgeCondition { .. }
+            | FlowMessage::Pick => {
                 panic!("at {time}: an M6 message in a model without routing words")
             }
         }

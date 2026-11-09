@@ -368,6 +368,8 @@ pub struct DispatchDecision {
 /// assert!(FlowMessage::Repaired.priority() < FlowMessage::SetupDone.priority());
 /// assert!(FlowMessage::SetupDone.priority() < FlowMessage::NextArrival.priority());
 /// assert!(FlowMessage::Accept.priority() < FlowMessage::Offer.priority());
+/// // A station with a rule picks once the offers of the instant are in.
+/// assert!(FlowMessage::Withdraw.priority() < FlowMessage::Pick.priority());
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FlowMessage {
@@ -430,6 +432,11 @@ pub enum FlowMessage {
         /// The condition.
         text: String,
     },
+    /// Timer, after no time: a station with a declared rule picks among the offers
+    /// of this instant. It comes after every `Offer`, `OfferOf` and `Withdraw` of
+    /// the instant, so the rule, not the order of delivery, decides between units
+    /// offered together (ADR-0023 §6).
+    Pick,
 }
 
 impl Message for FlowMessage {
@@ -444,7 +451,10 @@ impl Message for FlowMessage {
             Self::Accept => 5,
             Self::Decline => 6,
             Self::Offer | Self::Withdraw | Self::OfferOf(_) => 7,
-            Self::MachineState(_)
+            // `Pick` is the only one of these that is delivered: the notes and decisions
+            // never enter the queue, so it comes after every offer of its instant.
+            Self::Pick
+            | Self::MachineState(_)
             | Self::SourceState(_)
             | Self::VariantName { .. }
             | Self::RouteDecision(_)
@@ -473,6 +483,7 @@ const RETURN: u8 = 15;
 const ROUTE_DECISION: u8 = 16;
 const DISPATCH_DECISION: u8 = 17;
 const EDGE_CONDITION: u8 = 18;
+const PICK: u8 = 19;
 
 /// The code of a dispatching rule in the trace (ADR-0023 §9). Codes 128 to 255 stay
 /// reserved for package rules.
@@ -776,6 +787,7 @@ impl TraceMessage for FlowMessage {
                 out.u32(*edge);
                 out.str(text);
             }
+            Self::Pick => out.u8(PICK),
         }
     }
 
@@ -842,7 +854,8 @@ impl TraceMessage for FlowMessage {
                 edge: input.u32()?,
                 text: input.str()?.to_owned(),
             },
-            other => return Err(input.invalid("FlowMessage tag", other.into(), "0 to 18")),
+            PICK => Self::Pick,
+            other => return Err(input.invalid("FlowMessage tag", other.into(), "0 to 19")),
         })
     }
 }

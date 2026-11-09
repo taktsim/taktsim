@@ -6,7 +6,9 @@
 //!   reservation never lasts longer than an instant.
 //! - A holder calls the helpers within every event: a free place and a waiting
 //!   offer never coexist, nor a part to give and no offer outstanding, so a
-//!   wake-up cannot be lost.
+//!   wake-up cannot be lost. A station with a declared rule is the exception
+//!   within an instant: it picks at its `Pick`, after every offer of the instant
+//!   (ADR-0023 §6).
 //! - Between instants, a target holds an entry exactly when its upstream has an
 //!   offer outstanding.
 //!
@@ -28,7 +30,7 @@ use std::sync::Arc;
 
 use taktsim_core::random::Stream;
 use taktsim_core::{ComponentError, ComponentId, Context, ItemId, Violation};
-use taktsim_units::SimTime;
+use taktsim_units::{SimDuration, SimTime};
 
 use crate::dispatch::{MAX_LISTED, TakerPlan};
 use crate::message::{
@@ -883,8 +885,10 @@ struct InletRule {
     /// Offers in the order they came: the place in the inlet.
     offers: Vec<DescribedOffer>,
     pending: Vec<Pending>,
-    /// This event handled a `Decline`.
+    /// A `Decline` came at this instant, after the last pick.
     declined: bool,
+    /// A `Pick` is on its way, at this instant.
+    pick_due: bool,
 }
 
 /// One upstream that hears from this target, and what it heard last.
@@ -938,6 +942,7 @@ impl Inlet {
                     offers: Vec::new(),
                     pending: Vec::new(),
                     declined: false,
+                    pick_due: false,
                 })
             }),
             reporting: (!subscribers.is_empty()).then(|| {
@@ -1049,11 +1054,45 @@ impl Inlet {
         Ok(())
     }
 
+    /// The station's `Pick` has come: the next settling picks.
+    pub(crate) fn pick_came(&mut self) {
+        if let Some(rule) = self.rule.as_deref_mut() {
+            rule.pick_due = false;
+        }
+    }
+
+    /// Settles a station's rule: it picks only when its `Pick` comes (`picking`),
+    /// after every offer of the instant, so that the rule and not the order in which
+    /// offers were delivered decides between units offered together (ADR-0023 §6).
+    /// Otherwise a free place beside a waiting offer asks for a `Pick`, unless one
+    /// is on its way or a `minimum_setup` pick waits for its reply.
+    pub(crate) fn settle_by_rule(
+        &mut self,
+        picking: bool,
+        free: u64,
+        follows: Option<VariantId>,
+        ctx: &mut Context<'_, FlowMessage>,
+    ) -> Result<(), ComponentError> {
+        if picking {
+            return self.accept_by_rule(free, follows, ctx);
+        }
+        let asks = !self.waits_for_a_pick();
+        if let Some(rule) = self.rule.as_deref_mut()
+            && asks
+            && free > 0
+            && !rule.offers.is_empty()
+        {
+            rule.pick_due = true;
+            ctx.schedule(SimDuration::ZERO, FlowMessage::Pick)?;
+        }
+        Ok(())
+    }
+
     /// Accepts by the station's rule, as far as `free` places go: the rank is (key,
     /// since, place in the inlet), measured against what the next unit follows, which
     /// is `follows` until a place is reserved and what its offer described then
     /// (ADR-0023 §6).
-    pub(crate) fn accept_by_rule(
+    fn accept_by_rule(
         &mut self,
         mut free: u64,
         follows: Option<VariantId>,
@@ -1118,11 +1157,13 @@ impl Inlet {
         Ok(())
     }
 
-    /// Whether a free place may wait beside a waiting offer: until the reply to a
-    /// `minimum_setup` pick lands, at this instant.
-    pub(crate) fn waits_for_a_reply(&self) -> bool {
+    /// Whether a free place may wait beside a waiting offer: until the `Pick` on its
+    /// way comes, or the reply to a `minimum_setup` pick lands, both at this instant.
+    pub(crate) fn waits_for_a_pick(&self) -> bool {
         self.rule.as_deref().is_some_and(|rule| {
-            rule.plan.rule == taktsim_model::DispatchRule::MinimumSetup && !rule.pending.is_empty()
+            rule.pick_due
+                || (rule.plan.rule == taktsim_model::DispatchRule::MinimumSetup
+                    && !rule.pending.is_empty())
         })
     }
 
@@ -1164,7 +1205,7 @@ impl Inlet {
     }
 
     /// A `Decline` from `from` released its place. A rule's pick is discarded, since
-    /// it had no effect, and the next pick of this event goes on record.
+    /// it had no effect, and the next pick of this instant goes on record.
     pub(crate) fn declined(&mut self, from: ComponentId) -> Result<(), ComponentError> {
         self.release("Decline")?;
         if let Some(rule) = self.rule.as_deref_mut() {
@@ -1196,7 +1237,11 @@ impl Inlet {
         view: TargetView,
         ctx: &mut Context<'_, FlowMessage>,
     ) -> Result<(), ComponentError> {
-        if let Some(rule) = self.rule.as_deref_mut() {
+        // A `Decline` marks the pick it causes, which may come at a later event of
+        // this instant.
+        if let Some(rule) = self.rule.as_deref_mut()
+            && !rule.pick_due
+        {
             rule.declined = false;
         }
         let Some(reporting) = self.reporting.as_deref_mut() else {

@@ -66,6 +66,7 @@ fn every_message() -> Vec<(FlowMessage, u8, u8)> {
             8,
             18,
         ),
+        (FlowMessage::Pick, 8, 19),
     ]
 }
 
@@ -312,6 +313,8 @@ fn the_layout_of_the_new_messages_is_pinned() {
         .unwrap(),
         [18, 1, 0, 0, 0, 1, 0, b'a']
     );
+    // Pick: the tag alone.
+    assert_eq!(encode_message(&FlowMessage::Pick).unwrap(), [19]);
 }
 
 #[test]
@@ -366,7 +369,8 @@ fn unknown_and_inconsistent_bytes_are_rejected() {
         let e = decode_message::<FlowMessage>(bytes).unwrap_err();
         assert!(e.to_string().contains(text), "{e} for {bytes:?}");
     };
-    reject(&[19], "FlowMessage tag");
+    // The first tag after the last one in use.
+    reject(&[20], "FlowMessage tag");
     reject(&[9, 6, 0, 0, 0, 0, 0, 0, 0], "machine state");
     reject(&[10, 2, 0, 0, 0, 0], "source state");
     // A due date on a part that has none, a variant on a note that has none.

@@ -243,12 +243,53 @@ fn crossed_only_at_the_instant_of_a_move() {
 
 #[test]
 fn declined_pick_writes_no_record_and_the_re_pick_writes_one() {
-    // `holder` offers `u` and `t`. Part 1 goes to `u` at 3 s until 13 s, part 2 to `t` at 6
-    // s until 13 s, and part 3 waits from 9 s. `other`'s part waits at `t` from 10 s. At
-    // 13 s room opens at `u` and then at `t`. `u` takes part 3. `t`, not knowing, picks
-    // `holder`, the oldest, and gets a `Decline`. Its pick had no effect and writes
-    // nothing; it picks again, with one candidate, and that goes on record, since a pick
-    // that failed came first.
+    // `holder` makes a part every 2 s from 0 s and fails at 9 s for 5 s. Its first part
+    // goes to `t` at 2 s, until 12 s; its second is finished at 4 s and waits at `t`.
+    // `other`'s part waits there from 5 s. At 12 s `t` picks `holder`'s, the oldest, and
+    // gets a `Decline`: `holder` is down. Its pick had no effect and writes nothing; it
+    // picks again, with one candidate, and that goes on record, since a pick that
+    // failed came first.
+    let yaml = format!(
+        "{}control:\n  dispatch: {{t: fifo}}\n",
+        document(
+            "13s",
+            "  - {id: feed, type: Source}\n  \
+             - {id: holder, type: Machine, cycle_time: 2s, mtbf: 9s, mttr: 5s}\n  \
+             - {id: other, type: Source, interarrival: 5s}\n  \
+             - {id: t, type: Machine, cycle_time: 10s}\n  - {id: sink, type: Sink}",
+            "  - [feed, holder]\n  - {from: [holder, other], to: t}\n  - [t, sink]",
+        )
+    );
+    let r = run(&yaml, 1);
+    let declined = r
+        .events()
+        .iter()
+        .filter(|e| e.from == "holder" && e.to == "t" && matches!(e.message, FlowMessage::Decline))
+        .map(|e| e.time)
+        .collect::<Vec<_>>();
+    assert_eq!(declined, [t("12s")]);
+    // One record, of the second pick, with the unit that came.
+    let dispatches = r.dispatches();
+    assert_eq!(dispatches.len(), 1, "{dispatches:?}");
+    let (time, by, record) = &dispatches[0];
+    assert_eq!((*time, r.name(*by)), (t("12s"), "t"));
+    assert_eq!(record.rule, DispatchRule::Fifo);
+    assert_eq!(record.total, 1);
+    assert_eq!(record.candidates[0].from, r.id("other"));
+    let arrivals = r.arrivals("t");
+    let came: Vec<_> = arrivals.iter().map(|e| (e.from.as_str(), e.time)).collect();
+    assert_eq!(came, [("holder", t("2s")), ("other", t("12s"))]);
+    assert_eq!(record.candidates[0].item, arrivals[1].item);
+}
+
+#[test]
+fn a_station_with_a_rule_picks_after_the_offers_of_the_instant() {
+    // `holder` offers `u` and `t`, first free. `u` has no rule and takes an offer when it
+    // comes; `t` picks at its `Pick`, after every offer of the instant (ADR-0023 §6). So
+    // at 3 s and at 13 s, when both have room, `u` has taken the part and `holder` has
+    // withdrawn it from `t` before `t` picks: no `Decline`, and nothing to choose from
+    // but what is still on offer. Part 2 goes to `t` at 6 s, alone. At 13 s `t` takes
+    // `other`'s part, waiting since 10 s, alone: no record.
     let yaml = format!(
         "{}control:\n  dispatch: {{t: fifo}}\n",
         document(
@@ -261,27 +302,33 @@ fn declined_pick_writes_no_record_and_the_re_pick_writes_one() {
         )
     );
     let r = run(&yaml, 1);
-    // The `Decline` happened.
-    let declined = r
-        .events()
-        .iter()
-        .filter(|e| e.from == "holder" && e.to == "t" && matches!(e.message, FlowMessage::Decline))
-        .map(|e| e.time)
-        .collect::<Vec<_>>();
-    // At 3 s `t` accepted part 1 too, with nothing to pick from after its `Decline`.
-    assert_eq!(declined, [t("3s"), t("13s")]);
-    // One record, of the second pick, with the unit that came.
-    let dispatches = r.dispatches();
-    assert_eq!(dispatches.len(), 1, "{dispatches:?}");
-    let (time, by, record) = &dispatches[0];
-    assert_eq!((*time, r.name(*by)), (t("13s"), "t"));
-    assert_eq!(record.rule, DispatchRule::Fifo);
-    assert_eq!(record.total, 1);
-    assert_eq!(record.candidates[0].from, r.id("other"));
-    let arrivals = r.arrivals("t");
-    let came = arrivals.iter().find(|e| e.from == "other").unwrap();
-    assert_eq!(came.time, t("13s"));
-    assert_eq!(record.candidates[0].item, came.item);
+    assert!(
+        !r.events()
+            .iter()
+            .any(|e| matches!(e.message, FlowMessage::Decline)),
+        "no Decline"
+    );
+    assert_eq!(r.dispatches().len(), 0);
+    let at = |name: &str| -> Vec<_> {
+        r.arrivals(name)
+            .iter()
+            .map(|e| (e.from.clone(), e.time))
+            .collect()
+    };
+    assert_eq!(
+        at("u"),
+        [
+            ("holder".to_owned(), t("3s")),
+            ("holder".to_owned(), t("13s"))
+        ]
+    );
+    assert_eq!(
+        at("t"),
+        [
+            ("holder".to_owned(), t("6s")),
+            ("other".to_owned(), t("13s"))
+        ]
+    );
     // And `first_free` states which target took part 3, and no more.
     let last_route = r.routes().last().cloned().unwrap();
     assert_eq!(last_route.2.rule, RouteRule::FirstFree);

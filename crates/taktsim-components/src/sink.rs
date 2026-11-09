@@ -106,7 +106,8 @@ impl Component<FlowMessage> for SinkBehaviour {
             | FlowMessage::Return(_)
             | FlowMessage::RouteDecision(_)
             | FlowMessage::DispatchDecision(_)
-            | FlowMessage::EdgeCondition { .. }) => return Err(unexpected(message)),
+            | FlowMessage::EdgeCondition { .. }
+            | FlowMessage::Pick) => return Err(unexpected(message)),
         }
         Ok(())
     }
