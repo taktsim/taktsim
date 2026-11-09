@@ -170,3 +170,84 @@ impl Fold {
         metrics
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use taktsim_units::Count;
+
+    use super::*;
+
+    /// The guard behind `run.metrics_differ`: on a correct run the fold equals the
+    /// engine's counters, so only a hand-made disagreement shows that each of the
+    /// four sums is compared, and reported with its name, sum and counter.
+    #[test]
+    fn each_sum_that_differs_from_the_engine_is_reported() {
+        let fold = Fold {
+            rows: vec![
+                Row {
+                    created: 3,
+                    delivered: 1,
+                    scrapped: 0,
+                    consumed: 0,
+                },
+                Row {
+                    created: 1,
+                    delivered: 1,
+                    scrapped: 1,
+                    consumed: 1,
+                },
+            ],
+            last_event: SimTime::from_nanos(0),
+            recent: Vec::new(),
+        };
+        let same = ItemCounts {
+            created: Count::new(4),
+            held: Count::new(1),
+            in_transit: Count::ZERO,
+            delivered: Count::new(2),
+            scrapped: Count::new(1),
+            consumed: Count::new(1),
+        };
+        assert_eq!(fold.differs_from(&same), None);
+        // Held and in transit are not in the trace, so not compared.
+        let elsewhere = ItemCounts {
+            held: Count::ZERO,
+            in_transit: Count::new(9),
+            ..same
+        };
+        assert_eq!(fold.differs_from(&elsewhere), None);
+        let cases = [
+            (
+                ItemCounts {
+                    created: Count::new(5),
+                    ..same
+                },
+                ("created", 4, 5),
+            ),
+            (
+                ItemCounts {
+                    delivered: Count::new(3),
+                    ..same
+                },
+                ("delivered", 2, 3),
+            ),
+            (
+                ItemCounts {
+                    scrapped: Count::ZERO,
+                    ..same
+                },
+                ("scrapped", 1, 0),
+            ),
+            (
+                ItemCounts {
+                    consumed: Count::new(7),
+                    ..same
+                },
+                ("consumed", 1, 7),
+            ),
+        ];
+        for (counts, expected) in cases {
+            assert_eq!(fold.differs_from(&counts), Some(expected), "{expected:?}");
+        }
+    }
+}
