@@ -3,7 +3,7 @@
 
 mod support;
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use support::{Dir, EXACT, UNSEEDED};
 
@@ -88,6 +88,46 @@ fn invalid_invocations_exit_1_with_a_typed_error_and_an_empty_stdout() {
                 "{args:?} {key}: {}",
                 json.stderr
             );
+        }
+    }
+}
+
+/// A pipe whose reader has already gone: every write to it fails, on every target.
+fn broken_pipe() -> Stdio {
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    Stdio::from(writer)
+}
+
+/// A stdout that cannot be written is exit 7 with an `io.stdout` line, on every path
+/// that prints (ADR-0024 §9): also when `validate` has an invalid model, whose exit 1
+/// would tell the caller that a report is on stdout, and for help and version.
+#[test]
+fn a_stdout_that_cannot_be_written_is_exit_7_with_io_stdout() {
+    let dir = Dir::new();
+    dir.write("bad.yaml", "format: \"1.0\"\nbogus: 1\n");
+    for args in [
+        &["validate", "bad.yaml", "--format", "json"][..],
+        &["validate", "bad.yaml"][..],
+        &["--help"][..],
+        &["--help", "--format", "json"][..],
+        &["run", "--help"][..],
+        &["--version"][..],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_taktsim"))
+            .args(args)
+            .current_dir(dir.path())
+            .stdin(Stdio::null())
+            .stdout(broken_pipe())
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert_eq!(output.status.code(), Some(7), "{args:?}: {stderr}");
+        let first = stderr.lines().next().unwrap_or_default();
+        if args.contains(&"json") {
+            assert_eq!(support::parse(first)["type"], "io.stdout", "{args:?}");
+        } else {
+            assert!(first.starts_with("error[io.stdout]"), "{args:?}: {stderr}");
         }
     }
 }
