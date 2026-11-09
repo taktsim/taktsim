@@ -104,9 +104,10 @@ struct StandingOffer {
     rule: StatusRule,
     /// Where it stands, as a position in the edge's list.
     stand: Option<usize>,
-    /// The last `Accept` crossed a move: it came from a target where the offer no
-    /// longer stood.
-    crossed: bool,
+    /// The positions it moved away from at `left_at`: an `Accept` from one of them may
+    /// cross the move, and gets the part (§5).
+    left: Vec<usize>,
+    left_at: SimTime,
     /// The candidates when the offer was last placed or moved, and the time.
     copy: Vec<RouteCandidate>,
     copied_at: SimTime,
@@ -205,7 +206,8 @@ impl Routed {
                 Pick::Status(rule) => Some(StandingOffer {
                     rule,
                     stand: None,
-                    crossed: false,
+                    left: Vec::new(),
+                    left_at: SimTime::START,
                     copy: Vec::new(),
                     copied_at: SimTime::START,
                 }),
@@ -311,11 +313,49 @@ impl Routed {
             if place {
                 let copy = self.candidates(edge, rule, ids, now);
                 if let Some(offer) = self.standing[edge].as_mut() {
+                    if let Some(at) = stand {
+                        if offer.left_at != now {
+                            offer.left.clear();
+                            offer.left_at = now;
+                        }
+                        offer.left.push(at);
+                    }
                     offer.stand = Some(best);
                     offer.copy = copy;
                     offer.copied_at = now;
                 }
             }
+        }
+    }
+
+    /// Whether a part with `route` is for the target at `position`: the target its
+    /// route names, any target of its first-free edge, or the target where its status
+    /// edge's offer stands. With `crossing`, also a target the offer moved away from at
+    /// that instant, whose `Accept` may cross the move (§5). Several edges may name one
+    /// target (§1), so a part on a status edge is not for every target of its edge.
+    fn is_for(&self, route: Route, position: usize, crossing: Option<SimTime>) -> bool {
+        if let Some(target) = route.target {
+            return usize::try_from(target).is_ok_and(|t| t == position);
+        }
+        let Some(index) = usize::try_from(route.edge).ok() else {
+            return false;
+        };
+        let Some(edge) = self.table.edges.get(index) else {
+            return false;
+        };
+        match &edge.pick {
+            Pick::FirstFree => edge.targets.contains(&position),
+            Pick::Status(_) => {
+                let Some(offer) = self.standing.get(index).and_then(Option::as_ref) else {
+                    return false;
+                };
+                let stands = |at: usize| edge.targets.get(at) == Some(&position);
+                offer.stand.is_some_and(stands)
+                    || crossing.is_some_and(|now| {
+                        offer.left_at == now && offer.left.iter().any(|&at| stands(at))
+                    })
+            }
+            Pick::One | Pick::Split { .. } => false,
         }
     }
 
@@ -347,7 +387,7 @@ impl Routed {
 
 /// A station with a rule, asking its upstream which unit stands behind an offer.
 pub(crate) struct Asking<'a> {
-    table: &'a RouteTable,
+    routed: &'a Routed,
     position: usize,
     /// The station's rule.
     pub(crate) plan: &'a TakerPlan,
@@ -356,21 +396,9 @@ pub(crate) struct Asking<'a> {
 }
 
 impl Asking<'_> {
-    /// Whether a part with `route` is meant for this station.
+    /// Whether a part with `route` is meant for this station, where offers stand now.
     pub(crate) fn wants(&self, route: Route) -> bool {
-        route_meant_for(self.table, route, self.position)
-    }
-}
-
-/// Whether a part with `route` is meant for the target at `position`: the target it
-/// names, or any target of its edge.
-fn route_meant_for(table: &RouteTable, route: Route, position: usize) -> bool {
-    match route.target {
-        Some(target) => usize::try_from(target).is_ok_and(|t| t == position),
-        None => usize::try_from(route.edge)
-            .ok()
-            .and_then(|edge| table.edges.get(edge))
-            .is_some_and(|edge| edge.targets.contains(&position)),
+        self.routed.is_for(route, self.position, None)
     }
 }
 
@@ -474,11 +502,12 @@ impl Outlet {
         })?
     }
 
-    /// Whether a part with `route` is meant for the target at `position`.
-    pub(crate) fn meant_for(&self, route: Route, position: usize) -> bool {
+    /// Whether an `Accept` from the target at `position` at `now` may take a part with
+    /// `route`: an offer to that target stood for it, or crossed a move at `now`.
+    pub(crate) fn meant_for(&self, route: Route, position: usize, now: SimTime) -> bool {
         self.routed
             .as_deref()
-            .is_none_or(|routed| route_meant_for(&routed.table, route, position))
+            .is_none_or(|routed| routed.is_for(route, position, Some(now)))
     }
 
     /// The plan of the target at `position` if it has a rule, with what the holder
@@ -573,7 +602,7 @@ impl Outlet {
                 continue;
             };
             let asking = Asking {
-                table: &routed.table,
+                routed,
                 position,
                 plan,
                 follows: routed.known[position].follows,
@@ -630,7 +659,9 @@ impl Outlet {
     /// Takes in an `Accept` from `from`, which the caller answers with an `Arrive` or
     /// a `Decline`, and returns the position of `from`. If a withdrawal to `from`, or a
     /// description sent again, went out at this instant and an offer stands, that
-    /// offer may be on its way, so it is withdrawn too (module docs).
+    /// offer may be on its way, so it is withdrawn too (module docs). A standing offer
+    /// learns whether the `Accept` crossed a move only when a part leaves (`leaving`),
+    /// since an `Accept` from a target several edges name answers one of them.
     pub(crate) fn accepted(
         &mut self,
         from: ComponentId,
@@ -651,21 +682,6 @@ impl Outlet {
         }
         if let Some(routed) = self.routed.as_deref_mut() {
             routed.known[position].accept_due = false;
-            let Routed {
-                table, standing, ..
-            } = routed;
-            for (edge, offer) in table.edges.iter().zip(standing.iter_mut()) {
-                let (Some(offer), Some(at)) = (
-                    offer.as_mut(),
-                    edge.targets.iter().position(|t| *t == position),
-                ) else {
-                    continue;
-                };
-                offer.crossed = offer.stand != Some(at);
-                if !offer.crossed {
-                    offer.stand = None;
-                }
-            }
         }
         Ok(position)
     }
@@ -698,12 +714,12 @@ impl Outlet {
             table, standing, ..
         } = routed;
         let edge = &table.edges[index];
-        let chosen = short(
-            edge.targets
-                .iter()
-                .position(|t| *t == position)
-                .unwrap_or(usize::MAX),
-        );
+        let at = edge
+            .targets
+            .iter()
+            .position(|t| *t == position)
+            .unwrap_or(usize::MAX);
+        let chosen = short(at);
         let id = |target: usize| self.targets.get(target).map_or(u32::MAX, |t| number(t.id));
         let stated = |rule, crossed, detail, candidates| RouteDecision {
             rule,
@@ -740,7 +756,14 @@ impl Outlet {
                 let Some(offer) = standing[index].as_mut() else {
                     return;
                 };
-                let crossed = std::mem::take(&mut offer.crossed);
+                // The part left from a target where the offer no longer stands: its
+                // `Accept` crossed a move, and the offer stays where it moved to.
+                let crossed = offer.stand != Some(at);
+                if crossed {
+                    offer.left.retain(|&left| left != at);
+                } else {
+                    offer.stand = None;
+                }
                 stated(
                     rule.rule(),
                     crossed,

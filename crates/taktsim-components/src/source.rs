@@ -715,7 +715,7 @@ impl SourceBehaviour {
         }
         let at = held
             .iter()
-            .position(|p| self.outlet.meant_for(p.route, position))?;
+            .position(|p| self.outlet.meant_for(p.route, position, now))?;
         self.held.remove(at)
     }
 
@@ -730,7 +730,7 @@ impl SourceBehaviour {
     ) -> Result<(), ComponentError> {
         let next = self.next;
         let usable = next.filter(|part| {
-            self.outlet.meant_for(part.route, position)
+            self.outlet.meant_for(part.route, position, ctx.now())
                 && !self
                     .outlet
                     .answers_a_unit_gone(position, ctx.now(), |token| token == part.number)

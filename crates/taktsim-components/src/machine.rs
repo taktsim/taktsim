@@ -1087,7 +1087,7 @@ impl MachineBehaviour {
         }
         let at = finished
             .iter()
-            .position(|p| self.outlet.meant_for(p.route, position))?;
+            .position(|p| self.outlet.meant_for(p.route, position, now))?;
         self.finished.remove(at)
     }
 

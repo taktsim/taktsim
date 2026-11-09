@@ -253,7 +253,8 @@ impl BufferBehaviour {
         if gone {
             return None;
         }
-        let meant = |part: &Part| self.outlet.meant_for(part.route, position);
+        let now = ctx.now();
+        let meant = |part: &Part| self.outlet.meant_for(part.route, position, now);
         let key = if let Some((plan, follows)) = self.outlet.taker(position) {
             let mut ranked: Vec<Ranked> = parts
                 .iter()

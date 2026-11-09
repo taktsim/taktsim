@@ -375,3 +375,40 @@ fn a_part_behind_busy_machines_leaves_for_the_first_to_free() {
     assert_eq!(arrivals_at(&r, "a"), [t("1s")]);
     assert_eq!(arrivals_at(&r, "b"), [t("2s"), t("12s"), t("22s")]);
 }
+
+#[test]
+fn an_accept_gives_a_part_its_offer_stood_for_when_edges_share_a_target() {
+    // `b` is on two edges of `h`: the first for `xx` alone, the second a pool behind
+    // `c`. yy item 2 stands at `c` from 21 s, with no room anywhere. xx item 3 is
+    // offered to `b` at 31 s. When `b` frees at 116 s, its `Accept` answers the offer
+    // made for item 3: item 2's offer stands at `c`, so item 2 is not for `b`.
+    let yaml = document(
+        "400s",
+        "  - {id: sy, type: Source, interarrival: 10s, variants: {yy: 100%}}\n  \
+         - {id: sx, type: Source, interarrival: 15s, variants: {xx: 100%}}\n  \
+         - {id: h, type: Machine, cycle_time: 1s, capacity: 20 parts}\n  \
+         - {id: b, type: Machine, cycle_time: 100s}\n  \
+         - {id: c, type: Machine, cycle_time: 200s}\n  - {id: sink, type: Sink}",
+        "  - {from: [sy, sx], to: h}\n  - {from: h, to: b, when: \"variant == 'xx'\"}\n  \
+         - {from: h, to: [c, b], choose: preferred}\n  - {from: [b, c], to: sink}",
+    );
+    let r = run(&yaml, 1);
+    support::check_records(&r);
+    let at_b: Vec<_> = r
+        .arrivals("b")
+        .iter()
+        .map(|e| {
+            (
+                e.time,
+                support::arrive_attrs(e).and_then(|a| r.variant_name(a.variant)),
+            )
+        })
+        .collect();
+    assert_eq!(at_b[1], (t("116s"), Some("xx".to_owned())), "{at_b:?}");
+    // Nothing crossed: the offer never moved at 116 s.
+    assert!(
+        r.routes().iter().all(|(_, _, record)| !record.crossed),
+        "{:?}",
+        r.routes()
+    );
+}
