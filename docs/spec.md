@@ -239,7 +239,7 @@ Agents use the same `simcode` CLI that people use; there is no separate agent se
 | `schema` | component type or `all` | JSON Schema | lets an agent discover parameters without reading docs |
 | `validate` | model document | list of errors with path, message, fix hint | always run before `run` |
 | `render` | model document | Mermaid or SVG of the flow | agents show the model to people |
-| `run` | model, seed(s), horizon, observables | run id, metrics each with its accuracy, event trace reference | multiple seeds run in parallel |
+| `run` | model, seed(s), horizon, observables | run id, metrics each with its accuracy (proposed in ADR-0024 §4, not yet accepted; was: metrics with confidence intervals), event trace reference | multiple seeds run in parallel |
 | `trace query` | run id, filter, limit, cursor | one page of events and the next cursor | never the whole trace at once |
 | `compare` | run id, observed data reference, metrics | per-metric error, pass/fail against thresholds | the accuracy report |
 | `calibrate` | model, observed data, free parameters, budget | fitted model, accuracy report, change log | see section 6 |
@@ -252,10 +252,10 @@ Agents use the same `simcode` CLI that people use; there is no separate agent se
 **Contracts**
 
 - Idempotent reads, explicit writes: only `calibrate` and `optimize` produce new model versions, and they write them as new files rather than overwriting the input.
-- Every output that contains a number states its accuracy: a confidence interval with its replications and seed list, or that it has no error bound and why (ADR-0024 §4).
-- Every error message is actionable: field path, what was found, what is allowed, one example of a valid value. A failed run or an I/O failure (exit codes 2 and 7) has no valid value to show: it states where, the simulation time and the last events instead (ADR-0024 §9). With `--format json`, errors go to stderr as JSON; exit codes are documented in `describe` and stable.
+- Every output that contains a number states its accuracy: a confidence interval with its replications and seed list, or that it has no error bound and why (proposed in ADR-0024 §4, not yet accepted; it replaces: "Every output that contains a number contains its uncertainty: confidence interval, number of replications, seed list.").
+- Every error message is actionable: field path, what was found, what is allowed, one example of a valid value. A failed run or an I/O failure (exit codes 2 and 7) has no valid value to show: it states where, the simulation time and the last events instead (proposed in ADR-0024 §9, not yet accepted). With `--format json`, errors go to stderr as JSON; exit codes are documented in `describe` and stable.
 - Non-interactive: no prompts, except the confirmation that sharing needs. Budgets are mandatory on long-running commands (wall-clock seconds and maximum simulated runs) so an agent cannot start an unbounded loop; they report progress on stderr and, when interrupted, stop with a partial result and a stop reason.
-- Runs are kept in a local content-addressed run store; a run id is the hash of the engine's name and version, its record format, the domain package's name, version and message format, the model (whose hash covers the horizon) and the seed, and later commands take the id (ADR-0024 §6).
+- Runs are kept in a local content-addressed run store; a run id is the hash of the engine's name and version, its record format, the domain package's name, version and message format, the model (whose hash covers the horizon) and the seed, and later commands take the id (proposed in ADR-0024 §6, not yet accepted; it replaces: "a run id is the hash of model, seed, horizon and engine version").
 
 ## 6. Calibration and self-optimization
 
@@ -286,7 +286,7 @@ The system closes two loops on its own: one that fits a model to reality, one th
 
 **Output analysis**
 
-Most wrong simulation results come from bad statistics, not bad models. The engine therefore makes the statistical method part of the model: the experiment's type is required, and a result states what it can say about its error, so a run with one seed states that it has no interval (ADR-0024 §4).
+Most wrong simulation results come from bad statistics, not bad models. The engine therefore makes the statistical method part of the model: the experiment's type is required, and a result states what it can say about its error, so a run with one seed states that it has no interval (proposed in ADR-0024 §4, not yet accepted; it replaces: "and refuses runs that leave it undefined").
 
 - Every experiment declares its type: **terminating** (a natural end, such as one shift or one order list) or **steady-state** (long-run behaviour). The loader rejects a steady-state experiment without a warm-up rule.
 - **Warm-up** is a fixed period or detected automatically (default: MSER-5); the detected length is reported, and statistics exclude it.
@@ -328,7 +328,7 @@ Line coverage ≥ 90 % overall and 100 % branch coverage in `simcode-core` (init
 **Layer 3: runtime self-checks**
 
 - Every run executes the invariant set of every component plus global conservation at each event. Checks are on by default; a `--fast` flag disables them for calibration inner loops after one checked warm-up run.
-- Every run records its provenance: engine name and version, domain package name and version, model and system hashes, seed list (empty for a model that draws nothing), platform. A result without provenance is rejected by `compare`.
+- Every run records its provenance: engine name and version, domain package name and version, model and system hashes, seed list (empty for a model that draws nothing), platform (proposed in ADR-0024 §5 and §6, not yet accepted; was: model hash, engine version, seed list, platform). A result without provenance is rejected by `compare`.
 - Replay mode re-executes a run from its trace and asserts identical state at every event.
 
 **Layer 4: validation against reality**
@@ -399,8 +399,8 @@ simcode/
     simcode-adapters/    csv, parquet, opcua, mqtt, automationml (each a Cargo feature)
     simcode-share/       opt-in sharing client: preview, send, withdraw, receipts
     simcode-wasm/        WebAssembly build of the engine for the viewer
-    simcode-run/         run a model into the run store, result document, typed errors: what the CLI and the Python bindings share (ADR-0024 §1)
-    simcode-cli/         `simcode describe | schema | validate | run | trace | compare | calibrate | optimize | experiment | explain | render | view | share`
+    simcode-run/         run a model into the run store, result document, typed errors: what the CLI and the Python bindings share (proposed in ADR-0024 §1, not yet accepted)
+    simcode-cli/         `simcode describe | schema | validate | run | trace | compare | calibrate | optimize | experiment | explain | render | view | share` (the run store was listed here before ADR-0024 §1)
   python/                PyO3 bindings, generated .pyi stubs, pytest suite
   viewer/                TypeScript web app, component symbols, visual regression tests
   benchmarks/            reference models, analytical cases, anonymized datasets
