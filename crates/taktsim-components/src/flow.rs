@@ -102,6 +102,7 @@ pub(crate) fn variant_id(
         .ok_or_else(|| BuildError::UnknownVariant {
             path: path.clone(),
             name: name.to_owned(),
+            declared: shared.variants.clone(),
         })
 }
 

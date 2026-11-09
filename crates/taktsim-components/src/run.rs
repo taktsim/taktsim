@@ -307,6 +307,7 @@ fn build_entry<D: Domain, T: ComponentType<D>>(
         return Err(BuildError::WrongParameters {
             path: entry.path().clone(),
             type_name: entry.type_name().to_owned(),
+            example: T::EXAMPLE,
         });
     };
     params.build(wiring)
@@ -496,6 +497,7 @@ impl<D: Domain> Registry<D> {
                 return Err(BuildError::UnknownType {
                     path: entry.path().clone(),
                     type_name: entry.type_name().to_owned(),
+                    registered: self.builders.keys().map(|t| (*t).to_owned()).collect(),
                 });
             };
             let wiring = Wiring {
@@ -881,7 +883,9 @@ pub struct RunReport {
     pub trace: Option<Summary>,
 }
 
-/// Why a document cannot become an engine. Each variant names the field path.
+/// Why a document cannot become an engine. Each variant names the field path,
+/// what was found, what is allowed and one valid example, as fields for the
+/// CLI and the bindings (spec §5, §7 Layer 1).
 ///
 /// ```
 /// use taktsim_components::BuildError;
@@ -890,8 +894,12 @@ pub struct RunReport {
 /// let e = BuildError::UnknownType {
 ///     path: FieldPath::from(vec![Segment::Key("components".into()), Segment::Index(1)]),
 ///     type_name: "Conveyor".into(),
+///     registered: vec!["Machine".into(), "Sink".into()],
 /// };
 /// assert_eq!(e.path().map(ToString::to_string).as_deref(), Some("components[1]"));
+/// assert_eq!(e.found().as_deref(), Some("Conveyor"));
+/// assert_eq!(e.allowed().as_deref(), Some("a component type of this registry: Machine, Sink"));
+/// assert_eq!(e.example().as_deref(), Some("type: Machine"));
 /// assert_eq!(
 ///     e.to_string(),
 ///     "components[1]: this registry has no component type `Conveyor`; load the model with the registry that runs it"
@@ -914,6 +922,8 @@ pub enum BuildError {
         path: FieldPath,
         /// The type.
         type_name: String,
+        /// The registry's types, sorted.
+        registered: Vec<String>,
     },
     /// The entry's parameters are not this registry's type of that name: the
     /// document was loaded with another catalog.
@@ -925,6 +935,8 @@ pub enum BuildError {
         path: FieldPath,
         /// The type.
         type_name: String,
+        /// One valid entry of this registry's type.
+        example: &'static str,
     },
     /// A distribution cannot be sampled. A distribution the loader read always
     /// can.
@@ -946,6 +958,8 @@ pub enum BuildError {
         path: FieldPath,
         /// The name.
         name: String,
+        /// The variants the model declares, sorted.
+        declared: Vec<String>,
     },
     /// The engine refuses the component.
     #[error("{path}: {source}")]
@@ -966,7 +980,11 @@ impl BuildError {
     /// use taktsim_components::BuildError;
     /// use taktsim_model::FieldPath;
     ///
-    /// let e = BuildError::WrongParameters { path: FieldPath::default(), type_name: "Sink".into() };
+    /// let e = BuildError::WrongParameters {
+    ///     path: FieldPath::default(),
+    ///     type_name: "Sink".into(),
+    ///     example: "{id: sink, type: Sink}",
+    /// };
     /// assert_eq!(e.path().map(ToString::to_string).as_deref(), Some("(document)"));
     /// ```
     #[must_use]
@@ -979,6 +997,107 @@ impl BuildError {
             | Self::UnknownVariant { path, .. }
             | Self::Engine { path, .. } => path,
         })
+    }
+
+    /// What was found: the first error's, for [`Model`](Self::Model).
+    ///
+    /// ```
+    /// use taktsim_components::BuildError;
+    /// use taktsim_model::FieldPath;
+    ///
+    /// let e = BuildError::UnknownVariant {
+    ///     path: FieldPath::default(),
+    ///     name: "gold".into(),
+    ///     declared: vec!["basic".into(), "premium".into()],
+    /// };
+    /// assert_eq!(e.found().as_deref(), Some("gold"));
+    /// ```
+    #[must_use]
+    pub fn found(&self) -> Option<String> {
+        match self {
+            Self::Model(errors) => errors.first().kind().found(),
+            Self::UnknownType { type_name, .. } => Some(type_name.clone()),
+            Self::WrongParameters { type_name, .. } => Some(format!(
+                "parameters of `{type_name}` read by another catalog"
+            )),
+            Self::UnknownVariant { name, .. } => Some(name.clone()),
+            Self::Distribution { source, .. } => Some(source.to_string()),
+            Self::Engine { source, .. } => Some(source.to_string()),
+        }
+    }
+
+    /// What is allowed: the first error's, for [`Model`](Self::Model).
+    ///
+    /// ```
+    /// use taktsim_components::BuildError;
+    /// use taktsim_model::FieldPath;
+    ///
+    /// let e = BuildError::UnknownVariant {
+    ///     path: FieldPath::default(),
+    ///     name: "gold".into(),
+    ///     declared: vec!["basic".into(), "premium".into()],
+    /// };
+    /// assert_eq!(
+    ///     e.allowed().as_deref(),
+    ///     Some("a variant a Source of the model declares: basic, premium")
+    /// );
+    /// ```
+    #[must_use]
+    pub fn allowed(&self) -> Option<String> {
+        match self {
+            Self::Model(errors) => errors.first().kind().allowed(),
+            Self::UnknownType { registered, .. } => Some(format!(
+                "a component type of this registry: {}",
+                registered.join(", ")
+            )),
+            Self::WrongParameters { type_name, .. } => Some(format!(
+                "parameters read by this registry's `{type_name}`: load the model with the \
+                 registry that runs it"
+            )),
+            Self::UnknownVariant { declared, .. } => Some(format!(
+                "a variant a Source of the model declares: {}",
+                declared.join(", ")
+            )),
+            Self::Distribution { .. } => Some("a distribution that can be sampled".to_owned()),
+            Self::Engine { .. } => {
+                Some("a component the engine accepts: an id used once in the model".to_owned())
+            }
+        }
+    }
+
+    /// One valid value: the first error's, for [`Model`](Self::Model); `None`
+    /// only where there is none to give, such as a registry with no types.
+    ///
+    /// ```
+    /// use taktsim_components::BuildError;
+    /// use taktsim_model::FieldPath;
+    ///
+    /// let e = BuildError::UnknownVariant {
+    ///     path: FieldPath::default(),
+    ///     name: "gold".into(),
+    ///     declared: vec!["basic".into(), "premium".into()],
+    /// };
+    /// assert_eq!(e.example().as_deref(), Some("basic"));
+    /// ```
+    #[must_use]
+    pub fn example(&self) -> Option<String> {
+        match self {
+            Self::Model(errors) => errors.first().kind().example(),
+            Self::UnknownType { registered, .. } => {
+                registered.first().map(|t| format!("type: {t}"))
+            }
+            Self::WrongParameters { example, .. } => Some((*example).to_owned()),
+            Self::UnknownVariant { name, declared, .. } => Some(
+                declared
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| format!("variants: {{{name}: 100%}}")),
+            ),
+            Self::Distribution { .. } => {
+                Some("{dist: lognormal, mean: 42s, sigma: 0.08}".to_owned())
+            }
+            Self::Engine { .. } => Some("weld-1".to_owned()),
+        }
     }
 }
 
@@ -995,6 +1114,8 @@ impl BuildError {
 ///     e.to_string(),
 ///     "model.seed: no seed: give one in the run options or in the model, e.g. `model: {name: line-a, seed: 42}`; a run never takes one from entropy"
 /// );
+/// assert_eq!(e.path().map(ToString::to_string).as_deref(), Some("model.seed"));
+/// assert_eq!(e.example().as_deref(), Some("model: {name: line-a, seed: 42}"));
 /// ```
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -1016,4 +1137,87 @@ pub enum RunFailure {
     /// The trace could not be written.
     #[error(transparent)]
     Write(Box<WriteError>),
+}
+
+impl RunFailure {
+    /// The field path of the input at fault: the model's seed, or what could
+    /// not be built. `None` for a failed run or trace, which are not about the
+    /// input.
+    ///
+    /// ```
+    /// use taktsim_components::RunFailure;
+    /// use taktsim_model::{FieldPath, Segment};
+    ///
+    /// let e = RunFailure::NoSeed { path: FieldPath::from(vec![Segment::Key("model".into())]) };
+    /// assert_eq!(e.path().map(ToString::to_string).as_deref(), Some("model"));
+    /// ```
+    #[must_use]
+    pub fn path(&self) -> Option<&FieldPath> {
+        match self {
+            Self::NoSeed { path } => Some(path),
+            Self::Build(error) => error.path(),
+            Self::Run(_) | Self::Write(_) => None,
+        }
+    }
+
+    /// What was found; for a failed run or trace, what went wrong.
+    ///
+    /// ```
+    /// use taktsim_components::RunFailure;
+    /// use taktsim_model::FieldPath;
+    ///
+    /// let e = RunFailure::NoSeed { path: FieldPath::default() };
+    /// assert_eq!(e.found().as_deref(), Some("no seed in the run options or the model"));
+    /// ```
+    #[must_use]
+    pub fn found(&self) -> Option<String> {
+        match self {
+            Self::NoSeed { .. } => Some("no seed in the run options or the model".to_owned()),
+            Self::Build(error) => error.found(),
+            Self::Run(error) => Some(error.to_string()),
+            Self::Write(error) => Some(error.to_string()),
+        }
+    }
+
+    /// What is allowed; `None` for a failed run or trace.
+    ///
+    /// ```
+    /// use taktsim_components::RunFailure;
+    /// use taktsim_model::FieldPath;
+    ///
+    /// let e = RunFailure::NoSeed { path: FieldPath::default() };
+    /// assert_eq!(
+    ///     e.allowed().as_deref(),
+    ///     Some("a seed in the run options or in the model; a run never takes one from entropy")
+    /// );
+    /// ```
+    #[must_use]
+    pub fn allowed(&self) -> Option<String> {
+        match self {
+            Self::NoSeed { .. } => Some(
+                "a seed in the run options or in the model; a run never takes one from entropy"
+                    .to_owned(),
+            ),
+            Self::Build(error) => error.allowed(),
+            Self::Run(_) | Self::Write(_) => None,
+        }
+    }
+
+    /// One valid value; `None` for a failed run or trace.
+    ///
+    /// ```
+    /// use taktsim_components::RunFailure;
+    /// use taktsim_model::FieldPath;
+    ///
+    /// let e = RunFailure::NoSeed { path: FieldPath::default() };
+    /// assert_eq!(e.example().as_deref(), Some("model: {name: line-a, seed: 42}"));
+    /// ```
+    #[must_use]
+    pub fn example(&self) -> Option<String> {
+        match self {
+            Self::NoSeed { .. } => Some("model: {name: line-a, seed: 42}".to_owned()),
+            Self::Build(error) => error.example(),
+            Self::Run(_) | Self::Write(_) => None,
+        }
+    }
 }

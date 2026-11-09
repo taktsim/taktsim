@@ -52,6 +52,17 @@ fn no_seed_is_an_error() {
     };
     assert_eq!(path.to_string(), "model.seed");
     assert!(failure.to_string().contains("seed: 42"), "{failure}");
+    // The same as fields, for the CLI and the bindings: no parsing of the text.
+    assert_eq!(
+        failure.path().map(ToString::to_string).as_deref(),
+        Some("model.seed")
+    );
+    assert!(failure.found().is_some_and(|f| f.contains("no seed")));
+    assert!(failure.allowed().is_some_and(|a| a.contains("a seed")));
+    assert_eq!(
+        failure.example().as_deref(),
+        Some("model: {name: line-a, seed: 42}")
+    );
 }
 
 #[test]
@@ -246,6 +257,7 @@ fn parameters_of_another_type_are_refused_by_name() {
             Err(BuildError::UnknownVariant {
                 path: taktsim_model::FieldPath::default(),
                 name: "never".to_owned(),
+                declared: Vec::new(),
             })
         }
     }
@@ -264,6 +276,19 @@ fn parameters_of_another_type_are_refused_by_name() {
         "{error}"
     );
     assert_eq!(error.path().unwrap().to_string(), "components[0]");
+    assert_eq!(
+        error.found().as_deref(),
+        Some("parameters of `Sink` read by another catalog")
+    );
+    assert!(
+        error
+            .allowed()
+            .is_some_and(|a| a.contains("this registry's `Sink`"))
+    );
+    assert_eq!(
+        error.example().as_deref(),
+        Some(<taktsim_components::Sink as ComponentParams>::EXAMPLE)
+    );
     // And a type that registry does not have at all.
     let catalog = Catalog::new().with::<Conveyor>().unwrap();
     let yaml = yaml.replace("Sink", "Conveyor");
@@ -272,6 +297,19 @@ fn parameters_of_another_type_are_refused_by_name() {
         panic!("an unknown type was built");
     };
     assert!(matches!(error, BuildError::UnknownType { .. }), "{error}");
+    assert_eq!(error.found().as_deref(), Some("Conveyor"));
+    assert_eq!(
+        error.allowed().as_deref(),
+        Some("a component type of this registry: Sink")
+    );
+    assert_eq!(error.example().as_deref(), Some("type: Sink"));
+    // Through a run, the failure gives the build error's fields.
+    let failure = RunFailure::Build(Box::new(error));
+    assert_eq!(
+        failure.path().map(ToString::to_string).as_deref(),
+        Some("components[0]")
+    );
+    assert_eq!(failure.example().as_deref(), Some("type: Sink"));
 }
 
 #[test]
