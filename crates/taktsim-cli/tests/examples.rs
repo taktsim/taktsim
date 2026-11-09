@@ -200,7 +200,7 @@ fn malformed_invocations_exit_1_at_their_path() {
         (
             &["run", "line.yaml", "extra"],
             "args.unknown_argument",
-            "extra",
+            "<model>",
         ),
         (
             &["run", "line.yaml", "--sed", "1"],
