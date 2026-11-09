@@ -504,7 +504,9 @@ fn replay_refuses_a_trace_whose_header_names_another_run() {
 
 /// A result whose stated run id alone, or whose `provenance.seeds` alone, disagrees
 /// is not the run it is filed under, though its other fields still compute to that
-/// id: neither reuse nor replay accepts it (ADR-0024 §6).
+/// id: neither reuse nor replay accepts it (ADR-0024 §6). Nor one that says it is
+/// partial, since a partial run is never stored (§8), or states an experiment id
+/// other than the one over its run alone.
 #[test]
 fn a_result_that_disagrees_with_itself_in_one_field_is_refused() {
     let registry = standard().unwrap();
@@ -520,7 +522,27 @@ fn a_result_that_disagrees_with_itself_in_one_field_is_refused() {
         .join("result.json");
     let text = std::fs::read_to_string(&file).unwrap();
     let other_id = format!("taktsim-core-{}", "a".repeat(64));
+    let experiment = response.result.experiment_id.clone().unwrap();
+    let complete = "\"complete\": true";
+    let last = text.rfind(complete).unwrap();
+    assert_ne!(text.find(complete), Some(last), "the document and its run");
     let cases = [
+        (
+            "document's complete",
+            text.replacen(complete, "\"complete\": false", 1),
+        ),
+        (
+            "run's complete",
+            format!(
+                "{}\"complete\": false{}",
+                &text[..last],
+                &text[last + complete.len()..]
+            ),
+        ),
+        (
+            "experiment id",
+            text.replace(experiment.as_str(), &format!("exp-{}", "0".repeat(64))),
+        ),
         (
             "run id",
             text.replace(
