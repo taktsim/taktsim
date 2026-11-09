@@ -10,7 +10,7 @@ mod support;
 use std::path::Path;
 
 use support::{document, load, model_files, registry, try_load};
-use taktsim_model::{LoadErrorKind, LoadErrors, Loader};
+use taktsim_model::{LoadErrors, Loader};
 
 /// Each error as `path @ line:column Kind`.
 fn summary(errors: &LoadErrors) -> Vec<String> {
@@ -73,19 +73,54 @@ fn every_rule_says_what_was_found_what_is_allowed_and_an_example() {
     for path in corpus() {
         let errors = loader.load_file(&path).unwrap_err();
         for e in errors.iter() {
-            if let LoadErrorKind::NotAllowed {
-                found,
-                allowed,
-                example,
-            } = e.kind()
-            {
-                let at = path.display();
-                assert!(!found.is_empty() && !allowed.is_empty(), "{at}: {e}");
-                assert!(!example.is_empty(), "{at}: {e}");
-                assert!(e.kind().example().is_some(), "{at}: {e}");
-            }
+            let at = path.display();
+            let kind = e.kind();
+            assert!(kind.found().is_some_and(|f| !f.is_empty()), "{at}: {e}");
+            assert!(kind.allowed().is_some_and(|a| !a.is_empty()), "{at}: {e}");
+            assert!(kind.example().is_some_and(|x| !x.is_empty()), "{at}: {e}");
         }
     }
+    // The flow's own rules, which the corpus above does not all reach.
+    let body = "  - {id: source, type: Source, interarrival: 1min}\n  \
+                - {id: a, type: Machine, cycle_time: 1s}\n  - {id: sink, type: Sink}";
+    for (flow, path, example) in [
+        (
+            "  - [source, a]\n  - {from: a, to: a}\n  - [a, sink]",
+            "flow[1].to",
+            "{from: weld, to: inspect}",
+        ),
+        (
+            "  - [source, a, sink]\n  - [a, sink]",
+            "flow[1][1]",
+            "{from: a, to: sink}",
+        ),
+        (
+            "  - [source, a]\n  - {from: [a, a], to: sink}",
+            "flow[1].from[1]",
+            "[a]",
+        ),
+    ] {
+        let errors = try_load(&document("1h", body, flow)).unwrap_err();
+        let e = errors.first();
+        assert_eq!(e.path().to_string(), path, "{errors}");
+        assert_eq!(e.kind().example().as_deref(), Some(example), "{errors}");
+    }
+    // The loader's message prescribes no route: the catalog decides what may
+    // connect, and the standard one refuses a loop until M6 (ADR-0022 §3).
+    let errors = try_load(&document(
+        "1h",
+        body,
+        "  - [source, a]\n  - {from: a, to: a}\n  - [a, sink]",
+    ))
+    .unwrap_err();
+    assert_eq!(
+        errors.first().kind().to_string(),
+        "an edge from `a` to itself"
+    );
+    let twice = format!("{body}\n  - {{id: a, type: Sink}}");
+    let errors = try_load(&document("1h", &twice, "  - [source, a, sink]")).unwrap_err();
+    assert_eq!(errors.first().path().to_string(), "components[3].id");
+    assert_eq!(errors.first().kind().example().as_deref(), Some("a-2"));
 }
 
 #[test]

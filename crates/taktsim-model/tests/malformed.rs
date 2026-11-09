@@ -92,12 +92,6 @@ fn every_error_says_what_was_found_and_what_is_allowed() {
                     | LoadErrorKind::Alias
                     | LoadErrorKind::MergeKey
                     | LoadErrorKind::DuplicateKey { .. }
-                    | LoadErrorKind::Repeated { .. }
-                    | LoadErrorKind::SelfLoop { .. }
-                    | LoadErrorKind::DuplicateEdge { .. }
-                    | LoadErrorKind::DuplicateObservable { .. }
-                    | LoadErrorKind::DuplicateId { .. }
-                    | LoadErrorKind::CaseClash { .. }
                     | LoadErrorKind::UnknownComponent {
                         suggestion: None,
                         declared: None,

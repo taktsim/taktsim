@@ -758,7 +758,7 @@ pub enum LoadErrorKind {
         id: String,
     },
     /// An edge from a component to itself.
-    #[error("an edge from `{id}` to itself; route rework to another component")]
+    #[error("an edge from `{id}` to itself")]
     SelfLoop {
         /// The component.
         id: String,
@@ -988,12 +988,6 @@ impl LoadErrorKind {
             | Self::MergeKey
             | Self::ComplexKey
             | Self::DuplicateKey { .. }
-            | Self::Repeated { .. }
-            | Self::SelfLoop { .. }
-            | Self::DuplicateEdge { .. }
-            | Self::DuplicateObservable { .. }
-            | Self::DuplicateId { .. }
-            | Self::CaseClash { .. }
             | Self::IncludeUnavailable
             | Self::NestedInclude
             | Self::IncludeSelf { .. }
@@ -1030,6 +1024,17 @@ impl LoadErrorKind {
                 ..
             } => return suggestion.clone().or_else(|| declared.clone()),
             Self::Unit(error) => return unit_example(error),
+            // Each once: the end listed once, the edge declared once.
+            Self::Repeated { id } => return Some(format!("[{id}]")),
+            Self::DuplicateEdge { from, to, .. } => {
+                return Some(format!("{{from: {from}, to: {to}}}"));
+            }
+            Self::DuplicateObservable { text, .. } => return Some(text.clone()),
+            // An id not yet used.
+            Self::DuplicateId { id, .. } | Self::CaseClash { id, .. } => {
+                return Some(format!("{id}-2"));
+            }
+            Self::SelfLoop { .. } => "{from: weld, to: inspect}",
             Self::Distribution(_) => "{dist: lognormal, mean: 42s, sigma: 0.08}",
             Self::Expression { .. } | Self::NotAnObservable { .. } => "throughput(sink)",
             Self::NotAllowed { example, .. } => return Some(example.clone()),
