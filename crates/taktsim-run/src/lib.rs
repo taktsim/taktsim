@@ -331,15 +331,19 @@ fn run_failed(type_name: &str, message: String, fold: &Fold) -> Failure {
     Failure::one(FailureClass::RunFailed, line)
 }
 
+/// A trace at `path` that cannot be read: a file that failed (exit code 7), not a
+/// run that diverged (exit code 2), since no run writes such a trace.
+fn unreadable_trace(path: &Path, error: &dyn std::fmt::Display) -> Failure {
+    let mut line =
+        Diagnostic::error("store.read", format!("{}: {error}", path.display())).at("--store");
+    line.file = Some(path.display().to_string());
+    Failure::one(FailureClass::Io, line)
+}
+
 /// Folds the trace at `path`.
 fn fold_trace<D: Domain>(path: &Path) -> Result<Fold, Failure> {
     let file = File::open(path).map_err(|e| io_failure("store.read", path, &e))?;
-    let unreadable = |e: taktsim_trace::ReadError| {
-        Failure::one(
-            FailureClass::Io,
-            Diagnostic::error("store.read", format!("{}: {e}", path.display())).at("--store"),
-        )
-    };
+    let unreadable = |e: taktsim_trace::ReadError| unreadable_trace(path, &e);
     let reader = TraceReader::<_, D::Message>::new(BufReader::new(file)).map_err(unreadable)?;
     metrics::fold(reader).map_err(unreadable)
 }
@@ -387,10 +391,7 @@ fn check_no_draw_claim<D: Domain>(
     match checked {
         Ok(_) => Ok(()),
         Err(RunFailure::Replay(error)) if matches!(*error, ReplayError::Trace(_)) => {
-            Err(Failure::one(
-                FailureClass::Io,
-                Diagnostic::error("store.read", error.to_string()).at("--store"),
-            ))
+            Err(unreadable_trace(trace, &error))
         }
         Err(error) => Err(run_failed(
             "run.no_draw_claim_false",
@@ -738,12 +739,8 @@ fn check_trace_header<D: Domain>(
     id: &RunId,
 ) -> Result<(), Failure> {
     let file = File::open(path).map_err(|e| io_failure("store.read", path, &e))?;
-    let reader = TraceReader::<_, D::Message>::new(BufReader::new(file)).map_err(|e| {
-        from_run_failure(
-            RunFailure::Replay(Box::new(ReplayError::Trace(e))),
-            model.document(),
-        )
-    })?;
+    let reader = TraceReader::<_, D::Message>::new(BufReader::new(file))
+        .map_err(|e| unreadable_trace(path, &e))?;
     let header = reader.header();
     let seed_text =
         |seed: Option<u64>| seed.map_or_else(|| "no seed".to_owned(), |s| s.to_string());
@@ -792,7 +789,8 @@ fn check_trace_header<D: Domain>(
 /// # Errors
 ///
 /// A [`Failure`]: `Invalid` for an id that is not in the store, `Io` if a stored
-/// file cannot be read, `RunFailed` if the stored files disagree, the package
+/// file cannot be read, or does not read as what it is (a damaged trace, a model
+/// this build does not load), `RunFailed` if the stored files disagree, the package
 /// differs or the replay diverges.
 ///
 /// ```
@@ -845,7 +843,18 @@ pub fn replay_stored<D: Domain>(
         .map_err(|e| io_failure("store.read", &model_path, &e))?;
     let model = Loader::new(registry.catalog())
         .load_str(&text, Format::Json)
-        .map_err(|errors| Failure::from_load(&errors))?;
+        .map_err(|errors| {
+            // The caller gave an id, not this file: the fault is in the store.
+            let mut line = Diagnostic::error(
+                "store.read",
+                format!("{} is not a model this build loads", model_path.display()),
+            )
+            .at("--store")
+            .found(errors.first().to_string())
+            .allowed("the canonical model this build stored with the run");
+            line.file = Some(model_path.display().to_string());
+            Failure::one(FailureClass::Io, line)
+        })?;
     if model.hash() != provenance.model_hash || model.system_hash() != provenance.system_hash {
         return Err(stored_run_differs(format!(
             "the stored model of run {id} does not have the hashes its result states"
@@ -864,7 +873,14 @@ pub fn replay_stored<D: Domain>(
     let replayed = registry
         .prepare(&model, options)
         .and_then(|prepared| prepared.replay(BufReader::new(file)))
-        .map_err(|e| from_run_failure(e, document))?;
+        .map_err(|e| {
+            if let RunFailure::Replay(error) = &e
+                && let ReplayError::Trace(read) = &**error
+            {
+                return unreadable_trace(&trace_path, read);
+            }
+            from_run_failure(e, document)
+        })?;
     let stated = result.runs.first().and_then(|run| {
         let trace = run.trace.as_ref()?;
         Some((trace.stream_hash, run.records, run.events))
