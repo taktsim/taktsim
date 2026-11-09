@@ -187,11 +187,9 @@ fn every_malformed_model_exits_1_with_a_path() {
     assert!(!dir.path().join(".taktsim").exists());
 }
 
-/// Each of these exits 1 with an empty stdout and one typed line at its path.
-#[test]
-fn malformed_invocations_exit_1_at_their_path() {
-    let dir = Dir::new().with_line();
-    let table: [(&[&str], &str, &str); 14] = [
+/// Invocations that are refused: the arguments, the error type and its path.
+fn malformed() -> [(&'static [&'static str], &'static str, &'static str); 20] {
+    [
         (&[], "args.missing_command", "<command>"),
         (&["simulate"], "args.unknown_command", "<command>"),
         (&["run"], "args.missing_argument", "<model>"),
@@ -222,10 +220,41 @@ fn malformed_invocations_exit_1_at_their_path() {
             "args.unknown_argument",
             "-1",
         ),
+        // From M8, `--seed` repeats for a list; a seed twice is the mistake.
         (
-            &["run", "line.yaml", "--seed", "1", "--seed", "2"],
-            "args.repeated",
+            &["run", "line.yaml", "--seed", "1", "--seed", "1"],
+            "run.duplicate_seed",
             "--seed",
+        ),
+        (
+            &["run", "line.yaml", "--horizon", "1h", "--horizon", "2h"],
+            "args.repeated",
+            "--horizon",
+        ),
+        (
+            &["run", "line.yaml", "--seed", "1..x"],
+            "args.invalid_value",
+            "--seed",
+        ),
+        (
+            &["run", "line.yaml", "--seed", "5..1"],
+            "run.seed_out_of_range",
+            "--seed",
+        ),
+        (
+            &["run", "line.yaml", "--seed", "0..9007199254740991"],
+            "run.budget_too_large",
+            "--seed",
+        ),
+        (
+            &["run", "line.yaml", "--max-runs", "0"],
+            "args.invalid_value",
+            "--max-runs",
+        ),
+        (
+            &["run", "line.yaml", "--seed", "1..20", "--max-runs", "19"],
+            "run.budget_too_small",
+            "--max-runs",
         ),
         (
             &["run", "line.yaml", "--horizon", "5"],
@@ -242,8 +271,14 @@ fn malformed_invocations_exit_1_at_their_path() {
             "args.invalid_value",
             "--format",
         ),
-    ];
-    for (args, error_type, path) in table {
+    ]
+}
+
+/// Each of these exits 1 with an empty stdout and one typed line at its path.
+#[test]
+fn malformed_invocations_exit_1_at_their_path() {
+    let dir = Dir::new().with_line();
+    for (args, error_type, path) in malformed() {
         let mut args = args.to_vec();
         if !args.contains(&"--format") {
             args.extend(["--format", "json"]);

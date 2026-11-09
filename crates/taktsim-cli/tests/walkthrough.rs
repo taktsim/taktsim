@@ -127,7 +127,20 @@ fn validates_and_fixes(dir: &Dir, manual: &Manual) {
 fn runs_and_reads_the_result(dir: &Dir, manual: &Manual) {
     let run = manual.command("run a model");
     assert_eq!(run["writes"], "a run in the run store");
-    assert_eq!(run["long_running"], false);
+    // Long-running from M8 on, with what may be spent stated beside it.
+    assert_eq!(run["long_running"], true);
+    let flags = run["budget"]["flags"].as_array().unwrap();
+    for budget_flag in flags {
+        let name = budget_flag.as_str().unwrap();
+        assert!(
+            run["arguments"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|a| a["name"] == name),
+            "{name}"
+        );
+    }
     assert_eq!(run["needs_person"], false);
     let name = run["name"].as_str().unwrap();
     let [format_flag, json] = json_format(run);

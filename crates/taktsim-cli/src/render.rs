@@ -30,6 +30,16 @@ pub(crate) const fn exit_for_result(ended: Ended) -> u8 {
     }
 }
 
+/// How a command ended, for a person.
+pub(crate) const fn ended_text(ended: Ended) -> &'static str {
+    match ended {
+        Ended::Complete => "complete",
+        Ended::BudgetExhausted => "a budget (--max-runs or --max-seconds) ended it",
+        Ended::EventLimit => "a replication reached --max-events",
+        Ended::Cancelled => "interrupted; only finished replications count",
+    }
+}
+
 /// A line of stderr in `format`.
 pub(crate) fn line(diagnostic: &Diagnostic, format: Format) -> String {
     match format {
@@ -82,15 +92,25 @@ fn diagnostic_text(d: &Diagnostic) -> String {
     text
 }
 
-/// What the numbers of one metric are worth, in a few words.
-fn accuracy_text(accuracy: &[Accuracy]) -> String {
+/// What the numbers of one metric are worth, in a few words, over `runs` replications.
+fn accuracy_text(accuracy: &[Accuracy], runs: usize) -> String {
     let parts: Vec<String> = accuracy
         .iter()
         .map(|statement| match &statement.kind {
-            AccuracyKind::Sampling(interval) => format!(
-                "± {} ({} level, {} replications)",
-                interval.half_width, interval.level, interval.replications
-            ),
+            AccuracyKind::Sampling(interval) => {
+                let nominal = if interval.stopping.is_some() {
+                    " nominal"
+                } else {
+                    ""
+                };
+                format!(
+                    "± {} ({}{nominal} level, {} replications)",
+                    interval.half_width, interval.level, interval.replications
+                )
+            }
+            AccuracyKind::None { reason, .. } if reason == "no_variation_observed" => {
+                format!("same in all {runs} replications, no interval")
+            }
             AccuracyKind::None { reason, .. } => format!("no error bound: {reason}"),
             AccuracyKind::Censored { units_inside, .. } => {
                 format!("{units_inside} units still inside at the end")
@@ -101,10 +121,22 @@ fn accuracy_text(accuracy: &[Accuracy]) -> String {
             AccuracyKind::Unknown { kind } => format!("no statement read from `{kind}`"),
         })
         .collect();
-    parts.join("; ")
+    let mut text = parts.join("; ");
+    if let Some(statement) = accuracy.first()
+        && let (Some(target), reached) = (statement.target, statement.reached)
+        && let Some(relative) = target.relative
+    {
+        let word = match reached {
+            Some(true) => "reached",
+            Some(false) => "not reached",
+            None => "stated",
+        };
+        let _ = write!(text, "; target {}% {word}", relative * 100.0);
+    }
+    text
 }
 
-fn metric_text(text: &mut String, metric: &Metric) {
+fn metric_text(text: &mut String, metric: &Metric, runs: usize) {
     let over = match metric.over {
         Over::Window { from, to } => format!("{from} to {to}"),
         Over::At { at } => format!("at {at}"),
@@ -115,16 +147,21 @@ fn metric_text(text: &mut String, metric: &Metric) {
             Scalar::Number(x) => x.to_string(),
             Scalar::Flag(b) => b.to_string(),
         };
+        // A rate per second is hard to read: per hour too.
+        let per_hour = match (metric.unit.as_str(), value.value.as_f64()) {
+            ("items/s", Some(x)) => format!(" = {} items/h", x * 3600.0),
+            _ => String::new(),
+        };
         let labels = value.labels.as_ref().map_or_else(String::new, |labels| {
             let parts: Vec<String> = labels.iter().map(|(k, v)| format!("{k}={v}")).collect();
             format!(" [{}]", parts.join(", "))
         });
         let _ = writeln!(
             text,
-            "  {}{labels} = {number} {} ({over}; {})",
+            "  {}{labels} = {number} {}{per_hour} ({over}; {})",
             metric.name,
             metric.unit,
-            accuracy_text(&value.accuracy)
+            accuracy_text(&value.accuracy, runs)
         );
     }
 }
@@ -171,7 +208,7 @@ pub(crate) fn result_text(result: &ResultDocument) -> String {
     }
     let _ = writeln!(text, "metrics:");
     for metric in &result.metrics {
-        metric_text(&mut text, metric);
+        metric_text(&mut text, metric, result.runs.len());
     }
     if !result.unreported.is_empty() {
         let _ = writeln!(text, "not reported:");
@@ -244,7 +281,15 @@ mod tests {
     #[test]
     fn text_states_each_kind_of_accuracy() {
         let none = Accuracy::none("single_replication", "one run");
-        assert_eq!(accuracy_text(&[none]), "no error bound: single_replication");
+        assert_eq!(
+            accuracy_text(&[none], 1),
+            "no error bound: single_replication"
+        );
+        let same = Accuracy::none("no_variation_observed", "all equal");
+        assert_eq!(
+            accuracy_text(&[same], 20),
+            "same in all 20 replications, no interval"
+        );
         let unknown = Accuracy {
             kind: AccuracyKind::Unknown {
                 kind: "later".to_owned(),
@@ -252,7 +297,7 @@ mod tests {
             target: None,
             reached: None,
         };
-        assert!(accuracy_text(&[unknown]).contains("no statement"));
+        assert!(accuracy_text(&[unknown], 1).contains("no statement"));
         let sampling = Accuracy {
             kind: AccuracyKind::Sampling(taktsim_run::SamplingInterval {
                 mean: 1.0,
@@ -266,8 +311,24 @@ mod tests {
             reached: None,
         };
         assert_eq!(
-            accuracy_text(&[sampling]),
+            accuracy_text(std::slice::from_ref(&sampling), 3),
             "± 0.5 (0.95 level, 3 replications)"
+        );
+        let mut sequential = sampling;
+        if let AccuracyKind::Sampling(interval) = &mut sequential.kind {
+            interval.stopping = Some("sequential".to_owned());
+        }
+        sequential.target = Some(taktsim_run::AccuracyTarget {
+            relative: Some(0.02),
+        });
+        sequential.reached = Some(false);
+        assert_eq!(
+            accuracy_text(&[sequential], 3),
+            "± 0.5 (0.95 nominal level, 3 replications); target 2% not reached"
+        );
+        assert_eq!(
+            ended_text(Ended::Cancelled),
+            "interrupted; only finished replications count"
         );
     }
 
@@ -296,6 +357,7 @@ mod tests {
                     },
                 ],
             },
+            1,
         );
         assert!(
             text.contains("share [state=busy] = 0.5 1 (at 1h;"),

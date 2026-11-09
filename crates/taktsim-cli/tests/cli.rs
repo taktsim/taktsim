@@ -5,7 +5,7 @@ mod support;
 
 use std::process::Command;
 
-use support::{Dir, EXACT, UNSEEDED};
+use support::{Dir, EXACT, PRECISE, UNSEEDED};
 
 fn taktsim(args: &[&str]) -> std::io::Result<std::process::Output> {
     Command::new(env!("CARGO_BIN_EXE_taktsim"))
@@ -98,6 +98,7 @@ fn snapshot(name: &str, args: &[&str]) {
     let dir = Dir::new().with_line();
     dir.write("unseeded.yaml", UNSEEDED);
     dir.write("exact.yaml", EXACT);
+    dir.write("precise.yaml", PRECISE);
     dir.write(
         "broken.yaml",
         "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 8h}\n\
@@ -141,6 +142,35 @@ fn run_snapshots() {
     snapshot("run_invalid_model", &["run", "broken.yaml"]);
 }
 
+/// An experiment over a list, and one to a precision it cannot reach (ADR-0025 §5).
+#[test]
+fn experiment_snapshots() {
+    snapshot("run_list_text", &["run", "line.yaml", "--seed", "1..3"]);
+    snapshot(
+        "run_list_json",
+        &["run", "line.yaml", "--seed", "1..3", "--format", "json"],
+    );
+    snapshot(
+        "run_budget_exhausted",
+        &[
+            "run",
+            "precise.yaml",
+            "--max-runs",
+            "10",
+            "--max-seconds",
+            "600",
+        ],
+    );
+    snapshot(
+        "run_no_budget",
+        &["run", "precise.yaml", "--format", "json"],
+    );
+    snapshot(
+        "run_no_draw_list",
+        &["run", "exact.yaml", "--seed", "1..5", "--max-runs", "5"],
+    );
+}
+
 #[test]
 fn argument_error_snapshots() {
     snapshot("args_no_command", &[]);
@@ -155,8 +185,8 @@ fn argument_error_snapshots() {
     );
     snapshot("args_bad_format", &["run", "line.yaml", "--format", "yaml"]);
     snapshot(
-        "args_seed_twice",
-        &["run", "line.yaml", "--seed", "1", "--seed", "2"],
+        "args_duplicate_seed",
+        &["run", "line.yaml", "--seed", "1", "--seed", "1"],
     );
     snapshot(
         "schema_unknown",

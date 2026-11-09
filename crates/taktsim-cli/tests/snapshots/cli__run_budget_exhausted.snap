@@ -1,0 +1,62 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 3
+--- stdout ---
+partial: these numbers must not be compared with a complete result (budget_exhausted)
+engine: taktsim-core <version>
+package: taktsim-components <version>
+model hash: e1cc79fa7b4043101b6441f5763b340ef9f7e8d7795cbe511955a4e5484c7704
+system hash: 832ac539c40e743ee750b7001cc73c16e7920da745093507596f3eb46e0b83e5
+platform: <platform>
+experiment: <experiment id>
+run: seed 1, ended at 1h, 256 events, 514 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 2, ended at 1h, 296 events, 594 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 3, ended at 1h, 252 events, 506 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 4, ended at 1h, 248 events, 498 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 5, ended at 1h, 192 events, 386 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 6, ended at 1h, 236 events, 474 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 7, ended at 1h, 240 events, 482 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 8, ended at 1h, 256 events, 514 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 9, ended at 1h, 224 events, 450 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 10, ended at 1h, 260 events, 522 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+metrics:
+  created(source) = 61.5 items (0s to 1h; ± 4.7957968974128065 (0.95 nominal level, 10 replications))
+  delivered(sink) = 61.5 items (0s to 1h; ± 4.7957968974128065 (0.95 nominal level, 10 replications))
+  items_alive = 0 items (at 1h; same in all 10 replications, no interval)
+  held(source) = 0 items (0s to 1h; same in all 10 replications, no interval)
+  lead_time(sink) [statistic=mean] = 0 s (0s to 1h; same in all 10 replications, no interval)
+  lead_time(sink) [statistic=min] = 0 s (0s to 1h; same in all 10 replications, no interval)
+  lead_time(sink) [statistic=p50] = 0 s (0s to 1h; same in all 10 replications, no interval)
+  lead_time(sink) [statistic=p90] = 0 s (0s to 1h; same in all 10 replications, no interval)
+  lead_time(sink) [statistic=p95] = 0 s (0s to 1h; same in all 10 replications, no interval)
+  lead_time(sink) [statistic=p99] = 0 s (0s to 1h; same in all 10 replications, no interval)
+  lead_time(sink) [statistic=max] = 0 s (0s to 1h; same in all 10 replications, no interval)
+  state_shares(source) [resource=source, state=waiting] = 1 share (0s to 1h; same in all 10 replications, no interval)
+  state_shares(source) [resource=source, state=blocked] = 0 share (0s to 1h; same in all 10 replications, no interval)
+  throughput(sink) = 0.017083333333333336 items/s = 61.50000000000001 items/h (0s to 1h; ± 0.0013321658048368902 (0.95 nominal level, 10 replications); target 0.1% not reached)
+  wip() = 0 items (0s to 1h; same in all 10 replications, no interval)
+--- stderr ---
+progress[run.store]: ran in the store <tmp>/.taktsim
+progress[run.ended]: 10 replications counted; a budget (--max-runs or --max-seconds) ended it

@@ -40,7 +40,7 @@ metrics:
   state_shares(weld) [resource=weld, state=starved] = 0.001609582570625 share (0s to 8h; no error bound: single_replication)
   state_shares(weld) [resource=weld, state=down] = 0 share (0s to 8h; no error bound: single_replication)
   state_shares(weld) [resource=weld, state=setup] = 0 share (0s to 8h; no error bound: single_replication)
-  throughput(sink) = 0.022152777777777778 items/s (0s to 8h; no error bound: single_replication)
+  throughput(sink) = 0.022152777777777778 items/s = 79.75 items/h (0s to 8h; no error bound: single_replication)
   utilization(cut) = 0.9386437106942361 share (0s to 8h; no error bound: single_replication)
   utilization(weld) = 0.998390417429375 share (0s to 8h; no error bound: single_replication)
   wip() = 6.709247035741389 items (0s to 8h; no error bound: single_replication)

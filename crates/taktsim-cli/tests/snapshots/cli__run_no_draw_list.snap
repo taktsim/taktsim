@@ -1,0 +1,46 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 0
+--- stdout ---
+complete (horizon)
+engine: taktsim-core <version>
+package: taktsim-components <version>
+model hash: 1e37fe6b72fdb25f95346c0d47aafc69d0fba8920357ec652980a7af1671ba1a
+system hash: 4adcd1aed74b12bb5f9af262a013a2b92717adf3051cc9e21a68e46c75fa052b
+platform: <platform>
+experiment: <experiment id>
+run: seed none, ended at 1h, 424 events, 729 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+metrics:
+  created(source) = 61 items (0s to 1h; no error bound: no_random_draws)
+  delivered(sink) = 60 items (0s to 1h; no error bound: no_random_draws)
+  items_alive = 1 items (at 1h; no error bound: no_random_draws)
+  held(source) = 0 items (0s to 1h; no error bound: no_random_draws)
+  lead_time(sink) [statistic=mean] = 60 s (0s to 1h; no error bound: no_random_draws; 1 units still inside at the end)
+  lead_time(sink) [statistic=min] = 60 s (0s to 1h; no error bound: no_random_draws; 1 units still inside at the end)
+  lead_time(sink) [statistic=p50] = 60 s (0s to 1h; no error bound: no_random_draws; 1 units still inside at the end)
+  lead_time(sink) [statistic=p90] = 60 s (0s to 1h; no error bound: no_random_draws; 1 units still inside at the end)
+  lead_time(sink) [statistic=p95] = 60 s (0s to 1h; no error bound: no_random_draws; 1 units still inside at the end)
+  lead_time(sink) [statistic=p99] = 60 s (0s to 1h; no error bound: no_random_draws; 1 units still inside at the end)
+  lead_time(sink) [statistic=max] = 60 s (0s to 1h; no error bound: no_random_draws; 1 units still inside at the end)
+  state_shares(source) [resource=source, state=waiting] = 1 share (0s to 1h; no error bound: no_random_draws)
+  state_shares(source) [resource=source, state=blocked] = 0 share (0s to 1h; no error bound: no_random_draws)
+  state_shares(cut) [resource=cut, state=idle] = 0 share (0s to 1h; no error bound: no_random_draws)
+  state_shares(cut) [resource=cut, state=busy] = 1 share (0s to 1h; no error bound: no_random_draws)
+  state_shares(cut) [resource=cut, state=blocked] = 0 share (0s to 1h; no error bound: no_random_draws)
+  state_shares(cut) [resource=cut, state=starved] = 0 share (0s to 1h; no error bound: no_random_draws)
+  state_shares(cut) [resource=cut, state=down] = 0 share (0s to 1h; no error bound: no_random_draws)
+  state_shares(cut) [resource=cut, state=setup] = 0 share (0s to 1h; no error bound: no_random_draws)
+  throughput(sink) = 0.016666666666666666 items/s = 60 items/h (0s to 1h; no error bound: no_random_draws)
+  utilization(cut) = 1 share (0s to 1h; no error bound: no_random_draws)
+  wip() = 1 items (0s to 1h; no error bound: no_random_draws)
+  wip(cut) = 1 items (0s to 1h; no error bound: no_random_draws)
+--- stderr ---
+warning[run.seed_unused] --seed: this model draws nothing, so the 5 seeds from --seed are not used
+  found: 5 seeds
+warning[run.flag_unused] --max-runs: this model draws nothing, so --max-runs 5 is not used
+  found: 5
+progress[run.store]: ran in the store <tmp>/.taktsim

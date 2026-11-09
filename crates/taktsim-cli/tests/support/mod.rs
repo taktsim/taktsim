@@ -176,6 +176,16 @@ components:\n\
 flow:\n\
   - [source, cut, buf1, weld, sink]\n";
 
+/// A model that draws, with a precision target: a sequential experiment.
+pub const PRECISE: &str = "format: \"1.0\"\n\
+model: {name: precise, seed: 1}\n\
+experiment: {type: terminating, horizon: 1h, precision: {\"throughput(sink)\": 0.1%}}\n\
+components:\n\
+  - {id: source, type: Source, interarrival: {dist: exponential, mean: 1min}}\n\
+  - {id: sink, type: Sink}\n\
+flow:\n\
+  - [source, sink]\n";
+
 /// A model that draws and states no seed.
 pub const UNSEEDED: &str = "format: \"1.0\"\n\
 model: {name: unseeded}\n\

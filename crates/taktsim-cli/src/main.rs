@@ -10,6 +10,7 @@ mod args;
 mod describe;
 mod parse_error;
 mod render;
+mod signal;
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -20,8 +21,8 @@ use clap::Parser;
 use taktsim_components::{Flow, Registry, standard, standard_schema};
 use taktsim_model::Json;
 use taktsim_run::{
-    Diagnostic, Failure, ModelSource, RunRequest, Store, diagnostic_schema, result_schema,
-    validation_schema,
+    Budget, Diagnostic, Ended, Failure, ModelSource, RunRequest, Store, diagnostic_schema,
+    expand_seeds, result_schema, validation_schema,
 };
 
 use crate::args::{Cli, Command, Format, RunArgs};
@@ -206,16 +207,34 @@ fn run(args: &RunArgs, format: Format) -> u8 {
         Ok(store) => store,
         Err(failure) => return fail(&failure, format),
     };
-    let seeds: Vec<u64> = args.seed.iter().copied().collect();
+    let budget = Budget {
+        max_runs: args.max_runs,
+        max_seconds: args.max_seconds,
+    };
+    let seeds = match expand_seeds(&args.seed, budget) {
+        Ok(seeds) => seeds,
+        Err(failure) => return fail(&failure, format),
+    };
+    let cancel = match signal::install() {
+        Ok(flag) => Some(flag),
+        Err(error) => {
+            let line = Diagnostic::warning(
+                "run.no_signal_handler",
+                format!("a signal will stop the process without a result: {error}"),
+            );
+            write_stderr(&render::line(&line, format));
+            None
+        }
+    };
     let request = RunRequest {
         seeds: &seeds,
-        budget: taktsim_run::Budget::none(),
+        budget,
         threads: None,
         max_memory_mib: None,
         horizon: args.horizon,
         max_events: args.max_events,
         reuse: !args.no_reuse,
-        cancel: None,
+        cancel,
     };
     let response =
         match taktsim_run::run(&registry, ModelSource::Path(&args.model), &request, &store) {
@@ -236,6 +255,17 @@ fn run(args: &RunArgs, format: Format) -> u8 {
     progress.store = Some(store.root().display().to_string());
     progress.reused = Some(response.reused);
     write_stderr(&render::line(&progress, format));
+    if response.result.runs.len() > 1 || response.ended != Ended::Complete {
+        let ended = Diagnostic::progress(
+            "run.ended",
+            format!(
+                "{} replications counted; {}",
+                response.result.runs.len(),
+                render::ended_text(response.ended)
+            ),
+        );
+        write_stderr(&render::line(&ended, format));
+    }
     let text = match format {
         Format::Json => response.result.to_text(),
         Format::Text => render::result_text(&response.result),

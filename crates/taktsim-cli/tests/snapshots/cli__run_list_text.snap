@@ -1,0 +1,58 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 0
+--- stdout ---
+complete (seeds_finished)
+engine: taktsim-core <version>
+package: taktsim-components <version>
+model hash: 8f66853706191250f21ebeff56b8ad316bf0175b0ff0a9e322b228291d4a1b21
+system hash: e0e22c0f8cdadababc8602c28cd565ce8961b32491a47f65c71692ff8c01300a
+platform: <platform>
+experiment: <experiment id>
+run: seed 1, ended at 8h, 8982 events, 14117 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 2, ended at 8h, 8996 events, 14139 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+run: seed 3, ended at 8h, 8996 events, 14139 records
+  id: <run id>
+  trace: runs/<run id>/trace.takt
+metrics:
+  created(source) = 645.6666666666666 items (0s to 8h; ± 1.434217576583175 (0.95 level, 3 replications))
+  delivered(sink) = 638.6666666666666 items (0s to 8h; ± 1.434217576583175 (0.95 level, 3 replications))
+  items_alive = 7 items (at 8h; same in all 3 replications, no interval)
+  held(source) = 0 items (0s to 8h; same in all 3 replications, no interval)
+  lead_time(sink) [statistic=mean] = 300.546208533613 s (0s to 8h; ± 3.9478388066877423 (0.95 level, 3 replications); 7 units still inside at the end)
+  lead_time(sink) [statistic=min] = 87.88062746866666 s (0s to 8h; ± 4.562760026159283 (0.95 level, 3 replications); 7 units still inside at the end)
+  lead_time(sink) [statistic=p50] = 315 s (0s to 8h; same in all 3 replications, no interval; 7 units still inside at the end)
+  lead_time(sink) [statistic=p90] = 315 s (0s to 8h; same in all 3 replications, no interval; 7 units still inside at the end)
+  lead_time(sink) [statistic=p95] = 315 s (0s to 8h; same in all 3 replications, no interval; 7 units still inside at the end)
+  lead_time(sink) [statistic=p99] = 315 s (0s to 8h; same in all 3 replications, no interval; 7 units still inside at the end)
+  lead_time(sink) [statistic=max] = 315 s (0s to 8h; same in all 3 replications, no interval; 7 units still inside at the end)
+  state_shares(source) [resource=source, state=waiting] = 1 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(source) [resource=source, state=blocked] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(cut) [resource=cut, state=idle] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(cut) [resource=cut, state=busy] = 0.9405282342387732 share (0s to 8h; ± 0.00663708870088371 (0.95 level, 3 replications))
+  state_shares(cut) [resource=cut, state=blocked] = 0.05947176576122685 share (0s to 8h; ± 0.006637088700883731 (0.95 level, 3 replications))
+  state_shares(cut) [resource=cut, state=starved] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(cut) [resource=cut, state=down] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(cut) [resource=cut, state=setup] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(weld) [resource=weld, state=idle] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(weld) [resource=weld, state=busy] = 0.9984802832326505 share (0s to 8h; ± 0.0002051480839212784 (0.95 level, 3 replications))
+  state_shares(weld) [resource=weld, state=blocked] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(weld) [resource=weld, state=starved] = 0.001519716767349537 share (0s to 8h; ± 0.00020514808392123985 (0.95 level, 3 replications))
+  state_shares(weld) [resource=weld, state=down] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  state_shares(weld) [resource=weld, state=setup] = 0 share (0s to 8h; same in all 3 replications, no interval)
+  throughput(sink) = 0.022175925925925925 items/s = 79.83333333333333 items/h (0s to 8h; ± 0.00004979922140913514 (0.95 level, 3 replications))
+  utilization(cut) = 0.9405282342387732 share (0s to 8h; ± 0.00663708870088371 (0.95 level, 3 replications))
+  utilization(weld) = 0.9984802832326505 share (0s to 8h; ± 0.0002051480839212784 (0.95 level, 3 replications))
+  wip() = 6.701624779323518 items (0s to 8h; ± 0.08676188096899695 (0.95 level, 3 replications))
+  wip(cut) = 1 items (0s to 8h; same in all 3 replications, no interval)
+  wip(buf1) = 4.703144496090868 items (0s to 8h; ± 0.08695039706743769 (0.95 level, 3 replications))
+  wip(weld) = 0.9984802832326505 items (0s to 8h; ± 0.0002051480839212784 (0.95 level, 3 replications))
+--- stderr ---
+progress[run.store]: ran in the store <tmp>/.taktsim
+progress[run.ended]: 3 replications counted; complete

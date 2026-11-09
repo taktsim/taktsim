@@ -86,6 +86,8 @@ fn describe_carries_its_format_version_and_schema() {
         "--horizon",
         "--store",
         "--max-events",
+        "--max-runs",
+        "--max-seconds",
         "--no-reuse",
         "--format",
     ] {
@@ -169,7 +171,7 @@ fn error_lines_match_their_schema() {
     dir.write("bad.yaml", "{a: 1}\n");
     std::fs::create_dir_all(dir.path().join("taken")).unwrap();
     dir.write("taken/store.json", "{\"store_format\": 99}");
-    let cases: [&[&str]; 15] = [
+    let cases: [&[&str]; 17] = [
         &["--format", "json"],
         &["nope", "--format", "json"],
         &["run", "--format", "json"],
@@ -194,6 +196,8 @@ fn error_lines_match_their_schema() {
             "json",
         ],
         &["run", "line.yaml", "--horizon", "0s", "--format", "json"],
+        &["run", "line.yaml", "--seed", "1..2000", "--format", "json"],
+        &["run", "line.yaml", "--seed", "1..3", "--format", "json"],
         &["run", "line.yaml", "--format", "json"],
         &["run", "unseeded.yaml", "--format", "json"],
         &["run", "exact.yaml", "--seed", "1", "--format", "json"],
@@ -286,7 +290,10 @@ fn documented_exit_codes() {
                 .map(move |c| (name, code_of(c)))
         })
         .collect();
-    let writing_stdout: BTreeSet<(&str, i128)> = BTreeSet::from([("describe", 7), ("schema", 7)]);
+    // Exit 4 needs a signal: `a_signal_exits_4_with_the_finished_runs`, under unix. On
+    // Windows the library's flag is tested instead, and the gap is stated in the PR.
+    let writing_stdout: BTreeSet<(&str, i128)> =
+        BTreeSet::from([("describe", 7), ("schema", 7), ("run", 4)]);
     let not_reached: BTreeSet<_> = documented.difference(&reached).copied().collect();
     assert_eq!(not_reached, writing_stdout, "the rest are covered here");
     let not_documented: Vec<_> = reached.difference(&documented).collect();
@@ -371,4 +378,89 @@ fn schema_prints_what_is_committed() {
     let line = &unknown.lines()[0];
     assert_eq!(line["type"], "args.unknown_schema");
     assert!(line["allowed"].as_str().unwrap().contains("Machine"));
+}
+
+/// A real SIGINT cuts the running replication; the finished ones count, the document
+/// says `cancelled` and the exit code is 4 (ADR-0025 §9).
+#[cfg(unix)]
+#[allow(clippy::unwrap_used)] // Test helper.
+fn interrupted(dir: &Dir, args: &[&str]) -> support::Outcome {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    let child = Command::new(env!("CARGO_BIN_EXE_taktsim"))
+        .args(args)
+        .current_dir(dir.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Once a replication is in the store, the handler is installed and the next one
+    // runs.
+    let runs = dir.path().join(".taktsim").join("runs");
+    let started = Instant::now();
+    while std::fs::read_dir(&runs).map_or(0, Iterator::count) == 0 {
+        assert!(
+            started.elapsed() < Duration::from_secs(120),
+            "no run finished"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let killed = Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(killed.success());
+    let output = child.wait_with_output().unwrap();
+    support::Outcome {
+        code: output.status.code().unwrap(),
+        stdout: String::from_utf8(output.stdout).unwrap(),
+        stderr: String::from_utf8(output.stderr).unwrap(),
+    }
+}
+
+/// A list long enough to be interrupted in a debug build.
+#[cfg(unix)]
+const SLOW: [&str; 9] = [
+    "run",
+    "line.yaml",
+    "--seed",
+    "1..3",
+    "--horizon",
+    "300h",
+    "--format",
+    "json",
+    "--no-reuse",
+];
+
+#[cfg(unix)]
+#[test]
+fn a_signal_exits_4_with_the_finished_runs() {
+    let dir = Dir::new().with_line();
+    let outcome = interrupted(&dir, &SLOW);
+    assert_eq!(outcome.code, 4, "{}", outcome.stderr);
+    let result = outcome.json();
+    assert_eq!(result["complete"], false);
+    assert_eq!(result["stop_reason"], "cancelled");
+    let counted = result["runs"].as_array().unwrap().len();
+    assert!((1..3).contains(&counted), "{counted}");
+    // Not kept: a cancelled document is not determined by the model and the run set.
+    assert!(!dir.path().join(".taktsim").join("experiments").exists());
+}
+
+/// Running the same command again reuses the prefix and gives the bytes of a run that
+/// was never interrupted.
+#[cfg(unix)]
+#[test]
+fn interrupted_then_resumed_equals_uninterrupted() {
+    let dir = Dir::new().with_line();
+    let first = interrupted(&dir, &SLOW);
+    assert_eq!(first.code, 4, "{}", first.stderr);
+    let resumed = dir.taktsim(&SLOW[..8]);
+    assert_eq!(resumed.code, 0, "{}", resumed.stderr);
+    let fresh = Dir::new().with_line();
+    let whole = fresh.taktsim(&SLOW[..8]);
+    assert_eq!(whole.code, 0, "{}", whole.stderr);
+    assert_eq!(resumed.stdout, whole.stdout);
 }

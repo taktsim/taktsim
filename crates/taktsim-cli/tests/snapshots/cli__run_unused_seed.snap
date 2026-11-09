@@ -34,7 +34,7 @@ metrics:
   state_shares(cut) [resource=cut, state=starved] = 0 share (0s to 1h; no error bound: no_random_draws)
   state_shares(cut) [resource=cut, state=down] = 0 share (0s to 1h; no error bound: no_random_draws)
   state_shares(cut) [resource=cut, state=setup] = 0 share (0s to 1h; no error bound: no_random_draws)
-  throughput(sink) = 0.016666666666666666 items/s (0s to 1h; no error bound: no_random_draws)
+  throughput(sink) = 0.016666666666666666 items/s = 60 items/h (0s to 1h; no error bound: no_random_draws)
   utilization(cut) = 1 share (0s to 1h; no error bound: no_random_draws)
   wip() = 1 items (0s to 1h; no error bound: no_random_draws)
   wip(cut) = 1 items (0s to 1h; no error bound: no_random_draws)
