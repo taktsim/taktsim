@@ -289,3 +289,80 @@ fn an_accept_crossing_a_withdraw_keeps_both_sides_in_step() {
             .any(|(time, n)| *time == t("39s") && n.state == MachineState::Busy)
     );
 }
+
+#[test]
+fn a_buffer_counts_its_promised_places_when_offered() {
+    // Two machines merge into a one-place buffer that feeds two failing
+    // machines. At 13 s, `d1` takes the buffer's part and the buffer promises
+    // its place to `up2`. Before `up2`'s part lands, `d2`'s accept comes in:
+    // the buffer has no part and declines, and the promised place is not free,
+    // so `up1`, waiting since 12 s, is accepted only once `up2`'s part is in
+    // and gone (fill + reserved <= capacity).
+    let yaml = document(
+        "60s",
+        "  - {id: s1, type: Source}\n  - {id: s2, type: Source}\n  \
+         - {id: up1, type: Machine, cycle_time: 3s}\n  - {id: up2, type: Machine, cycle_time: 3s}\n  \
+         - {id: buf, type: Buffer, capacity: 1 parts}\n  \
+         - {id: d1, type: Machine, cycle_time: 500ms, mtbf: 7s, mttr: 6s}\n  \
+         - {id: d2, type: Machine, cycle_time: 500ms, mtbf: 7s, mttr: 6s}\n  \
+         - {id: sink, type: Sink}",
+        "  - [s1, up1]\n  - [s2, up2]\n  - {from: [up1, up2], to: buf}\n  \
+         - {from: buf, to: [d1, d2]}\n  - {from: [d1, d2], to: sink}",
+    );
+    let r = run(&yaml, 1);
+    let at_13: Vec<_> = r
+        .events()
+        .into_iter()
+        .filter(|e| e.time == t("13s"))
+        .map(|e| (e.from, e.to, e.message))
+        .collect();
+    let index = |from: &str, to: &str, pick: fn(&FlowMessage) -> bool| {
+        at_13
+            .iter()
+            .position(|(f, t, m)| f == from && t == to && pick(m))
+            .unwrap()
+    };
+    let accept = |m: &FlowMessage| matches!(m, FlowMessage::Accept);
+    let promised = index("buf", "up2", accept);
+    let landed = index("up2", "buf", is_arrive);
+    let declined = index("buf", "d2", |m| matches!(m, FlowMessage::Decline));
+    // `d2`'s accept is handled while the place is promised to `up2`.
+    let d2_accept = index("d2", "buf", accept);
+    assert!(d2_accept < landed && promised < declined, "{at_13:?}");
+    // `up1` is accepted only after `up2`'s part has landed.
+    assert!(index("buf", "up1", accept) > landed, "{at_13:?}");
+}
+
+#[test]
+fn a_part_promised_before_a_failure_can_land_while_the_machine_is_down() {
+    // A failure drawn within a nanosecond can fall between the Accept and the
+    // Arrive of one instant. The part still arrives, waits in its place, and
+    // starts after the repair (ADR-0022 §4).
+    let yaml = document(
+        "1min",
+        "  - {id: source, type: Source}\n  \
+         - {id: m, type: Machine, cycle_time: 1s, mtbf: {dist: uniform, min: 0s, max: 0.000000001s}, mttr: 1s}\n  \
+         - {id: sink, type: Sink}",
+        "  - [source, m, sink]",
+    );
+    let mut landed = 0;
+    for seed in 1..=8 {
+        let r = run(&yaml, seed);
+        let mut down = false;
+        for e in r.events().iter().filter(|e| e.to == "m") {
+            if matches!(e.message, FlowMessage::Failure) {
+                down = true;
+            } else if matches!(e.message, FlowMessage::Repaired) {
+                down = false;
+            } else if down && is_arrive(&e.message) {
+                landed += 1;
+            }
+        }
+        // Every part that arrived is delivered or still held at the end.
+        assert!(
+            r.delivered().len() + 1 >= r.arrivals("m").len(),
+            "seed {seed}"
+        );
+    }
+    assert!(landed > 0, "no part landed while down");
+}
