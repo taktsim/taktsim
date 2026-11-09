@@ -35,6 +35,8 @@ fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().collect();
     let format = parse_error::format_in(&args);
     install_panic_hook(format);
+    #[cfg(feature = "test-panic")]
+    panic_if_asked();
     let code = match Cli::try_parse_from(parse_error::attach_hyphen_values(&args)) {
         Ok(cli) => run_command(&cli),
         Err(error) => parse_error::handle(&error, &args, format),
@@ -50,6 +52,16 @@ fn install_panic_hook(format: Format) {
             let line = Diagnostic::error("internal.panic", info.to_string());
             write_stderr(&render::line(&line, Format::Json));
         }));
+    }
+}
+
+/// With the `test-panic` feature only: no input reaches a panic, so the test of the
+/// hook asks for one.
+#[cfg(feature = "test-panic")]
+#[allow(clippy::panic)] // The feature exists to reach the invariant-violation path from a test.
+fn panic_if_asked() {
+    if std::env::var_os("TAKTSIM_TEST_PANIC").is_some() {
+        panic!("a panic asked for by TAKTSIM_TEST_PANIC");
     }
 }
 
