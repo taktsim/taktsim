@@ -1,0 +1,9 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+{"allowed":"--max-runs with a whole number from 1","example":"--max-runs 100","found":"nothing","kind":"error","message":"`experiment.precision` runs until a target is reached, which needs --max-runs","path":"--max-runs","type":"run.no_budget"}
+{"allowed":"--max-seconds with a whole number from 1","example":"--max-seconds 100","found":"nothing","kind":"error","message":"`experiment.precision` runs until a target is reached, which needs --max-seconds","path":"--max-seconds","type":"run.no_budget"}

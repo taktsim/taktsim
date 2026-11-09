@@ -307,12 +307,12 @@
         },
         {
           "allowed": [],
-          "help": "The seed, over `model.seed`; a model that draws nothing has none",
+          "help": "The seed, over `model.seed`; a model that draws nothing has none. Repeat it, or give a range such as `1..20`, for an experiment over several seeds; with `experiment.precision`, one seed is the first of a sequence",
           "name": "--seed",
           "positional": false,
           "required": false,
           "takes_value": true,
-          "type": "seed"
+          "type": "seeds"
         },
         {
           "allowed": [],
@@ -343,6 +343,24 @@
         },
         {
           "allowed": [],
+          "help": "The most replications of an experiment; required with `experiment.precision` and for more than 1000 seeds",
+          "name": "--max-runs",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "integer"
+        },
+        {
+          "allowed": [],
+          "help": "The most wall-clock seconds of an experiment; required with `experiment.precision` and for more than 1000 seeds. Only how many replications count depends on it",
+          "name": "--max-seconds",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "integer"
+        },
+        {
+          "allowed": [],
           "help": "Run even if the store has this run, and compare; it is never overwritten",
           "name": "--no-reuse",
           "positional": false,
@@ -364,6 +382,15 @@
           "type": "enum"
         }
       ],
+      "budget": {
+        "flags": [
+          "--max-runs",
+          "--max-seconds"
+        ],
+        "max_seeds": 100000,
+        "required": "both, with `experiment.precision`, and for a list of more than 1000 seeds; a shorter list is its own budget",
+        "short_list": 1000
+      },
       "example": "taktsim run line.yaml --seed 42 --horizon 8h --format json",
       "exit_codes": [
         {
@@ -377,6 +404,11 @@
             "model.*",
             "run.no_seed",
             "run.seed_out_of_range",
+            "run.duplicate_seed",
+            "run.no_budget",
+            "run.budget_too_small",
+            "run.budget_too_large",
+            "run.seed_list_with_precision",
             "run.build"
           ]
         },
@@ -396,12 +428,20 @@
             "run.stored_run_differs",
             "run.trace_format",
             "run.replay_differs",
+            "run.kpi_conservation",
+            "run.kpi_undeclared_state",
+            "run.kpi_no_end",
+            "run.windows_differ",
             "internal.no_trace",
             "internal.experiment_id"
           ]
         },
         {
           "code": 3,
+          "error_types": []
+        },
+        {
+          "code": 4,
           "error_types": []
         },
         {
@@ -429,7 +469,7 @@
           "schema_command": "taktsim schema model"
         }
       ],
-      "long_running": false,
+      "long_running": true,
       "name": "run",
       "needs_person": false,
       "purpose": "Run a model and keep the run in the run store",
@@ -1116,6 +1156,9 @@
               "$ref": "#/$defs/Argument"
             },
             "type": "array"
+          },
+          "budget": {
+            "description": "Any JSON value."
           },
           "example": {
             "type": "string"

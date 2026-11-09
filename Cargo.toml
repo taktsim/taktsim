@@ -58,6 +58,10 @@ gungraun = "0.20.0"
 # The command line's parser (ADR-0019, ADR-0024 §2). Default features off, so no
 # colour crates and no `strsim`. New in the lock with it: `clap_derive`.
 clap = { version = "4.6.7", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
+# Signals for `taktsim run`, in taktsim-cli only (ADR-0025 §9): SIGINT, SIGTERM,
+# Ctrl+C and Ctrl+Break set one flag. New in the lock with it: `nix` (unix) and
+# `windows-sys`, at the version already locked.
+ctrlc = { version = "3.5.1", features = ["termination"] }
 # Golden-trace snapshots (ADR-0021), tests only, without colors or extra
 # formats.
 insta = { version = "1.49.0", default-features = false }

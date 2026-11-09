@@ -1,0 +1,736 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 0
+--- stdout ---
+{
+  "complete": true,
+  "experiment_id": "<experiment id>",
+  "format": "taktsim-result/1",
+  "metrics": [
+    {
+      "name": "created(source)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 1.434217576583175,
+                "level": 0.95,
+                "mean": 645.6666666666666,
+                "replications": 3,
+                "std_dev": 0.577350269189634
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 645.6666666666666
+        }
+      ]
+    },
+    {
+      "name": "delivered(sink)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 1.434217576583175,
+                "level": 0.95,
+                "mean": 638.6666666666666,
+                "replications": 3,
+                "std_dev": 0.577350269189634
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 638.6666666666666
+        }
+      ]
+    },
+    {
+      "name": "items_alive",
+      "over": {
+        "at": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "value": 7
+        }
+      ]
+    },
+    {
+      "name": "held(source)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "lead_time(sink)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "s",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 3.9478388066877423,
+                "level": 0.95,
+                "mean": 300.546208533613,
+                "replications": 3,
+                "std_dev": 1.5892189825120777
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 7
+            }
+          ],
+          "labels": {
+            "statistic": "mean"
+          },
+          "value": 300.546208533613
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 4.562760026159283,
+                "level": 0.95,
+                "mean": 87.88062746866666,
+                "replications": 3,
+                "std_dev": 1.836758084938998
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 7
+            }
+          ],
+          "labels": {
+            "statistic": "min"
+          },
+          "value": 87.88062746866666
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 7
+            }
+          ],
+          "labels": {
+            "statistic": "p50"
+          },
+          "value": 315
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 7
+            }
+          ],
+          "labels": {
+            "statistic": "p90"
+          },
+          "value": 315
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 7
+            }
+          ],
+          "labels": {
+            "statistic": "p95"
+          },
+          "value": 315
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 7
+            }
+          ],
+          "labels": {
+            "statistic": "p99"
+          },
+          "value": 315
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 7
+            }
+          ],
+          "labels": {
+            "statistic": "max"
+          },
+          "value": 315
+        }
+      ]
+    },
+    {
+      "name": "state_shares(source)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "source",
+            "state": "waiting"
+          },
+          "value": 1
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "source",
+            "state": "blocked"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "state_shares(cut)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "idle"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.00663708870088371,
+                "level": 0.95,
+                "mean": 0.9405282342387732,
+                "replications": 3,
+                "std_dev": 0.002671787747309386
+              },
+              "kind": "sampling"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "busy"
+          },
+          "value": 0.9405282342387732
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.006637088700883731,
+                "level": 0.95,
+                "mean": 0.05947176576122685,
+                "replications": 3,
+                "std_dev": 0.002671787747309394
+              },
+              "kind": "sampling"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "blocked"
+          },
+          "value": 0.05947176576122685
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "starved"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "down"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "cut",
+            "state": "setup"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "state_shares(weld)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "idle"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.0002051480839212784,
+                "level": 0.95,
+                "mean": 0.9984802832326505,
+                "replications": 3,
+                "std_dev": 0.00008258321708611332
+              },
+              "kind": "sampling"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "busy"
+          },
+          "value": 0.9984802832326505
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "blocked"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.00020514808392123985,
+                "level": 0.95,
+                "mean": 0.001519716767349537,
+                "replications": 3,
+                "std_dev": 0.00008258321708609781
+              },
+              "kind": "sampling"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "starved"
+          },
+          "value": 0.001519716767349537
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "down"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "weld",
+            "state": "setup"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "throughput(sink)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items/s",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.00004979922140913514,
+                "level": 0.95,
+                "mean": 0.022175925925925925,
+                "replications": 3,
+                "std_dev": 0.000020046884346861133
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.022175925925925925
+        }
+      ]
+    },
+    {
+      "name": "utilization(cut)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.00663708870088371,
+                "level": 0.95,
+                "mean": 0.9405282342387732,
+                "replications": 3,
+                "std_dev": 0.002671787747309386
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.9405282342387732
+        }
+      ]
+    },
+    {
+      "name": "utilization(weld)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.0002051480839212784,
+                "level": 0.95,
+                "mean": 0.9984802832326505,
+                "replications": 3,
+                "std_dev": 0.00008258321708611332
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.9984802832326505
+        }
+      ]
+    },
+    {
+      "name": "wip()",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.08676188096899695,
+                "level": 0.95,
+                "mean": 6.701624779323518,
+                "replications": 3,
+                "std_dev": 0.0349263571655471
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 6.701624779323518
+        }
+      ]
+    },
+    {
+      "name": "wip(cut)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 3 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "name": "wip(buf1)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.08695039706743769,
+                "level": 0.95,
+                "mean": 4.703144496090868,
+                "replications": 3,
+                "std_dev": 0.035002245107487284
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 4.703144496090868
+        }
+      ]
+    },
+    {
+      "name": "wip(weld)",
+      "over": {
+        "from": "0s",
+        "to": "8h"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.0002051480839212784,
+                "level": 0.95,
+                "mean": 0.9984802832326505,
+                "replications": 3,
+                "std_dev": 0.00008258321708611332
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.9984802832326505
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "engine": "taktsim-core",
+    "engine_version": "<version>",
+    "model_hash": "8f66853706191250f21ebeff56b8ad316bf0175b0ff0a9e322b228291d4a1b21",
+    "package": "taktsim-components",
+    "package_version": "<version>",
+    "platform": "<platform>",
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "system_hash": "e0e22c0f8cdadababc8602c28cd565ce8961b32491a47f65c71692ff8c01300a"
+  },
+  "runs": [
+    {
+      "complete": true,
+      "end_time": "8h",
+      "events": 8982,
+      "records": 14117,
+      "run_id": "<run id>",
+      "seed": 1,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 496447,
+        "message_format": "taktsim-components/1",
+        "path": "runs/<run id>/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "e703e6793e7008b0c57644922a1c7d8e5ab364ab6b0ad5f5a52b87f340b4e932",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "8h",
+      "events": 8996,
+      "records": 14139,
+      "run_id": "<run id>",
+      "seed": 2,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 497220,
+        "message_format": "taktsim-components/1",
+        "path": "runs/<run id>/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "4d1859cbde1a66e9e54f190f469562a6fa296da6e1c96eb20c9ea34722fd931e",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "8h",
+      "events": 8996,
+      "records": 14139,
+      "run_id": "<run id>",
+      "seed": 3,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 497220,
+        "message_format": "taktsim-components/1",
+        "path": "runs/<run id>/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "7f8d8f31e0e2782d1cb86148c3595c991a3a81ddff4c2d2139965597fdd4a11b",
+        "trace_format": 3
+      }
+    }
+  ],
+  "stop_reason": "seeds_finished",
+  "unreported": []
+}
+--- stderr ---
+{"kind":"progress","message":"ran in the store <tmp>/.taktsim","reused":false,"store":"<tmp>/.taktsim","type":"run.store"}
+{"kind":"progress","message":"3 replications counted; complete","type":"run.ended"}

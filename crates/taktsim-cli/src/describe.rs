@@ -21,10 +21,20 @@ pub(crate) const fn value_type(value_name: &str) -> Option<ValueType> {
             allowed: "a duration such as `42s`, `12min`, `0.5h` or `8h`",
             example: "8h",
         }),
-        b"SEED" => Some(ValueType {
-            word: "seed",
-            allowed: "a whole number from 0 to 9007199254740991",
+        b"SEEDS" => Some(ValueType {
+            word: "seeds",
+            allowed: "a whole number from 0 to 9007199254740991, or a range such as `1..20`; repeat the flag for more",
             example: "42",
+        }),
+        b"RUNS" => Some(ValueType {
+            word: "integer",
+            allowed: "a whole number from 1 to 100000",
+            example: "100",
+        }),
+        b"SECONDS" => Some(ValueType {
+            word: "integer",
+            allowed: "a whole number of seconds from 1",
+            example: "600",
         }),
         b"COUNT" => Some(ValueType {
             word: "integer",
@@ -129,6 +139,7 @@ impl Record for CommandExit {
 struct Facts {
     writes: &'static str,
     long_running: bool,
+    budget: Option<Json>,
     needs_person: bool,
     input_schemas: &'static [(&'static str, &'static str)],
     result_schema: Json,
@@ -144,6 +155,65 @@ const WRITE_ERROR: &[&str] = &["io.stdout"];
 /// (`internal.catalog`).
 const INTERNAL: (u32, &[&str]) = (101, &["internal.*"]);
 
+/// The exit codes of `run`, with the error types of each.
+const RUN_EXITS: &[(u32, &[&str])] = &[
+    (0, &[]),
+    (
+        1,
+        &[
+            "args.*",
+            "model.*",
+            "run.no_seed",
+            "run.seed_out_of_range",
+            "run.duplicate_seed",
+            "run.no_budget",
+            "run.budget_too_small",
+            "run.budget_too_large",
+            "run.seed_list_with_precision",
+            "run.build",
+        ],
+    ),
+    (
+        2,
+        &[
+            "run.component_failed",
+            "run.invariant_violated",
+            "run.conservation_violated",
+            "run.item_not_received",
+            "run.engine",
+            "run.failed",
+            "run.metrics_differ",
+            "run.stalled",
+            "run.no_draw_claim_false",
+            "run.store_differs",
+            "run.stored_run_differs",
+            "run.trace_format",
+            "run.replay_differs",
+            "run.kpi_conservation",
+            "run.kpi_undeclared_state",
+            "run.kpi_no_end",
+            "run.windows_differ",
+            "internal.no_trace",
+            "internal.experiment_id",
+        ],
+    ),
+    (3, &[]),
+    (4, &[]),
+    (
+        7,
+        &[
+            "io.stdout",
+            "model.io",
+            "store.format",
+            "store.not_a_store",
+            "store.read",
+            "store.result",
+            "store.write",
+        ],
+    ),
+    INTERNAL,
+];
+
 /// The facts of a command. Exhaustive, so adding a command does not compile until
 /// it has them.
 fn facts(command: &Command) -> Facts {
@@ -151,6 +221,7 @@ fn facts(command: &Command) -> Facts {
         Command::Describe => Facts {
             writes: "nothing",
             long_running: false,
+            budget: None,
             needs_person: false,
             input_schemas: &[],
             result_schema: Json::object([
@@ -166,6 +237,7 @@ fn facts(command: &Command) -> Facts {
         Command::Schema { .. } => Facts {
             writes: "nothing",
             long_running: false,
+            budget: None,
             needs_person: false,
             input_schemas: &[],
             result_schema: Json::object([
@@ -178,6 +250,7 @@ fn facts(command: &Command) -> Facts {
         Command::Validate { .. } => Facts {
             writes: "nothing",
             long_running: false,
+            budget: None,
             needs_person: false,
             input_schemas: &[("<model>", "taktsim schema model")],
             result_schema: validation_schema(),
@@ -191,60 +264,34 @@ fn facts(command: &Command) -> Facts {
         },
         Command::Run(_) => Facts {
             writes: "a run in the run store",
-            long_running: false,
+            long_running: true,
+            budget: Some(run_budget()),
             needs_person: false,
             input_schemas: &[("<model>", "taktsim schema model")],
             result_schema: result_schema(),
-            exits: &[
-                (0, &[]),
-                (
-                    1,
-                    &[
-                        "args.*",
-                        "model.*",
-                        "run.no_seed",
-                        "run.seed_out_of_range",
-                        "run.build",
-                    ],
-                ),
-                (
-                    2,
-                    &[
-                        "run.component_failed",
-                        "run.invariant_violated",
-                        "run.conservation_violated",
-                        "run.item_not_received",
-                        "run.engine",
-                        "run.failed",
-                        "run.metrics_differ",
-                        "run.stalled",
-                        "run.no_draw_claim_false",
-                        "run.store_differs",
-                        "run.stored_run_differs",
-                        "run.trace_format",
-                        "run.replay_differs",
-                        "internal.no_trace",
-                        "internal.experiment_id",
-                    ],
-                ),
-                (3, &[]),
-                (
-                    7,
-                    &[
-                        "io.stdout",
-                        "model.io",
-                        "store.format",
-                        "store.not_a_store",
-                        "store.read",
-                        "store.result",
-                        "store.write",
-                    ],
-                ),
-                INTERNAL,
-            ],
+            exits: RUN_EXITS,
             example: "taktsim run line.yaml --seed 42 --horizon 8h --format json",
         },
     }
+}
+
+/// What `run` may spend, and when each flag is required (ADR-0025 §4).
+fn run_budget() -> Json {
+    Json::object([
+        (
+            "flags",
+            Json::Array(vec![Json::from("--max-runs"), Json::from("--max-seconds")]),
+        ),
+        (
+            "required",
+            Json::from(format!(
+                "both, with `experiment.precision`, and for a list of more than {} seeds; a shorter list is its own budget",
+                taktsim_run::MAX_SHORT_LIST
+            )),
+        ),
+        ("short_list", Json::from(taktsim_run::MAX_SHORT_LIST)),
+        ("max_seeds", Json::from(taktsim_run::MAX_SEEDS)),
+    ])
 }
 
 /// One value of each command, to take the facts of each. A command the parser has
@@ -260,10 +307,12 @@ pub(crate) fn every_command() -> Vec<Command> {
         },
         Command::Run(crate::args::RunArgs {
             model: std::path::PathBuf::new(),
-            seed: None,
+            seed: Vec::new(),
             horizon: None,
             store: None,
             max_events: None,
+            max_runs: None,
+            max_seconds: None,
             no_reuse: false,
         }),
     ]
@@ -395,6 +444,7 @@ struct CommandInfo {
     purpose: String,
     writes: String,
     long_running: bool,
+    budget: Option<AnyJson>,
     needs_person: bool,
     arguments: Vec<ArgumentInfo>,
     input_schemas: Vec<InputSchema>,
@@ -410,6 +460,7 @@ impl Encode for CommandInfo {
             .with("purpose", &self.purpose)
             .with("writes", &self.writes)
             .with("long_running", &self.long_running)
+            .with_optional("budget", self.budget.as_ref())
             .with("needs_person", &self.needs_person)
             .with("arguments", &self.arguments)
             .with("input_schemas", &self.input_schemas)
@@ -430,6 +481,7 @@ impl Record for CommandInfo {
         let purpose = fields.required("purpose");
         let writes = fields.required("writes");
         let long_running = fields.required("long_running");
+        let budget = fields.optional("budget");
         let needs_person = fields.required("needs_person");
         let arguments = fields.required("arguments");
         let input_schemas = fields.required("input_schemas");
@@ -441,6 +493,7 @@ impl Record for CommandInfo {
             purpose: purpose?,
             writes: writes?,
             long_running: long_running?,
+            budget: budget?,
             needs_person: needs_person?,
             arguments: arguments?,
             input_schemas: input_schemas?,
@@ -601,6 +654,7 @@ pub(crate) fn describe() -> Describe {
                     .map_or_else(String::new, ToString::to_string),
                 writes: facts.writes.to_owned(),
                 long_running: facts.long_running,
+                budget: facts.budget.map(AnyJson),
                 needs_person: facts.needs_person,
                 arguments: sub
                     .get_arguments()
@@ -699,14 +753,24 @@ mod tests {
         assert_eq!(read, describe());
     }
 
+    /// `run` is long-running from M8 on, and states its budget (ADR-0025 §9); nothing
+    /// needs a person.
     #[test]
-    fn no_command_of_m7_is_long_running_or_needs_a_person() {
+    fn only_run_is_long_running_and_nothing_needs_a_person() {
         for command in describe().commands {
-            assert!(
-                !command.long_running && !command.needs_person,
+            assert_eq!(
+                command.long_running,
+                command.name == "run",
                 "{}",
                 command.name
             );
+            assert_eq!(
+                command.budget.is_some(),
+                command.long_running,
+                "{}",
+                command.name
+            );
+            assert!(!command.needs_person, "{}", command.name);
             assert!(!command.purpose.is_empty(), "{}", command.name);
             assert!(command.example.starts_with("taktsim "), "{}", command.name);
         }

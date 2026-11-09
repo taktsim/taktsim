@@ -481,3 +481,4 @@ exit: 3
 }
 --- stderr ---
 {"kind":"progress","message":"ran in the store <tmp>/.taktsim","reused":false,"store":"<tmp>/.taktsim","type":"run.store"}
+{"kind":"progress","message":"1 replications counted; a replication reached --max-events","type":"run.ended"}

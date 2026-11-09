@@ -1,8 +1,10 @@
 //! The command line's arguments: the parser's types, which `describe` walks.
 
+use std::num::{NonZeroU32, NonZeroU64};
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use taktsim_run::SeedSpec;
 use taktsim_units::SimDuration;
 
 /// Simulate production systems from models in text files.
@@ -57,9 +59,11 @@ pub(crate) struct RunArgs {
     /// The model file, `.yaml`, `.yml` or `.json`.
     #[arg(value_name = "MODEL")]
     pub(crate) model: PathBuf,
-    /// The seed, over `model.seed`; a model that draws nothing has none.
-    #[arg(long, value_name = "SEED")]
-    pub(crate) seed: Option<u64>,
+    /// The seed, over `model.seed`; a model that draws nothing has none. Repeat it, or
+    /// give a range such as `1..20`, for an experiment over several seeds; with
+    /// `experiment.precision`, one seed is the first of a sequence.
+    #[arg(long, value_name = "SEEDS")]
+    pub(crate) seed: Vec<SeedSpec>,
     /// Another horizon: a new version of the model, with its own hash.
     #[arg(long, value_name = "DURATION")]
     pub(crate) horizon: Option<SimDuration>,
@@ -69,6 +73,15 @@ pub(crate) struct RunArgs {
     /// The most events to process; a run stopped by it is partial and exits 3.
     #[arg(long, value_name = "COUNT")]
     pub(crate) max_events: Option<u64>,
+    /// The most replications of an experiment; required with `experiment.precision`
+    /// and for more than 1000 seeds.
+    #[arg(long, value_name = "RUNS")]
+    pub(crate) max_runs: Option<NonZeroU32>,
+    /// The most wall-clock seconds of an experiment; required with
+    /// `experiment.precision` and for more than 1000 seeds. Only how many replications
+    /// count depends on it.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) max_seconds: Option<NonZeroU64>,
     /// Run even if the store has this run, and compare; it is never overwritten.
     #[arg(long)]
     pub(crate) no_reuse: bool,

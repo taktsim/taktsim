@@ -1,0 +1,11 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+error[run.duplicate_seed] --seed: the seed 1 is named twice
+  found: 1
+  allowed: each seed once
+  example: --seed 1 --seed 2
