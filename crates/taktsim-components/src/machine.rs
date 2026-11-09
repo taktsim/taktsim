@@ -615,6 +615,14 @@ impl MachineBehaviour {
 
     /// One note after an event, if anything changed.
     fn write_note(&mut self, ctx: &mut Context<'_, FlowMessage>) {
+        if let Some(note) = self.next_note() {
+            ctx.note(&FlowMessage::MachineState(note));
+        }
+    }
+
+    /// The note to write, if anything changed since the last one; remembers
+    /// it, and a change of state the table does not allow.
+    fn next_note(&mut self) -> Option<MachineStateNote> {
         let state = self.state();
         // At most 65,535 units (`capacity`).
         let running = u32::try_from(self.cycles.len()).unwrap_or(u32::MAX);
@@ -631,7 +639,7 @@ impl MachineBehaviour {
             },
         };
         if self.noted == Some(note) {
-            return;
+            return None;
         }
         if let Some(before) = self.noted
             && before.state != state
@@ -640,7 +648,7 @@ impl MachineBehaviour {
             self.bad_transition.get_or_insert((before.state, state));
         }
         self.noted = Some(note);
-        ctx.note(&FlowMessage::MachineState(note));
+        Some(note)
     }
 
     /// A failure: cancel each timer and keep what remains (ADR-0001, ADR-0018).
@@ -942,6 +950,34 @@ mod tests {
         assert_eq!(
             violated(&m),
             "unless down, a unit waits to start only behind a cycle or a changeover"
+        );
+    }
+
+    #[test]
+    fn a_change_of_state_the_table_does_not_allow_is_caught_from_the_notes() {
+        // Busy to blocked is in the table: no violation.
+        let mut m = machine(1);
+        running(&mut m, 0);
+        assert_eq!(m.next_note().map(|n| n.state), Some(MachineState::Busy));
+        let (item, (attrs, _, _)) = m.cycles.pop_first().unwrap();
+        m.finished.push_back((item, attrs));
+        assert_eq!(m.next_note().map(|n| n.state), Some(MachineState::Blocked));
+        assert_eq!(m.next_note(), None);
+        assert!(m.bad_transition.is_none());
+        // Busy straight to idle skips blocked: the note records it and the
+        // invariant reports the first such change.
+        let mut m = machine(1);
+        running(&mut m, 0);
+        m.next_note();
+        m.cycles.clear();
+        assert_eq!(m.next_note().map(|n| n.state), Some(MachineState::Idle));
+        assert_eq!(
+            m.bad_transition,
+            Some((MachineState::Busy, MachineState::Idle))
+        );
+        assert_eq!(
+            violated(&m),
+            "state changes follow the table of ADR-0022 §5"
         );
     }
 
