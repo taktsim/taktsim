@@ -1,0 +1,1243 @@
+---
+source: crates/taktsim-run/tests/reference_experiments.rs
+expression: masked(&document)
+---
+{
+  "complete": true,
+  "experiment_id": "exp-f0918c6393372f8eff0e555bc8d215e848bda2391a187d58006e70edf3550ed7",
+  "format": "taktsim-result/1",
+  "metrics": [
+    {
+      "name": "created(source)",
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 5.762924493226606,
+                "level": 0.95,
+                "mean": 297.8888888888888,
+                "replications": 36,
+                "std_dev": 17.03236881063779,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 297.8888888888888
+        }
+      ]
+    },
+    {
+      "name": "delivered(sink)",
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 6.005563864023941,
+                "level": 0.95,
+                "mean": 296.61111111111103,
+                "replications": 36,
+                "std_dev": 17.749491385514254,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 296.61111111111103
+        }
+      ]
+    },
+    {
+      "name": "items_alive",
+      "over": {
+        "at": "10min"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.6748202951740928,
+                "level": 0.95,
+                "mean": 1.2777777777777775,
+                "replications": 36,
+                "std_dev": 1.994436706886879,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 1.2777777777777775
+        }
+      ]
+    },
+    {
+      "name": "held(source)",
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 36 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "lead_time(sink)",
+      "observables": [
+        "lead_time(sink)"
+      ],
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "s",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.0991354127604535,
+                "level": 0.95,
+                "mean": 1.9870883845870264,
+                "replications": 36,
+                "std_dev": 0.2929954946165659,
+                "stopping": "sequential"
+              },
+              "kind": "sampling",
+              "reached": true,
+              "target": {
+                "relative": 0.05
+              }
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 1.2777777777777777
+            }
+          ],
+          "labels": {
+            "statistic": "mean"
+          },
+          "value": 1.9870883845870264
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.002316615330789866,
+                "level": 0.95,
+                "mean": 0.007034867777777778,
+                "replications": 36,
+                "std_dev": 0.006846774888820176,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 1.2777777777777777
+            }
+          ],
+          "labels": {
+            "statistic": "min"
+          },
+          "value": 0.007034867777777778
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.07517807495153045,
+                "level": 0.95,
+                "mean": 1.393619835,
+                "replications": 36,
+                "std_dev": 0.22218939369294421,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 1.2777777777777777
+            }
+          ],
+          "labels": {
+            "statistic": "p50"
+          },
+          "value": 1.393619835
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.26674719940414165,
+                "level": 0.95,
+                "mean": 4.6601882471944425,
+                "replications": 36,
+                "std_dev": 0.7883734525406407,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 1.2777777777777777
+            }
+          ],
+          "labels": {
+            "statistic": "p90"
+          },
+          "value": 4.6601882471944425
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.38921464666938643,
+                "level": 0.95,
+                "mean": 5.913854870333333,
+                "replications": 36,
+                "std_dev": 1.1503269592316685,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 1.2777777777777777
+            }
+          ],
+          "labels": {
+            "statistic": "p95"
+          },
+          "value": 5.913854870333333
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.7519582456836281,
+                "level": 0.95,
+                "mean": 8.688488682444445,
+                "replications": 36,
+                "std_dev": 2.2224185282554116,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 1.2777777777777777
+            }
+          ],
+          "labels": {
+            "statistic": "p99"
+          },
+          "value": 8.688488682444445
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.7719493886479959,
+                "level": 0.95,
+                "mean": 10.192446635277777,
+                "replications": 36,
+                "std_dev": 2.281502509021687,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            },
+            {
+              "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
+              "kind": "censored",
+              "units_inside": 1.2777777777777777
+            }
+          ],
+          "labels": {
+            "statistic": "max"
+          },
+          "value": 10.192446635277777
+        }
+      ]
+    },
+    {
+      "name": "state_shares(source)",
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "detail": "all 36 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "source",
+            "state": "waiting"
+          },
+          "value": 1
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 36 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "source",
+            "state": "blocked"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "state_shares(server)",
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.012970449781865128,
+                "level": 0.95,
+                "mean": 0.503483075067639,
+                "replications": 36,
+                "std_dev": 0.03833426667037482,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "labels": {
+            "resource": "server",
+            "state": "idle"
+          },
+          "value": 0.503483075067639
+        },
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.012970449781865125,
+                "level": 0.95,
+                "mean": 0.4965169249323611,
+                "replications": 36,
+                "std_dev": 0.03833426667037481,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "labels": {
+            "resource": "server",
+            "state": "busy"
+          },
+          "value": 0.4965169249323611
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 36 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "server",
+            "state": "blocked"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 36 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "server",
+            "state": "starved"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 36 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "server",
+            "state": "down"
+          },
+          "value": 0
+        },
+        {
+          "accuracy": [
+            {
+              "detail": "all 36 replications gave this value; an interval of width zero would not be certainty, since a rarer outcome may not have shown",
+              "kind": "none",
+              "reason": "no_variation_observed"
+            }
+          ],
+          "labels": {
+            "resource": "server",
+            "state": "setup"
+          },
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "throughput(sink)",
+      "observables": [
+        "throughput(sink)"
+      ],
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "items/s",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.010009273106706561,
+                "level": 0.95,
+                "mean": 0.4943518518518518,
+                "replications": 36,
+                "std_dev": 0.029582485642523738,
+                "stopping": "sequential"
+              },
+              "kind": "sampling",
+              "reached": true,
+              "target": {
+                "relative": 0.03
+              }
+            }
+          ],
+          "value": 0.4943518518518518
+        }
+      ]
+    },
+    {
+      "name": "utilization(server)",
+      "observables": [
+        "utilization(server)"
+      ],
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "share",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.012970449781865125,
+                "level": 0.95,
+                "mean": 0.4965169249323611,
+                "replications": 36,
+                "std_dev": 0.03833426667037481,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.4965169249323611
+        }
+      ]
+    },
+    {
+      "name": "wip()",
+      "observables": [
+        "wip()"
+      ],
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.06162561719418857,
+                "level": 0.95,
+                "mean": 0.9910799983820833,
+                "replications": 36,
+                "std_dev": 0.18213499785886028,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.9910799983820833
+        }
+      ]
+    },
+    {
+      "name": "wip(queue)",
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.05081277317562088,
+                "level": 0.95,
+                "mean": 0.4945630734497222,
+                "replications": 36,
+                "std_dev": 0.15017755204595676,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.4945630734497222
+        }
+      ]
+    },
+    {
+      "name": "wip(server)",
+      "over": {
+        "from": "0s",
+        "to": "10min"
+      },
+      "unit": "items",
+      "values": [
+        {
+          "accuracy": [
+            {
+              "interval": {
+                "half_width": 0.012970449781865125,
+                "level": 0.95,
+                "mean": 0.4965169249323611,
+                "replications": 36,
+                "std_dev": 0.03833426667037481,
+                "stopping": "sequential"
+              },
+              "kind": "sampling"
+            }
+          ],
+          "value": 0.4965169249323611
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "engine": "taktsim-core",
+    "engine_version": "0.0.0",
+    "model_hash": "99b41031a05b5c8ed67e4d8037d484aa2512d822ba908225e13c513efba6740f",
+    "package": "taktsim-components",
+    "package_version": "0.0.0",
+    "platform": "<platform>",
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36
+    ],
+    "system_hash": "26853a75b01e263e78cfff03111e26060278f28a72c19cb92beedf554f82ae7a"
+  },
+  "runs": [
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3158,
+      "records": 5170,
+      "run_id": "taktsim-core-56a4aab6d262c0911a1169379f2abbd1f69b28c0f4f6772354cdc89bb324d39b",
+      "seed": 1,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 176061,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-56a4aab6d262c0911a1169379f2abbd1f69b28c0f4f6772354cdc89bb324d39b/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "15d8d0595954b3f277a9bcc9bb47ce49dfef850cac7463a739281fe2a956efa4",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3333,
+      "records": 5457,
+      "run_id": "taktsim-core-b0003a4909f1e932db6b56c01e9972b2ae65bb37f4194a403b446bd97ab6e53e",
+      "seed": 2,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 185831,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-b0003a4909f1e932db6b56c01e9972b2ae65bb37f4194a403b446bd97ab6e53e/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "642fe33718473c287f11e2b13b35c334d89e26e79f9ff513397ffd5a9d14896c",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3234,
+      "records": 5295,
+      "run_id": "taktsim-core-40e0c7db77926889050e077bf5f3e27681707ea13328ff6a3dfb14ab17321853",
+      "seed": 3,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 180323,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-40e0c7db77926889050e077bf5f3e27681707ea13328ff6a3dfb14ab17321853/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "2ec28b46b857a9caa803d04a1b154bc5f19f2bab6906301152ae3c5322a9e14b",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 2927,
+      "records": 4792,
+      "run_id": "taktsim-core-97933e23cb0ad05f1fa7123025bb70ac3f334218156b3e7a0f62ac45d28f737b",
+      "seed": 4,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 163209,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-97933e23cb0ad05f1fa7123025bb70ac3f334218156b3e7a0f62ac45d28f737b/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "444a164b818fc43d2f4837cdbf7aca44e5b461d6df1c4384de576e1ecac9959c",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3305,
+      "records": 5411,
+      "run_id": "taktsim-core-d21a23d95eebd73c2c6d37a9cc76004eee40e54ead0ab7a418b39377b015a6b2",
+      "seed": 5,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 184242,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-d21a23d95eebd73c2c6d37a9cc76004eee40e54ead0ab7a418b39377b015a6b2/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "0ce4d94b96db0f54fae24bf1722b81a6453862262887ba8fe52fab7877ac85ed",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3135,
+      "records": 5133,
+      "run_id": "taktsim-core-8aea852d55b439a431ea4d2245a2a56497ce353d10c37fc0245ce907dfd487b5",
+      "seed": 6,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 174815,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-8aea852d55b439a431ea4d2245a2a56497ce353d10c37fc0245ce907dfd487b5/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "a5d5cf9468e8432067203937d259101c876e2e50ce12153a4889db53864979cc",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3353,
+      "records": 5490,
+      "run_id": "taktsim-core-10c85c9b17a9869481becc185aca236bd6e326b831e4c366383f3964254d0874",
+      "seed": 7,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 186915,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-10c85c9b17a9869481becc185aca236bd6e326b831e4c366383f3964254d0874/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "24f7b17b756492918a9eaf5eafc47aa9e81030eb129908af5209247def462d73",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3355,
+      "records": 5493,
+      "run_id": "taktsim-core-6c6d443056d3ce60c1c6f6a09505fca2c9a9ed5b6eb60a9ae9aa5082d140c3f2",
+      "seed": 8,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 187055,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-6c6d443056d3ce60c1c6f6a09505fca2c9a9ed5b6eb60a9ae9aa5082d140c3f2/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "d6772bc15fbb79ab94645b9e82a127634b443db5b17244224739f96bda00cfb9",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3047,
+      "records": 4989,
+      "run_id": "taktsim-core-459ba05913f3b046e623ca4b1c29f6806fcb1cda5944ae373c41b87db73a55b3",
+      "seed": 9,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 169919,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-459ba05913f3b046e623ca4b1c29f6806fcb1cda5944ae373c41b87db73a55b3/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "3cd786875692dc3dbc160aeb9dfc4b93987d37ad7f650884550884aaff0d74dd",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3256,
+      "records": 5331,
+      "run_id": "taktsim-core-0b11f4381f9a893e24b6ecabe5586da8f53c9cf7e9bc9c176b6ce3e3a590f12e",
+      "seed": 10,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 181547,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-0b11f4381f9a893e24b6ecabe5586da8f53c9cf7e9bc9c176b6ce3e3a590f12e/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "bc391fedfa1c0f3b7461943ee9edabee26e206222bdec4dc1a2de69d1902cb67",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3406,
+      "records": 5576,
+      "run_id": "taktsim-core-f282b959ef8c2239438fa1985552f05d48931c6d8caf6a50f57d42c21aa60f7c",
+      "seed": 11,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 189875,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-f282b959ef8c2239438fa1985552f05d48931c6d8caf6a50f57d42c21aa60f7c/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "e3458062ad74a77691bc6e73bd5072585a4aa338dba470a33afa8dbe6c82c4cb",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3388,
+      "records": 5547,
+      "run_id": "taktsim-core-74501380ac6686b1e3a6c81ebf706f476ef15e298ea261139599d5e1fb3b3f63",
+      "seed": 12,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 188891,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-74501380ac6686b1e3a6c81ebf706f476ef15e298ea261139599d5e1fb3b3f63/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "e411de38a4a8f264eadfc8a59abb4924fc1c411b46084e0d63aeb3f28f47a699",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3674,
+      "records": 6015,
+      "run_id": "taktsim-core-7bd0c3723a3c3710f98e2b7cef9a66ff523a21ab2fee3d158efd3bfb680ccc44",
+      "seed": 13,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 204832,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-7bd0c3723a3c3710f98e2b7cef9a66ff523a21ab2fee3d158efd3bfb680ccc44/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "1f295463d157ff8717fbb747ae33bb2b61a41df45820491f11a5b7c44d8ca4ac",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3384,
+      "records": 5540,
+      "run_id": "taktsim-core-28c5e354d35b11f2ac8b9414165cd39d77a72392d7c13b54b6df73fd909c3e80",
+      "seed": 14,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 188651,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-28c5e354d35b11f2ac8b9414165cd39d77a72392d7c13b54b6df73fd909c3e80/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "6b901758d42325d689c7737d0c076e64f451f94dce8e7726e92cc1933094682b",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3069,
+      "records": 5025,
+      "run_id": "taktsim-core-f32a6d1e82df22538d54853abcf2e28f4cffc388b7eec072868579a7484fdfc7",
+      "seed": 15,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 171143,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-f32a6d1e82df22538d54853abcf2e28f4cffc388b7eec072868579a7484fdfc7/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "e83b76cd36e9a2c09803298be100ab4cafff9cf075d55849846557ab9d594a73",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3707,
+      "records": 6069,
+      "run_id": "taktsim-core-1491c594d40dd187f6ff92e12ad00e94f5c84960c1540036f1ee411349097d54",
+      "seed": 16,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 206668,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-1491c594d40dd187f6ff92e12ad00e94f5c84960c1540036f1ee411349097d54/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "1dc4247b2a71aab7cd8874ed7431330680b618e7c6e43b6fda334333f69cd564",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3443,
+      "records": 5637,
+      "run_id": "taktsim-core-03cf49cb9c1d9e1fc859692b6549fd3ed52c0863d1aeb0d3c0d99e091c401980",
+      "seed": 17,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 191951,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-03cf49cb9c1d9e1fc859692b6549fd3ed52c0863d1aeb0d3c0d99e091c401980/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "55ee442329b07c0fae7d950a69d8f3d440907a844293249f3b26b7f7ed69e497",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3228,
+      "records": 5285,
+      "run_id": "taktsim-core-e42b3e05bce4f0e422a466451d0edd86be681558fe5fc391bc4e55e0d7ac9799",
+      "seed": 18,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 179958,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-e42b3e05bce4f0e422a466451d0edd86be681558fe5fc391bc4e55e0d7ac9799/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "6dbfce8e4206d270ffce145a4c17dc1cbcc0c393a56d3fd5fc22fcaf82c90d4a",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3056,
+      "records": 5004,
+      "run_id": "taktsim-core-927ef05d5e3c5fe57d212a3dfe0f261828f3bb04b1ef3849e446c3a4d2d48bab",
+      "seed": 19,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 170391,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-927ef05d5e3c5fe57d212a3dfe0f261828f3bb04b1ef3849e446c3a4d2d48bab/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "6c4a915a9b9c344373f4cb83c69912bcc0d5e2d68e58ac35f7fddd6a319c48c1",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3054,
+      "records": 5003,
+      "run_id": "taktsim-core-4edc6f39fb3e5aa132c4c25aaaa82a3eb1dc795a956e91de0beabae309a37876",
+      "seed": 20,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 170292,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-4edc6f39fb3e5aa132c4c25aaaa82a3eb1dc795a956e91de0beabae309a37876/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "727045fd33265c1bd565474f9b18cef0ebd687167afc6ec899d10b0317464690",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 2981,
+      "records": 4881,
+      "run_id": "taktsim-core-1f808425a7af6c1f1fc03d59f03d7cd8203239d8dfb119015d44a85a57dc53e9",
+      "seed": 21,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 166247,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-1f808425a7af6c1f1fc03d59f03d7cd8203239d8dfb119015d44a85a57dc53e9/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "389a0d9b05b6a7ee9b1ac9ef2d437f9d462951df1da7815566de5d39da161fde",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3201,
+      "records": 5241,
+      "run_id": "taktsim-core-6457f32be1c3dafab76550d3d90925766722cac5265a989bf5629a12be89ad14",
+      "seed": 22,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 178487,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-6457f32be1c3dafab76550d3d90925766722cac5265a989bf5629a12be89ad14/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "f2e39004a54a4df0b93af480930c833507abb3f2753c2b84562b09d7b4aaed40",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3086,
+      "records": 5054,
+      "run_id": "taktsim-core-1e6df0021b327390f8fb7f7e91b463f6c4aeb06787205307d6ac1382da42e381",
+      "seed": 23,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 172065,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-1e6df0021b327390f8fb7f7e91b463f6c4aeb06787205307d6ac1382da42e381/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "01f487d476215da63a140aac9e117b07a506e86785bb057c522f117285e2ba29",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3432,
+      "records": 5619,
+      "run_id": "taktsim-core-510371b96168396248fcbe1ddaa0d6991b68fd7efeb90315cf9bb9b8897612de",
+      "seed": 24,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 191339,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-510371b96168396248fcbe1ddaa0d6991b68fd7efeb90315cf9bb9b8897612de/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "0631229891ba08af96b9838da14c24d5eb02640c519eab38fd53a4107ce8a819",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3208,
+      "records": 5252,
+      "run_id": "taktsim-core-5a84b5758258a7ca6c8cff38d2410fef78e5d3a07dc99cfbdf34406512162f59",
+      "seed": 25,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 178859,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-5a84b5758258a7ca6c8cff38d2410fef78e5d3a07dc99cfbdf34406512162f59/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "c51af601507824ed39f661b6a01ebf1ed3d104d2a7d70d06ac15cb44cc5792d0",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3377,
+      "records": 5529,
+      "run_id": "taktsim-core-60f9ade48d7d6dea400b994515bea27da069e6afd6a2f09e169e6b7c9e860ef3",
+      "seed": 26,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 188279,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-60f9ade48d7d6dea400b994515bea27da069e6afd6a2f09e169e6b7c9e860ef3/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "0dd6b4c15884b54490dd29018c67237cc3c0a712362f1bbeab1c96708f06b285",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3037,
+      "records": 4972,
+      "run_id": "taktsim-core-4ea2d80a00f705c8b92bdc347c43443857d9c79e656f8ee2b3f5ae2fd13f8825",
+      "seed": 27,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 169329,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-4ea2d80a00f705c8b92bdc347c43443857d9c79e656f8ee2b3f5ae2fd13f8825/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "f9576df99090bbd7b0d8c4a06ca22a067f02595b9f95ebcb3408eb5effd8a1f0",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3311,
+      "records": 5421,
+      "run_id": "taktsim-core-ba8c801875f47d2a29e13dce3cef0b67d436e9c032e05578e34be315c5b6b9ef",
+      "seed": 28,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 184607,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-ba8c801875f47d2a29e13dce3cef0b67d436e9c032e05578e34be315c5b6b9ef/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "97ea084d05a51fe766c6858d6041aca0228be7be615c3cbf8c9e2b72afff79d3",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3450,
+      "records": 5648,
+      "run_id": "taktsim-core-0bc07a382125ca98bc2f4c53c9146f9da20cb5068dbbd0e8791f2c645d4555c8",
+      "seed": 29,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 192323,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-0bc07a382125ca98bc2f4c53c9146f9da20cb5068dbbd0e8791f2c645d4555c8/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "7f4a0792de85edf6862f91e4580006b66552b4fbd94fb029969e4ea823950948",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3373,
+      "records": 5522,
+      "run_id": "taktsim-core-8ca3f907fb29b498b398d06eafb9fd1fcdfcfb69baf3274824c45a25f99f80e5",
+      "seed": 30,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 188039,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-8ca3f907fb29b498b398d06eafb9fd1fcdfcfb69baf3274824c45a25f99f80e5/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "c4db1b2b157af2f127fd537fb9848db1f6822c2599532464ea3e3fe800d6c1d7",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3063,
+      "records": 5015,
+      "run_id": "taktsim-core-262f0cd200b912975a704d17ef9b4fbdd2ff3b3574b6e3b3049869ea065fa51c",
+      "seed": 31,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 170778,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-262f0cd200b912975a704d17ef9b4fbdd2ff3b3574b6e3b3049869ea065fa51c/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "00aab33e8dfd395bd089ed5e9180369a16fef2d51c17df68aa519138f22fea98",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3509,
+      "records": 5745,
+      "run_id": "taktsim-core-a2ea0379b801591a5ff4cd06c20d1d894ea4ef9f0bbc5df91a0667556990b380",
+      "seed": 32,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 195623,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-a2ea0379b801591a5ff4cd06c20d1d894ea4ef9f0bbc5df91a0667556990b380/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "138597f4f41f4c60d7b44c643091dbc87faeb3ac7eb4282005ee33f23aa9dd6d",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3289,
+      "records": 5385,
+      "run_id": "taktsim-core-cc40eb4142d86bd050717f7bb35b3599c01a6bf281a3a726521f70ea254f9185",
+      "seed": 33,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 183383,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-cc40eb4142d86bd050717f7bb35b3599c01a6bf281a3a726521f70ea254f9185/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "b52d557d025edc906e7f601f737177d3df2947829cc34e263eb8487456ffd3f7",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3377,
+      "records": 5529,
+      "run_id": "taktsim-core-34de9b022c28f528b9f490178135b3e4b7bde1f80f5c53b0f6fe3543bc68ac14",
+      "seed": 34,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 188279,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-34de9b022c28f528b9f490178135b3e4b7bde1f80f5c53b0f6fe3543bc68ac14/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "f6f04951ffd6277de38b70692e0257fec1f793c71b768e464f57fd208e1c084e",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 2999,
+      "records": 4910,
+      "run_id": "taktsim-core-cd3fd47043ef42844cc645a6de309453c68dbbc1be1dafc1960f26a977d34994",
+      "seed": 35,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 167231,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-cd3fd47043ef42844cc645a6de309453c68dbbc1be1dafc1960f26a977d34994/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "b2a8053b37107c0d7bd2ed32445dd968af8293ba60381b356c5aa381cf5f2e7d",
+        "trace_format": 3
+      }
+    },
+    {
+      "complete": true,
+      "end_time": "10min",
+      "events": 3499,
+      "records": 5728,
+      "run_id": "taktsim-core-d979d23e8f45084503d20b52508527b820fd924a79066b0c8f85a309598451c6",
+      "seed": 36,
+      "stop_reason": "horizon",
+      "trace": {
+        "bytes": 195033,
+        "message_format": "taktsim-components/1",
+        "path": "runs/taktsim-core-d979d23e8f45084503d20b52508527b820fd924a79066b0c8f85a309598451c6/trace.takt",
+        "record_format": "taktsim-core/2",
+        "stream_hash": "1890067cd6a34210e70b4a9e5c03c5dd80f6e529a4415568f3e9d77552e31fd2",
+        "trace_format": 3
+      }
+    }
+  ],
+  "stop_reason": "precision_reached",
+  "unreported": []
+}

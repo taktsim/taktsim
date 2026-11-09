@@ -1,0 +1,17 @@
+# Reference experiment (ADR-0025 §12): M/M/1 run until the throughput's 95 %
+# interval is within 3 % of its mean, from seed 1, at most 100 replications.
+# run: --max-runs 100 --max-seconds 3600
+format: "1.0"
+model: {name: mm1, seed: 1}
+experiment:
+  type: terminating
+  horizon: 600s
+  precision: {"throughput(sink)": 3%, "lead_time(sink)": 5%}
+observe: ["wip()", "utilization(server)"]
+components:
+  - {id: source, type: Source, interarrival: {dist: exponential, mean: 2s}}
+  - {id: queue, type: Buffer, capacity: 1000 parts}
+  - {id: server, type: Machine, cycle_time: {dist: exponential, mean: 1s}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, queue, server, sink]
