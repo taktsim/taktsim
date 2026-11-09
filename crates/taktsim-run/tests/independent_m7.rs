@@ -2423,6 +2423,89 @@ impl ComponentType<Lax> for Silent {
     }
 }
 
+/// A domain that draws for what no component states, like a split on an edge (ADR-0024 §5): its
+/// `draws_random` answers yes whatever the components say.
+struct Routed;
+
+impl Domain for Routed {
+    type Message = FlowMessage;
+    type Shared = ();
+    const PACKAGE: &'static str = "routed";
+    const PACKAGE_VERSION: &'static str = "1.0.0";
+
+    fn check(_: &Document, _: &Roles, _: &mut Findings) {}
+
+    fn prepare(_: &Document, _: &Roles) -> Result<(), BuildError> {
+        Ok(())
+    }
+
+    fn draws_random(_: &Document) -> bool {
+        true
+    }
+}
+
+impl ComponentType<Routed> for Quiet {
+    const PORTS: Ports = Ports::Both;
+
+    fn draws_random(&self) -> bool {
+        false
+    }
+
+    fn build(&self, _: &Wiring<'_, ()>) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
+        Ok(Box::new(QuietBehaviour))
+    }
+}
+
+/// The domain's half of the no-draw claim: a model whose components all draw nothing still draws when
+/// its domain does, so it needs a seed and is refused without one at `model.seed`, at load, never
+/// labelled exact.
+#[test]
+fn a_domain_that_draws_makes_a_model_of_constant_components_draw() {
+    let registry = Registry::<Routed>::new().with::<Quiet>().unwrap();
+    let text = |head: &str| {
+        format!(
+            "format: \"1.0\"\nmodel: {{name: m{head}}}\nexperiment: {{type: terminating, horizon: 1h}}\n\
+             components:\n  - {{id: a, type: Quiet}}\n  - {{id: b, type: Quiet}}\nflow: [[a, b]]\n"
+        )
+    };
+    let model = taktsim_model::Loader::new(registry.catalog())
+        .load_str(&text(""), Format::Yaml)
+        .unwrap();
+    assert!(registry.draws_random(model.document()));
+
+    let refused = registry.prepare(&model, taktsim_components::RunOptions::new().no_seed());
+    let Err(taktsim_components::RunFailure::DrawsRandom { path }) = refused else {
+        panic!("a domain that draws ran with no seed: {refused:?}");
+    };
+    assert_eq!(path.to_string(), "model.seed");
+    assert!(
+        registry
+            .prepare(&model, taktsim_components::RunOptions::new().seed(1))
+            .is_ok()
+    );
+
+    let (_, store) = fresh_store("domain_draws");
+    let failure = run(
+        &registry,
+        ModelSource::Text(&text(""), Format::Yaml),
+        &RunRequest::new(),
+        &store,
+    )
+    .unwrap_err();
+    assert_eq!(failure.class, FailureClass::Invalid);
+    assert_eq!(failure.diagnostics[0].type_name, "run.no_seed");
+    assert_eq!(failure.diagnostics[0].path.as_deref(), Some("model.seed"));
+    let seeded = run(
+        &registry,
+        ModelSource::Text(&text(", seed: 1"), Format::Yaml),
+        &RunRequest::new(),
+        &store,
+    )
+    .unwrap();
+    assert_eq!(seeded.result.provenance.seeds, [1]);
+    assert_eq!(seeded.result.provenance.package, "routed");
+}
+
 fn lax() -> Registry<Lax> {
     Registry::<Lax>::new()
         .with::<Hoard>()
