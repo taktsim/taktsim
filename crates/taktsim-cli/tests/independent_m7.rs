@@ -18,8 +18,17 @@ use taktsim_run::ResultDocument;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// A fresh directory for one test, below Cargo's temporary directory.
+/// A fresh directory for one test, below Cargo's temporary directory, with an empty store of its own.
+/// `run` without `--store` takes the nearest `.taktsim/` upward, and what sits above this directory is
+/// the machine's, not the test's: without its own store, a test would read and write that one.
 fn fresh(name: &str) -> PathBuf {
+    let dir = unsealed(name);
+    fs::create_dir_all(dir.join(".taktsim")).unwrap();
+    dir
+}
+
+/// As [`fresh`], with no store: for the tests of the upward lookup.
+fn unsealed(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("independent_m7_cli")
         .join(name);
@@ -28,6 +37,27 @@ fn fresh(name: &str) -> PathBuf {
     }
     fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+/// Whether the store of a [`fresh`] directory holds nothing: no command wrote to it.
+fn store_is_empty(dir: &Path) -> bool {
+    fs::read_dir(dir.join(".taktsim")).unwrap().next().is_none()
+}
+
+/// A test of what `run` does when no `.taktsim/` lies upward cannot control the directories above the
+/// temporary one. On a machine with a store there, it stops before writing into it, and says why.
+fn assert_no_store_above(dir: &Path) {
+    if let Some(store) = dir
+        .ancestors()
+        .map(|d| d.join(".taktsim"))
+        .find(|d| d.is_dir())
+    {
+        panic!(
+            "{} is a run store above the test's directory, so this test cannot see what happens \
+             without one; it wrote nothing there",
+            store.display()
+        );
+    }
 }
 
 #[derive(Debug)]
@@ -503,6 +533,7 @@ fn the_store_is_found_upward_and_stated() {
     let below = top.join("a").join("b");
     fs::create_dir_all(&below).unwrap();
     write(&below, "m.yaml", EXACT);
+    assert_no_store_above(&below);
 
     let out = taktsim(&below, &["run", "m.yaml", "--format", "json"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
@@ -573,7 +604,10 @@ fn processes_racing_on_one_store_all_succeed() {
             .map(|_| {
                 Command::new(env!("CARGO_BIN_EXE_taktsim"))
                     .current_dir(&dir)
-                    .args(["run", "m.yaml", "--seed", "42", "--format", "json"])
+                    // Named, as each round races on a new store of its own below `top`.
+                    .args([
+                        "run", "m.yaml", "--seed", "42", "--format", "json", "--store", ".taktsim",
+                    ])
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .spawn()
@@ -1207,7 +1241,7 @@ fn validate_of_a_valid_model() {
     assert_eq!(report["valid"], true);
     assert_eq!(report["errors"].as_array().unwrap().len(), 0);
     assert_matches_schema(&schema_of(&dir, "validation"), &report, "report");
-    assert!(!dir.join(".taktsim").exists(), "validate wrote a store");
+    assert!(store_is_empty(&dir), "validate wrote a store");
 
     let run = json(&taktsim(&dir, &["run", "m.yaml", "--format", "json"]).stdout);
     assert_eq!(report["model_hash"], run["provenance"]["model_hash"]);
@@ -2094,7 +2128,7 @@ fn a_flag_given_twice_is_refused() {
         assert_eq!(out.stdout, "", "{all:?}");
         assert!(out.stderr.contains(path), "{all:?}: {}", out.stderr);
     }
-    assert!(!dir.join(".taktsim").exists());
+    assert!(store_is_empty(&dir));
 }
 
 /// §8: `--no-reuse` "runs anyway" and prints the same bytes for an unchanged engine, in exit 0.
@@ -2335,11 +2369,13 @@ fn an_unknown_extension_gets_a_typed_answer() {
 /// exit 7 on both, without a panic (§8, §9).
 #[test]
 fn a_bad_store_found_by_discovery_is_exit_7() {
-    let top = fresh("discover_bad");
+    let top = unsealed("discover_bad");
     let file_case = top.join("file");
     fs::create_dir_all(&file_case).unwrap();
     write(&file_case, ".taktsim", "x");
     write(&file_case, "m.yaml", EXACT);
+    // A `.taktsim` that is a file is no store, so the lookup goes on upward.
+    assert_no_store_above(&file_case);
     let out = taktsim(&file_case, &["run", "m.yaml", "--format", "json"]);
     assert_eq!(out.code, 7, "{}", out.stderr);
     assert_eq!(out.stdout, "");

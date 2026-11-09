@@ -184,7 +184,7 @@ fn malformed_models_exit_1_with_a_path() {
         assert_eq!(run.stdout, "", "{name}");
         assert_eq!(run.lines(), lines, "{name}");
     }
-    assert!(!dir.path().join(".taktsim").exists());
+    assert!(dir.store_is_empty());
 }
 
 /// Each of these exits 1 with an empty stdout and one typed line at its path.
