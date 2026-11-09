@@ -1156,6 +1156,26 @@ fn a_failed_parse_answers_in_the_format_asked_for() {
     assert!(bad.stderr.contains("json") && bad.stderr.contains("text"));
 }
 
+/// `--version` stands alone (ADR-0024 §10, disagreement 15): beside `--format json`, before or after
+/// it, it is exit 1 with a typed error at `--version` and nothing on stdout.
+#[test]
+fn version_beside_the_format_flag_is_exit_1() {
+    let dir = fresh("version_format");
+    for args in [
+        &["--version", "--format", "json"][..],
+        &["--format", "json", "--version"],
+    ] {
+        let out = taktsim(&dir, args);
+        assert_eq!(out.code, 1, "{args:?}: {}", out.stderr);
+        assert_eq!(out.stdout, "", "{args:?}");
+        let errors = errors_of(&out.stderr);
+        assert_eq!(errors.len(), 1, "{args:?}: {}", out.stderr);
+        assert_eq!(errors[0]["type"], "args.unknown_argument");
+        assert_eq!(errors[0]["path"], "--version");
+        assert_eq!(errors[0]["example"], "taktsim --version");
+    }
+}
+
 /// `--help` and `--version` keep clap's rendering, exit 0 (ADR-0024 §10), for people. `run --help`
 /// names every flag of §10's table.
 #[test]
