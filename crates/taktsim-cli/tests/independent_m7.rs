@@ -22,42 +22,67 @@ use taktsim_run::ResultDocument;
 /// `run` without `--store` takes the nearest `.taktsim/` upward, and what sits above this directory is
 /// the machine's, not the test's: without its own store, a test would read and write that one.
 fn fresh(name: &str) -> PathBuf {
-    let dir = unsealed(name);
-    fs::create_dir_all(dir.join(".taktsim")).unwrap();
-    dir
-}
-
-/// As [`fresh`], with no store: for the tests of the upward lookup.
-fn unsealed(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("independent_m7_cli")
         .join(name);
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap();
     }
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(dir.join(".taktsim")).unwrap();
     dir
+}
+
+/// The nearest run store upward from `dir`.
+fn store_above(dir: &Path) -> Option<PathBuf> {
+    dir.ancestors()
+        .map(|d| d.join(".taktsim"))
+        .find(|d| d.is_dir())
+}
+
+/// A fresh directory with no store in it or above it, removed when dropped: for the tests of the
+/// upward lookup. The directories above a test's are the machine's, not the test's. `taktsim run` in
+/// the repository leaves a `.taktsim/` above Cargo's temporary directory, and on Windows one in the home
+/// directory sits above the system's. So this is below the first of the two with no store above it.
+struct Unsealed(PathBuf);
+
+impl Unsealed {
+    fn new(name: &str) -> Self {
+        let bases = [
+            PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
+            std::env::temp_dir(),
+        ];
+        let found: Vec<PathBuf> = bases.iter().filter_map(|base| store_above(base)).collect();
+        let Some(base) = bases.iter().find(|base| store_above(base).is_none()) else {
+            panic!(
+                "{found:?} are run stores above both temporary directories, so this test cannot see \
+                 what happens without one; it wrote nothing there"
+            );
+        };
+        let dir = base.join(format!(
+            "taktsim-independent-m7-{}-{name}",
+            std::process::id()
+        ));
+        if dir.exists() {
+            fs::remove_dir_all(&dir).unwrap();
+        }
+        fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Unsealed {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
 }
 
 /// Whether the store of a [`fresh`] directory holds nothing: no command wrote to it.
 fn store_is_empty(dir: &Path) -> bool {
     fs::read_dir(dir.join(".taktsim")).unwrap().next().is_none()
-}
-
-/// A test of what `run` does when no `.taktsim/` lies upward cannot control the directories above the
-/// temporary one. On a machine with a store there, it stops before writing into it, and says why.
-fn assert_no_store_above(dir: &Path) {
-    if let Some(store) = dir
-        .ancestors()
-        .map(|d| d.join(".taktsim"))
-        .find(|d| d.is_dir())
-    {
-        panic!(
-            "{} is a run store above the test's directory, so this test cannot see what happens \
-             without one; it wrote nothing there",
-            store.display()
-        );
-    }
 }
 
 #[derive(Debug)]
@@ -526,14 +551,12 @@ fn two_stores_two_places_one_set_of_bytes() {
 /// holds no absolute path, so stderr must say it).
 #[test]
 fn the_store_is_found_upward_and_stated() {
-    let top = std::env::temp_dir().join(format!("taktsim-independent-m7-{}", std::process::id()));
-    if top.exists() {
-        fs::remove_dir_all(&top).unwrap();
-    }
+    let scratch = Unsealed::new("found_upward");
+    let top = scratch.path();
     let below = top.join("a").join("b");
     fs::create_dir_all(&below).unwrap();
     write(&below, "m.yaml", EXACT);
-    assert_no_store_above(&below);
+    assert_eq!(store_above(&below), None);
 
     let out = taktsim(&below, &["run", "m.yaml", "--format", "json"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
@@ -565,7 +588,6 @@ fn the_store_is_found_upward_and_stated() {
     );
     assert_eq!(chosen.code, 0);
     assert!(below.join("mine").join("runs").is_dir());
-    fs::remove_dir_all(&top).unwrap();
 }
 
 /// "Opening one does not create it; the first write does." A store several directories deep is
@@ -2373,13 +2395,14 @@ fn an_unknown_extension_gets_a_typed_answer() {
 /// exit 7 on both, without a panic (§8, §9).
 #[test]
 fn a_bad_store_found_by_discovery_is_exit_7() {
-    let top = unsealed("discover_bad");
+    let scratch = Unsealed::new("discover_bad");
+    let top = scratch.path();
     let file_case = top.join("file");
     fs::create_dir_all(&file_case).unwrap();
     write(&file_case, ".taktsim", "x");
     write(&file_case, "m.yaml", EXACT);
     // A `.taktsim` that is a file is no store, so the lookup goes on upward.
-    assert_no_store_above(&file_case);
+    assert_eq!(store_above(&file_case), None);
     let out = taktsim(&file_case, &["run", "m.yaml", "--format", "json"]);
     assert_eq!(out.code, 7, "{}", out.stderr);
     assert_eq!(out.stdout, "");
