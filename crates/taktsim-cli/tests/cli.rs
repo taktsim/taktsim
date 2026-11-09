@@ -152,7 +152,7 @@ fn a_panic_is_exit_101_and_one_json_line_with_format_json() {
     };
     let json = panicking(&["describe", "--format", "json"]);
     assert_eq!(json.status.code(), Some(101));
-    assert!(json.stdout.is_empty());
+    assert_eq!(String::from_utf8(json.stdout).unwrap(), "");
     let stderr = String::from_utf8(json.stderr).unwrap();
     assert_eq!(stderr.lines().count(), 1, "{stderr}");
     let line = support::parse(&stderr);

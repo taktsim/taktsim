@@ -58,11 +58,11 @@ fn install_panic_hook(format: Format) {
 /// With the `test-panic` feature only: no input reaches a panic, so the test of the
 /// hook asks for one.
 #[cfg(feature = "test-panic")]
-#[allow(clippy::panic)] // The feature exists to reach the invariant-violation path from a test.
 fn panic_if_asked() {
-    if std::env::var_os("TAKTSIM_TEST_PANIC").is_some() {
-        panic!("a panic asked for by TAKTSIM_TEST_PANIC");
-    }
+    assert!(
+        std::env::var_os("TAKTSIM_TEST_PANIC").is_none(),
+        "a panic asked for by TAKTSIM_TEST_PANIC"
+    );
 }
 
 /// Writes to stderr. If stderr itself is gone there is nowhere to say so.
