@@ -330,7 +330,9 @@ over those fourteen, `complete: false`, `budget_exhausted`, each interval over n
 **A cut run in the document.** Partial runs enter no statistic and no list, or ADR-0024's "an
 experiment id exactly when every run has a `run_id`" would remove the id. The one exception
 is no finished replication at all: `runs` must hold at least one, so the document is the
-lowest seed's partial one, M7's shape, with no ids.
+lowest seed's partial one, M7's shape, with no ids. Its top `stop_reason` is the experiment's
+word from the table above, as the exit code is, while `runs[0].stop_reason` keeps the run's own:
+a replication cut by `--max-seconds` says `cancelled` there, under a top `budget_exhausted`.
 
 ## 6. A KPI that does not vary, in a model that draws
 
@@ -616,7 +618,9 @@ Before v0.1 ships each costs regenerated files; the cost below is after that.
 | A2 model, seeds, count, window | the v0.1 claim | never move; a new test beside it | `a2_fixed_n_coverage_on_mm1` |
 | `experiments/<id>/result.json` and what is kept | every store, M11 | a store migration | `kept_only_when_determined`, `interrupted_then_resumed_equals_uninterrupted` |
 | `Domain::read_message`, `ComponentType::STATES`, `CREATION`, `places`, `Registry::with_kpi`, `Kpi`, `MessageFact`, `Fact`, `PlaceSpec`, `KpiFold::new(places, start)`, `finish(end)` | every later package | every package | doc tests, `flow_reads_every_message`, `a_package_gets_only_the_kpis_it_registers`, `one_pass_needs_no_end` |
-| `RunRequest`, `Budget`, `Ended` | M12, every client | every client | doc tests |
+| `RunRequest`, `Budget`, `Ended`, `RunResponse.progress` (`Progress`, `Spent`) | M12, every client | every client | doc tests, `progress_states_the_count_and_the_budget` |
+| Progress lines `run.threads` and `run.ended`, and the error type `run.threads` (exit 2) | scripts reading stderr | a deprecation | CLI snapshots |
+| A reference experiment states its flags on a `# run:` line in `benchmarks/experiments/*.yaml` | later reference experiments | each file and the harness | `every_reference_experiment_gives_its_golden_result` |
 | `rayon` and `ctrlc` | bill of materials | removing is easy: both are behind one module | `cargo deny check` |
 
 ## Spec and code disagreements
