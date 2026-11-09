@@ -37,6 +37,7 @@
 
 mod diagnostic;
 mod ending;
+mod experiment;
 mod facts;
 mod id;
 mod metrics;
@@ -46,11 +47,12 @@ mod store;
 
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
 use taktsim_components::{Domain, Registry, RunFailure, RunOptions, RunReport};
-use taktsim_core::{ENGINE_NAME, ENGINE_VERSION};
+use taktsim_core::{ENGINE_NAME, ENGINE_VERSION, RunOutcome};
 use taktsim_model::{Document, Format, LoadErrors, Loader, Model};
 use taktsim_trace::{
     FORMAT_VERSION, RECORD_FORMAT, ReplayError, Summary, TraceHash, TraceMessage, TraceReader,
@@ -59,6 +61,7 @@ use taktsim_trace::{
 use taktsim_units::SimDuration;
 
 pub use diagnostic::{Diagnostic, DiagnosticKind, Failure, FailureClass};
+pub use experiment::{Budget, Ended};
 pub use id::{ExperimentId, ParseIdError, RunId, RunIdInputs};
 pub use result::{
     Accuracy, AccuracyKind, AccuracyPlan, AccuracyTarget, Metric, MetricValue, Over, Provenance,
@@ -66,11 +69,14 @@ pub use result::{
     Unreported, VALIDATION_FORMAT, ValidationReport, diagnostic_schema, result_schema,
     validation_schema,
 };
+pub use seeds::{MAX_SEEDS, MAX_SHORT_LIST, ParseSeedError, SeedSpec, expand_seeds};
 pub use store::Store;
 
 use crate::ending::Ending;
+use crate::experiment::SeedList;
 use crate::facts::Places;
 use crate::metrics::{Fold, FoldError};
+use crate::seeds::Mode;
 use crate::store::{Commit, MODEL_FILE, RESULT_FILE, TRACE_FILE, TempRun, io_failure};
 
 /// Where a model comes from.
@@ -110,8 +116,15 @@ impl ModelSource<'_> {
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct RunRequest<'a> {
-    /// The seeds; empty takes the model's (ADR-0024 §5, ADR-0025 §4).
+    /// The seeds; empty takes the model's (ADR-0024 §5, ADR-0025 §4). Two or more
+    /// are a list; with `experiment.precision`, one is the first of a sequence.
     pub seeds: &'a [u64],
+    /// What an experiment may spend.
+    pub budget: Budget,
+    /// The most replications at once.
+    pub threads: Option<NonZeroUsize>,
+    /// The memory replications at once may take, in MiB.
+    pub max_memory_mib: Option<NonZeroU64>,
     /// Another horizon: a new version of the model, with its own hash.
     pub horizon: Option<SimDuration>,
     /// The most events the run processes. A run stopped by it is partial.
@@ -133,6 +146,9 @@ impl RunRequest<'_> {
     pub const fn new() -> Self {
         Self {
             seeds: &[],
+            budget: Budget::none(),
+            threads: None,
+            max_memory_mib: None,
             horizon: None,
             max_events: None,
             reuse: true,
@@ -150,8 +166,14 @@ impl Default for RunRequest<'_> {
 /// What [`run`] returns.
 ///
 /// ```
-/// fn exit_code(response: &taktsim_run::RunResponse) -> u8 {
-///     if response.result.complete { 0 } else { 3 }
+/// use taktsim_run::{Ended, RunResponse};
+///
+/// fn exit_code(response: &RunResponse) -> u8 {
+///     match response.ended {
+///         Ended::Complete => 0,
+///         Ended::BudgetExhausted | Ended::EventLimit => 3,
+///         Ended::Cancelled => 4,
+///     }
 /// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]
@@ -162,6 +184,8 @@ pub struct RunResponse {
     pub reused: bool,
     /// What the caller should know, such as a seed that is not used.
     pub warnings: Vec<Diagnostic>,
+    /// How it ended; the exit code follows from this, never from `stop_reason`.
+    pub ended: Ended,
 }
 
 /// What [`replay_stored`] compared.
@@ -616,19 +640,64 @@ pub fn run<D: Domain>(
         None => model,
     };
     let document = model.document();
-    let seeding = seeds::effective(
-        registry.draws_random(document),
-        request.seeds.first().copied(),
-        document.model().seed(),
-    )?;
-    let id = run_id::<D>(&model, seeding.seed)?;
+    let mode = seeds::plan(registry.draws_random(document), request, document)?;
+    match mode {
+        Mode::One(seeding) => {
+            let one = run_one(registry, &model, seeding.seed, request, store)?;
+            let ended = match one.partial {
+                None | Some(RunOutcome::Horizon | RunOutcome::Idle) => Ended::Complete,
+                Some(RunOutcome::EventLimit) => Ended::EventLimit,
+                Some(RunOutcome::Cancelled) => Ended::Cancelled,
+            };
+            Ok(RunResponse {
+                result: one.result,
+                reused: one.reused,
+                warnings: seeding.warnings,
+                ended,
+            })
+        }
+        Mode::List { seeds } => {
+            experiment::run_experiment(registry, &model, SeedList::List(&seeds), request, store)
+        }
+        Mode::Sequence { first, max_runs } => experiment::run_experiment(
+            registry,
+            &model,
+            SeedList::Sequence {
+                first,
+                count: max_runs,
+            },
+            request,
+            store,
+        ),
+    }
+}
+
+/// One run's result, and how it ended.
+#[derive(Debug)]
+pub(crate) struct One {
+    pub(crate) result: ResultDocument,
+    pub(crate) reused: bool,
+    /// How a partial run stopped; `None` for one that reached its end.
+    pub(crate) partial: Option<RunOutcome>,
+}
+
+/// One run of `model` with `seed`, from the store or run and kept (ADR-0024 §3, §8).
+fn run_one<D: Domain>(
+    registry: &Registry<D>,
+    model: &Model,
+    seed: Option<u64>,
+    request: &RunRequest<'_>,
+    store: &Store,
+) -> Result<One, Failure> {
+    let document = model.document();
+    let id = run_id::<D>(model, seed)?;
     if request.reuse
         && let Some(result) = store.read_result(&id)?
     {
-        return Ok(RunResponse {
+        return Ok(One {
             result,
             reused: true,
-            warnings: seeding.warnings,
+            partial: None,
         });
     }
 
@@ -636,7 +705,7 @@ pub fn run<D: Domain>(
     let model_path = temp.file(MODEL_FILE);
     std::fs::write(&model_path, model.canonical_json())
         .map_err(|e| io_failure("store.write", &model_path, &e))?;
-    let (report, written) = write_trace(registry, &model, options(request, seeding.seed), &temp)?;
+    let (report, written) = write_trace(registry, model, options(request, seed), &temp)?;
     let trace_path = temp.file(TRACE_FILE);
     let places = Places::of(registry, document);
     let fold = fold_trace::<D>(&trace_path, &places)?;
@@ -665,7 +734,7 @@ pub fn run<D: Domain>(
     };
     let finished = |id| Finished {
         id,
-        seed: seeding.seed,
+        seed,
         stop_reason,
         complete,
         report: &report,
@@ -673,16 +742,16 @@ pub fn run<D: Domain>(
         fold: &fold,
     };
     if !complete {
-        return Ok(RunResponse {
-            result: result_document(registry, &model, &finished(None))?,
+        return Ok(One {
+            result: result_document(registry, model, &finished(None))?,
             reused: false,
-            warnings: seeding.warnings,
+            partial: Some(report.summary.outcome),
         });
     }
-    if seeding.seed.is_none() {
-        check_no_draw_claim(registry, &model, &trace_path, &fold)?;
+    if seed.is_none() {
+        check_no_draw_claim(registry, model, &trace_path, &fold)?;
     }
-    let result = result_document(registry, &model, &finished(Some(&id)))?;
+    let result = result_document(registry, model, &finished(Some(&id)))?;
     let result_path = temp.file(RESULT_FILE);
     std::fs::write(&result_path, result.to_text())
         .map_err(|e| io_failure("store.write", &result_path, &e))?;
@@ -690,10 +759,10 @@ pub fn run<D: Domain>(
         Commit::Stored => result,
         Commit::AlreadyThere => compare_with_stored(store, &id, &written)?,
     };
-    Ok(RunResponse {
+    Ok(One {
         result,
         reused: false,
-        warnings: seeding.warnings,
+        partial: None,
     })
 }
 

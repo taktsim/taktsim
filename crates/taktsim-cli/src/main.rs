@@ -209,6 +209,9 @@ fn run(args: &RunArgs, format: Format) -> u8 {
     let seeds: Vec<u64> = args.seed.iter().copied().collect();
     let request = RunRequest {
         seeds: &seeds,
+        budget: taktsim_run::Budget::none(),
+        threads: None,
+        max_memory_mib: None,
         horizon: args.horizon,
         max_events: args.max_events,
         reuse: !args.no_reuse,
@@ -238,7 +241,7 @@ fn run(args: &RunArgs, format: Format) -> u8 {
         Format::Text => render::result_text(&response.result),
     };
     match print(&text, format) {
-        0 => exit_for_result(response.result.complete),
+        0 => exit_for_result(response.ended),
         code => code,
     }
 }

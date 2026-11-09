@@ -6,7 +6,7 @@ use std::fmt::Write as _;
 
 use taktsim_model::Encode;
 use taktsim_run::{
-    Accuracy, AccuracyKind, Diagnostic, FailureClass, Metric, Over, ResultDocument, Scalar,
+    Accuracy, AccuracyKind, Diagnostic, Ended, FailureClass, Metric, Over, ResultDocument, Scalar,
     ValidationReport,
 };
 
@@ -21,9 +21,13 @@ pub(crate) const fn exit_for_failure(class: FailureClass) -> u8 {
     }
 }
 
-/// The exit code of a result that was printed: `complete` decides.
-pub(crate) const fn exit_for_result(complete: bool) -> u8 {
-    if complete { 0 } else { 3 }
+/// The exit code of a result that was printed: how it ended decides (ADR-0025 §5).
+pub(crate) const fn exit_for_result(ended: Ended) -> u8 {
+    match ended {
+        Ended::Complete => 0,
+        Ended::BudgetExhausted | Ended::EventLimit => 3,
+        Ended::Cancelled => 4,
+    }
 }
 
 /// A line of stderr in `format`.
@@ -198,8 +202,10 @@ mod tests {
         assert_eq!(exit_for_failure(FailureClass::Invalid), 1);
         assert_eq!(exit_for_failure(FailureClass::RunFailed), 2);
         assert_eq!(exit_for_failure(FailureClass::Io), 7);
-        assert_eq!(exit_for_result(true), 0);
-        assert_eq!(exit_for_result(false), 3);
+        assert_eq!(exit_for_result(Ended::Complete), 0);
+        assert_eq!(exit_for_result(Ended::BudgetExhausted), 3);
+        assert_eq!(exit_for_result(Ended::EventLimit), 3);
+        assert_eq!(exit_for_result(Ended::Cancelled), 4);
     }
 
     #[test]

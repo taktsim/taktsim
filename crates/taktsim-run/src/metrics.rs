@@ -503,6 +503,30 @@ impl KpiSpec {
             Kpi::Transit => labels.is_some_and(|l| l.get(STATISTIC).is_some_and(|s| s == MEAN)),
         }
     }
+
+    /// The labels of its rows that the model determines, in order. A `Deliveries`
+    /// metric also has class rows, which the runs determine.
+    pub(crate) fn fixed_rows(&self) -> Vec<Option<Labels>> {
+        match self.kpi {
+            Kpi::Deliveries | Kpi::Occupancy | Kpi::AwaitingRelease | Kpi::InProgress => {
+                vec![None]
+            }
+            Kpi::StateShares => self
+                .states
+                .iter()
+                .map(|name| {
+                    Some(Labels::from([
+                        ("resource".to_owned(), self.subject.clone()),
+                        ("state".to_owned(), (*name).to_owned()),
+                    ]))
+                })
+                .collect(),
+            Kpi::Transit => STATISTICS
+                .iter()
+                .map(|(word, _)| Some(single_label(STATISTIC, word)))
+                .collect(),
+        }
+    }
 }
 
 /// The tightest target on each metric: a half-width within it is within the others
