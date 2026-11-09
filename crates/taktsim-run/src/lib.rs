@@ -880,3 +880,45 @@ pub fn replay_stored<D: Domain>(
         stream_hash: replayed.hash,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use taktsim_components::Flow;
+
+    use super::*;
+
+    /// A check run that cannot read the trace is a file that failed (exit 7), not a
+    /// model that lies about drawing nothing (exit 2): only a damaged trace reaches
+    /// that arm, and no run writes one.
+    #[test]
+    fn a_trace_the_check_run_cannot_read_is_an_io_failure() {
+        let registry = taktsim_components::standard().unwrap();
+        let model = Loader::new(registry.catalog())
+            .load_str(
+                "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+                 components: [{id: source, type: Source}, {id: cut, type: Machine, cycle_time: 1min}, {id: sink, type: Sink}]\n\
+                 flow: [[source, cut, sink]]\n",
+                Format::Yaml,
+            )
+            .unwrap();
+        let (trace, _) = registry
+            .prepare(&model, RunOptions::new().no_seed())
+            .unwrap()
+            .run_traced(Vec::new())
+            .unwrap();
+        let dir =
+            std::env::temp_dir().join(format!("taktsim-run-check-run-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(TRACE_FILE);
+        std::fs::write(&path, &trace).unwrap();
+        let fold = fold_trace::<Flow>(&path).unwrap();
+        assert!(check_no_draw_claim(&registry, &model, &path, &fold).is_ok());
+
+        std::fs::write(&path, &trace[..trace.len() / 2]).unwrap();
+        let failure = check_no_draw_claim(&registry, &model, &path, &fold).unwrap_err();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(failure.class, FailureClass::Io);
+        assert_eq!(failure.diagnostics[0].type_name, "store.read");
+        assert_eq!(failure.diagnostics[0].path.as_deref(), Some("--store"));
+    }
+}
