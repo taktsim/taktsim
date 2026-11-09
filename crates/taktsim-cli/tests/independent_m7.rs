@@ -2219,10 +2219,15 @@ fn an_error_line_stays_one_line_whatever_the_model_says() {
 }
 
 /// A model path with spaces, quotes and non-ASCII letters is only a path: it runs, and an error names it.
+/// Windows allows no `"` in a file name (ADR-0010: tier 1), so there the quotes are single.
 #[test]
 fn file_names_are_only_names() {
     let dir = fresh("names");
-    let good = "my \"line\" é.yaml";
+    let good = if cfg!(windows) {
+        "my 'line' é.yaml"
+    } else {
+        "my \"line\" é.yaml"
+    };
     write(&dir, good, EXACT);
     let out = taktsim(&dir, &["run", good, "--store", "s t", "--format", "json"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
