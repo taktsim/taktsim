@@ -136,7 +136,10 @@ impl Run {
                     assert_eq!(*how, Disposal::Delivered);
                     Some(secs(*time))
                 }
-                Record::Event { .. } | Record::ItemCreated { .. } | Record::Note { .. } => None,
+                Record::Event { .. }
+                | Record::ItemCreated { .. }
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -147,7 +150,10 @@ impl Run {
             .iter()
             .filter_map(|record| match record {
                 Record::ItemCreated { time, .. } => Some(secs(*time)),
-                Record::Event { .. } | Record::ItemDisposed { .. } | Record::Note { .. } => None,
+                Record::Event { .. }
+                | Record::ItemDisposed { .. }
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -167,7 +173,8 @@ impl Run {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -192,7 +199,7 @@ impl Run {
     fn note_count(&self) -> usize {
         self.records
             .iter()
-            .filter(|r| matches!(r, Record::Note { .. }))
+            .filter(|r| matches!(r, Record::Note { .. } | Record::Decision { .. }))
             .count()
     }
 
@@ -209,7 +216,8 @@ impl Run {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -227,7 +235,8 @@ impl Run {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     }
@@ -433,6 +442,7 @@ impl Walk {
                     self.held_note.insert(by.index(), note.held);
                 }
             }
+            Record::Decision { .. } => {}
         }
     }
 
@@ -676,7 +686,10 @@ fn line_a_gives_page_1s_numbers() {
             Record::ItemDisposed { time, item, .. } => {
                 last_lead = secs(*time) - secs(released[item]);
             }
-            Record::Event { .. } | Record::ItemCreated { .. } | Record::Note { .. } => {}
+            Record::Event { .. }
+            | Record::ItemCreated { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => {}
         }
     }
     assert_eq!(last_lead, 990);
@@ -1815,7 +1828,8 @@ fn a_changeover_does_not_wait_for_finished_units() {
             Record::Event { .. }
             | Record::ItemCreated { .. }
             | Record::ItemDisposed { .. }
-            | Record::Note { .. } => None,
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
         .collect();
     assert_eq!(variants, [(110, 0), (210, 1), (310, 0)]);
@@ -1875,7 +1889,10 @@ fn each_discipline_picks_the_part_worked_out_by_hand() {
                     message: FlowMessage::Arrive(_),
                     ..
                 } if target.index() == m => taken.push(made[item]),
-                Record::Event { .. } | Record::ItemDisposed { .. } | Record::Note { .. } => {}
+                Record::Event { .. }
+                | Record::ItemDisposed { .. }
+                | Record::Note { .. }
+                | Record::Decision { .. } => {}
             }
         }
         assert_eq!(taken, expected, "{discipline}");
@@ -1920,7 +1937,8 @@ fn a_merge_serves_the_oldest_offer_first() {
             Record::Event { .. }
             | Record::ItemCreated { .. }
             | Record::ItemDisposed { .. }
-            | Record::Note { .. } => None,
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
         .collect();
     assert_eq!(order, [(10, "s1"), (110, "s2"), (210, "s1"), (310, "s2")]);
@@ -2207,7 +2225,7 @@ fn priorities_tags_and_sizes_are_the_adrs() {
     };
     assert_eq!(name.priority(), 8);
     assert_eq!(encode_message(&name).unwrap()[0], 11);
-    assert_eq!(FlowMessage::FORMAT, "taktsim-components/1");
+    assert_eq!(FlowMessage::FORMAT, "taktsim-components/2");
 }
 
 /// ADR-0022 §7: names sort, `default` is one of them when a Source declares none,
@@ -2282,7 +2300,10 @@ fn an_on_demand_source_makes_a_part_when_it_is_taken() {
                 message: FlowMessage::Arrive(_),
                 ..
             } if seen.insert(*item) => assert_eq!(*time, made[item]),
-            Record::Event { .. } | Record::ItemDisposed { .. } | Record::Note { .. } => {}
+            Record::Event { .. }
+            | Record::ItemDisposed { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => {}
         }
     }
     assert!(r.source_notes("source").iter().all(|(_, n)| n.held == 0));
@@ -2657,7 +2678,10 @@ fn stats(text: &str, seed: u64) -> Stats {
                     out.close(&names[by.index()], &before, nanos_f64(now - since));
                 }
             }
-            Record::Event { .. } | Record::ItemCreated { .. } | Record::Note { .. } => {}
+            Record::Event { .. }
+            | Record::ItemCreated { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => {}
         }
     }
     for (at, (since, note)) in &last {
@@ -3026,7 +3050,9 @@ fn trails(run: &Run) -> BTreeMap<String, Vec<(u64, String)>> {
             }
             Record::ItemCreated { by, .. } => (*by, "created".to_string()),
             Record::ItemDisposed { by, .. } => (*by, "disposed".to_string()),
-            Record::Note { by, message, .. } => (*by, format!("{message:?}")),
+            Record::Note { by, message, .. } | Record::Decision { by, message, .. } => {
+                (*by, format!("{message:?}"))
+            }
         };
         trails
             .entry(run.name(at).to_string())
@@ -3215,7 +3241,10 @@ fn delivery_nanos(r: &Run) -> Vec<u64> {
         .iter()
         .filter_map(|record| match record {
             Record::ItemDisposed { time, .. } => Some(time.as_nanos()),
-            Record::Event { .. } | Record::ItemCreated { .. } | Record::Note { .. } => None,
+            Record::Event { .. }
+            | Record::ItemCreated { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
         .collect()
 }
@@ -3225,7 +3254,10 @@ fn creation_nanos(r: &Run) -> Vec<u64> {
         .iter()
         .filter_map(|record| match record {
             Record::ItemCreated { time, .. } => Some(time.as_nanos()),
-            Record::Event { .. } | Record::ItemDisposed { .. } | Record::Note { .. } => None,
+            Record::Event { .. }
+            | Record::ItemDisposed { .. }
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
         .collect()
 }
@@ -3326,7 +3358,8 @@ fn two_components_with_the_same_parameters_draw_differently() {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect()
     };
@@ -4550,6 +4583,14 @@ impl<'a> ProtocolWalk<'a> {
             | FlowMessage::MachineState(_)
             | FlowMessage::SourceState(_)
             | FlowMessage::VariantName { .. } => {}
+            FlowMessage::Status(_)
+            | FlowMessage::OfferOf(_)
+            | FlowMessage::Return(_)
+            | FlowMessage::RouteDecision(_)
+            | FlowMessage::DispatchDecision(_)
+            | FlowMessage::EdgeCondition { .. } => {
+                panic!("at {time}: an M6 message in a model without routing words")
+            }
         }
     }
 
@@ -4563,7 +4604,7 @@ impl<'a> ProtocolWalk<'a> {
                 message: FlowMessage::MachineState(note),
                 ..
             } => self.down[by.index()] = note.state == MachineState::Down,
-            Record::Note { .. } => {}
+            Record::Note { .. } | Record::Decision { .. } => {}
         }
     }
 
@@ -4923,7 +4964,8 @@ fn two_on_demand_sources_take_turns() {
             Record::Event { .. }
             | Record::ItemCreated { .. }
             | Record::ItemDisposed { .. }
-            | Record::Note { .. } => None,
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
         .collect();
     assert_eq!(
@@ -4950,7 +4992,7 @@ fn a_trace_accounts_for_itself() {
     assert_eq!(summary.bytes, u64::try_from(r.bytes.len()).unwrap());
     assert_eq!(r.names, ["source", "cut", "buf1", "weld", "sink"]);
     let reader = TraceReader::<_, FlowMessage>::new(r.bytes.as_slice()).unwrap();
-    assert_eq!(reader.header().message_format, "taktsim-components/1");
+    assert_eq!(reader.header().message_format, "taktsim-components/2");
     assert_eq!(reader.header().seed, 1);
 }
 
@@ -4968,7 +5010,8 @@ fn event_nanos(r: &Run, name: &str, pick: fn(&FlowMessage) -> bool) -> Vec<u64> 
             Record::Event { .. }
             | Record::ItemCreated { .. }
             | Record::ItemDisposed { .. }
-            | Record::Note { .. } => None,
+            | Record::Note { .. }
+            | Record::Decision { .. } => None,
         })
         .collect()
 }
@@ -5048,7 +5091,8 @@ fn the_variant_stream_is_apart_from_the_interval() {
                 Record::Event { .. }
                 | Record::ItemCreated { .. }
                 | Record::ItemDisposed { .. }
-                | Record::Note { .. } => None,
+                | Record::Note { .. }
+                | Record::Decision { .. } => None,
             })
             .collect::<Vec<u16>>()
     };
