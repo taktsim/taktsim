@@ -1156,6 +1156,41 @@ fn a_failed_parse_answers_in_the_format_asked_for() {
     assert!(bad.stderr.contains("json") && bad.stderr.contains("text"));
 }
 
+/// A second word that is not a flag is at the argument it would be another of, not at the word
+/// (ADR-0024 §9: "`path` is a model path, or the flag or argument"); `found` keeps the word as typed,
+/// and `allowed` says how many of that argument the command takes.
+#[test]
+fn an_extra_positional_is_at_its_argument() {
+    let dir = fresh("extra_positional");
+    write(&dir, "m.yaml", EXACT);
+    for (args, path, allowed) in [
+        (
+            &["validate", "m.yaml", "Extra.YAML"][..],
+            "<model>",
+            "one <model>, --format",
+        ),
+        (
+            &["schema", "result", "Extra"],
+            "<type>",
+            "one <type>, --format",
+        ),
+        (&["describe", "Extra"], "<arguments>", "--format"),
+    ] {
+        let mut with_json = args.to_vec();
+        with_json.extend(["--format", "json"]);
+        let out = taktsim(&dir, &with_json);
+        assert_eq!(out.code, 1, "{args:?}: {}", out.stderr);
+        assert_eq!(out.stdout, "", "{args:?}");
+        let errors = errors_of(&out.stderr);
+        assert_eq!(errors.len(), 1, "{args:?}: {}", out.stderr);
+        assert_eq!(errors[0]["type"], "args.unknown_argument", "{args:?}");
+        assert_eq!(errors[0]["path"], path, "{args:?}");
+        assert_eq!(errors[0]["found"], *args.last().unwrap(), "{args:?}");
+        assert_eq!(errors[0]["allowed"], allowed, "{args:?}");
+    }
+    assert!(store_is_empty(&dir));
+}
+
 /// `--version` stands alone (ADR-0024 §10, disagreement 15): beside `--format json`, before or after
 /// it, it is exit 1 with a typed error at `--version` and nothing on stdout.
 #[test]

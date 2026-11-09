@@ -99,6 +99,49 @@ fn flags_of(command: &clap::Command) -> Vec<String> {
         .collect()
 }
 
+/// The positional arguments of a command, as paths: `<model>`.
+fn positionals_of(command: &clap::Command) -> Vec<String> {
+    command
+        .get_positionals()
+        .map(|arg| {
+            let name = arg
+                .get_value_names()
+                .and_then(<[clap::builder::Str]>::first)
+                .map_or_else(|| arg.get_id().to_string(), ToString::to_string);
+            path_of(&format!("<{name}>"))
+        })
+        .collect()
+}
+
+/// A word that is not a flag, after the command's positional arguments are all
+/// taken. The path is the argument it would be another of (ADR-0024 §9: "the flag
+/// or argument"), not the word itself, which is what was found.
+fn extra_positional(found: &str, command: &clap::Command, example: String) -> Diagnostic {
+    let name = command.get_name();
+    let positionals = positionals_of(command);
+    let (path, message) = match positionals.last() {
+        Some(last) => (
+            last.clone(),
+            format!("`{name}` takes one {last}, and `{found}` is another"),
+        ),
+        None => (
+            "<arguments>".to_owned(),
+            format!("`{name}` takes no argument, and `{found}` is one"),
+        ),
+    };
+    let allowed = positionals
+        .iter()
+        .map(|p| format!("one {p}"))
+        .chain(flags_of(command))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Diagnostic::error("args.unknown_argument", message)
+        .at(path)
+        .found(found)
+        .allowed(allowed)
+        .example(example)
+}
+
 /// `--horizon <DURATION>` as `--horizon`, `<MODEL>` as `<model>`.
 fn path_of(argument: &str) -> String {
     let word = argument.split_whitespace().next().unwrap_or(argument);
@@ -164,6 +207,9 @@ fn diagnostic(error: &clap::Error, args: &[OsString]) -> Diagnostic {
     }
     if kind == ErrorKind::UnknownArgument {
         let found = argument.unwrap_or("an unknown argument");
+        if let Some(command) = command.as_ref().filter(|_| !found.starts_with('-')) {
+            return extra_positional(found, command, example);
+        }
         let allowed = command.as_ref().map_or_else(
             || "--help, --version, --format".to_owned(),
             |c| flags_of(c).join(", "),
