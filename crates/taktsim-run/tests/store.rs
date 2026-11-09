@@ -695,3 +695,95 @@ fn replay_of_a_stored_model_that_does_not_load_is_an_io_failure() {
     std::fs::write(&path, &model).unwrap();
     assert!(replay_stored(&registry, &store, &id).is_ok());
 }
+
+/// A `store.json` that exists but cannot be read, here a directory, which is one on
+/// every target, is refused when the store is opened, before anything is written
+/// into it: only a missing one means a store not made yet.
+#[test]
+fn a_store_json_that_cannot_be_read_is_refused_on_opening() {
+    let dir = TempDir::new();
+    let root = dir.path().join("store");
+    let file = root.join("store.json");
+    std::fs::create_dir_all(&file).unwrap();
+    let failure = Store::open(&root).unwrap_err();
+    assert_eq!(failure.class, FailureClass::Io);
+    assert_eq!(failure.diagnostics[0].type_name, "store.read");
+    assert_eq!(
+        failure.diagnostics[0].file,
+        Some(file.display().to_string())
+    );
+    assert_eq!(listing(&root), set(&["store.json"]));
+}
+
+/// A stored `result.json` that exists but cannot be read, here a directory, is a
+/// store that failed (exit code 7), for replay and for a run with or without reuse:
+/// only a missing one means the run is not in the store.
+#[test]
+fn a_stored_result_that_cannot_be_opened_is_an_io_failure() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let store = dir.store();
+    let yaml = drawing_model(", seed: 1");
+    let response = run_text(&yaml, &RunRequest::new(), &store).unwrap();
+    let id = response.result.runs[0].run_id.clone().unwrap();
+    let file = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("result.json");
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    let no_reuse = RunRequest {
+        reuse: false,
+        ..RunRequest::new()
+    };
+    for (how, outcome) in [
+        ("replay", replay_stored(&registry, &store, &id).map(|_| ())),
+        (
+            "reuse",
+            run_text(&yaml, &RunRequest::new(), &store).map(|_| ()),
+        ),
+    ] {
+        let failure = outcome.expect_err(how);
+        assert_eq!(failure.class, FailureClass::Io, "{how}");
+        assert_eq!(failure.diagnostics[0].type_name, "store.read", "{how}");
+        assert_eq!(
+            failure.diagnostics[0].file,
+            Some(file.display().to_string()),
+            "{how}"
+        );
+    }
+    // Without reuse it runs, and cannot put the run in place: its directory is there
+    // without a result that reads, and a stored run is never overwritten.
+    let failure = run_text(&yaml, &no_reuse, &store).unwrap_err();
+    assert_eq!(failure.class, FailureClass::Io);
+    assert_eq!(failure.diagnostics[0].type_name, "store.write");
+    assert!(file.is_dir(), "nothing was written over it");
+}
+
+/// A `tmp/` that cannot be written is a store that failed (exit code 7), not a
+/// directory to retry in forever: only a directory that is there already is skipped.
+/// Where the mode binds; a privileged user writes through it, and the run goes
+/// through.
+#[cfg(unix)]
+#[test]
+fn a_tmp_that_cannot_be_written_is_an_io_failure() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new();
+    let store = dir.store();
+    run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    let tmp = store.root().join("tmp");
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let probe = tmp.join("probe");
+    let mode_binds = std::fs::create_dir(&probe).is_err();
+    let _ = std::fs::remove_dir(&probe);
+    let outcome = run_text(&drawing_model(", seed: 2"), &RunRequest::new(), &store);
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if mode_binds {
+        let failure = outcome.unwrap_err();
+        assert_eq!(failure.class, FailureClass::Io);
+        assert_eq!(failure.diagnostics[0].type_name, "store.write");
+    } else {
+        assert!(outcome.unwrap().result.complete);
+    }
+}
