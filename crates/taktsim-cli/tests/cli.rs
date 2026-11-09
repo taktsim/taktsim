@@ -133,6 +133,46 @@ fn a_stdout_that_cannot_be_written_is_exit_7_with_io_stdout() {
     }
 }
 
+/// The invariant-violation path through the real binary (ADR-0024 §9): exit 101, and
+/// with `--format json` one JSON line of type `internal.panic` on stderr and nothing
+/// else, not Rust's text. Needs the `test-panic` feature, which `--all-features` and CI
+/// turn on.
+#[cfg(feature = "test-panic")]
+#[test]
+fn a_panic_is_exit_101_and_one_json_line_with_format_json() {
+    let dir = Dir::new();
+    let panicking = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_taktsim"))
+            .args(args)
+            .current_dir(dir.path())
+            .env("TAKTSIM_TEST_PANIC", "1")
+            .env("RUST_BACKTRACE", "1")
+            .output()
+            .unwrap()
+    };
+    let json = panicking(&["describe", "--format", "json"]);
+    assert_eq!(json.status.code(), Some(101));
+    assert!(json.stdout.is_empty());
+    let stderr = String::from_utf8(json.stderr).unwrap();
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    let line = support::parse(&stderr);
+    assert_eq!(line["kind"], "error");
+    assert_eq!(line["type"], "internal.panic");
+    assert!(
+        line["message"]
+            .as_str()
+            .unwrap()
+            .contains("TAKTSIM_TEST_PANIC"),
+        "{stderr}"
+    );
+
+    let text = panicking(&["describe"]);
+    assert_eq!(text.status.code(), Some(101));
+    let stderr = String::from_utf8(text.stderr).unwrap();
+    assert!(stderr.contains("panicked"), "{stderr}");
+    assert!(!stderr.starts_with('{'), "{stderr}");
+}
+
 /// One snapshot of an invocation in a fresh directory with `line.yaml`.
 #[track_caller]
 fn snapshot(name: &str, args: &[&str]) {

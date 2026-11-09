@@ -19,6 +19,11 @@ doc = false
 [lints]
 workspace = true
 
+[features]
+# For the test of the panic hook only: with it, the binary panics when
+# TAKTSIM_TEST_PANIC is set, since no input reaches a panic. Never in a release.
+test-panic = []
+
 [dependencies]
 taktsim-units.workspace = true
 taktsim-model.workspace = true
