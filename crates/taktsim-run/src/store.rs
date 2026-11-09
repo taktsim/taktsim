@@ -107,7 +107,11 @@ impl Store {
     /// let top = std::env::temp_dir().join(format!("taktsim-doc-discover-{}", std::process::id()));
     /// let below = top.join("a").join("b");
     /// std::fs::create_dir_all(&below)?;
-    /// assert_eq!(Store::discover(&below)?.root(), below.join(".taktsim"));
+    /// // No store from `below` up to `top`. What lies above the temporary directory
+    /// // is the machine's, and may hold one; if none, the store is the one in `below`.
+    /// let above = top.ancestors().map(|d| d.join(".taktsim")).find(|d| d.is_dir());
+    /// let nearest = above.unwrap_or_else(|| below.join(".taktsim"));
+    /// assert_eq!(Store::discover(&below)?.root(), nearest);
     /// std::fs::create_dir_all(top.join(".taktsim"))?;
     /// assert_eq!(Store::discover(&below)?.root(), top.join(".taktsim"));
     /// std::fs::remove_dir_all(&top)?;
