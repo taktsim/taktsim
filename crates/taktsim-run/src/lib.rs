@@ -673,6 +673,19 @@ fn check_filed_under(result: &ResultDocument, id: &RunId) -> Result<(), Failure>
     if run.run_id.as_ref() != Some(id) {
         return Err(disagrees("it states another run id"));
     }
+    // A partial run is never stored (ADR-0024 §8).
+    if !result.complete || !run.complete {
+        return Err(disagrees("it says it is partial"));
+    }
+    let experiment = ExperimentId::over([id.clone()]).map_err(|e| {
+        Failure::one(
+            FailureClass::RunFailed,
+            Diagnostic::error("internal.experiment_id", e.to_string()),
+        )
+    })?;
+    if result.experiment_id.as_ref() != Some(&experiment) {
+        return Err(disagrees("it states another experiment id than its run's"));
+    }
     if provenance.seeds.as_slice() != run.seed.as_slice() {
         return Err(disagrees("its provenance states another seed than its run"));
     }
