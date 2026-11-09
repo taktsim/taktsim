@@ -143,6 +143,53 @@ fn the_readme_and_the_introduction_run() {
     }
 }
 
+/// The README says what `run` prints for its model today: counts from one seed, each
+/// without an error bound, and throughput and WIP later (ADR-0024 §4). Once `run`
+/// reports what the model observes, or gives a number an error bound, this fails
+/// until the README says so.
+#[test]
+fn the_readme_says_what_run_reports() {
+    let text = std::fs::read_to_string(repo(&["README.md"])).unwrap();
+    let (_, block) = &yaml_blocks(&text)[0];
+    let dir = Dir::new();
+    dir.write("readme.yaml", block);
+    let outcome = dir.taktsim(&["run", "readme.yaml", "--format", "json"]);
+    assert_eq!(outcome.code, 0, "{}", outcome.stderr);
+    let result = outcome.json();
+    // The prose as one line: a note's lines start with `>`.
+    let prose = text
+        .replace("\n>", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(!prose.contains("not built yet"), "`run` is built");
+    let unreported: Vec<&str> = result["unreported"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|u| u["observable"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        prose.contains("Throughput and WIP with confidence intervals come with replications"),
+        unreported == ["throughput(sink)", "wip(buf1)"],
+        "not reported: {unreported:?}"
+    );
+    let kinds: Vec<&str> = result["metrics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|m| m["values"].as_array().unwrap())
+        .flat_map(|v| v["accuracy"].as_array().unwrap())
+        .map(|a| a["kind"].as_str().unwrap())
+        .collect();
+    assert_ne!(kinds.len(), 0, "the model reports some number");
+    assert_eq!(
+        prose.contains("each marked as having no error bound"),
+        kinds.iter().all(|k| *k == "none"),
+        "accuracy: {kinds:?}"
+    );
+}
+
 #[test]
 fn malformed_models_exit_1_with_a_path() {
     let corpus = repo(&["crates", "taktsim-components", "tests", "data", "malformed"]);

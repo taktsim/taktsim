@@ -47,8 +47,11 @@ Use it to:
 ## What a model looks like
 
 > [!NOTE]
-> Planned for v0.1. The format is specified in [spec §4](docs/spec.md);
-> the loader and the `run` command are not built yet.
+> Part of v0.1, not released yet. The format is specified in [spec
+> §4](docs/spec.md). For now `run` reports counts from one seed: parts
+> created, parts delivered and parts still in the line, each marked as
+> having no error bound. Throughput and WIP with confidence intervals
+> come with replications (milestone M8 of the [roadmap](docs/roadmap.md)).
 
 The line above, as a model file:
 
@@ -87,7 +90,7 @@ Check it, then run it:
 
 ```sh
 taktsim validate line-a.yaml          # mistakes reported with the field and the fix
-taktsim run line-a.yaml               # throughput and WIP, each with a confidence interval
+taktsim run line-a.yaml               # counts from one seed; throughput and WIP with intervals in M8
 ```
 
 Python and Rust get the same two calls, `validate` and `run`.
@@ -106,9 +109,10 @@ approach.
   valid example, never halfway through a simulation.
 - **Same input, same answer.** The same model and seed give the same
   result, byte for byte, on Windows, Linux and macOS.
-- **Numbers come with error bars.** Every result has a confidence
-  interval, and the engine is tested against queueing problems whose
-  exact answers are known.
+- **Numbers come with error bars.** Results will carry confidence
+  intervals (planned for M8); until then a number from one seed says
+  that it has none. The engine is tested against queueing problems
+  whose exact answers are known.
 - **AI agents can use it too.** The `taktsim` command describes its own
   commands and results as JSON, so an agent can build, run and refine
   models the same way a person does.
@@ -194,7 +198,8 @@ against seven [design principles](docs/spec.md#2-design-principles).
 | [`taktsim-adapters`](crates/taktsim-adapters) | Data adapters, each behind a Cargo feature (`csv`) |
 | [`taktsim-trace`](crates/taktsim-trace) | Trace writer, reader and replay (M3, empty) |
 | [`taktsim-components`](crates/taktsim-components) | Source, Machine, Buffer, Sink (M5, empty) |
-| [`taktsim-cli`](crates/taktsim-cli) | The `taktsim` command (M7; `--version` and `--help` only) |
+| [`taktsim-run`](crates/taktsim-run) | Running a model into the run store, and the result document (M7) |
+| [`taktsim-cli`](crates/taktsim-cli) | The `taktsim` command: `validate`, `run`, `describe`, `schema` (M7) |
 | [`taktsim-bench`](crates/taktsim-bench) | Benchmarks for the regression gate |
 
 The Python bindings live in [`python/`](python) (M12). Supported
