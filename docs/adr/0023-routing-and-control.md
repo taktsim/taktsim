@@ -384,7 +384,11 @@ of the time there is nothing to choose and no record. That is what the model say
 
 - `due_in`: a duration or distribution from creation, zero allowed, on stream `due_in`.
   `ItemAttrs.due`, carried since M5, gets `creation + draw`. A due time past the end
-  of simulated time is a typed run failure.
+  of the clock, a draw too long for a duration or a creation plus draw that passes the
+  limit, is no due date: the unit sorts last under `earliest_due_date`, as one without a
+  date, and the run goes on. This is ADR-0022 §6's rule for every other draw, so whether
+  a run fails never depends on the seed (principle 2). The draw still takes its place in
+  the stream. A date exactly at the limit is still a date.
 - `due_in` needs `interarrival`. An on-demand part is created when accepted, so a rule
   would rank it by a date it does not yet have, and its later due date would differ from
   the one ranked. Counting from the offer instead would measure time spent blocked, not an
@@ -657,6 +661,7 @@ after v0.1 ships.
 | Queue, room and utilization definitions; a `Status`'s queue leaves out the receiver's own offer | results; what users compare with M8's utilization | every pool result | `queue_counts_what_it_says`, `work_per_place_matches_trace_utilization` |
 | Meaning of each dispatching rule, FIFO as oldest ready, no due date last, taker's rule over `discipline`; what `minimum_setup` measures against | every dispatched result | every dispatched result | `dispatching.rs` hand-built queues, `fifo_is_oldest_ready_across_two_buffers`, `no_due_date_sorts_last_then_fifo`, `taker_rule_replaces_discipline`, `minimum_setup_follows_the_last_committed_unit` |
 | `mean` is what the sampler draws, per distribution, truncated normal included | SPT and minimum setup ranks | a new rule name | `means_are_pinned_per_distribution`, `truncated_normal_mean_matches_its_draws` |
+| A due date past the end of the clock is no due date, never a run failure (§7, ADR-0022 §6) | every model with due dates; results of `earliest_due_date` with dates beyond 584 years | silently different results for those models; failing them instead breaks them | `a_due_date_past_the_end_of_time_is_no_due_date`, `a_due_date_drawn_past_the_end_of_time_is_no_due_date_and_keeps_its_draw`, `a_due_date_past_the_clock_sorts_with_no_due_date` |
 | `due_in` needs `interarrival` | every model with due dates | none: relaxing it breaks no model | `routing_malformed` corpus, `due_in_on_an_on_demand_source_is_rejected` |
 | `StationFacts`, `Domain::Facts`, `ComponentType::facts`, and which rule needs which fact | every later station and package | every package | `a_rule_on_a_type_without_the_facts_is_rejected`, `a_registered_stand_in_loads_and_builds` |
 | `Catalog::with_routing`, `Domain::ROUTING`: a catalog offers only the words it honours | later domains, their schemas | every later domain | `routing_words_need_a_catalog_that_offers_them`, `a_catalog_without_routing_does_not_offer_it` |
@@ -690,6 +695,7 @@ after v0.1 ships.
 | 15 | §13's table lists `takes_rule` as what a dispatching rule needs, but a station ranks what its upstreams describe, and a type that does not state `routes` sends a bare `Offer` | §13 here | a station with a rule also needs upstreams that state `routes`, an error at load naming type, fact and rule. Relaxing it later breaks no model | no |
 | 16 | §10's table lists `Status`, `OfferOf` and the two decisions as messages with their fields; in Rust they are boxed, and `FlowMessage` keeps its size, so a model without rules moves no larger message (`a_model_without_rules_moves_no_larger_message_than_it_did`). The bytes in a trace are as the table says | §10 here | keep; no reader sees it | no |
 | 17 | §6 has a Buffer rank by `follows` when `Accept` arrives, and `follows` is the newest reserved place. With two places free in one event, the first `Accept` lands after a `Status` already naming the second pick, so the Buffer gives a unit that ranks worse than what the station passed over | §6, §9 here | `minimum_setup` takes one place at a time, the next when this one's reply has landed at this instant. No other rule reads `follows`, and throughput does not change, since a reservation ends within its instant. The invariant on free places and waiting offers makes that one exception | no |
+| 18 | §7 made a due date past the end of the clock a typed run failure, while ADR-0022 §6 (question 19 there) makes every other draw past the clock mean never, so that whether a run fails does not depend on the seed. With a `due_in` distribution, §7 as written fails some runs by seed | §7 here, ADR-0022 §6 | such a date is no due date: it sorts last like a unit without one, and the run goes on (question 16) | no |
 
 ## Consequences
 
@@ -767,3 +773,7 @@ request merges.
 15. **A rule needs upstreams that describe (disagreement 15).** A station with a rule rejects a
     feeder whose type does not state `routes`, at load? *Recommended:* yes; relaxing later breaks
     nothing.
+16. **A due date past the end of the clock (§7, disagreement 18).** It is no due date, so it sorts
+    last under `earliest_due_date` and the run goes on, as ADR-0022 §6 does for every other draw?
+    The alternative fails the run, depending on the seed for a distribution. *Recommended:* yes.
+    Implementation proceeds on this.
