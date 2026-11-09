@@ -195,6 +195,61 @@ fn a_signal_cuts_running_replications() {
     assert_eq!((progress.counted, progress.planned), (0, 3));
 }
 
+/// The caller's flag set before the call: nothing runs to its end, however short the
+/// replications, and the lowest seed's partial document is returned, as one run's is
+/// (ADR-0025 §5, §9). Covers the check before each replication starts.
+#[test]
+fn a_signal_before_the_call_runs_nothing_to_its_end() {
+    let dir = TempDir::new();
+    let seeds = [1, 2, 3];
+    let cancel = AtomicBool::new(true);
+    let request = RunRequest {
+        seeds: &seeds,
+        threads: threads(3),
+        cancel: Some(&cancel),
+        ..RunRequest::new()
+    };
+    let response = run_text(&line(""), &request, &dir.store()).unwrap();
+    assert_eq!(response.ended, Ended::Cancelled);
+    assert_eq!(response.result.stop_reason, "cancelled");
+    assert!(!response.result.complete);
+    assert_eq!(response.result.experiment_id, None);
+    assert_eq!(response.result.runs.len(), 1);
+    assert_eq!(response.result.runs[0].seed, Some(1));
+    assert_eq!(response.result.runs[0].run_id, None);
+    assert_eq!(runs_in(&dir.store()), 0);
+    assert!(!dir.store().root().join("experiments").exists());
+    let progress = response.progress.unwrap();
+    assert_eq!((progress.counted, progress.planned), (0, 3));
+}
+
+/// Signalled before the call with the lowest seed's run in the store: that run counts,
+/// and nothing else starts.
+#[test]
+fn a_signal_before_the_call_counts_a_stored_lowest_seed() {
+    let dir = TempDir::new();
+    let first = run_text(&line(""), &RunRequest::new(), &dir.store()).unwrap();
+    assert_eq!(runs_in(&dir.store()), 1);
+    let seeds = [1, 2, 3];
+    let cancel = AtomicBool::new(true);
+    let request = RunRequest {
+        seeds: &seeds,
+        threads: threads(3),
+        cancel: Some(&cancel),
+        ..RunRequest::new()
+    };
+    let response = run_text(&line(""), &request, &dir.store()).unwrap();
+    assert_eq!(response.ended, Ended::Cancelled);
+    assert!(!response.result.complete);
+    assert_eq!(response.result.runs.len(), 1);
+    assert_eq!(response.result.runs[0].run_id, first.result.runs[0].run_id);
+    assert!(response.result.experiment_id.is_some());
+    assert_eq!(runs_in(&dir.store()), 1);
+    assert!(!dir.store().root().join("experiments").exists());
+    let progress = response.progress.unwrap();
+    assert_eq!((progress.counted, progress.planned), (1, 3));
+}
+
 /// What ran first, alone, sets how many run at once; every one from the store takes no
 /// thread.
 #[test]

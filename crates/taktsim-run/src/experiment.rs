@@ -803,6 +803,13 @@ struct Work<'r, D: Domain> {
 }
 
 impl<'r, D: Domain> Work<'r, D> {
+    /// Whether the caller's flag is set.
+    fn signalled(&self) -> bool {
+        self.request
+            .cancel
+            .is_some_and(|c| c.load(Ordering::Relaxed))
+    }
+
     /// Starts replications while the window allows, waits for one, polls the signal
     /// and the clock, until the sequencer has decided and nothing runs. At most
     /// `at_once` seeds run past the decision point, so waste is bounded.
@@ -822,8 +829,19 @@ impl<'r, D: Domain> Work<'r, D> {
         let mut at_once: Option<NonZeroUsize> = None;
         let mut next = 0_u32;
         let mut running = 0_usize;
+        // Once seen, the caller's flag stays seen, even if the caller clears it.
+        let mut cancelled = false;
         loop {
             while coordinator.sequencer.stop().is_none() && next < coordinator.limit {
+                cancelled |= self.signalled();
+                if cancelled && next > 0 {
+                    // Nothing more starts. What runs reports, cut, before the poll
+                    // below decides; with nothing running it decides now.
+                    if running == 0 {
+                        coordinator.sequencer.on_cancel();
+                    }
+                    break;
+                }
                 let window = at_once.map_or(1, NonZeroUsize::get);
                 let ahead = (next - coordinator.sequencer.committed()) as usize;
                 if ahead >= window || running >= window {
@@ -840,6 +858,14 @@ impl<'r, D: Domain> Work<'r, D> {
                         running += 1;
                         let sender = sender.clone();
                         let flag = coordinator.flags.get(index as usize);
+                        if cancelled {
+                            // Signalled before anything ran: the lowest seed starts cut,
+                            // so its partial document is what is left (ADR-0025 §5),
+                            // as one run's is.
+                            if let Some(flag) = flag {
+                                flag.store(true, Ordering::Relaxed);
+                            }
+                        }
                         let Work {
                             registry,
                             model,
@@ -885,11 +911,8 @@ impl<'r, D: Domain> Work<'r, D> {
                 }
             }
             if coordinator.sequencer.stop().is_none() {
-                if self
-                    .request
-                    .cancel
-                    .is_some_and(|c| c.load(Ordering::Relaxed))
-                {
+                cancelled |= self.signalled();
+                if cancelled {
                     coordinator.sequencer.on_cancel();
                 } else if deadline.is_some_and(|d| started.elapsed() >= d) {
                     coordinator.sequencer.on_deadline();

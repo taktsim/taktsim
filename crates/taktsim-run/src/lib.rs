@@ -137,7 +137,11 @@ pub struct RunRequest<'a> {
     /// Whether a stored run is returned without running. `false` runs anyway and
     /// compares with the stored run, never overwriting.
     pub reuse: bool,
-    /// Once set, the run stops and is partial.
+    /// Once set, the run stops and is partial. An experiment starts no further
+    /// replication, cuts the running ones within 100 ms and counts only the finished
+    /// ones (ADR-0025 §9). Set before the call, only the lowest seed starts, cut at
+    /// once, and its partial document is returned; if that seed's run is in the store,
+    /// it is the one run counted.
     pub cancel: Option<&'a AtomicBool>,
 }
 
