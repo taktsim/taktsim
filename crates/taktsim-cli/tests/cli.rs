@@ -94,10 +94,10 @@ fn invalid_invocations_exit_1_with_a_typed_error_and_an_empty_stdout() {
 }
 
 /// A pipe whose reader has already gone: every write to it fails, on every target.
-fn broken_pipe() -> Stdio {
-    let (reader, writer) = std::io::pipe().unwrap();
+fn broken_pipe() -> std::io::Result<Stdio> {
+    let (reader, writer) = std::io::pipe()?;
     drop(reader);
-    Stdio::from(writer)
+    Ok(Stdio::from(writer))
 }
 
 /// A stdout that cannot be written is exit 7 with an `io.stdout` line, on every path
@@ -119,7 +119,7 @@ fn a_stdout_that_cannot_be_written_is_exit_7_with_io_stdout() {
             .args(args)
             .current_dir(dir.path())
             .stdin(Stdio::null())
-            .stdout(broken_pipe())
+            .stdout(broken_pipe().unwrap())
             .output()
             .unwrap();
         let stderr = String::from_utf8(output.stderr).unwrap();
