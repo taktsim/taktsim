@@ -543,7 +543,9 @@ list in `allowed`.
 
 Every command has `--format text|json` as a global flag, default `text`, chosen only
 by the flag (ADR-0019 answer 2). `describe` and `schema` print JSON either way.
-`--version` and `--help` keep clap's rendering, exit 0.
+`--version` and `--help` keep clap's rendering, exit 0, also under `--format json`
+(disagreement 15); a stdout that cannot take it is exit 7 with `io.stdout`, as for any
+command.
 
 | Command | Flags in M7 |
 | --- | --- |
@@ -650,6 +652,8 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | 12 | §9 requires `example` for exit 1, but `LoadErrorKind::example` returns none for about twenty kinds (a syntax error, a duplicate, a self-loop), and has since ADR-0020 | §9, ADR-0020, `crates/taktsim-model/src/error.rs` | the error schema requires `example` for `args.*` only; a `model.*` error has one where the loader has one. Giving every kind an example is a later change that adds a key, so it breaks nothing |
 | 13 | A docs-only pull request skips the gates (`ci/changes.sh`), but `every_yaml_block_of_the_docs_validates`, like the older `docs_examples.rs`, reads `docs/` and `README.md`, so a broken example in a page fails only the next full run | `ci/changes.sh`, `crates/taktsim-cli/tests/examples.rs` | decide separately; narrowing what may skip is a gate change of its own |
 | 14 | §9 did not list a stdout that cannot be written, and had no namespace for it; `store.write` blamed a store on commands that touch none | §9 | `io.stdout`, still exit 7 |
+| 15 | With `--format json`, stdout carries exactly one JSON document of the command's result type and never free text; `--help --format json` and `run --help --format json` print clap's text, exit 0 | ADR-0019 item 2, spec §5, §10 here | either record it here as amending ADR-0019 item 2 for help (help is for people; an agent reads `describe`), or refuse `--help` beside `--format json` with exit 1 and a typed `args.*` error that names `taktsim describe`, as `--version` beside anything already is. *Recommended:* the refusal, which keeps ADR-0019 item 2 true without an amendment. Until the owner decides, the code keeps clap's text (question 15) |
+| 16 | CLAUDE.md: every error variant can produce a field path, what was found, what is allowed and one valid example. §9 drops only `example` for exit 2 and 7, but no exit-2 line carries `found` or `allowed` (`run.stored_run_differs`, `run.replay_differs`, `run.trace_format`, `run.engine`, `run.stalled`, `run.metrics_differ`, `run.no_draw_claim_false`), and several carry no `path` or `time` either; the error schema requires `found` and `allowed` for `args.*` and `model.*` only | CLAUDE.md "Rust rules", §9, `diagnostic_schema` | decide whether exit-2 lines need `found` and `allowed`. *Recommended:* yes where there are two values to compare (a stored and a computed hash, a trace's seed and the result's, a fold's sum and the engine's counter), as the check of a trace's header already does; no for a broken invariant, which states `time` and `recent`. Then §9 says so, CLAUDE.md's rule gets the exception, and the error schema requires what §9 requires (question 16) |
 
 ## Questions for the owner
 
@@ -684,3 +688,7 @@ merges.
     *Recommended:* yes. "Exact" is a strong word, and a declaration alone should not earn it.
 14. **The domain package in the run id (§6).** *Recommended:* yes. It costs two constants now and
     every store later.
+15. **`--help` with `--format json` (disagreement 15).** Refuse it with a typed error that names
+    `describe`, or amend ADR-0019 item 2 for help? *Recommended:* refuse.
+16. **`found` and `allowed` on exit-2 errors (disagreement 16).** *Recommended:* where two values
+    disagree, yes; for a broken invariant, `time` and `recent` instead.
