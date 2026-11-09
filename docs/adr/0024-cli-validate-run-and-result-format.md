@@ -67,6 +67,8 @@ pub fn run<D: Domain>(registry: &Registry<D>, source: ModelSource<'_>, request: 
                       store: &Store) -> Result<RunResponse, Failure>;
 pub fn replay_stored<D: Domain>(registry: &Registry<D>, store: &Store, run_id: &RunId)
                       -> Result<ReplaySummary, Failure>;
+pub fn schema_named(model: &Json, name: &str) -> Option<Json>;   // `taktsim schema` but `describe`
+pub fn schema_names(model: &Json) -> Vec<&str>;
 
 pub struct RunResponse { pub result: ResultDocument, pub text: String, pub reused: bool, pub warnings: Vec<Diagnostic> }
 pub struct Failure { pub class: FailureClass, pub diagnostics: Vec<Diagnostic> }

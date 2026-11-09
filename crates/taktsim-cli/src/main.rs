@@ -20,8 +20,7 @@ use clap::Parser;
 use taktsim_components::{Flow, Registry, standard, standard_schema};
 use taktsim_model::Json;
 use taktsim_run::{
-    Diagnostic, Failure, ModelSource, RunRequest, Store, diagnostic_schema, result_schema,
-    validation_schema,
+    Diagnostic, Failure, ModelSource, RunRequest, SCHEMA_NAMES, Store, schema_named, schema_names,
 };
 
 use crate::args::{Cli, Command, Format, RunArgs};
@@ -109,27 +108,9 @@ fn schema_text(schema: &Json) -> String {
     text
 }
 
-/// The entry of a component type: its part of `$defs.Component`, with the `$defs`
-/// its references need.
-fn component_schema(schema: &Json, name: &str) -> Option<Json> {
-    let entry = schema["$defs"]["Component"]["oneOf"]
-        .as_array()?
-        .iter()
-        .find(|entry| entry["properties"]["type"]["const"] == name)?;
-    Some(
-        entry
-            .clone()
-            .with("$schema", &"https://json-schema.org/draft/2020-12/schema")
-            .with("title", &name)
-            .with("$defs", &schema["$defs"]),
-    )
-}
-
+/// Prints the schema called `name`; `taktsim-run` picks every one but `describe`,
+/// which is this binary's own (ADR-0024 §10).
 fn schema(name: &str, format: Format) -> u8 {
-    let registry = match registry(format) {
-        Ok(registry) => registry,
-        Err(code) => return code,
-    };
     let model = match standard_schema() {
         Ok(model) => model,
         Err(error) => {
@@ -138,25 +119,20 @@ fn schema(name: &str, format: Format) -> u8 {
             return INTERNAL;
         }
     };
-    let schema = match name {
-        "all" | "model" => Some(model),
-        "result" => Some(result_schema()),
-        "validation" => Some(validation_schema()),
-        "error" => Some(diagnostic_schema()),
-        "describe" => Some(describe::describe_schema()),
-        other => component_schema(&model, other),
+    let schema = if name == "describe" {
+        Some(describe::describe_schema())
+    } else {
+        schema_named(&model, name)
     };
     if let Some(schema) = schema {
         return print(&schema_text(&schema), format);
     }
-    let types: Vec<&str> = ["all", "model", "result", "validation", "error", "describe"]
-        .into_iter()
-        .chain(registry.catalog().types())
-        .collect();
+    let mut names = schema_names(&model);
+    names.insert(SCHEMA_NAMES.len(), "describe");
     let line = Diagnostic::error("args.unknown_schema", format!("no schema of `{name}`"))
         .at("<type>")
         .found(name)
-        .allowed(types.join(", "))
+        .allowed(names.join(", "))
         .example("Machine");
     write_stderr(&render::line(&line, format));
     1
@@ -253,16 +229,6 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn a_component_schema_is_the_entry_of_that_type_with_its_defs() {
-        let model = standard_schema().unwrap();
-        let machine = component_schema(&model, "Machine").unwrap();
-        assert_eq!(machine["properties"]["type"]["const"], "Machine");
-        assert_eq!(machine["title"], "Machine");
-        assert!(machine["$defs"]["Distribution"].as_object().is_some());
-        assert_eq!(component_schema(&model, "Conveyor"), None);
-    }
-
     /// The line a panic writes: `internal.panic`, which `error` allows.
     #[test]
     fn a_panic_line_is_one_line_of_the_error_format() {
@@ -272,7 +238,7 @@ mod tests {
         );
         assert_eq!(line.lines().count(), 1);
         assert!(line.contains("\"type\":\"internal.panic\""), "{line}");
-        let schema = diagnostic_schema();
+        let schema = taktsim_run::diagnostic_schema();
         assert_eq!(schema["properties"]["type"]["type"], Json::from("string"));
         let _ = Diagnostic::error("internal.panic", "x").encode();
     }

@@ -40,6 +40,7 @@ mod ending;
 mod id;
 mod metrics;
 mod result;
+mod schemas;
 mod seeds;
 mod store;
 
@@ -65,6 +66,7 @@ pub use result::{
     ResultDocument, RunEntry, SamplingInterval, Scalar, TraceRef, Unreported, VALIDATION_FORMAT,
     ValidationReport, diagnostic_schema, result_schema, validation_schema,
 };
+pub use schemas::{SCHEMA_NAMES, schema_named, schema_names};
 pub use store::Store;
 
 use crate::ending::Ending;
