@@ -239,12 +239,14 @@ fn version_is_alone(args: &[OsString]) -> bool {
 /// Prints what the parser has to say, and returns the exit code.
 pub(crate) fn handle(error: &clap::Error, args: &[OsString], format: Format) -> u8 {
     let kind = error.kind();
+    // Help and version go to stdout like any result, so a stdout that cannot be
+    // written is the same `io.stdout` error (ADR-0024 §9).
     if kind == ErrorKind::DisplayHelp {
-        return u8::from(error.print().is_err()) * 7;
+        return crate::print(&error.render().to_string(), format);
     }
     if kind == ErrorKind::DisplayVersion {
         if version_is_alone(args) {
-            return u8::from(error.print().is_err()) * 7;
+            return crate::print(&error.render().to_string(), format);
         }
         let line = Diagnostic::error("args.unknown_argument", "`--version` stands alone")
             .at("--version")

@@ -59,8 +59,9 @@ pub(crate) fn write_stderr(text: &str) {
     let _ = std::io::stderr().write_all(text.as_bytes());
 }
 
-/// Writes to stdout: the exit code of a failure if it cannot be written.
-fn print(text: &str, format: Format) -> u8 {
+/// Writes to stdout: the exit code of a failure if it cannot be written, after an
+/// `io.stdout` line on stderr.
+pub(crate) fn print(text: &str, format: Format) -> u8 {
     let mut out = std::io::stdout().lock();
     match out.write_all(text.as_bytes()).and_then(|()| out.flush()) {
         Ok(()) => 0,
@@ -175,7 +176,11 @@ fn validate(model: &Path, format: Format) -> u8 {
     for line in &report.errors {
         write_stderr(&render::line(line, format));
     }
-    report.failure_class().map_or(printed, exit_for_failure)
+    // Exit 1 says the report is on stdout; if it is not, that comes first.
+    if printed != 0 {
+        return printed;
+    }
+    report.failure_class().map_or(0, exit_for_failure)
 }
 
 /// The store `--store` names, or the nearest one upward from here.
