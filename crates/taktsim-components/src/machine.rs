@@ -381,6 +381,7 @@ impl ComponentType<Flow> for Machine {
             outlet: Outlet::default(),
             waiting: VecDeque::new(),
             cycles: BTreeMap::new(),
+            started: 0,
             finished: VecDeque::new(),
             changeover: None,
             ready_for: None,
@@ -503,8 +504,10 @@ struct MachineBehaviour {
     /// Arrived and not started, in arrival order.
     waiting: VecDeque<(ItemId, ItemAttrs)>,
     /// Each unit in its cycle, found by id for its timer only: no order a part
-    /// sees follows from this id.
-    cycles: BTreeMap<ItemId, (ItemAttrs, Timer)>,
+    /// sees follows from this id. The number is when its cycle started.
+    cycles: BTreeMap<ItemId, (ItemAttrs, Timer, u64)>,
+    /// Cycles started so far, which numbers the next one.
+    started: u64,
     /// Finished, in the order they finished; they keep their places.
     finished: VecDeque<(ItemId, ItemAttrs)>,
     changeover: Option<Changeover>,
@@ -585,7 +588,8 @@ impl MachineBehaviour {
             };
             let after = clock::draw(&self.cycle_time, stream)?;
             let timer = Timer::start(after, FlowMessage::CycleDone { item }, ctx)?;
-            self.cycles.insert(item, (attrs, timer));
+            self.cycles.insert(item, (attrs, timer, self.started));
+            self.started += 1;
         }
         Ok(())
     }
@@ -640,7 +644,7 @@ impl MachineBehaviour {
     /// A failure: cancel each timer and keep what remains (ADR-0001, ADR-0018).
     fn fail(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         self.down = true;
-        for (_, timer) in self.cycles.values_mut() {
+        for (_, timer, _) in self.cycles.values_mut() {
             timer.pause(ctx)?;
         }
         if let Some(changeover) = &mut self.changeover {
@@ -652,11 +656,14 @@ impl MachineBehaviour {
         Ok(())
     }
 
-    /// A repair ended: everything resumes, in `ItemId` order, and the next up
-    /// time is drawn.
+    /// A repair ended: everything resumes, in the order the cycles started, so
+    /// units with equal remaining times finish in that order, as without a
+    /// failure; then the next up time is drawn.
     fn repaired(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         self.down = false;
-        for (item, (_, timer)) in &mut self.cycles {
+        let mut cycles: Vec<_> = self.cycles.iter_mut().collect();
+        cycles.sort_by_key(|(_, (_, _, started))| *started);
+        for (item, (_, timer, _)) in cycles {
             timer.resume(FlowMessage::CycleDone { item: *item }, ctx)?;
         }
         if let Some(changeover) = &mut self.changeover {
@@ -692,7 +699,7 @@ impl Component<FlowMessage> for MachineBehaviour {
             FlowMessage::Failure => self.fail(ctx)?,
             FlowMessage::Repaired => self.repaired(ctx)?,
             FlowMessage::CycleDone { item } => {
-                let Some((attrs, _)) = self.cycles.remove(item) else {
+                let Some((attrs, _, _)) = self.cycles.remove(item) else {
                     return Err(self.unexpected(d.message));
                 };
                 self.finished.push_back((*item, attrs));
@@ -829,6 +836,7 @@ mod tests {
             outlet: Outlet::default(),
             waiting: VecDeque::new(),
             cycles: BTreeMap::new(),
+            started: 0,
             finished: VecDeque::new(),
             changeover: None,
             ready_for: None,
@@ -858,7 +866,7 @@ mod tests {
         let timer = Timer::Paused {
             remaining: SimDuration::ZERO,
         };
-        m.cycles.insert(item, (attrs, timer));
+        m.cycles.insert(item, (attrs, timer, n));
     }
 
     fn violated(m: &MachineBehaviour) -> &'static str {

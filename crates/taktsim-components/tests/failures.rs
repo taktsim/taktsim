@@ -257,3 +257,41 @@ fn availability_holds_at_every_load() {
     let share = down_share(&yaml, "m");
     assert!((share - formula).abs() < 0.006, "blocked: {share}");
 }
+
+#[test]
+fn units_with_equal_remaining_times_finish_in_the_order_they_started() {
+    // The LIFO buffer starts item 3 before item 2 on `m` at 11 s. Both have
+    // 5 s cycles, so without a failure 3 leaves before 2 at 16 s. A failure at
+    // 13 s pauses both with 3 s remaining; after the repair at 15 s they end
+    // together at 18 s and must still leave 3 first: the order follows when
+    // the cycles started, never the part's id.
+    let line = |failures: &str| {
+        document(
+            "30s",
+            &format!(
+                "  - {{id: source, type: Source, interarrival: 1s, batch: 2 parts}}\n\
+                 \x20 - {{id: gate, type: Machine, cycle_time: 5s, capacity: 2 parts}}\n\
+                 \x20 - {{id: buf, type: Buffer, capacity: 2 parts, discipline: lifo}}\n\
+                 \x20 - {{id: m, type: Machine, cycle_time: 5s, capacity: 2 parts{failures}}}\n\
+                 \x20 - {{id: sink, type: Sink}}"
+            ),
+            "  - [source, gate, buf, m, sink]",
+        )
+    };
+    let order = |yaml: &str| -> Vec<(SimTime, u64)> {
+        run(yaml, 1)
+            .arrivals("sink")
+            .into_iter()
+            .map(|e| (e.time, e.item.unwrap().as_u64()))
+            .collect()
+    };
+    let plain = order(&line(""));
+    assert_eq!(&plain[2..4], [(t("16s"), 3), (t("16s"), 2)]);
+
+    let failing = line(", mtbf: 13s, mttr: 2s");
+    let r = run(&failing, 1);
+    assert_eq!(r.times("m", failure)[0], t("13s"));
+    assert_eq!(r.times("m", repaired)[0], t("15s"));
+    let failed = order(&failing);
+    assert_eq!(&failed[2..4], [(t("18s"), 3), (t("18s"), 2)]);
+}

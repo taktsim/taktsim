@@ -456,8 +456,10 @@ regular failures are meant, and M10 pins this case.
 
 **Mechanics.** At a failure the machine cancels each running cycle's timer and
 any setup timer (ADR-0001, ADR-0018) and keeps each remaining time. At repair
-it schedules them again in `ItemId` order and draws the next up time. The timers
-are found by `ItemId`, but no order a part sees follows from that id. A
+it schedules them again in the order their cycles started, so units with equal
+remaining times finish in that order, as they would without the failure; then it
+draws the next up time. The timers are found by `ItemId`, but no order a part
+sees follows from that id. A
 failure at the same instant as a cycle end comes first (ADR-0001), so that
 cycle resumes with zero remaining. All units of a machine stop together: one
 machine, one failure process.
