@@ -236,3 +236,101 @@ fn a_corpus_is_its_model_files_only() {
     std::fs::create_dir_all(dir.join("parts.yaml")).unwrap();
     assert_eq!(model_files(&dir), [dir.join("a.json"), dir.join("b.yaml")]);
 }
+
+#[test]
+fn a_loop_error_names_the_loop_itself() {
+    // Only the cycle, without the path that led to it, and starting where it
+    // starts, also when that is the first component of the search.
+    let errors = registry_loader_errors("flow-loop.yaml");
+    assert_eq!(
+        errors.first().kind().found().as_deref(),
+        Some("a loop: m -> back -> m")
+    );
+    let errors = try_load(&document(
+        "1h",
+        "  - {id: a, type: Machine, cycle_time: 1s}\n  \
+         - {id: source, type: Source, interarrival: 1min}\n  \
+         - {id: b, type: Machine, cycle_time: 1s}\n  - {id: sink, type: Sink}",
+        "  - [source, a]\n  - [a, b]\n  - {from: b, to: [a, sink]}",
+    ))
+    .unwrap_err();
+    assert_eq!(
+        errors.first().kind().found().as_deref(),
+        Some("a loop: a -> b -> a")
+    );
+}
+
+/// The errors of one corpus file.
+#[allow(clippy::unwrap_used)] // Test helper.
+fn registry_loader_errors(name: &str) -> LoadErrors {
+    let registry = registry();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("data")
+        .join("malformed")
+        .join(name);
+    Loader::new(registry.catalog())
+        .load_file(&path)
+        .unwrap_err()
+}
+
+#[test]
+fn a_matrix_may_hold_two_changes_that_share_one_end() {
+    // Only the same pair twice is refused: two changes from one variant, or to
+    // one variant, are two different changes.
+    for matrix in [
+        "[{from: a, to: b, time: 1s}, {from: a, to: c, time: 2s}]",
+        "[{from: a, to: c, time: 1s}, {from: b, to: c, time: 2s}]",
+    ] {
+        load(&document(
+            "1h",
+            &format!(
+                "  - {{id: source, type: Source, interarrival: 1min, variants: {{a: 50%, b: 25%, c: 25%}}}}\n  \
+                 - {{id: m, type: Machine, cycle_time: 1s, setup: {{matrix: {matrix}}}}}\n  \
+                 - {{id: sink, type: Sink}}"
+            ),
+            "  - [source, m, sink]",
+        ));
+    }
+}
+
+/// A Source declaring `n` variant names whose shares sum to exactly 100 %.
+#[allow(clippy::unwrap_used)] // Test helper.
+fn many_variants(n: usize) -> String {
+    use std::fmt::Write;
+
+    // 100 % / 65536 is exact in decimal; the last name takes the rest.
+    let share = 100.0 / 65536.0;
+    let mut names = String::new();
+    for i in 0..n - 1 {
+        write!(names, "v{i:05}: {share}%, ").unwrap();
+    }
+    let rest = 100.0 - share * f64::from(u32::try_from(n - 1).unwrap());
+    write!(names, "v{:05}: {rest}%", n - 1).unwrap();
+    document(
+        "1h",
+        &format!(
+            "  - {{id: source, type: Source, interarrival: 1min, variants: {{{names}}}}}\n  \
+             - {{id: sink, type: Sink}}"
+        ),
+        "  - [source, sink]",
+    )
+}
+
+#[test]
+fn a_model_holds_at_most_65535_variant_names() {
+    // The most a `VariantId` numbers loads and builds; one more is refused at
+    // load time, so a model that loads always builds.
+    let model = load(&many_variants(65_535));
+    registry()
+        .build(model.document(), taktsim_core::EngineConfig::new(1))
+        .unwrap();
+    let errors = try_load(&many_variants(65_536)).unwrap_err();
+    assert_eq!(errors.len(), 1, "{errors}");
+    let e = errors.first();
+    assert_eq!(e.path().to_string(), "components[0]");
+    assert_eq!(
+        e.kind().found().as_deref(),
+        Some("65536 variant names in the model")
+    );
+}
