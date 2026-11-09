@@ -5,4 +5,4 @@ expression: dir.masked(&outcome)
 exit: 1
 --- stdout ---
 --- stderr ---
-{"allowed":"--seed, --horizon, --store, --max-events, --max-runs, --max-seconds, --no-reuse, --format","example":"taktsim run line.yaml --seed 42","found":"--sed","kind":"error","message":"no argument `--sed`","path":"--sed","type":"args.unknown_argument"}
+{"allowed":"--seed, --horizon, --store, --max-events, --max-runs, --max-seconds, --threads, --max-memory-mib, --no-reuse, --format","example":"taktsim run line.yaml --seed 42","found":"--sed","kind":"error","message":"no argument `--sed`","path":"--sed","type":"args.unknown_argument"}

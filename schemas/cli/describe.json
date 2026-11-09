@@ -361,6 +361,24 @@
         },
         {
           "allowed": [],
+          "help": "The most replications at once; otherwise as many as the cores. Fewer run if `--max-memory-mib` holds fewer. No byte of a result depends on it",
+          "name": "--threads",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "integer"
+        },
+        {
+          "allowed": [],
+          "help": "The memory replications at once may take, in MiB; 2048 otherwise. The first replication that runs goes alone and gives the estimate per replication",
+          "name": "--max-memory-mib",
+          "positional": false,
+          "required": false,
+          "takes_value": true,
+          "type": "integer"
+        },
+        {
+          "allowed": [],
           "help": "Run even if the store has this run, and compare; it is never overwritten",
           "name": "--no-reuse",
           "positional": false,
@@ -432,6 +450,7 @@
             "run.kpi_undeclared_state",
             "run.kpi_no_end",
             "run.windows_differ",
+            "run.threads",
             "internal.no_trace",
             "internal.experiment_id"
           ]

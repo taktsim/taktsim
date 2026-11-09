@@ -59,4 +59,5 @@ metrics:
   wip() = 0 items (0s to 1h; same in all 10 replications, no interval)
 --- stderr ---
 progress[run.store]: ran in the store <tmp>/.taktsim
-progress[run.ended]: 10 replications counted; a budget (--max-runs or --max-seconds) ended it
+progress[run.threads]: 1 replications ran at once
+progress[run.ended]: 10 of 10 replications counted; --max-runs ended it before every target was reached

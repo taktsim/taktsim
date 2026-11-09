@@ -88,6 +88,8 @@ fn describe_carries_its_format_version_and_schema() {
         "--max-events",
         "--max-runs",
         "--max-seconds",
+        "--threads",
+        "--max-memory-mib",
         "--no-reuse",
         "--format",
     ] {
@@ -171,7 +173,7 @@ fn error_lines_match_their_schema() {
     dir.write("bad.yaml", "{a: 1}\n");
     std::fs::create_dir_all(dir.path().join("taken")).unwrap();
     dir.write("taken/store.json", "{\"store_format\": 99}");
-    let cases: [&[&str]; 17] = [
+    let cases: [&[&str]; 19] = [
         &["--format", "json"],
         &["nope", "--format", "json"],
         &["run", "--format", "json"],
@@ -198,6 +200,15 @@ fn error_lines_match_their_schema() {
         &["run", "line.yaml", "--horizon", "0s", "--format", "json"],
         &["run", "line.yaml", "--seed", "1..2000", "--format", "json"],
         &["run", "line.yaml", "--seed", "1..3", "--format", "json"],
+        &["run", "line.yaml", "--threads", "0", "--format", "json"],
+        &[
+            "run",
+            "line.yaml",
+            "--max-memory-mib",
+            "x",
+            "--format",
+            "json",
+        ],
         &["run", "line.yaml", "--format", "json"],
         &["run", "unseeded.yaml", "--format", "json"],
         &["run", "exact.yaml", "--seed", "1", "--format", "json"],
@@ -401,6 +412,54 @@ fn a_stdout_that_cannot_be_written_exits_7() {
             .unwrap();
         assert_eq!(output.status.code(), Some(7), "{args:?}");
     }
+}
+
+/// `--threads` and `--max-memory-mib` change how fast, never a byte of stdout; zero or
+/// a word is an argument error, and one run warns that they are unused.
+#[test]
+fn parallel_flags_change_no_byte() {
+    let list = ["run", "line.yaml", "--seed", "1..4", "--format", "json"];
+    let one = Dir::new().with_line();
+    let serial = one.taktsim(&[&list[..], &["--threads", "1"]].concat());
+    assert_eq!(serial.code, 0, "{}", serial.stderr);
+    let many = Dir::new().with_line();
+    let parallel =
+        many.taktsim(&[&list[..], &["--threads", "4", "--max-memory-mib", "4096"]].concat());
+    assert_eq!(parallel.code, 0, "{}", parallel.stderr);
+    // One machine, so even `provenance.platform` is the same.
+    assert_eq!(serial.stdout, parallel.stdout);
+    assert!(serial.stderr.contains("run.threads"), "{}", serial.stderr);
+
+    let dir = Dir::new().with_line();
+    for args in [
+        &["run", "line.yaml", "--threads", "0", "--format", "json"][..],
+        &[
+            "run",
+            "line.yaml",
+            "--max-memory-mib",
+            "0",
+            "--format",
+            "json",
+        ][..],
+        &["run", "line.yaml", "--threads", "many", "--format", "json"][..],
+    ] {
+        let outcome = dir.taktsim(args);
+        assert_eq!(outcome.code, 1, "{args:?}");
+        assert_eq!(outcome.stdout, "");
+        let line = &outcome.lines()[0];
+        assert!(
+            line["type"].as_str().unwrap().starts_with("args."),
+            "{line}"
+        );
+        assert_eq!(line["path"], args[2], "{line}");
+    }
+    let unused = dir.taktsim(&["run", "line.yaml", "--threads", "2", "--format", "json"]);
+    assert_eq!(unused.code, 0, "{}", unused.stderr);
+    let warned = unused
+        .lines()
+        .into_iter()
+        .any(|line| line["type"] == "run.flag_unused" && line["path"] == "--threads");
+    assert!(warned, "{}", unused.stderr);
 }
 
 #[test]

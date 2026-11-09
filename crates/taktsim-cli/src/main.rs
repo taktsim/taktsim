@@ -223,8 +223,8 @@ fn run(args: &RunArgs, format: Format) -> u8 {
     let request = RunRequest {
         seeds: &seeds,
         budget,
-        threads: None,
-        max_memory_mib: None,
+        threads: args.threads,
+        max_memory_mib: args.max_memory_mib,
         horizon: args.horizon,
         max_events: args.max_events,
         reuse: !args.no_reuse,
@@ -249,13 +249,18 @@ fn run(args: &RunArgs, format: Format) -> u8 {
     progress.store = Some(store.root().display().to_string());
     progress.reused = Some(response.reused);
     write_stderr(&render::line(&progress, format));
-    if response.result.runs.len() > 1 || response.ended != Ended::Complete {
+    if let Some(at_once) = response.progress.and_then(|p| p.at_once) {
+        let threads =
+            Diagnostic::progress("run.threads", format!("{at_once} replications ran at once"));
+        write_stderr(&render::line(&threads, format));
+    }
+    if response.progress.is_some() || response.ended != Ended::Complete {
         let ended = Diagnostic::progress(
             "run.ended",
-            format!(
-                "{} replications counted; {}",
+            render::ended_line(
                 response.result.runs.len(),
-                render::ended_text(response.ended)
+                response.ended,
+                response.progress,
             ),
         );
         write_stderr(&render::line(&ended, format));

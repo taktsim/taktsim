@@ -733,4 +733,5 @@ exit: 0
 }
 --- stderr ---
 {"kind":"progress","message":"ran in the store <tmp>/.taktsim","reused":false,"store":"<tmp>/.taktsim","type":"run.store"}
-{"kind":"progress","message":"3 replications counted; complete","type":"run.ended"}
+{"kind":"progress","message":"1 replications ran at once","type":"run.threads"}
+{"kind":"progress","message":"3 of 3 replications counted; complete","type":"run.ended"}

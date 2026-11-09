@@ -55,4 +55,5 @@ metrics:
   wip(weld) = 0.9984802832326505 items (0s to 8h; ± 0.0002051480839212784 (0.95 level, 3 replications))
 --- stderr ---
 progress[run.store]: ran in the store <tmp>/.taktsim
-progress[run.ended]: 3 replications counted; complete
+progress[run.threads]: 1 replications ran at once
+progress[run.ended]: 3 of 3 replications counted; complete

@@ -36,6 +36,16 @@ pub(crate) const fn value_type(value_name: &str) -> Option<ValueType> {
             allowed: "a whole number of seconds from 1",
             example: "600",
         }),
+        b"THREADS" => Some(ValueType {
+            word: "integer",
+            allowed: "a whole number from 1; more than the cores runs as many as the cores",
+            example: "4",
+        }),
+        b"MIB" => Some(ValueType {
+            word: "integer",
+            allowed: "a whole number of MiB from 1",
+            example: "2048",
+        }),
         b"COUNT" => Some(ValueType {
             word: "integer",
             allowed: "a whole number from 0",
@@ -193,6 +203,7 @@ const RUN_EXITS: &[(u32, &[&str])] = &[
             "run.kpi_undeclared_state",
             "run.kpi_no_end",
             "run.windows_differ",
+            "run.threads",
             "internal.no_trace",
             "internal.experiment_id",
         ],
@@ -313,6 +324,8 @@ pub(crate) fn every_command() -> Vec<Command> {
             max_events: None,
             max_runs: None,
             max_seconds: None,
+            threads: None,
+            max_memory_mib: None,
             no_reuse: false,
         }),
     ]

@@ -254,10 +254,24 @@ fn a_global_flag_alone_finds_no_command() {
 /// An experiment over a list, and one to a precision it cannot reach (ADR-0025 §5).
 #[test]
 fn experiment_snapshots() {
-    snapshot("run_list_text", &["run", "line.yaml", "--seed", "1..3"]);
+    // `--threads 1`: how many run at once depends on the cores, and is on a progress
+    // line, never in the document.
+    snapshot(
+        "run_list_text",
+        &["run", "line.yaml", "--seed", "1..3", "--threads", "1"],
+    );
     snapshot(
         "run_list_json",
-        &["run", "line.yaml", "--seed", "1..3", "--format", "json"],
+        &[
+            "run",
+            "line.yaml",
+            "--seed",
+            "1..3",
+            "--format",
+            "json",
+            "--threads",
+            "1",
+        ],
     );
     snapshot(
         "run_budget_exhausted",
@@ -268,6 +282,8 @@ fn experiment_snapshots() {
             "10",
             "--max-seconds",
             "600",
+            "--threads",
+            "1",
         ],
     );
     snapshot(

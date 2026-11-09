@@ -1,6 +1,6 @@
 //! The command line's arguments: the parser's types, which `describe` walks.
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::{NonZeroU32, NonZeroU64, NonZeroUsize};
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -82,6 +82,14 @@ pub(crate) struct RunArgs {
     /// count depends on it.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) max_seconds: Option<NonZeroU64>,
+    /// The most replications at once; otherwise as many as the cores. Fewer run if
+    /// `--max-memory-mib` holds fewer. No byte of a result depends on it.
+    #[arg(long, value_name = "THREADS")]
+    pub(crate) threads: Option<NonZeroUsize>,
+    /// The memory replications at once may take, in MiB; 2048 otherwise. The first
+    /// replication that runs goes alone and gives the estimate per replication.
+    #[arg(long, value_name = "MIB")]
+    pub(crate) max_memory_mib: Option<NonZeroU64>,
     /// Run even if the store has this run, and compare; it is never overwritten.
     #[arg(long)]
     pub(crate) no_reuse: bool,
