@@ -14,7 +14,7 @@ use regex::Regex;
 use taktsim_model::Json;
 
 /// The keywords `Checker` validates.
-pub const VALIDATION: [&str; 24] = [
+pub const VALIDATION: [&str; 25] = [
     "$ref",
     "type",
     "properties",
@@ -24,6 +24,7 @@ pub const VALIDATION: [&str; 24] = [
     "items",
     "minItems",
     "minProperties",
+    "maxLength",
     "uniqueItems",
     "oneOf",
     "anyOf",
@@ -127,6 +128,10 @@ impl Checker<'_> {
             "minItems" => value
                 .as_array()
                 .is_none_or(|items| items.len() >= usize::try_from(arg_integer(arg)).unwrap()),
+            // In code points, as JSON Schema counts.
+            "maxLength" => value
+                .as_str()
+                .is_none_or(|s| s.chars().count() <= usize::try_from(arg_integer(arg)).unwrap()),
             "minProperties" => value
                 .as_object()
                 .is_none_or(|object| object.len() >= usize::try_from(arg_integer(arg)).unwrap()),

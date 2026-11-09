@@ -301,6 +301,8 @@ impl ComponentParams for Machine {
         let mttr = fields.optional::<Mttr>("mttr");
         let setup = fields.optional::<SetupEntry>("setup");
         let capacity = fields.optional::<Units>("capacity");
+        fields.needs("mtbf", &["mttr"]);
+        fields.needs("mttr", &["mtbf"]);
         let lone = match (fields.entry("mtbf"), fields.entry("mttr")) {
             (Some(entry), None) => Some(("mtbf", entry)),
             (None, Some(entry)) => Some(("mttr", entry)),

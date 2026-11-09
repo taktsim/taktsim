@@ -13,7 +13,7 @@ use taktsim_units::{Count, Ratio};
 use crate::clock;
 use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, SourceStateNote, VariantId};
-use crate::params::{Interarrival, Units, VARIANT_NAME_RULE, is_variant_name};
+use crate::params::{Interarrival, MAX_NAME, Units, VARIANT_NAME_RULE, is_variant_name};
 use crate::port::Outlet;
 use crate::run::{BuildError, ComponentType, Ports, Wiring};
 use crate::state::SourceState;
@@ -98,7 +98,13 @@ impl Decode for VariantMix {
         Json::object([
             ("type", Json::from("object")),
             ("minProperties", Json::from(1)),
-            ("propertyNames", schemas.of::<taktsim_model::ComponentRef>()),
+            // A name is ASCII, so its bytes are its code points.
+            (
+                "propertyNames",
+                schemas
+                    .of::<taktsim_model::ComponentRef>()
+                    .with("maxLength", &Json::from(MAX_NAME as u64)),
+            ),
             ("additionalProperties", schemas.of::<Ratio>()),
             (
                 "description",
@@ -249,6 +255,7 @@ impl ComponentParams for Source {
         let batch = fields.optional::<Units>("batch");
         let variants = fields.optional("variants");
         let priority = fields.optional("priority");
+        fields.needs("batch", &["interarrival"]);
         if let Some(entry) = fields.entry("batch")
             && fields.entry("interarrival").is_none()
         {

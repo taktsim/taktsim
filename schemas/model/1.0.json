@@ -34,6 +34,32 @@
         },
         {
           "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "mtbf"
+                ]
+              },
+              "then": {
+                "required": [
+                  "mttr"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "mttr"
+                ]
+              },
+              "then": {
+                "required": [
+                  "mtbf"
+                ]
+              }
+            }
+          ],
           "properties": {
             "capacity": {
               "$ref": "#/$defs/Count",
@@ -133,6 +159,20 @@
         },
         {
           "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "batch"
+                ]
+              },
+              "then": {
+                "required": [
+                  "interarrival"
+                ]
+              }
+            }
+          ],
           "properties": {
             "batch": {
               "$ref": "#/$defs/Count",
@@ -161,7 +201,8 @@
               "description": "The share of each variant, each above 0 %, summing to 100 %. One variant and one priority per batch. Default: one variant, `default`.",
               "minProperties": 1,
               "propertyNames": {
-                "$ref": "#/$defs/ComponentId"
+                "$ref": "#/$defs/ComponentId",
+                "maxLength": 255
               },
               "type": "object"
             }
@@ -428,7 +469,7 @@
       "type": "object"
     },
     "FlowEntry": {
-      "description": "A chain of at least two components, or an edge from one or several components to one or several components (branch, merge, loop-back).",
+      "description": "A chain of at least two components, or an edge from one or several components to one or several components (branch, merge). What may connect to what, loops included, is decided by the catalog's check, not by this schema.",
       "oneOf": [
         {
           "items": {

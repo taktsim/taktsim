@@ -1222,7 +1222,8 @@ impl Decode for FlowEntry {
                 "description",
                 Json::from(
                     "A chain of at least two components, or an edge from one or several components \
-                     to one or several components (branch, merge, loop-back).",
+                     to one or several components (branch, merge). What may connect to what, loops \
+                     included, is decided by the catalog's check, not by this schema.",
                 ),
             ),
             ("oneOf", Json::Array(vec![chain, schemas.of::<EdgeMap>()])),

@@ -1,6 +1,6 @@
 //! The committed JSON Schema against the loader, for the standard catalog
 //! (ADR-0020 §11): the schema accepts every documented example and rejects every
-//! malformed model whose error a schema can state.
+//! malformed model whose error a schema can state, rules between keys included.
 
 #[path = "../../taktsim-model/tests/support/schema_checker.rs"]
 mod schema_checker;
@@ -11,7 +11,7 @@ use std::path::Path;
 
 use schema_checker::{ANNOTATIONS, Checker, VALIDATION, keywords};
 use support::{model_files, registry};
-use taktsim_model::{Format, Json, LoadErrorKind, Loader, model_schema, parse};
+use taktsim_model::{Format, Json, Loader, model_schema, parse};
 
 fn schema() -> Json {
     model_schema(registry().catalog())
@@ -95,18 +95,50 @@ fn documented_shapes_load_and_the_schema_accepts_them() {
     assert!(checker.valid(&schema, &tree(&buffer)));
 }
 
-/// Whether a schema can state the rule an error is about. The rest needs the
-/// whole document, the quantity's value, or a rule between keys.
-fn schema_can_state(kind: &LoadErrorKind) -> bool {
-    !matches!(
-        kind,
-        LoadErrorKind::NotAllowed { .. }
-            | LoadErrorKind::Expression { .. }
-            | LoadErrorKind::Unit(_)
-            | LoadErrorKind::Distribution(_)
-            | LoadErrorKind::BareShare { .. }
-    )
-}
+/// The corpus files whose rule a schema cannot state, each with the reason.
+/// Every other file must be rejected by the schema (ADR-0020 §11).
+const BEYOND_A_SCHEMA: &[(&str, &str)] = &[
+    // What may connect to what: the whole document.
+    ("flow-edge-into-source.yaml", "the flow"),
+    ("flow-edge-out-of-sink.yaml", "the flow"),
+    ("flow-loop.yaml", "the flow"),
+    ("flow-machine-not-entered.yaml", "the flow"),
+    ("flow-machine-not-left.yaml", "the flow"),
+    ("flow-on-demand-branch-without-station.yaml", "the flow"),
+    ("flow-on-demand-through-buffer.yaml", "the flow"),
+    ("flow-on-demand-to-sink.yaml", "the flow"),
+    ("flow-second-edge-chains.yaml", "the flow"),
+    ("flow-second-edge-mappings.yaml", "the flow"),
+    ("flow-sink-not-entered.yaml", "the flow"),
+    ("flow-source-not-left.yaml", "the flow"),
+    // A variant a matrix names must be declared by a Source: the whole document.
+    ("machine-matrix-default-only.yaml", "the Sources' variants"),
+    (
+        "machine-matrix-unknown-variant.yaml",
+        "the Sources' variants",
+    ),
+    // An expression's type: the catalog's observables.
+    ("observe-wrong-type.yaml", "the expression's type"),
+    // Two values compared: entries of a list, or two keys of one entry.
+    ("machine-matrix-twice.yaml", "two entries compared"),
+    ("machine-matrix-same-variant.yaml", "two values compared"),
+    // The value of a quantity written in a string, or a sum of shares.
+    ("buffer-capacity-zero.yaml", "the quantity's value"),
+    ("machine-capacity-too-large.yaml", "the quantity's value"),
+    ("machine-capacity-zero.yaml", "the quantity's value"),
+    ("machine-cycle-time-zero.yaml", "the quantity's value"),
+    ("machine-mtbf-zero.yaml", "the quantity's value"),
+    ("machine-mttr-zero.yaml", "the quantity's value"),
+    (
+        "machine-setup-per-variant-zero.yaml",
+        "the quantity's value",
+    ),
+    ("source-batch-too-large.yaml", "the quantity's value"),
+    ("source-batch-zero.yaml", "the quantity's value"),
+    ("source-interarrival-zero.yaml", "the quantity's value"),
+    ("source-variants-not-100.yaml", "a sum of shares"),
+    ("source-variants-zero-share.yaml", "the quantity's value"),
+];
 
 #[test]
 fn the_schema_rejects_every_malformed_model_it_can() {
@@ -123,7 +155,8 @@ fn the_schema_rejects_every_malformed_model_it_can() {
         let text = std::fs::read_to_string(&path).unwrap();
         let errors = loader.load_file(&path).unwrap_err();
         files += 1;
-        if errors.iter().any(|e| schema_can_state(e.kind())) {
+        let name = path.file_name().unwrap().to_str().unwrap();
+        if !BEYOND_A_SCHEMA.iter().any(|(beyond, _)| *beyond == name) {
             assert!(
                 !checker.valid(&schema, &tree(&text)),
                 "{}: the schema accepts it: {errors}",
@@ -132,8 +165,14 @@ fn the_schema_rejects_every_malformed_model_it_can() {
             rejected += 1;
         }
     }
-    // The corpus files whose errors a schema can state, all rejected.
-    assert_eq!((files, rejected), (47, 9));
+    // Every listed file exists, so the list cannot hide a rule.
+    for (name, _) in BEYOND_A_SCHEMA {
+        assert!(dir.join(name).is_file(), "{name}");
+    }
+    // The corpus files whose rule a schema can state, all rejected; among them
+    // rules between keys (`mtbf` with `mttr`, `batch` with `interarrival`) and
+    // the length of a variant name.
+    assert_eq!((files, rejected), (47, 18));
 }
 
 #[test]
@@ -154,6 +193,10 @@ fn the_schema_states_the_rules_a_pattern_or_keyword_can() {
     assert!(!checker.valid(&schema, &tree(&machine("setup: {matrix: []}"))));
     assert!(checker.valid(&schema, &tree(&machine("setup: {per_variant: 4min}"))));
     assert!(!checker.valid(&schema, &tree(&machine("priority: 1"))));
+    // `mtbf` and `mttr` come together.
+    assert!(!checker.valid(&schema, &tree(&machine("mtbf: 6h"))));
+    assert!(!checker.valid(&schema, &tree(&machine("mttr: 12min"))));
+    assert!(checker.valid(&schema, &tree(&machine("mtbf: 6h, mttr: 12min"))));
     let source = |params: &str| {
         support::document(
             "1h",
@@ -165,6 +208,19 @@ fn the_schema_states_the_rules_a_pattern_or_keyword_can() {
     assert!(!checker.valid(&schema, &tree(&source("variants: {}"))));
     assert!(!checker.valid(&schema, &tree(&source("variants: {\"a b\": 100%}"))));
     assert!(checker.valid(&schema, &tree(&source("priority: 255"))));
+    // `batch` needs `interarrival`; a variant name has at most 255 bytes.
+    assert!(!checker.valid(&schema, &tree(&source("batch: 2 parts"))));
+    assert!(checker.valid(&schema, &tree(&source("interarrival: 40s, batch: 2 parts"))));
+    let long = "v".repeat(256);
+    assert!(!checker.valid(
+        &schema,
+        &tree(&source(&format!("variants: {{{long}: 100%}}")))
+    ));
+    let longest = "v".repeat(255);
+    assert!(checker.valid(
+        &schema,
+        &tree(&source(&format!("variants: {{{longest}: 100%}}")))
+    ));
     assert!(checker.valid(&schema, &tree(&source("variants: {a: 100%}"))));
 }
 
