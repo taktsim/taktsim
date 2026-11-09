@@ -543,9 +543,11 @@ list in `allowed`.
 
 Every command has `--format text|json` as a global flag, default `text`, chosen only
 by the flag (ADR-0019 answer 2). `describe` and `schema` print JSON either way.
-`--version` and `--help` keep clap's rendering, exit 0, also under `--format json`
-(disagreement 15); a stdout that cannot take it is exit 7 with `io.stdout`, as for any
-command.
+`--help` keeps clap's rendering, exit 0, also under `--format json` (disagreement 15).
+`--version` stands alone: by itself it prints clap's rendering, exit 0; beside anything
+else, `--format json` included, it is exit 1 with `args.unknown_argument` at
+`--version`, since the parser's early exit would otherwise hide what is beside it. A
+stdout that cannot take either is exit 7 with `io.stdout`, as for any command.
 
 | Command | Flags in M7 |
 | --- | --- |
