@@ -183,8 +183,11 @@ pub fn replay<R: Read, M: TraceMessage>(
 }
 
 /// Runs the engine to the end the trace states, with no event allowed. A run
-/// stopped early (event limit, cancelled) had events left, so it is compared
-/// by its clock only.
+/// stopped early (event limit, cancelled) is compared by its clock only. Its
+/// clock can be past the last event: a run advanced in steps may have reached
+/// a horizon in an earlier step and then stopped before delivering anything.
+/// So the engine is first moved there with no event allowed, which needs no
+/// event due by then and, after an event limit, one still to come.
 fn check_end<R: Read, M: TraceMessage>(
     engine: &mut Engine<M>,
     sink: &mut Replayer<R, M>,
@@ -217,6 +220,17 @@ fn check_end<R: Read, M: TraceMessage>(
             ))
         }
         RunOutcome::EventLimit | RunOutcome::Cancelled => {
+            let before = engine.now();
+            if before < end.time {
+                let ran = run(engine, RunLimits::until(end.time).max_events(0), sink)?;
+                let reached = match (ran.outcome, end.outcome) {
+                    (RunOutcome::Horizon, _) | (RunOutcome::Idle, RunOutcome::Cancelled) => true,
+                    (RunOutcome::Idle | RunOutcome::EventLimit | RunOutcome::Cancelled, _) => false,
+                };
+                if !reached {
+                    return Err(diverged(format!("the engine's clock at {before}")));
+                }
+            }
             if engine.now() == end.time {
                 Ok(())
             } else {

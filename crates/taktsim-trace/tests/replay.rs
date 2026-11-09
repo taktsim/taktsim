@@ -585,3 +585,69 @@ fn replay_compares_the_stated_outcome_and_clock() {
     };
     assert!(found.starts_with("the engine's clock at "), "{found}");
 }
+
+#[test]
+fn a_stepped_run_whose_last_step_delivered_nothing_replays() {
+    // The first step reaches its horizon, so the clock is past the last event;
+    // the second stops at the event limit before delivering anything. The
+    // stated end is the first horizon, which no event in the trace carries.
+    let mut engine = support::single_server(3).unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let first = engine.run(RunLimits::until(t("1h")), &mut writer).unwrap();
+    assert_eq!((first.outcome, first.now), (RunOutcome::Horizon, t("1h")));
+    writer.run_ended(&first);
+    let second = engine
+        .run(RunLimits::until(t("2h")).max_events(0), &mut writer)
+        .unwrap();
+    assert_eq!(
+        (second.outcome, second.events, second.now),
+        (RunOutcome::EventLimit, 0, t("1h"))
+    );
+    writer.run_ended(&second);
+    let trace = writer.finish().unwrap().0;
+    let report = replay_with(&trace, support::single_server(3).unwrap()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::EventLimit, t("1h")));
+
+    // The same with a cancelled last step.
+    let mut engine = support::single_server(3).unwrap();
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let first = engine.run(RunLimits::until(t("1h")), &mut writer).unwrap();
+    writer.run_ended(&first);
+    let flag = std::sync::atomic::AtomicBool::new(true);
+    let second = engine
+        .run(RunLimits::until(t("2h")).cancel_on(&flag), &mut writer)
+        .unwrap();
+    assert_eq!(
+        (second.outcome, second.now),
+        (RunOutcome::Cancelled, t("1h"))
+    );
+    writer.run_ended(&second);
+    let trace = writer.finish().unwrap().0;
+    let report = replay_with(&trace, support::single_server(3).unwrap()).unwrap();
+    assert_eq!(report.end.unwrap().outcome, RunOutcome::Cancelled);
+
+    // An event limit stated past an event that was due is still found.
+    let mut engine = support::single_server(3).unwrap();
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine
+        .run(RunLimits::until(t("10min")).max_events(3), &mut writer)
+        .unwrap();
+    writer.run_ended(&RunSummary {
+        now: t("1h"),
+        ..ran
+    });
+    let (trace, summary) = writer.finish().unwrap();
+    let Err(ReplayError::Diverged { record, found, .. }) =
+        replay_with(&trace, support::single_server(3).unwrap())
+    else {
+        panic!("an event limit past a due event replayed");
+    };
+    assert_eq!(record, summary.records);
+    assert!(found.starts_with("the engine's clock at "), "{found}");
+}
