@@ -65,7 +65,8 @@ pub struct ItemAttrs {
     /// The priority: higher goes first, absent in the model is 0. Unrelated to
     /// a message's priority, where lower goes first.
     pub priority: u8,
-    /// The due date: when a Source with `due_in` says so.
+    /// The due date: when a Source with `due_in` says so, and the date is not
+    /// past the end of the clock.
     pub due: Option<SimTime>,
 }
 

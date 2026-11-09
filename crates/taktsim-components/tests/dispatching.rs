@@ -109,6 +109,37 @@ fn no_due_date_sorts_last_then_fifo() {
 }
 
 #[test]
+fn a_due_date_past_the_clock_sorts_with_no_due_date() {
+    // s0's due date, 213,503 days after 26 h, is past the clock's 213,503.98 days:
+    // it has none. s2 arrives first and holds `m` until 34 h; s3's unit, due at 28 h,
+    // goes next; then s1's from 25 h and s0's from 26 h tie at no due date, and the
+    // older goes first, as without a date.
+    let r = run(
+        &at_station(
+            &[
+                "interarrival: 26h, due_in: 213503d",
+                "interarrival: 25h",
+                "interarrival: 24h",
+                "interarrival: 27h, due_in: 1h",
+            ],
+            "cycle_time: 10h",
+            "earliest_due_date",
+            "60h",
+        ),
+        1,
+    );
+    let arrivals = r.arrivals("m");
+    assert_eq!(from(&r)[..4], ["s2", "s3", "s1", "s0"]);
+    assert_eq!(attrs(&arrivals[3]).due, None);
+    let (_, _, third) = &r.dispatches()[1];
+    assert_eq!(third.total, 2, "{third:?}");
+    assert!(
+        third.candidates.iter().all(|c| c.key == u64::MAX),
+        "{third:?}"
+    );
+}
+
+#[test]
 fn shortest_processing_time_takes_the_shorter_mean() {
     // Machine `m` takes 100 s for `long` and 7 s for `short`. The first unit is `long`,
     // from `s0`; `long` from `s2` waited longer than `short` from `s1`, and still

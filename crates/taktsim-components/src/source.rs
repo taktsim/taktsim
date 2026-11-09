@@ -304,7 +304,7 @@ impl Decode for DueIn {
             "description",
             &"The due date of its parts, from creation. Needs `interarrival`: an on-demand part \
               is created when it is accepted, so a rule would rank it by a date it does not yet \
-              have. Absent: no due date.",
+              have. Absent, or a date past the end of the clock (about 584 years): no due date.",
         )
     }
 }
@@ -322,7 +322,8 @@ impl Encode for DueIn {
 /// component takes one. `batch` (default `1 parts`) needs `interarrival`.
 /// `variants` gives the shares of each variant, `priority` (0 to 255, default
 /// 0) the priority of its parts, or `priority_mix` the share of each priority.
-/// `due_in`, which needs `interarrival`, gives their due date from creation.
+/// `due_in`, which needs `interarrival`, gives their due date from creation; a
+/// date past the end of the clock is no due date.
 ///
 /// ```
 /// use taktsim_components::Source;
@@ -622,14 +623,18 @@ impl SourceBehaviour {
         Ok(ItemAttrs::new(variant, priority))
     }
 
-    /// A batch's due date: its creation plus one draw. Past the end of simulated time
-    /// it is a run failure (ADR-0023 §7).
+    /// A batch's due date: its creation plus one draw. A date past the end of the
+    /// clock is no due date, so it sorts last like a part without one, and the run
+    /// goes on (ADR-0023 §7, as ADR-0022 §6 does for every other draw). The draw
+    /// takes its place in the stream either way.
     fn next_due(&mut self, now: SimTime) -> Result<Option<SimTime>, ComponentError> {
         let (Some(distribution), Some(stream)) = (&self.due_in, self.due_stream.as_mut()) else {
             return Ok(None);
         };
-        let after = distribution.sample(stream)?;
-        Ok(Some(now.checked_add(after)?))
+        let Some(after) = clock::draw(distribution, stream)? else {
+            return Ok(None);
+        };
+        Ok(now.checked_add(after).ok())
     }
 
     /// Draws the next part of an on-demand Source with routes: its variant and

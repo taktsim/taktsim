@@ -321,7 +321,9 @@ fn due_dates_and_priorities_are_one_per_batch() {
 }
 
 #[test]
-fn a_due_date_past_the_end_of_time_is_a_run_failure() {
+fn a_due_date_past_the_end_of_time_is_no_due_date() {
+    // The clock ends after 213,503.98 days: 213,503 days from a creation at 1 d or
+    // later is past it. Every part has no due date, and the run reaches its horizon.
     let yaml = document(
         "3d",
         "  - {id: source, type: Source, interarrival: 1d, due_in: 213503d}\n  - {id: sink, type: Sink}",
@@ -333,7 +335,54 @@ fn a_due_date_past_the_end_of_time_is_a_run_failure() {
         .build(model.document(), EngineConfig::new(1))
         .unwrap();
     let result = engine.run(taktsim_core::RunLimits::until(t("3d")), &mut NoTrace);
-    assert!(result.is_err());
+    assert!(result.is_ok(), "{result:?}");
+    let r = run(&yaml, 1);
+    let arrivals = r.arrivals("sink");
+    assert_eq!(arrivals.len(), 3);
+    assert!(
+        arrivals
+            .iter()
+            .all(|e| matches!(e.message, FlowMessage::Arrive(attrs) if attrs.due.is_none())),
+        "{arrivals:?}"
+    );
+}
+
+#[test]
+fn a_due_date_drawn_past_the_end_of_time_is_no_due_date_and_keeps_its_draw() {
+    // Exponential of mean 100,000 days against a clock of 213,503.98 days: about one
+    // draw in eight is too long for a duration, and more than that land past the
+    // clock once added to the creation. Seed fixed when the test was written.
+    let seed = 2026;
+    let yaml = document(
+        "64d",
+        "  - {id: source, type: Source, interarrival: 1d, due_in: {dist: exponential, mean: 100000d}}\n  \
+         - {id: sink, type: Sink}",
+        "  - [source, sink]",
+    );
+    let r = run(&yaml, seed);
+    let distribution =
+        taktsim_core::random::DurationDistribution::exponential(d("100000d")).unwrap();
+    let mut stream = taktsim_core::random::Stream::new(
+        seed,
+        taktsim_core::random::StreamKey::new("source", "due_in"),
+    );
+    let arrivals = r.arrivals("sink");
+    assert_eq!(arrivals.len(), 64);
+    let (mut dated, mut undated) = (0, 0);
+    for e in &arrivals {
+        let attrs = arrive_attrs(e).unwrap();
+        // The source hands each part on at the instant it makes it.
+        let expected = distribution
+            .sample(&mut stream)
+            .ok()
+            .and_then(|after| e.time.checked_add(after).ok());
+        assert_eq!(attrs.due, expected, "{e:?}");
+        match attrs.due {
+            Some(_) => dated += 1,
+            None => undated += 1,
+        }
+    }
+    assert!(dated > 0 && undated > 0, "{dated} dated, {undated} undated");
 }
 
 #[test]

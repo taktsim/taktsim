@@ -160,7 +160,7 @@
             },
             "due_in": {
               "$ref": "#/$defs/Distribution",
-              "description": "The due date of its parts, from creation. Needs `interarrival`: an on-demand part is created when it is accepted, so a rule would rank it by a date it does not yet have. Absent: no due date."
+              "description": "The due date of its parts, from creation. Needs `interarrival`: an on-demand part is created when it is accepted, so a rule would rank it by a date it does not yet have. Absent, or a date past the end of the clock (about 584 years): no due date."
             },
             "id": {
               "$ref": "#/$defs/ComponentId"
