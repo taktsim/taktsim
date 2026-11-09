@@ -839,7 +839,9 @@ fn a_damaged_stored_result_is_exit_7() {
     assert_eq!(fs::read_to_string(&file).unwrap(), "{ not json");
 }
 
-/// A store that cannot be written: exit 7. Only where a directory's mode says so.
+/// A store that cannot be written: exit 7. Where a directory's mode says so; a privileged user
+/// (root, or `CAP_DAC_OVERRIDE` in a container) writes through any mode, so there the mode cannot make
+/// a store unwritable and the test asks a `runs` that is a file instead, which binds every user.
 #[cfg(unix)]
 #[test]
 fn a_read_only_store_is_exit_7() {
@@ -849,6 +851,13 @@ fn a_read_only_store_is_exit_7() {
     let store = dir.join("store");
     fs::create_dir_all(&store).unwrap();
     fs::set_permissions(&store, fs::Permissions::from_mode(0o555)).unwrap();
+    let probe = store.join("probe");
+    let mode_binds = fs::create_dir(&probe).is_err();
+    if !mode_binds {
+        fs::remove_dir(&probe).unwrap();
+        fs::set_permissions(&store, fs::Permissions::from_mode(0o755)).unwrap();
+        write(&store, "runs", "a file where the store keeps its runs");
+    }
     let out = taktsim(
         &dir,
         &["run", "m.yaml", "--store", "store", "--format", "json"],
@@ -856,6 +865,30 @@ fn a_read_only_store_is_exit_7() {
     fs::set_permissions(&store, fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(out.code, 7, "{}", out.stderr);
     assert_eq!(out.stdout, "");
+    let error = &errors_of(&out.stderr)[0];
+    assert!(
+        error["type"].as_str().unwrap().starts_with("store."),
+        "{error}"
+    );
+}
+
+/// A store that cannot be used, for every user and on every target: its `runs` is a file.
+#[test]
+fn a_store_whose_runs_is_a_file_is_exit_7() {
+    let dir = fresh("runs_is_a_file");
+    write(&dir, "m.yaml", EXACT);
+    let store = dir.join("store");
+    fs::create_dir_all(&store).unwrap();
+    write(&store, "runs", "x");
+    let out = taktsim(
+        &dir,
+        &["run", "m.yaml", "--store", "store", "--format", "json"],
+    );
+    assert_eq!(out.code, 7, "{}", out.stderr);
+    assert_eq!(out.stdout, "");
+    // Looking for the run in it fails first: `runs/<id>/result.json` cannot be read.
+    assert_eq!(errors_of(&out.stderr)[0]["type"], "store.read");
+    assert_eq!(fs::read_to_string(store.join("runs")).unwrap(), "x");
 }
 
 /// A failed run prints nothing on stdout. Run on a model that fails to load is exit 1 with the same
