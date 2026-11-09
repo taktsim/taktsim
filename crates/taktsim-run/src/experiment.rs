@@ -4,8 +4,9 @@
 //! first and whatever thread ran what.
 
 use std::collections::BTreeMap;
-use std::num::{NonZeroU32, NonZeroU64};
-use std::sync::atomic::Ordering;
+use std::num::{NonZeroU32, NonZeroU64, NonZeroUsize};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use taktsim_components::{Domain, Kpi, Ports, Registry};
@@ -16,13 +17,14 @@ use taktsim_units::{Ratio, SimDuration};
 
 use crate::diagnostic::{Diagnostic, Failure, FailureClass};
 use crate::id::ExperimentId;
+use crate::memory;
 use crate::metrics::{self, KpiSpec, Labels, Targets};
 use crate::result::{
     Accuracy, AccuracyKind, AccuracyPlan, Metric, MetricValue, Over, Provenance, ResultDocument,
     Scalar,
 };
 use crate::store::Store;
-use crate::{One, RunRequest, RunResponse};
+use crate::{One, Ready, RunRequest, RunResponse, Worked};
 
 /// What a long command may spend (ADR-0019 item 4, ADR-0025 §4). Each is a flag; which
 /// are required depends on what is asked, so each may be absent here.
@@ -613,15 +615,296 @@ const fn ending(stop: Stop) -> (Ended, &'static str) {
     }
 }
 
+/// Which budget ended an experiment.
+///
+/// ```
+/// use taktsim_run::Spent;
+///
+/// let flag = |spent: Spent| match spent {
+///     Spent::MaxRuns => "--max-runs",
+///     Spent::MaxSeconds => "--max-seconds",
+/// };
+/// assert_eq!(flag(Spent::MaxSeconds), "--max-seconds");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Spent {
+    /// `--max-runs`: every replication it allows ran, under the targets.
+    MaxRuns,
+    /// `--max-seconds`: the clock ran out.
+    MaxSeconds,
+}
+
+/// What an experiment did beside its document, for the `progress` line (ADR-0025 §5,
+/// §8). None of it is in the document, which stays a function of the counted runs.
+///
+/// ```
+/// use std::num::NonZeroUsize;
+/// use taktsim_run::{Progress, Spent};
+///
+/// let progress = Progress { counted: 14, planned: 100, at_once: NonZeroUsize::new(4), spent: Some(Spent::MaxSeconds) };
+/// assert!(progress.counted < progress.planned);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Progress {
+    /// Replications counted.
+    pub counted: u32,
+    /// The most there could have been: the list's length, or `--max-runs`.
+    pub planned: u32,
+    /// How many replications ran at once; `None` if every one came from the store.
+    pub at_once: Option<NonZeroUsize>,
+    /// Which budget ended it, if one did.
+    pub spent: Option<Spent>,
+}
+
 /// What the replications of an experiment gave, in seed order.
 struct Replications {
     stop: Stop,
     counted: Vec<One>,
     lowest_partial: Option<One>,
     failure: Option<Failure>,
+    at_once: Option<NonZeroUsize>,
 }
 
-/// Runs the replications in seed order until the sequencer stops.
+/// How often the coordinator looks at the signal flag and the clock.
+const POLL: Duration = Duration::from_millis(100);
+
+/// A seed that finished before the ones below it, waiting to be committed.
+#[derive(Debug)]
+enum Waiting {
+    /// It was in the store.
+    Stored(Box<One>),
+    /// It ran, and waits in `tmp/`.
+    Fresh(Box<Ready>),
+}
+
+/// What reached the coordinator for one seed.
+#[derive(Debug)]
+enum Arrived {
+    /// It was in the store, and takes no thread.
+    Stored(Box<One>),
+    /// A worker ran it.
+    Worked(Worked),
+}
+
+/// The one thread that commits in seed order (ADR-0025 §8). Workers run into `tmp/`;
+/// this feeds the sequencer, renames what it commits into the store, and cuts what it
+/// no longer needs.
+struct Coordinator<'r> {
+    sequencer: Sequencer,
+    plan: &'r RowPlan,
+    store: &'r Store,
+    /// One cancel flag per replication.
+    flags: &'r [AtomicBool],
+    /// Nothing at or above this index is started, and what runs there is cut.
+    limit: u32,
+    waiting: BTreeMap<u32, Waiting>,
+    counted: Vec<One>,
+    lowest_partial: Option<One>,
+    failures: BTreeMap<u32, Failure>,
+}
+
+fn internal_line(message: &str) -> Failure {
+    Failure::one(
+        FailureClass::RunFailed,
+        Diagnostic::error("internal.experiment", message.to_owned()),
+    )
+}
+
+impl Coordinator<'_> {
+    /// Cuts every replication from `from` on, and drops what waits there.
+    fn cut(&mut self, from: u32) {
+        self.limit = self.limit.min(from);
+        for flag in self.flags.iter().skip(from as usize) {
+            flag.store(true, Ordering::Relaxed);
+        }
+        self.waiting.retain(|index, _| *index < from);
+    }
+
+    /// The seed at `index` finished: feed the sequencer, commit what it commits in
+    /// order, and cut what it no longer needs.
+    fn finished(&mut self, index: u32, arrived: Result<Arrived, Failure>) -> Result<(), Failure> {
+        let outcome = match arrived {
+            Ok(Arrived::Stored(one)) => {
+                let values = self.plan.target_values(&one.result);
+                self.waiting.insert(index, Waiting::Stored(one));
+                Outcome::Values(values)
+            }
+            Ok(Arrived::Worked(Worked::Ready(ready))) => {
+                let values = self.plan.target_values(&ready.result);
+                self.waiting.insert(index, Waiting::Fresh(ready));
+                Outcome::Values(values)
+            }
+            Ok(Arrived::Worked(Worked::Partial(one))) => {
+                // Only this coordinator sets a replication's flag, and only once it
+                // has decided: a cut replication tells the sequencer nothing.
+                let outcome = match one.partial {
+                    Some(RunOutcome::Cancelled) => None,
+                    Some(RunOutcome::EventLimit | RunOutcome::Horizon | RunOutcome::Idle)
+                    | None => Some(Outcome::EventLimit),
+                };
+                if index == 0 {
+                    self.lowest_partial = Some(*one);
+                }
+                let Some(outcome) = outcome else {
+                    return Ok(());
+                };
+                outcome
+            }
+            Err(failure) => {
+                self.failures.insert(index, failure);
+                Outcome::Failed
+            }
+        };
+        if index >= self.limit {
+            self.waiting.remove(&index);
+            return Ok(());
+        }
+        let step = self
+            .sequencer
+            .on_finished(index, outcome)
+            .map_err(|e| internal(&e))?;
+        for committed in step.committed {
+            let one = match self.waiting.remove(&committed) {
+                Some(Waiting::Stored(one)) => *one,
+                Some(Waiting::Fresh(ready)) => {
+                    let id = ready.id.clone();
+                    crate::commit(self.store, *ready)?;
+                    // Each counted run is read back from the store, fresh or reused,
+                    // so both follow one path (ADR-0025 §5).
+                    let result = self
+                        .store
+                        .read_result(&id)?
+                        .ok_or_else(|| internal_line("a committed run is not in the store"))?;
+                    One {
+                        result,
+                        reused: false,
+                        partial: None,
+                    }
+                }
+                None => return Err(internal_line("a committed seed has no result")),
+            };
+            self.counted.push(one);
+        }
+        if let Some(from) = step.cancel_from {
+            self.cut(from);
+        }
+        Ok(())
+    }
+}
+
+/// Where the workers run and what they share.
+struct Work<'r, D: Domain> {
+    registry: &'r Registry<D>,
+    model: &'r Model,
+    seeds: SeedList<'r>,
+    request: &'r RunRequest<'r>,
+    store: &'r Store,
+    cores: NonZeroUsize,
+}
+
+impl<'r, D: Domain> Work<'r, D> {
+    /// Starts replications while the window allows, waits for one, polls the signal
+    /// and the clock, until the sequencer has decided and nothing runs. At most
+    /// `at_once` seeds run past the decision point, so waste is bounded.
+    fn drive(
+        &self,
+        scope: &rayon::Scope<'r>,
+        coordinator: &mut Coordinator<'r>,
+    ) -> Result<Option<NonZeroUsize>, Failure> {
+        let (sender, receiver) = mpsc::channel::<(u32, Result<Worked, Failure>)>();
+        let started = Instant::now();
+        let deadline = self
+            .request
+            .budget
+            .max_seconds
+            .map(|s| Duration::from_secs(s.get()));
+        // Unknown until the first replication that runs has gone alone (ADR-0010).
+        let mut at_once: Option<NonZeroUsize> = None;
+        let mut next = 0_u32;
+        let mut running = 0_usize;
+        loop {
+            while coordinator.sequencer.stop().is_none() && next < coordinator.limit {
+                let window = at_once.map_or(1, NonZeroUsize::get);
+                let ahead = (next - coordinator.sequencer.committed()) as usize;
+                if ahead >= window || running >= window {
+                    break;
+                }
+                let index = next;
+                next += 1;
+                let seed = Some(self.seeds.seed(index));
+                match crate::stored::<D>(self.model, seed, self.request, self.store) {
+                    Ok(Some(one)) => {
+                        coordinator.finished(index, Ok(Arrived::Stored(Box::new(one))))?;
+                    }
+                    Ok(None) => {
+                        running += 1;
+                        let sender = sender.clone();
+                        let flag = coordinator.flags.get(index as usize);
+                        let Work {
+                            registry,
+                            model,
+                            request,
+                            store,
+                            ..
+                        } = *self;
+                        scope.spawn(move |_| {
+                            let worked =
+                                crate::work_one(registry, model, seed, request, flag, store);
+                            // The coordinator holds the receiver until every worker has
+                            // reported; a failed send drops the run, and its temp directory.
+                            let _ = sender.send((index, worked));
+                        });
+                    }
+                    Err(failure) => coordinator.finished(index, Err(failure))?,
+                }
+            }
+            if running == 0 {
+                if coordinator.sequencer.stop().is_some() {
+                    return Ok(at_once);
+                }
+                return Err(internal_line(
+                    "an experiment waits for a replication that does not run",
+                ));
+            }
+            match receiver.recv_timeout(POLL) {
+                Ok((index, worked)) => {
+                    running -= 1;
+                    if let (None, Ok(Worked::Ready(ready))) = (at_once, &worked) {
+                        at_once = Some(memory::parallel(
+                            self.cores,
+                            self.request.threads,
+                            self.request.max_memory_mib,
+                            ready.memory,
+                        ));
+                    }
+                    coordinator.finished(index, worked.map(Arrived::Worked))?;
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => {
+                    return Err(internal_line("the replications stopped reporting"));
+                }
+            }
+            if coordinator.sequencer.stop().is_none() {
+                if self
+                    .request
+                    .cancel
+                    .is_some_and(|c| c.load(Ordering::Relaxed))
+                {
+                    coordinator.sequencer.on_cancel();
+                } else if deadline.is_some_and(|d| started.elapsed() >= d) {
+                    coordinator.sequencer.on_deadline();
+                }
+            }
+            if coordinator.sequencer.stop().is_some() {
+                let committed = coordinator.sequencer.committed();
+                coordinator.cut(committed);
+            }
+        }
+    }
+}
+
+/// Runs the replications on a pool of an explicit size, committing in seed order until
+/// the sequencer stops (ADR-0025 §8).
 fn replicate<D: Domain>(
     registry: &Registry<D>,
     model: &Model,
@@ -631,61 +914,59 @@ fn replicate<D: Domain>(
     plan: &RowPlan,
 ) -> Result<Replications, Failure> {
     let n0 = ReplicationPlan::DEFAULT_MIN_REPLICATIONS;
-    let mut sequencer = Sequencer::new(&plan.targets(), seeds.len(), seeds.sequential(), n0)
+    let sequencer = Sequencer::new(&plan.targets(), seeds.len(), seeds.sequential(), n0)
         .map_err(|e| internal(&e))?;
-    let started = Instant::now();
-    let deadline = request
-        .budget
-        .max_seconds
-        .map(|s| Duration::from_secs(s.get()));
-    let mut counted: Vec<One> = Vec::new();
-    let mut lowest_partial: Option<One> = None;
-    let mut failure: Option<Failure> = None;
-    let mut index = 0;
-    while sequencer.stop().is_none() && index < seeds.len() {
-        // The first replication always runs, alone: ADR-0010's checked first run.
-        if index > 0 {
-            if deadline.is_some_and(|d| started.elapsed() >= d) {
-                sequencer.on_deadline();
-                break;
-            }
-            if request.cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-                sequencer.on_cancel();
-                break;
-            }
+    // Only speed depends on the cores: no thread count reaches a byte.
+    let cores = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(memory::pool_size(cores, request.threads).get())
+        .thread_name(|i| format!("taktsim-replication-{i}"))
+        .build()
+        .map_err(|e| {
+            Failure::one(
+                FailureClass::RunFailed,
+                Diagnostic::error(
+                    "run.threads",
+                    format!("the replication threads cannot start: {e}"),
+                ),
+            )
+        })?;
+    let flags: Vec<AtomicBool> = (0..seeds.len()).map(|_| AtomicBool::new(false)).collect();
+    let mut coordinator = Coordinator {
+        sequencer,
+        plan,
+        store,
+        flags: &flags,
+        limit: seeds.len(),
+        waiting: BTreeMap::new(),
+        counted: Vec::new(),
+        lowest_partial: None,
+        failures: BTreeMap::new(),
+    };
+    let work = Work {
+        registry,
+        model,
+        seeds,
+        request,
+        store,
+        cores,
+    };
+    let driven = pool.in_place_scope(|scope| {
+        let driven = work.drive(scope, &mut coordinator);
+        if driven.is_err() {
+            // Nothing more is needed: cut every worker, so the scope ends soon.
+            coordinator.cut(0);
         }
-        let seed = Some(seeds.seed(index));
-        let outcome = match crate::run_one(registry, model, seed, request, store) {
-            Ok(one) => match one.partial {
-                None => {
-                    let values = plan.target_values(&one.result);
-                    counted.push(one);
-                    Outcome::Values(values)
-                }
-                Some(RunOutcome::Cancelled) => {
-                    if index == 0 {
-                        lowest_partial = Some(one);
-                    }
-                    sequencer.on_cancel();
-                    break;
-                }
-                Some(RunOutcome::EventLimit | RunOutcome::Horizon | RunOutcome::Idle) => {
-                    if index == 0 {
-                        lowest_partial = Some(one);
-                    }
-                    Outcome::EventLimit
-                }
-            },
-            Err(error) => {
-                failure.get_or_insert(error);
-                Outcome::Failed
-            }
-        };
-        sequencer
-            .on_finished(index, outcome)
-            .map_err(|e| internal(&e))?;
-        index += 1;
-    }
+        driven
+    });
+    let at_once = driven?;
+    let Coordinator {
+        sequencer,
+        counted,
+        lowest_partial,
+        mut failures,
+        ..
+    } = coordinator;
     // A runtime invariant (spec §7 Layer 3): the incremental decision is the decision
     // over the matrix.
     let mut check = sequencer.clone();
@@ -702,20 +983,28 @@ fn replicate<D: Domain>(
         ));
     }
     let Some(stop) = sequencer.stop() else {
-        return Err(Failure::one(
-            FailureClass::RunFailed,
-            Diagnostic::error(
-                "internal.experiment",
-                "an experiment ended without a decision",
-            ),
-        ));
+        return Err(internal_line("an experiment ended without a decision"));
     };
-    counted.truncate(sequencer.committed() as usize);
+    if counted.len() != sequencer.committed() as usize {
+        return Err(internal_line(
+            "the counted runs differ from the committed seeds",
+        ));
+    }
+    let failure = match stop {
+        Stop::Failed(index) => failures.remove(&index),
+        Stop::SeedsFinished
+        | Stop::PrecisionReached
+        | Stop::BudgetExhausted
+        | Stop::Clock
+        | Stop::EventLimit(_)
+        | Stop::Cancelled => None,
+    };
     Ok(Replications {
         stop,
         counted,
         lowest_partial,
         failure,
+        at_once,
     })
 }
 
@@ -736,6 +1025,7 @@ pub(crate) fn run_experiment<D: Domain>(
         counted,
         lowest_partial,
         failure,
+        at_once,
     } = replicate(registry, model, seeds, request, store, &plan)?;
     if let Stop::Failed(_) = stop {
         return Err(failure.unwrap_or_else(|| {
@@ -749,6 +1039,20 @@ pub(crate) fn run_experiment<D: Domain>(
         }));
     }
     let (ended, stop_reason) = ending(stop);
+    let progress = Some(Progress {
+        counted: u32::try_from(counted.len()).unwrap_or(u32::MAX),
+        planned: seeds.len(),
+        at_once,
+        spent: match stop {
+            Stop::BudgetExhausted => Some(Spent::MaxRuns),
+            Stop::Clock => Some(Spent::MaxSeconds),
+            Stop::SeedsFinished
+            | Stop::PrecisionReached
+            | Stop::EventLimit(_)
+            | Stop::Failed(_)
+            | Stop::Cancelled => None,
+        },
+    });
     if counted.is_empty() {
         // No finished replication: the lowest seed's partial document (ADR-0025 §5).
         let Some(partial) = lowest_partial else {
@@ -757,11 +1061,16 @@ pub(crate) fn run_experiment<D: Domain>(
                 Diagnostic::error("internal.experiment", "no replication ran"),
             ));
         };
+        // Its own word says how the run stopped; the top one, why the experiment did,
+        // as the exit code does.
+        let mut result = partial.result;
+        stop_reason.clone_into(&mut result.stop_reason);
         return Ok(RunResponse {
-            result: partial.result,
+            result,
             reused: false,
             warnings: Vec::new(),
             ended,
+            progress,
         });
     }
     let result = experiment_document(
@@ -786,6 +1095,7 @@ pub(crate) fn run_experiment<D: Domain>(
         reused,
         warnings: Vec::new(),
         ended,
+        progress,
     })
 }
 

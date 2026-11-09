@@ -21,6 +21,7 @@ taktsim-components.workspace = true
 taktsim-stats.workspace = true
 thiserror.workspace = true
 sha2.workspace = true
+rayon.workspace = true
 
 [dev-dependencies]
 taktsim-trace = { workspace = true, features = ["golden"] }

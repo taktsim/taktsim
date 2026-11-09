@@ -54,6 +54,8 @@ pub(crate) struct Fold {
     pub(crate) recent: Vec<String>,
     /// What the records say about the KPIs.
     kpis: KpiFacts,
+    /// The most items alive at once.
+    peak_alive: u64,
 }
 
 impl Fold {
@@ -100,6 +102,7 @@ pub(crate) fn fold<R: Read, D: Domain>(
     let mut last_event = SimTime::START;
     let mut recent = VecDeque::with_capacity(RECENT);
     let mut bridge = Bridge::new(places);
+    let (mut alive, mut peak_alive) = (0_u64, 0_u64);
     let as_text = |recent: &VecDeque<Record<D::Message>>| -> Vec<String> {
         recent
             .iter()
@@ -113,8 +116,11 @@ pub(crate) fn fold<R: Read, D: Domain>(
                 if let Some(row) = rows.get_mut(by.index()) {
                     row.created += 1;
                 }
+                alive = alive.saturating_add(1);
+                peak_alive = peak_alive.max(alive);
             }
             Record::ItemDisposed { by, how, .. } => {
+                alive = alive.saturating_sub(1);
                 if let Some(row) = rows.get_mut(by.index()) {
                     match how {
                         Disposal::Delivered => row.delivered += 1,
@@ -161,6 +167,7 @@ pub(crate) fn fold<R: Read, D: Domain>(
         last_event,
         recent: recent_text,
         kpis,
+        peak_alive,
     })
 }
 
@@ -175,6 +182,11 @@ impl Fold {
         let disposed =
             self.total(|r| r.delivered) + self.total(|r| r.scrapped) + self.total(|r| r.consumed);
         self.total(|r| r.created).saturating_sub(disposed)
+    }
+
+    /// What one replication like this one takes in memory, in bytes (ADR-0025 §8).
+    pub(crate) fn memory_estimate(&self) -> u64 {
+        crate::memory::estimate(self.total(|r| r.delivered), self.peak_alive)
     }
 
     /// The first of the four sums that differs from the engine's counter: the
