@@ -616,7 +616,9 @@ impl Decode for Over {
 
     fn schema(schemas: &mut Schemas) -> Json {
         let duration = schemas.of::<SimDuration>();
-        let shape = |keys: &[&str]| {
+        // Other keys stay open (`Record::OPEN`), but the keys of the other shape
+        // are refused, as `decode` refuses any other mix of the three.
+        let shape = |keys: &[&str], refused: &[&str]| {
             Json::object([
                 ("type", Json::from("object")),
                 (
@@ -628,6 +630,7 @@ impl Decode for Over {
                     Json::Object(
                         keys.iter()
                             .map(|k| ((*k).to_owned(), duration.clone()))
+                            .chain(refused.iter().map(|k| ((*k).to_owned(), Json::from(false))))
                             .collect(),
                     ),
                 ),
@@ -635,7 +638,10 @@ impl Decode for Over {
         };
         Json::object([(
             "oneOf",
-            Json::Array(vec![shape(&["from", "to"]), shape(&["at"])]),
+            Json::Array(vec![
+                shape(&["from", "to"], &["at"]),
+                shape(&["at"], &["from", "to"]),
+            ]),
         )])
     }
 }
