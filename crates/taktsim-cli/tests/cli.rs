@@ -3,6 +3,7 @@
 
 mod support;
 
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use support::{Dir, EXACT, UNSEEDED};
@@ -261,5 +262,27 @@ fn describe_and_schema_print_json_whatever_the_format() {
 fn validate_writes_nothing() {
     let dir = Dir::new().with_line();
     assert_eq!(dir.taktsim(&["validate", "line.yaml"]).code, 0);
-    assert!(!dir.path().join(".taktsim").exists());
+    assert!(dir.store_is_empty());
+}
+
+/// A store above the test's directory is the machine's: the tests never use it. Each
+/// test directory has a store of its own, which `run` finds first.
+#[test]
+fn a_store_above_the_test_directory_is_never_used() {
+    let outer = Dir::new();
+    std::fs::create_dir_all(outer.path().join(".taktsim")).unwrap();
+    let dir = Dir::new_in(outer.path()).with_line();
+    let ran = dir.taktsim(&["run", "line.yaml", "--format", "json"]);
+    assert_eq!(ran.code, 0, "{}", ran.stderr);
+    let progress = &ran.lines()[0];
+    assert_eq!(progress["reused"], false);
+    assert_eq!(
+        Path::new(progress["store"].as_str().unwrap()),
+        dir.path().join(".taktsim")
+    );
+    assert!(
+        outer.store_is_empty(),
+        "a test wrote into the store above it"
+    );
+    assert!(!dir.store_is_empty());
 }
