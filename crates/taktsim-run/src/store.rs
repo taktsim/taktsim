@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use taktsim_model::{Fields, Format, Record, decode_str};
 
 use crate::diagnostic::{Diagnostic, Failure, FailureClass};
-use crate::id::RunId;
+use crate::id::{ExperimentId, RunId};
 use crate::result::ResultDocument;
 
 /// The name of a store's directory.
@@ -249,26 +249,64 @@ impl Store {
 
     /// The stored result of the run `id`, if it is in the store.
     pub(crate) fn read_result(&self, id: &RunId) -> Result<Option<StoredResult>, Failure> {
-        let path = self.run_file(id, RESULT_FILE);
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(io_failure("store.read", &path, &e)),
+        read_document(&self.run_file(id, RESULT_FILE))
+    }
+
+    fn experiment_dir(&self, id: &ExperimentId) -> PathBuf {
+        self.root.join("experiments").join(id.as_str())
+    }
+
+    /// Keeps `document` as the experiment `id`, written in `tmp/` and renamed. If it is
+    /// there already it is never overwritten, and that one is returned: an id names one
+    /// document. With `compare`, it must have the same bytes apart from
+    /// `provenance.platform` (ADR-0025 §10).
+    pub(crate) fn keep_experiment(
+        &self,
+        id: &ExperimentId,
+        document: &ResultDocument,
+        compare: bool,
+    ) -> Result<ResultDocument, Failure> {
+        let target = self.experiment_dir(id);
+        let path = target.join(RESULT_FILE);
+        let kept = if let Some(stored) = read_document(&path)? {
+            stored.document
+        } else {
+            {
+                let temp = self.begin()?;
+                let file = temp.file(RESULT_FILE);
+                fs::write(&file, document.to_text())
+                    .map_err(|e| io_failure("store.write", &file, &e))?;
+                let parent = self.root.join("experiments");
+                fs::create_dir_all(&parent).map_err(|e| io_failure("store.write", &parent, &e))?;
+                match fs::rename(&temp.dir, &target) {
+                    Ok(()) => return Ok(document.clone()),
+                    // Another process kept it just now.
+                    Err(_) if path.is_file() => {}
+                    Err(e) => return Err(io_failure("store.write", &target, &e)),
+                }
+                read_document(&path)?.map_or_else(|| document.clone(), |stored| stored.document)
+            }
         };
-        match decode_str(&text, Format::Json) {
-            Ok(document) => Ok(Some(StoredResult { document, text })),
-            Err(errors) => {
-                let mut line = Diagnostic::error(
-                    "store.result",
-                    format!("{} is not a result this build reads", path.display()),
-                )
-                .at("--store")
-                .found(errors.first().to_string())
-                .allowed(crate::RESULT_FORMAT);
-                line.file = Some(path.display().to_string());
-                Err(Failure::one(FailureClass::Io, line))
+        if compare {
+            let mut same_platform = kept.clone();
+            same_platform
+                .provenance
+                .platform
+                .clone_from(&document.provenance.platform);
+            if same_platform.to_text() != document.to_text() {
+                return Err(Failure::one(
+                    FailureClass::RunFailed,
+                    Diagnostic::error(
+                        "run.store_differs",
+                        format!(
+                            "experiment {id} is in the store with another document: the engine changed or determinism broke"
+                        ),
+                    )
+                    .at("--no-reuse"),
+                ));
             }
         }
+        Ok(kept)
     }
 
     /// A new directory for a run in progress.
@@ -313,6 +351,29 @@ impl Store {
 pub(crate) struct StoredResult {
     pub(crate) document: ResultDocument,
     pub(crate) text: String,
+}
+
+/// The result document at `path`, if there is one.
+fn read_document(path: &Path) -> Result<Option<StoredResult>, Failure> {
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(io_failure("store.read", path, &e)),
+    };
+    match decode_str(&text, Format::Json) {
+        Ok(document) => Ok(Some(StoredResult { document, text })),
+        Err(errors) => {
+        let mut line = Diagnostic::error(
+            "store.result",
+            format!("{} is not a result this build reads", path.display()),
+        )
+        .at("--store")
+        .found(errors.first().to_string())
+        .allowed(crate::RESULT_FORMAT);
+        line.file = Some(path.display().to_string());
+        Err(Failure::one(FailureClass::Io, line))
+        }
+    }
 }
 
 /// What [`Store::commit`] did.

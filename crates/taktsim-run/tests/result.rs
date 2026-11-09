@@ -487,10 +487,16 @@ fn declared_observable_is_answered_or_unreported() {
          - {id: buf, type: Buffer, capacity: 5 parts}\n  - {id: cut, type: Machine, cycle_time: 1min}\n  - {id: sink, type: Sink}\n\
          flow:\n  - [source, buf, cut, sink]\n\
          observe:\n  - throughput(sink)\n  - wip(buf)\n  - state_shares(cut)\n";
+    // A precision target runs until it is reached, which needs a budget (ADR-0025 §4).
+    let request = RunRequest {
+        budget: taktsim_run::Budget {
+            max_runs: std::num::NonZeroU32::new(20),
+            max_seconds: std::num::NonZeroU64::new(600),
+        },
+        ..RunRequest::new()
+    };
     let dir = TempDir::new();
-    let result = run_text(yaml, &RunRequest::new(), &dir.store())
-        .unwrap()
-        .result;
+    let result = run_text(yaml, &request, &dir.store()).unwrap().result;
     let answered: BTreeSet<&str> = result
         .metrics
         .iter()
