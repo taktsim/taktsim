@@ -6,8 +6,8 @@ use std::fmt::Write as _;
 
 use taktsim_model::Encode;
 use taktsim_run::{
-    Accuracy, AccuracyKind, Diagnostic, Ended, FailureClass, Metric, Over, ResultDocument, Scalar,
-    ValidationReport,
+    Accuracy, AccuracyKind, Diagnostic, Ended, FailureClass, Metric, Over, Progress,
+    ResultDocument, Scalar, Spent, ValidationReport,
 };
 
 use crate::args::Format;
@@ -30,13 +30,31 @@ pub(crate) const fn exit_for_result(ended: Ended) -> u8 {
     }
 }
 
-/// How a command ended, for a person.
-pub(crate) const fn ended_text(ended: Ended) -> &'static str {
+/// How a command ended, for a person; `spent` names the budget that ended it.
+pub(crate) const fn ended_text(ended: Ended, spent: Option<Spent>) -> &'static str {
     match ended {
         Ended::Complete => "complete",
-        Ended::BudgetExhausted => "a budget (--max-runs or --max-seconds) ended it",
+        Ended::BudgetExhausted => match spent {
+            Some(Spent::MaxRuns) => "--max-runs ended it before every target was reached",
+            Some(Spent::MaxSeconds) => "--max-seconds ended it",
+            None => "a budget ended it",
+        },
         Ended::EventLimit => "a replication reached --max-events",
         Ended::Cancelled => "interrupted; only finished replications count",
+    }
+}
+
+/// The `run.ended` line: how many replications count of how many could have, and how
+/// it ended (ADR-0025 §5). `runs` is the document's, for one run.
+pub(crate) fn ended_line(runs: usize, ended: Ended, progress: Option<Progress>) -> String {
+    match progress {
+        Some(progress) => format!(
+            "{} of {} replications counted; {}",
+            progress.counted,
+            progress.planned,
+            ended_text(ended, progress.spent)
+        ),
+        None => format!("{runs} replications counted; {}", ended_text(ended, None)),
     }
 }
 
@@ -327,8 +345,26 @@ mod tests {
             "± 0.5 (0.95 nominal level, 3 replications); target 2% not reached"
         );
         assert_eq!(
-            ended_text(Ended::Cancelled),
+            ended_text(Ended::Cancelled, None),
             "interrupted; only finished replications count"
+        );
+        assert_eq!(
+            ended_text(Ended::BudgetExhausted, Some(Spent::MaxSeconds)),
+            "--max-seconds ended it"
+        );
+        let progress = Progress {
+            counted: 14,
+            planned: 100,
+            at_once: None,
+            spent: Some(Spent::MaxRuns),
+        };
+        assert_eq!(
+            ended_line(14, Ended::BudgetExhausted, Some(progress)),
+            "14 of 100 replications counted; --max-runs ended it before every target was reached"
+        );
+        assert_eq!(
+            ended_line(1, Ended::EventLimit, None),
+            "1 replications counted; a replication reached --max-events"
         );
     }
 
