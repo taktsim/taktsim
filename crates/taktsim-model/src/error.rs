@@ -1524,11 +1524,123 @@ mod tests {
         ]
     }
 
+    /// The kinds neither list above holds.
+    fn other_kinds() -> Vec<LoadErrorKind> {
+        let place = Place::new(None, Location::new(1, 1));
+        vec![
+            LoadErrorKind::NonStringKey {
+                found: Found::Int(1),
+            },
+            LoadErrorKind::Ambiguous {
+                text: "yes".into(),
+                reading: Ambiguity::Boolean,
+            },
+            LoadErrorKind::WrongType {
+                expected: "e",
+                example: "x",
+                found: Found::Null,
+            },
+            LoadErrorKind::Unit(UnitError::InvalidNumber {
+                input: "x".into(),
+                quantity: "duration",
+                example: "1s",
+            }),
+            LoadErrorKind::Distribution(DistributionError::NotPositive {
+                distribution: "exponential",
+                parameter: "mean",
+                found: taktsim_units::SimDuration::ZERO,
+                example: "x",
+            }),
+            LoadErrorKind::Expression {
+                text: "1 +".into(),
+                error: crate::expr::parse("1 +").unwrap_err(),
+            },
+            LoadErrorKind::CaseClash {
+                id: "a".into(),
+                other: "A".into(),
+                first: place,
+                other_path: Box::new(FieldPath::from(vec![])),
+            },
+            LoadErrorKind::IncludePath {
+                path: "p".into(),
+                problem: IncludePathProblem::Absolute,
+            },
+            LoadErrorKind::Normalize {
+                type_name: "T".into(),
+                problem: NormalizeProblem::NotAMapping,
+            },
+        ]
+    }
+
+    /// The position of each kind, 0 to 44. The match is exhaustive, so a new kind
+    /// does not compile without a position; it takes 45, and raises the bound in
+    /// `every_kind`, which then fails until a value of it is in a list.
+    fn position(kind: &LoadErrorKind) -> usize {
+        match kind {
+            LoadErrorKind::Io { .. } => 0,
+            LoadErrorKind::NotUtf8 { .. } => 1,
+            LoadErrorKind::Yaml { .. } => 2,
+            LoadErrorKind::Json { .. } => 3,
+            LoadErrorKind::TooDeep { .. } => 4,
+            LoadErrorKind::Empty => 5,
+            LoadErrorKind::MultipleDocuments => 6,
+            LoadErrorKind::Anchor => 7,
+            LoadErrorKind::Alias => 8,
+            LoadErrorKind::Tag { .. } => 9,
+            LoadErrorKind::MergeKey => 10,
+            LoadErrorKind::ComplexKey => 11,
+            LoadErrorKind::NonStringKey { .. } => 12,
+            LoadErrorKind::DuplicateKey { .. } => 13,
+            LoadErrorKind::Ambiguous { .. } => 14,
+            LoadErrorKind::IntegerRange { .. } => 15,
+            LoadErrorKind::NotFinite { .. } => 16,
+            LoadErrorKind::WrongType { .. } => 17,
+            LoadErrorKind::MissingField { .. } => 18,
+            LoadErrorKind::UnknownField { .. } => 19,
+            LoadErrorKind::UnknownValue { .. } => 20,
+            LoadErrorKind::Unit(_) => 21,
+            LoadErrorKind::Distribution(_) => 22,
+            LoadErrorKind::Expression { .. } => 23,
+            LoadErrorKind::BareShare { .. } => 24,
+            LoadErrorKind::NotAllowed { .. } => 25,
+            LoadErrorKind::UnsupportedFormat { .. } => 26,
+            LoadErrorKind::InvalidId { .. } => 27,
+            LoadErrorKind::DuplicateId { .. } => 28,
+            LoadErrorKind::CaseClash { .. } => 29,
+            LoadErrorKind::UnknownComponent { .. } => 30,
+            LoadErrorKind::TooFew { .. } => 31,
+            LoadErrorKind::Repeated { .. } => 32,
+            LoadErrorKind::SelfLoop { .. } => 33,
+            LoadErrorKind::DuplicateEdge { .. } => 34,
+            LoadErrorKind::DuplicateObservable { .. } => 35,
+            LoadErrorKind::NotAnObservable { .. } => 36,
+            LoadErrorKind::SteadyStateUnsupported => 37,
+            LoadErrorKind::IncludePath { .. } => 38,
+            LoadErrorKind::IncludeUnavailable => 39,
+            LoadErrorKind::NestedInclude => 40,
+            LoadErrorKind::IncludeSelf { .. } => 41,
+            LoadErrorKind::DuplicateInclude { .. } => 42,
+            LoadErrorKind::IncludeHash { .. } => 43,
+            LoadErrorKind::Normalize { .. } => 44,
+        }
+    }
+
+    /// Every kind, once each.
+    fn every_kind() -> Vec<LoadErrorKind> {
+        let kinds = [syntax_kinds(), document_kinds(), other_kinds()].concat();
+        let positions: Vec<usize> = kinds.iter().map(position).collect();
+        let mut sorted = positions.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, (0..45).collect::<Vec<_>>(), "{positions:?}");
+        kinds
+    }
+
     /// Every word is in the namespace and none is used twice. The match in
-    /// `name` is exhaustive, so a new kind cannot go without a word.
+    /// `name` is exhaustive, so a new kind cannot go without a word; `every_kind`
+    /// holds each kind, so each word is checked.
     #[test]
     fn error_names_are_unique_words_in_the_model_namespace() {
-        let kinds = [syntax_kinds(), document_kinds()].concat();
+        let kinds = every_kind();
         let names: std::collections::BTreeSet<&str> =
             kinds.iter().map(LoadErrorKind::name).collect();
         assert_eq!(names.len(), kinds.len());
