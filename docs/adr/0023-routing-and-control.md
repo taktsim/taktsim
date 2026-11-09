@@ -350,15 +350,27 @@ it is absent. A model that declares the rule without it loads and behaves as FIF
 **Who decides.** A rule on station T acts in two places, so that every waiting unit
 can win:
 
-1. **At T's inlet,** when a place frees and two or more offers wait: T picks an
+1. **At T's inlet,** when a place is free and two or more offers wait: T picks an
    offer by the key of the unit each describes. An `Accept` is not yet a commitment,
    since upstream may answer `Decline`, so the record waits for the `Arrive` (§9).
+   Units offered at one instant all wait at that instant, so T picks only once every
+   offer of the instant is in: a free place beside a waiting offer schedules a `Pick`,
+   a timer after no time at priority 8, after every `Offer`, `OfferOf` and `Withdraw`
+   (§10). Otherwise the first offer delivered would take a free place unranked, and
+   which one that is follows the order components are listed in
+   (`dispatch_result_does_not_depend_on_listing_order`, disagreement 19).
 2. **In a Buffer upstream,** when T's `Accept` arrives: the Buffer applies T's rule
    to the parts meant for T. T's rule replaces the Buffer's `discipline` while it
    is declared, as ADR-0022 recommended. Without a rule, the discipline holds.
 
 A Machine upstream gives its first finished unit meant for T. A Source's batch is
 one variant, priority and due date, so its order does not matter.
+
+A station without a rule takes an offer when it comes. So when a `first_free` holder
+offers to it and to T at one instant with room at both, it has taken the part and the
+holder has withdrawn it from T before T picks
+(`a_station_with_a_rule_picks_after_the_offers_of_the_instant`). Event order still
+decides that race, as ADR-0022 §3 says for `first_free`; it is only fixed.
 
 | | O1. Bare `Offer` stays; new `OfferOf(unit)` only to a station with a rule | O2. Every `Offer` carries attributes (ADR-0022 §3's wording) |
 | --- | --- | --- |
@@ -494,13 +506,14 @@ gives one rule: a record exists exactly when its choice had an effect. A part wi
 the decision it made earlier, and the record states it.
 
 **Dispatch records wait for the `Arrive`.** A pick at T's inlet may meet a `Decline`,
-because a `first_free` upstream gave the part to another target. A record written with the
-`Accept` would then state a choice that never happened. So T keeps the candidates beside
-the reservation for that instant. An `Arrive` writes them, with the chosen entry's item and
-key replaced by those of the unit that came (a Buffer's `Accept` may give a better one, under
-the same rule). A `Decline` discards them. A pick made while handling a `Decline` writes a
-record even with one candidate, because a pick that failed came first and the trace should
-show what replaced it (`declined_pick_writes_no_record_and_the_re_pick_writes_one`).
+because the holder is down, or the unit it described has gone (disagreement 14). A record
+written with the `Accept` would then state a choice that never happened. So T keeps the
+candidates beside the reservation for that instant. An `Arrive` writes them, with the
+chosen entry's item and key replaced by those of the unit that came (a Buffer's `Accept`
+may give a better one, under the same rule). A `Decline` discards them. The next pick after
+a `Decline` at that instant writes a record even with one candidate, because a pick that
+failed came first and the trace should show what replaced it
+(`declined_pick_writes_no_record_and_the_re_pick_writes_one`).
 
 Nothing is written for a chain, one candidate, a Buffer's own `discipline`, or the
 oldest offer at a merge with no rule. Those orders follow from records already in the
@@ -588,6 +601,7 @@ neither does their order at one instant.
 | 16 | `RouteDecision` | 8, never delivered | §9 |
 | 17 | `DispatchDecision` | 8 | §9 |
 | 18 | `EdgeCondition` | 8 | §9 |
+| 19 | `Pick` (timer, after no time) | 8, the only message at 8 that is delivered: after every offer of the instant (§6) | none |
 
 **Proof that M5 keeps its meaning:** a model with no rule, `when`, `split` or loop
 writes the same event bytes as under ADR-0022, so `m5_chain`, `m5_capacity2`,
@@ -659,7 +673,7 @@ after v0.1 ships.
 | First-match, the route decided once, full means wait, no fallthrough | every routed result | silently different results | `first_match_in_written_order`, `full_branch_waits_and_never_takes_another`, `no_edge_after_an_unconditional_one` |
 | Meaning of each choice rule, its rank and ties; re-rank on any room change or repair | every pool result | every pool result | `each_choice_rule_breaks_ties_by_list_order`, `preferred_is_not_first_free_when_room_opens_together`, `no_part_stands_beside_a_free_target`, `offer_moves_when_its_target_loses_room`, `repaired_holder_re_ranks`, `queue_changes_alone_move_nothing`, `utilization_rank_is_exact_integers` |
 | Queue, room and utilization definitions; a `Status`'s queue leaves out the receiver's own offer | results; what users compare with M8's utilization | every pool result | `queue_counts_what_it_says`, `work_per_place_matches_trace_utilization` |
-| Meaning of each dispatching rule, FIFO as oldest ready, no due date last, taker's rule over `discipline`; what `minimum_setup` measures against | every dispatched result | every dispatched result | `dispatching.rs` hand-built queues, `fifo_is_oldest_ready_across_two_buffers`, `no_due_date_sorts_last_then_fifo`, `taker_rule_replaces_discipline`, `minimum_setup_follows_the_last_committed_unit` |
+| Meaning of each dispatching rule, FIFO as oldest ready, no due date last, taker's rule over `discipline`; what `minimum_setup` measures against; a rule picks among every offer of the instant, at its `Pick` | every dispatched result | every dispatched result | `dispatching.rs` hand-built queues, `fifo_is_oldest_ready_across_two_buffers`, `no_due_date_sorts_last_then_fifo`, `taker_rule_replaces_discipline`, `minimum_setup_follows_the_last_committed_unit`, `earliest_due_date_takes_the_earliest_and_no_date_last`, `dispatch_result_does_not_depend_on_listing_order`, `a_station_with_a_rule_picks_after_the_offers_of_the_instant` |
 | `mean` is what the sampler draws, per distribution, truncated normal included | SPT and minimum setup ranks | a new rule name | `means_are_pinned_per_distribution`, `truncated_normal_mean_matches_its_draws` |
 | A due date past the end of the clock is no due date, never a run failure (§7, ADR-0022 §6) | every model with due dates; results of `earliest_due_date` with dates beyond 584 years | silently different results for those models; failing them instead breaks them | `a_due_date_past_the_end_of_time_is_no_due_date`, `a_due_date_drawn_past_the_end_of_time_is_no_due_date_and_keeps_its_draw`, `a_due_date_past_the_clock_sorts_with_no_due_date` |
 | `due_in` needs `interarrival` | every model with due dates | none: relaxing it breaks no model | `routing_malformed` corpus, `due_in_on_an_on_demand_source_is_rejected` |
@@ -696,6 +710,7 @@ after v0.1 ships.
 | 16 | §10's table lists `Status`, `OfferOf` and the two decisions as messages with their fields; in Rust they are boxed, and `FlowMessage` keeps its size, so a model without rules moves no larger message (`a_model_without_rules_moves_no_larger_message_than_it_did`). The bytes in a trace are as the table says | §10 here | keep; no reader sees it | no |
 | 17 | §6 has a Buffer rank by `follows` when `Accept` arrives, and `follows` is the newest reserved place. With two places free in one event, the first `Accept` lands after a `Status` already naming the second pick, so the Buffer gives a unit that ranks worse than what the station passed over | §6, §9 here | `minimum_setup` takes one place at a time, the next when this one's reply has landed at this instant. No other rule reads `follows`, and throughput does not change, since a reservation ends within its instant. The invariant on free places and waiting offers makes that one exception | no |
 | 18 | §7 made a due date past the end of the clock a typed run failure, while ADR-0022 §6 (question 19 there) makes every other draw past the clock mean never, so that whether a run fails does not depend on the seed. With a `due_in` distribution, §7 as written fails some runs by seed | §7 here, ADR-0022 §6 | such a date is no due date: it sorts last like a unit without one, and the run goes on (question 16) | no |
+| 19 | §6 step 1 said a station picks "when a place frees and two or more offers wait", and the implementation read it per event: offers made at one instant reach a free station one by one, so the first delivered took the place unranked and wrote no record. Which one that is depends on the order components are listed in, so a declared rule had no effect on units offered together, against spec §4 ("decide which waiting unit a resource takes next") and the roadmap's record for every choice | §6, §9, §10 here | a station with a rule picks at a `Pick`, a timer after no time at priority 8, after every offer of the instant; tag 19 in `taktsim-components/2`, which is not yet released. Models with a rule gain one event per pick; models without one are unchanged. The invariant on free places and waiting offers exempts the events before the `Pick` of that instant. The alternative, stating that simultaneous offers follow event order, leaves results depending on listing order | no |
 
 ## Consequences
 
@@ -777,3 +792,8 @@ request merges.
     last under `earliest_due_date` and the run goes on, as ADR-0022 §6 does for every other draw?
     The alternative fails the run, depending on the seed for a distribution. *Recommended:* yes.
     Implementation proceeds on this.
+17. **Offers of one instant (§6, disagreement 19).** A station with a rule picks only once every
+    offer of the instant is in, through a `Pick` timer, so that units offered together are ranked
+    by the rule and not by the order components are listed in? *Recommended:* yes; it costs one
+    event per pick in models with a rule, and a station with a rule then loses a same-instant
+    `first_free` race to one without, which event order decided anyway.

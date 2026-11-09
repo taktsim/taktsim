@@ -78,7 +78,9 @@ In the model, the setup is one line:
 >
 > The other rules are `fifo` (the oldest ready unit, from any upstream),
 > `earliest_due_date`, `shortest_processing_time` (with `cycle_time_by_variant` on the
-> machine, or there is nothing to tell the units apart) and `priority_class`. A rule
+> machine, or there is nothing to tell the units apart) and `priority_class`. Units
+> offered at the same moment all count as waiting: the rule picks among them, not
+> whichever happened to be handled first. A rule
 > also replaces the `discipline` of a Buffer directly upstream, while it is declared.
 > A Source sets what the rules read, until order lists arrive in v0.2: `due_in` (needs
 > `interarrival`) and `priority_mix`.
