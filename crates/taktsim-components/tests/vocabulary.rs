@@ -10,7 +10,7 @@ use std::path::Path;
 
 use regex::Regex;
 use schema_checker::Checker;
-use support::{document, load, registry, run};
+use support::{document, files_with, load, registry, run};
 use taktsim_components::{
     BuildError, ComponentType, Flow, FlowMessage, FlowShared, ItemAttrs, MachineState, Ports,
     Registry, Wiring, standard,
@@ -234,8 +234,8 @@ fn every_component_type_is_registered() {
     let pattern = Regex::new(r"impl ComponentType<Flow> for (\w+)").unwrap();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut implemented = BTreeSet::new();
-    for entry in std::fs::read_dir(source).unwrap() {
-        let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
+    for path in files_with(&source, &["rs"]) {
+        let text = std::fs::read_to_string(path).unwrap();
         for capture in pattern.captures_iter(&text) {
             implemented.insert(capture[1].to_owned());
         }

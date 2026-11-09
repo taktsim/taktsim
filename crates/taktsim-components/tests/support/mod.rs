@@ -3,6 +3,8 @@
 
 #![allow(dead_code, clippy::unwrap_used, clippy::panic)] // Each test crate uses a part.
 
+use std::path::{Path, PathBuf};
+
 use taktsim_components::{
     Flow, FlowMessage, MachineStateNote, Registry, RunOptions, RunReport, SourceStateNote,
     VariantId, standard,
@@ -11,6 +13,28 @@ use taktsim_core::{ComponentId, Disposal, EngineConfig, ItemId};
 use taktsim_model::{Format, LoadErrors, Loader, Model};
 use taktsim_trace::{Record, TraceReader, replay};
 use taktsim_units::{SimDuration, SimTime};
+
+/// The files in `dir` with one of `extensions`, sorted. Anything else, such as
+/// the `.DS_Store` that macOS's Finder writes, is not part of a corpus.
+pub fn files_with(dir: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let mut paths: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| extensions.contains(&e))
+        })
+        .collect();
+    paths.sort();
+    paths
+}
+
+/// The model files in `dir`, YAML or JSON, sorted.
+pub fn model_files(dir: &Path) -> Vec<PathBuf> {
+    files_with(dir, &["yaml", "json"])
+}
 
 pub fn registry() -> Registry<Flow> {
     standard().unwrap()

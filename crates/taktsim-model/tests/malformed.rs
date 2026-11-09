@@ -11,7 +11,9 @@
 
 mod support;
 
-use support::{catalog, data, summary};
+use std::path::Path;
+
+use support::{catalog, data, model_files, summary};
 use taktsim_model::{Format, LoadErrorKind, Loader};
 
 #[test]
@@ -19,12 +21,7 @@ fn every_malformed_model_fails_with_the_expected_errors() {
     let dir = data("malformed");
     let catalog = catalog();
     let loader = Loader::new(&catalog);
-    let mut paths: Vec<_> = std::fs::read_dir(&dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.is_file())
-        .collect();
-    paths.sort();
+    let paths = model_files(&dir);
     let mut failures = Vec::new();
     for path in &paths {
         let text = std::fs::read_to_string(path).unwrap();
@@ -71,11 +68,7 @@ fn every_error_says_what_was_found_and_what_is_allowed() {
     let dir = data("malformed");
     let catalog = catalog();
     let loader = Loader::new(&catalog);
-    for entry in std::fs::read_dir(&dir).unwrap() {
-        let path = entry.unwrap().path();
-        if !path.is_file() {
-            continue;
-        }
+    for path in model_files(&dir) {
         let errors = loader.load_file(&path).unwrap_err();
         for e in errors.iter() {
             let kind = e.kind();
@@ -232,4 +225,22 @@ fn files_that_are_not_utf8_or_not_model_files() {
         LoadErrorKind::NotAllowed { .. }
     ));
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_corpus_is_its_model_files_only() {
+    // macOS's Finder writes a binary `.DS_Store` into a folder it shows; git
+    // ignores it, so the corpus tests must too.
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("model-corpus");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(".DS_Store"),
+        b"\x00\x00\x00\x01Bud1\x00\xff\xfe\x80",
+    )
+    .unwrap();
+    std::fs::write(dir.join("b.yaml"), "b: 1\n").unwrap();
+    std::fs::write(dir.join("a.json"), "{}").unwrap();
+    std::fs::write(dir.join("notes.txt"), "not a model").unwrap();
+    std::fs::create_dir_all(dir.join("parts.yaml")).unwrap();
+    assert_eq!(model_files(&dir), [dir.join("a.json"), dir.join("b.yaml")]);
 }

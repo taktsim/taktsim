@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 
 use regex::Regex;
 use schema_checker::{ANNOTATIONS, Checker, VALIDATION, keywords};
-use support::{catalog, data};
+use support::{catalog, data, model_files};
 use taktsim_model::{
     Catalog, Decode, Format, Json, LoadErrorKind, Loader, Schemas, model_schema, parse,
 };
@@ -33,15 +33,8 @@ fn only_supported_keywords() {
     }
 }
 
-#[allow(clippy::unwrap_used)] // Test helper: the corpus directories exist.
 fn files(dir: &str) -> Vec<std::path::PathBuf> {
-    let mut paths: Vec<_> = std::fs::read_dir(data(dir))
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.is_file())
-        .collect();
-    paths.sort();
-    paths
+    model_files(&data(dir))
 }
 
 #[allow(clippy::unwrap_used)] // Test helper: the corpus files are model files.
@@ -60,8 +53,7 @@ fn the_schema_accepts_every_valid_model_and_included_file() {
         assert!(checker.valid(&schema, &value), "{}", path.display());
     }
     let included = &schema["$defs"]["IncludedFile"];
-    for path in std::fs::read_dir(data("valid").join("parts")).unwrap() {
-        let path = path.unwrap().path();
+    for path in model_files(&data("valid").join("parts")) {
         assert!(
             checker.valid(included, &tree(&path).unwrap()),
             "{}",

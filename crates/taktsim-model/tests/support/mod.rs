@@ -221,6 +221,28 @@ pub fn catalog() -> Catalog {
 }
 
 /// The directory of the test data.
+/// The files in `dir` with one of `extensions`, sorted. Anything else, such as
+/// the `.DS_Store` that macOS's Finder writes, is not part of a corpus.
+pub fn files_with(dir: &Path, extensions: &[&str]) -> Vec<PathBuf> {
+    let mut paths: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| extensions.contains(&e))
+        })
+        .collect();
+    paths.sort();
+    paths
+}
+
+/// The model files in `dir`, YAML or JSON, sorted.
+pub fn model_files(dir: &Path) -> Vec<PathBuf> {
+    files_with(dir, &["yaml", "json"])
+}
+
 pub fn data(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")

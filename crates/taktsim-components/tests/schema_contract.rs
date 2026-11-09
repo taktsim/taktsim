@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use schema_checker::{ANNOTATIONS, Checker, VALIDATION, keywords};
-use support::registry;
+use support::{model_files, registry};
 use taktsim_model::{Format, Json, LoadErrorKind, Loader, model_schema, parse};
 
 fn schema() -> Json {
@@ -119,8 +119,7 @@ fn the_schema_rejects_every_malformed_model_it_can() {
         .join("data")
         .join("malformed");
     let (mut files, mut rejected) = (0, 0);
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
+    for path in model_files(&dir) {
         let text = std::fs::read_to_string(&path).unwrap();
         let errors = loader.load_file(&path).unwrap_err();
         files += 1;

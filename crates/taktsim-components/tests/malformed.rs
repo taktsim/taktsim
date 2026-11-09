@@ -9,7 +9,7 @@ mod support;
 
 use std::path::Path;
 
-use support::{document, load, registry, try_load};
+use support::{document, load, model_files, registry, try_load};
 use taktsim_model::{LoadErrorKind, LoadErrors, Loader};
 
 /// Each error as `path @ line:column Kind`.
@@ -31,18 +31,12 @@ fn summary(errors: &LoadErrors) -> Vec<String> {
         .collect()
 }
 
-#[allow(clippy::unwrap_used)] // Test helper.
 fn corpus() -> Vec<std::path::PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("data")
         .join("malformed");
-    let mut paths: Vec<_> = std::fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
-    paths.sort();
-    paths
+    model_files(&dir)
 }
 
 #[test]
@@ -188,4 +182,22 @@ fn a_matrix_entry_may_be_zero_and_a_batch_at_the_limit_loads() {
         "  - [source, m, sink]",
     );
     load(&yaml);
+}
+
+#[test]
+fn a_corpus_is_its_model_files_only() {
+    // macOS's Finder writes a binary `.DS_Store` into a folder it shows; git
+    // ignores it, so the corpus tests must too.
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("components-corpus");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(".DS_Store"),
+        b"\x00\x00\x00\x01Bud1\x00\xff\xfe\x80",
+    )
+    .unwrap();
+    std::fs::write(dir.join("b.yaml"), "b: 1\n").unwrap();
+    std::fs::write(dir.join("a.json"), "{}").unwrap();
+    std::fs::write(dir.join("notes.txt"), "not a model").unwrap();
+    std::fs::create_dir_all(dir.join("parts.yaml")).unwrap();
+    assert_eq!(model_files(&dir), [dir.join("a.json"), dir.join("b.yaml")]);
 }
