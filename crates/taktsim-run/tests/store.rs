@@ -612,3 +612,64 @@ fn the_text_of_a_response_is_the_document() {
     assert!(!partial.result.complete);
     assert_eq!(partial.text, partial.result.to_text());
 }
+
+/// A stored trace that cannot be read, cut to nothing or in half, is a file that
+/// failed (exit code 7), as it is in the check run, not a replay that diverged
+/// (exit code 2): `replay_stored`'s doc says `Io` for a stored file that cannot be read.
+#[test]
+fn replay_of_a_trace_that_cannot_be_read_is_an_io_failure() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let store = dir.store();
+    let response = run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    let id = response.result.runs[0].run_id.clone().unwrap();
+    let path = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("trace.takt");
+    let trace = std::fs::read(&path).unwrap();
+    // Cut to nothing, the header does not read; cut in half, a record does not.
+    for cut in [0, trace.len() / 2] {
+        std::fs::write(&path, &trace[..cut]).unwrap();
+        let failure = replay_stored(&registry, &store, &id).unwrap_err();
+        assert_eq!(failure.class, FailureClass::Io, "cut at {cut}");
+        let line = &failure.diagnostics[0];
+        assert_eq!(line.type_name, "store.read", "cut at {cut}");
+        assert_eq!(line.path.as_deref(), Some("--store"));
+        assert_eq!(line.file, Some(path.display().to_string()));
+    }
+    std::fs::write(&path, &trace).unwrap();
+    assert!(replay_stored(&registry, &store, &id).is_ok());
+}
+
+/// A stored `model.json` that does not load is a stored file that cannot be read
+/// (exit code 7), named as the file, not invalid input at a path inside a file the
+/// caller never gave (exit code 1).
+#[test]
+fn replay_of_a_stored_model_that_does_not_load_is_an_io_failure() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let store = dir.store();
+    let response = run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    let id = response.result.runs[0].run_id.clone().unwrap();
+    let path = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("model.json");
+    let model = std::fs::read_to_string(&path).unwrap();
+    for broken in ["{}", "{\"format\": \"1.0\""] {
+        std::fs::write(&path, broken).unwrap();
+        let failure = replay_stored(&registry, &store, &id).unwrap_err();
+        assert_eq!(failure.class, FailureClass::Io, "{broken}");
+        assert_eq!(failure.diagnostics.len(), 1, "{broken}");
+        let line = &failure.diagnostics[0];
+        assert_eq!(line.type_name, "store.read", "{broken}");
+        assert_eq!(line.path.as_deref(), Some("--store"));
+        assert_eq!(line.file, Some(path.display().to_string()));
+        assert!(line.found.as_deref().is_some_and(|f| !f.is_empty()));
+    }
+    std::fs::write(&path, &model).unwrap();
+    assert!(replay_stored(&registry, &store, &id).is_ok());
+}
