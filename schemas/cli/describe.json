@@ -557,6 +557,7 @@
             "oneOf": [
               {
                 "properties": {
+                  "at": false,
                   "from": {
                     "$ref": "#/$defs/Duration"
                   },
@@ -574,7 +575,9 @@
                 "properties": {
                   "at": {
                     "$ref": "#/$defs/Duration"
-                  }
+                  },
+                  "from": false,
+                  "to": false
                 },
                 "required": [
                   "at"

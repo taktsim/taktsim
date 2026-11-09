@@ -177,6 +177,38 @@ fn emitted_results_match_the_schema() {
     assert!(!checker.valid(&schema, &bare));
 }
 
+/// The schema of `over` accepts exactly what the reader reads (ADR-0024 §2: one
+/// definition for reader and schema): every mix of `from`, `to` and `at`, with and
+/// without a key of a later version.
+#[test]
+fn the_schema_of_over_accepts_what_the_reader_reads() {
+    let schema = result_schema();
+    let checker = Checker { root: &schema };
+    let over = &schema["$defs"]["Over"];
+    assert_ne!(
+        *over,
+        Json::Null,
+        "`Over` is a definition of the result schema"
+    );
+    let keys = ["from", "to", "at"];
+    for mask in 0..(1_u8 << keys.len()) {
+        for later in [false, true] {
+            let mut object = Json::object([]);
+            for (i, key) in keys.iter().enumerate() {
+                if mask & (1 << i) != 0 {
+                    object = object.with(key, &Json::from("8h"));
+                }
+            }
+            if later {
+                object = object.with("a_later_key", &1_u32);
+            }
+            let text = object.to_string();
+            let read = decode_str::<Over>(&text, Format::Json).is_ok();
+            assert_eq!(checker.valid(over, &object), read, "{text}");
+        }
+    }
+}
+
 /// Any JSON, as read.
 struct Raw(Json);
 
