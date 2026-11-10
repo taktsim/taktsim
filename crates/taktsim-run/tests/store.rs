@@ -8,7 +8,10 @@ use std::path::Path;
 use support::{TempDir, drawing_model, exact_model, run_text};
 use taktsim_components::standard;
 use taktsim_model::ModelHash;
-use taktsim_run::{FailureClass, ModelSource, RunRequest, Store, replay_stored, run};
+use taktsim_run::{
+    FailureClass, ModelSource, ResultDocument, RunRequest, Scalar, Store, Unreported,
+    replay_stored, run,
+};
 
 #[allow(clippy::unwrap_used)] // Test helper.
 fn listing(dir: &Path) -> BTreeSet<String> {
@@ -916,4 +919,106 @@ fn replay_refuses_the_model_and_trace_of_another_run_filed_together() {
         failure.diagnostics[0].message
     );
     assert!(replay_stored(&registry, &store, &a_id).is_ok());
+}
+
+/// A change to a stored result.
+type Edit<'a> = dyn Fn(&mut ResultDocument) + 'a;
+
+/// `--no-reuse` is how a stored run is checked (ADR-0024 §8): the run it makes must
+/// give the stored result, not only the stored stream. A stored result whose numbers
+/// are not what the run gives, with its stream hash left alone, is exit 2 and is
+/// never overwritten.
+#[test]
+fn no_reuse_compares_the_whole_stored_result() {
+    let dir = TempDir::new();
+    let store = dir.store();
+    let yaml = drawing_model(", seed: 1");
+    let first = run_text(&yaml, &RunRequest::new(), &store).unwrap();
+    let id = first.result.runs[0].run_id.clone().unwrap();
+    let file = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("result.json");
+    let no_reuse = RunRequest {
+        reuse: false,
+        ..RunRequest::new()
+    };
+    let delivered = first
+        .result
+        .metrics
+        .iter()
+        .position(|m| m.name == "delivered(sink)")
+        .unwrap();
+    let edits: [(&str, &Edit<'_>); 4] = [
+        ("metrics", &|d| {
+            d.metrics[delivered].values[0].value = Scalar::Integer(5);
+        }),
+        ("runs", &|d| d.runs[0].events = 1),
+        ("runs", &|d| d.runs[0].end_time = "3h".parse().unwrap()),
+        ("unreported", &|d| {
+            d.unreported.push(Unreported {
+                observable: "throughput(sink)".to_owned(),
+                reason: "not_computed".to_owned(),
+            });
+        }),
+    ];
+    for (key, edit) in edits {
+        let mut forged = first.result.clone();
+        edit(&mut forged);
+        std::fs::write(&file, forged.to_text()).unwrap();
+        let failure = run_text(&yaml, &no_reuse, &store).unwrap_err();
+        assert_eq!(failure.class, FailureClass::RunFailed, "{key}");
+        let line = &failure.diagnostics[0];
+        assert_eq!(line.type_name, "run.store_differs", "{key}");
+        assert!(
+            line.message.contains(&format!("`{key}`")),
+            "{}",
+            line.message
+        );
+        assert_eq!(line.path.as_deref(), Some("--no-reuse"));
+        assert_ne!(line.found, line.allowed, "{key}");
+        // Never overwritten.
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), forged.to_text());
+        assert_eq!(listing(&store.root().join("tmp")).len(), 0);
+    }
+    std::fs::write(&file, &first.text).unwrap();
+    assert_eq!(run_text(&yaml, &no_reuse, &store).unwrap().text, first.text);
+}
+
+/// A `--no-reuse` run that matches the stored run returns the stored bytes, as reuse
+/// does: a key this build does not read is kept, and the platform the run was stored
+/// on is the only field that may differ (ADR-0024 §3, §8).
+#[test]
+fn no_reuse_returns_the_stored_bytes() {
+    let dir = TempDir::new();
+    let store = dir.store();
+    let yaml = drawing_model(", seed: 1");
+    let first = run_text(&yaml, &RunRequest::new(), &store).unwrap();
+    let id = first.result.runs[0].run_id.clone().unwrap();
+    let file = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("result.json");
+    let platform = format!("\"platform\": \"{}\"", first.result.provenance.platform);
+    let other = if first.result.provenance.platform == "aarch64-macos" {
+        "x86_64-windows"
+    } else {
+        "aarch64-macos"
+    };
+    let stored = first
+        .text
+        .replace(&platform, &format!("\"platform\": \"{other}\""))
+        .replacen("{\n", "{\n  \"later\": 1,\n", 1);
+    assert_ne!(stored, first.text);
+    std::fs::write(&file, &stored).unwrap();
+    let no_reuse = RunRequest {
+        reuse: false,
+        ..RunRequest::new()
+    };
+    let again = run_text(&yaml, &no_reuse, &store).unwrap();
+    assert!(!again.reused);
+    assert_eq!(again.text, stored);
+    assert_eq!(again.result.provenance.platform, other);
 }
