@@ -53,6 +53,7 @@ change true "the README, which tests read" sh -c 'echo more >>README.md'
 change true "the spec, which tests read" sh -c 'echo more >>docs/spec.md'
 change true "the introduction, which tests read" sh -c 'echo more >>docs/introduction.md'
 change true "a concept page, which tests read" sh -c 'echo more >>docs/concepts/01-production-line.md'
+change true "ADR-0022, which tests read" sh -c 'mkdir -p docs/adr; echo x >docs/adr/0022-components-source-machine-buffer-sink.md'
 change true "a new concept page" sh -c 'echo x >docs/concepts/09-new.md'
 change false "site and PR workflows" sh -c 'mkdir -p .github/workflows; echo x >.github/workflows/site.yml; echo x >.github/workflows/pr.yml'
 change false "no change at all" true

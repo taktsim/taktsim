@@ -16,12 +16,14 @@ base=$1 head=$2
 # Some documents are read by tests, which load and run the models they show
 # and pin results taken from them: README.md and docs/spec.md
 # (taktsim-model's examples.rs), README.md, docs/introduction.md and the
-# concept pages (taktsim-components' docs_examples.rs). Changing one runs the
-# gates, so a docs-only pull request cannot leave main failing for the next.
+# concept pages and ADR-0022 (taktsim-components' docs_examples.rs). Changing
+# one runs the gates, so a docs-only pull request cannot leave main failing
+# for the next.
 # A test that reads another document adds it here.
 skippable() {
   case "$1" in
     README.md | docs/spec.md | docs/introduction.md | docs/concepts/*) return 1 ;;
+    docs/adr/0022-components-source-machine-buffer-sink.md) return 1 ;;
     docs/* | website/*) return 0 ;;
     CONTRIBUTING.md | CLAUDE.md | CODE_OF_CONDUCT.md | SECURITY.md) return 0 ;;
     LICENSE-APACHE | LICENSE-MIT | .nvmrc | cliff.toml) return 0 ;;
