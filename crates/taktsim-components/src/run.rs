@@ -13,8 +13,8 @@ use std::sync::atomic::AtomicBool;
 
 use taktsim_core::random::DistributionError;
 use taktsim_core::{
-    Component as Behaviour, Engine, EngineConfig, EngineError, ItemCounts, RunError, RunLimits,
-    RunSummary, TraceSink,
+    Component as Behaviour, ComponentId, Engine, EngineConfig, EngineError, ItemCounts, RunError,
+    RunLimits, RunOutcome, RunSummary, TraceRecord, TraceSink,
 };
 use taktsim_model::expr::Signature;
 use taktsim_model::{
@@ -571,6 +571,11 @@ impl<D: Domain> Registry<D> {
         Ok(Prepared {
             engine,
             header,
+            paths: document
+                .components()
+                .iter()
+                .map(|c| c.path().clone())
+                .collect(),
             until: SimTime::from_nanos(document.experiment().horizon().as_nanos()),
             max_events: options.max_events,
             cancel: options.cancel,
@@ -726,6 +731,8 @@ impl<'a> RunOptions<'a> {
 pub struct Prepared<'a, D: Domain> {
     engine: Engine<D::Message>,
     header: Header,
+    /// The field path of each component's entry, in engine order.
+    paths: Vec<FieldPath>,
     until: SimTime,
     max_events: Option<u64>,
     cancel: Option<&'a AtomicBool>,
@@ -741,12 +748,66 @@ impl<D: Domain> fmt::Debug for Prepared<'_, D> {
     }
 }
 
-impl<'a, D: Domain> Prepared<'a, D> {
-    fn limits(&self) -> RunLimits<'a> {
-        RunLimits {
-            until: self.until,
-            max_events: self.max_events,
-            cancel: self.cancel,
+impl<D: Domain> Prepared<'_, D> {
+    /// Runs the engine to the horizon or a limit of the options, in steps short
+    /// enough that no component addresses more than [`TIMERS_PER_INSTANT`]
+    /// events to itself at one instant unnoticed (ADR-0022 §6). The steps leave
+    /// the events, and so the trace, exactly as one call would.
+    fn drive(&mut self, trace: &mut dyn TraceSink<D::Message>) -> Result<RunSummary, RunFailure> {
+        let mut watch = Watch::new(trace, self.paths.len());
+        let mut events: u64 = 0;
+        loop {
+            // At most this many events before the budget is passed: each event
+            // adds at most one to one component's count.
+            let room = (TIMERS_PER_INSTANT + 1).saturating_sub(watch.most);
+            let step = self
+                .max_events
+                .map_or(room, |max| room.min(max.saturating_sub(events)));
+            let limits = RunLimits {
+                until: self.until,
+                max_events: Some(step),
+                cancel: self.cancel,
+            };
+            let summary = self
+                .engine
+                .run(limits, &mut watch)
+                .map_err(|e| RunFailure::Run(Box::new(e)))?;
+            events += summary.events;
+            if watch.most > TIMERS_PER_INSTANT {
+                return Err(self.stalled(&watch));
+            }
+            let limit_reached = self.max_events == Some(events);
+            match summary.outcome {
+                RunOutcome::EventLimit if !limit_reached => {}
+                RunOutcome::EventLimit
+                | RunOutcome::Horizon
+                | RunOutcome::Idle
+                | RunOutcome::Cancelled => {
+                    return Ok(RunSummary {
+                        outcome: summary.outcome,
+                        events,
+                        now: summary.now,
+                    });
+                }
+            }
+        }
+    }
+
+    /// The failure of a run whose clock stopped moving, naming the component
+    /// that kept addressing events to itself.
+    fn stalled(&self, watch: &Watch<'_, D::Message>) -> RunFailure {
+        let index = watch.who.map_or(0, ComponentId::index);
+        RunFailure::Stalled {
+            path: self.paths.get(index).cloned().unwrap_or_default(),
+            component: self
+                .header
+                .components
+                .get(index)
+                .cloned()
+                .unwrap_or_default(),
+            time: watch.instant,
+            timers: watch.most,
+            events: watch.events,
         }
     }
 
@@ -778,7 +839,8 @@ impl<'a, D: Domain> Prepared<'a, D> {
     ///
     /// # Errors
     ///
-    /// [`RunFailure::Run`] if the run fails.
+    /// [`RunFailure::Run`] if the run fails, [`RunFailure::Stalled`] if its
+    /// clock stops moving.
     ///
     /// ```
     /// use taktsim_components::RunOptions;
@@ -797,11 +859,7 @@ impl<'a, D: Domain> Prepared<'a, D> {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn run(mut self, trace: &mut dyn TraceSink<D::Message>) -> Result<RunReport, RunFailure> {
-        let limits = self.limits();
-        let summary = self
-            .engine
-            .run(limits, trace)
-            .map_err(|e| RunFailure::Run(Box::new(e)))?;
+        let summary = self.drive(trace)?;
         Ok(RunReport {
             summary,
             items: self.engine.item_counts(),
@@ -820,7 +878,8 @@ impl<'a, D: Domain> Prepared<'a, D> {
     /// # Errors
     ///
     /// [`RunFailure::Write`] if the trace cannot be written, [`RunFailure::Run`]
-    /// if the run fails (whether or not its trace could be written).
+    /// if the run fails and [`RunFailure::Stalled`] if its clock stops moving
+    /// (whether or not its trace could be written).
     ///
     /// ```
     /// use taktsim_components::RunOptions;
@@ -843,15 +902,14 @@ impl<'a, D: Domain> Prepared<'a, D> {
     pub fn run_traced<W: Write>(mut self, out: W) -> Result<(W, RunReport), RunFailure> {
         let mut writer = TraceWriter::<W, D::Message>::new(out, &self.header)
             .map_err(|e| RunFailure::Write(Box::new(e)))?;
-        let limits = self.limits();
-        let summary = match self.engine.run(limits, &mut writer) {
+        let summary = match self.drive(&mut writer) {
             Ok(summary) => summary,
-            Err(e) => {
+            Err(failure) => {
                 // The records that led to the failure reach `out` (spec §4).
                 // The run's error is the one to report; if the trace cannot be
                 // written either, it reads as cut off earlier.
                 drop(writer.abandon());
-                return Err(RunFailure::Run(Box::new(e)));
+                return Err(failure);
             }
         };
         writer.run_ended(&summary);
@@ -866,6 +924,95 @@ impl<'a, D: Domain> Prepared<'a, D> {
                 trace: Some(trace),
             },
         ))
+    }
+}
+
+/// The most events one component may address to itself at one instant, its
+/// timers, before a run ends with [`RunFailure::Stalled`] (ADR-0022 §6).
+///
+/// A duration whose draws almost always round to 0 ns, such as a gamma of mean
+/// 1 s and cv 10⁶, loads, and then keeps its timer landing at the instant it was
+/// set, so the clock would never move. The budget ends such a run the same way on
+/// every PC: it counts events, never wall-clock time or memory, and it is always
+/// on.
+///
+/// Counted per component, of the events it addresses to itself, because that is
+/// what the model's limits bound: a component's timers at one instant are at most
+/// one per unit in cycle (at most 65,535) plus a failure, a repair and a setup,
+/// and a timer set at an instant lands at it again only on a draw of 0 ns. All
+/// events at an instant have no such bound, since any number of Sources may
+/// release a batch of 65,535 parts at the same instant. One million is about 15
+/// times the most a component can reach without a run of 0 ns draws: a reading
+/// for the owner, not a measurement.
+///
+/// ```
+/// assert_eq!(taktsim_components::TIMERS_PER_INSTANT, 1_000_000);
+/// ```
+pub const TIMERS_PER_INSTANT: u64 = 1_000_000;
+
+/// Passes every record on, and counts what each component addresses to itself
+/// at the current instant.
+struct Watch<'t, M> {
+    inner: &'t mut dyn TraceSink<M>,
+    /// The instant of the last event.
+    instant: SimTime,
+    /// Events at `instant`.
+    events: u64,
+    /// Events each component addressed to itself at `instant`, by index.
+    timers: Vec<u64>,
+    /// The indices whose count is not zero, to reset them.
+    touched: Vec<usize>,
+    /// The highest count at `instant`, and the first component to reach it.
+    most: u64,
+    who: Option<ComponentId>,
+}
+
+impl<'t, M> Watch<'t, M> {
+    fn new(inner: &'t mut dyn TraceSink<M>, components: usize) -> Self {
+        Self {
+            inner,
+            instant: SimTime::START,
+            events: 0,
+            timers: vec![0; components],
+            touched: Vec::new(),
+            most: 0,
+            who: None,
+        }
+    }
+}
+
+impl<M> TraceSink<M> for Watch<'_, M> {
+    fn record(&mut self, record: &TraceRecord<'_, M>) {
+        if let TraceRecord::Event {
+            time, target, from, ..
+        } = record
+        {
+            if *time != self.instant {
+                self.instant = *time;
+                self.events = 0;
+                for index in self.touched.drain(..) {
+                    if let Some(count) = self.timers.get_mut(index) {
+                        *count = 0;
+                    }
+                }
+                self.most = 0;
+                self.who = None;
+            }
+            self.events += 1;
+            if target == from
+                && let Some(count) = self.timers.get_mut(target.index())
+            {
+                if *count == 0 {
+                    self.touched.push(target.index());
+                }
+                *count += 1;
+                if *count > self.most {
+                    self.most = *count;
+                    self.who = Some(*target);
+                }
+            }
+        }
+        self.inner.record(record);
     }
 }
 
@@ -1148,12 +1295,32 @@ pub enum RunFailure {
     /// The trace could not be written.
     #[error(transparent)]
     Write(Box<WriteError>),
+    /// The clock stopped moving: a component addressed more than
+    /// [`TIMERS_PER_INSTANT`] events to itself at one instant, as a duration
+    /// whose draws almost all round to 0 ns does (ADR-0022 §6). The records up
+    /// to that event are in the trace, which has no end marker.
+    #[error(
+        "{path}: `{component}` addressed {timers} events to itself at {time} without the clock moving ({events} events in all), more than the {TIMERS_PER_INSTANT} a run allows at one instant; give it durations whose draws are not almost all 0 ns, e.g. `{{dist: lognormal, mean: 42s, sigma: 0.08}}`"
+    )]
+    Stalled {
+        /// The component's entry.
+        path: FieldPath,
+        /// The component's id.
+        component: String,
+        /// The instant the clock stayed at.
+        time: SimTime,
+        /// Events it addressed to itself at that instant: one more than the
+        /// budget.
+        timers: u64,
+        /// Events of every component at that instant.
+        events: u64,
+    },
 }
 
 impl RunFailure {
-    /// The field path of the input at fault: the model's seed, or what could
-    /// not be built. `None` for a failed run or trace, which are not about the
-    /// input.
+    /// The field path of the input at fault: the model's seed, what could not
+    /// be built, or the component whose clock stopped moving. `None` for a
+    /// failed run or trace, which are not about the input.
     ///
     /// ```
     /// use taktsim_components::RunFailure;
@@ -1165,7 +1332,7 @@ impl RunFailure {
     #[must_use]
     pub fn path(&self) -> Option<&FieldPath> {
         match self {
-            Self::NoSeed { path } => Some(path),
+            Self::NoSeed { path } | Self::Stalled { path, .. } => Some(path),
             Self::Build(error) => error.path(),
             Self::Run(_) | Self::Write(_) => None,
         }
@@ -1187,6 +1354,16 @@ impl RunFailure {
             Self::Build(error) => error.found(),
             Self::Run(error) => Some(error.to_string()),
             Self::Write(error) => Some(error.to_string()),
+            Self::Stalled {
+                component,
+                time,
+                timers,
+                events,
+                ..
+            } => Some(format!(
+                "{timers} events `{component}` addressed to itself at {time} without the clock \
+                 moving, {events} events in all"
+            )),
         }
     }
 
@@ -1210,6 +1387,10 @@ impl RunFailure {
                     .to_owned(),
             ),
             Self::Build(error) => error.allowed(),
+            Self::Stalled { .. } => Some(format!(
+                "at most {TIMERS_PER_INSTANT} events a component addresses to itself at one \
+                 instant: durations whose draws are not almost all 0 ns"
+            )),
             Self::Run(_) | Self::Write(_) => None,
         }
     }
@@ -1228,6 +1409,7 @@ impl RunFailure {
         match self {
             Self::NoSeed { .. } => Some("model: {name: line-a, seed: 42}".to_owned()),
             Self::Build(error) => error.example(),
+            Self::Stalled { .. } => Some("{dist: lognormal, mean: 42s, sigma: 0.08}".to_owned()),
             Self::Run(_) | Self::Write(_) => None,
         }
     }
