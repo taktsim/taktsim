@@ -2388,7 +2388,9 @@ fn what_comes_out_matches_the_published_schemas() {
     }
 }
 
-/// Writes each key of `value` that `schema` does not declare to `missing`.
+/// Writes each key of `value` that `schema` does not declare to `missing`. A key is declared by name
+/// in `properties`, or by an `additionalProperties` schema, which declares an open map such as
+/// `labels`: every key is allowed and only its value is checked, against that schema.
 fn walk(schema: &Json, root: &Json, value: &Json, at: &str, missing: &mut String) {
     if let Some(name) = schema["$ref"].as_str() {
         let name = name.strip_prefix("#/$defs/").unwrap();
@@ -2397,8 +2399,11 @@ fn walk(schema: &Json, root: &Json, value: &Json, at: &str, missing: &mut String
     }
     if let Some(object) = value.as_object() {
         let known = schema["properties"].as_object();
+        let open = schema["additionalProperties"]
+            .as_object()
+            .map(|_| &schema["additionalProperties"]);
         for (key, field) in object {
-            match known.and_then(|k| k.get(key)) {
+            match known.and_then(|k| k.get(key)).or(open) {
                 Some(sub) => walk(sub, root, field, &format!("{at}.{key}"), missing),
                 None => {
                     if schema["oneOf"].as_array().is_none() && schema["anyOf"].as_array().is_none()
