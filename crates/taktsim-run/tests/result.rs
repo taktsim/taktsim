@@ -302,6 +302,52 @@ fn unknown_kind_reads_as_no_statement() {
     assert!(decode_str::<Accuracy>("{reason: r}", Format::Yaml).is_err());
 }
 
+/// A later kind may use `interval`, `reason` or `detail` in a shape of its own: the
+/// reader rule says it reads as no statement, so it must not fail the document, and
+/// the schema must accept what the reader reads (ADR-0024 §4).
+#[test]
+fn an_unknown_kind_may_use_a_known_key_in_another_shape() {
+    let schema = result_schema();
+    let checker = Checker { root: &schema };
+    let accuracy = &schema["$defs"]["Accuracy"];
+    for text in [
+        r#"{"kind": "discretization", "detail": {"order": 2}}"#,
+        r#"{"kind": "discretization", "interval": 0.5}"#,
+        r#"{"kind": "discretization", "reason": ["a", "b"]}"#,
+    ] {
+        let read: Accuracy = decode_str(text, Format::Json).unwrap();
+        assert_eq!(
+            read.kind,
+            AccuracyKind::Unknown {
+                kind: "discretization".to_owned()
+            },
+            "{text}"
+        );
+        let json = decode_str::<Raw>(text, Format::Json).unwrap().0;
+        assert!(checker.valid(accuracy, &json), "{text}");
+    }
+    // The known kinds still type their own keys, in the reader and the schema.
+    for text in [
+        r#"{"kind": "none", "reason": "r", "detail": {"order": 2}}"#,
+        r#"{"kind": "sampling", "interval": 0.5}"#,
+    ] {
+        assert!(
+            decode_str::<Accuracy>(text, Format::Json).is_err(),
+            "{text}"
+        );
+        let json = decode_str::<Raw>(text, Format::Json).unwrap().0;
+        assert!(!checker.valid(accuracy, &json), "{text}");
+    }
+    // In a whole stored document too.
+    let text = sample_documents().remove(0).to_text().replacen(
+        "\"accuracy\": [",
+        "\"accuracy\": [{\"kind\": \"discretization\", \"detail\": {\"order\": 2}},",
+        1,
+    );
+    let read: ResultDocument = decode_str(&text, Format::Json).unwrap();
+    assert_eq!(read.metrics[0].values[0].accuracy.len(), 2);
+}
+
 /// A float with no fraction of its own reads back as the same float, also above
 /// 2^53 − 1, where the reader refuses an integer: the document is read back on
 /// reuse, so it must read as what was written (ADR-0024 §3).
