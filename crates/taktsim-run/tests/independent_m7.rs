@@ -2838,6 +2838,7 @@ impl ComponentType<Lax> for Unbuildable {
         Err(BuildError::UnknownType {
             path: wiring.path().clone(),
             type_name: "Unbuildable".into(),
+            registered: Vec::new(),
         })
     }
 }
