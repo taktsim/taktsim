@@ -5124,22 +5124,37 @@ fn observing(names: &[&str]) -> String {
 }
 
 /// ADR-0022, Observables: `throughput(Sink)`, `lead_time(Sink)`, `wip(Buffer)`,
-/// `state_shares(Machine, ...)`, as spec §4's example and page 6 write them. Each
-/// wrong type of component is refused at `observe`'s path, every argument checked.
+/// `state_shares(Machine, ...)`, as spec §4's example and page 6 write them. ADR-0025 §2
+/// settles the signatures (ADR-0015 answer 5): `wip` of any arity over Buffers and
+/// Machines, `wip()` the whole line, `held(Source)`, `utilization(Machine)`, and
+/// `state_shares` over Machines and Sources. Each wrong type of component is refused at
+/// `observe`'s path, every argument checked.
 #[test]
 fn observables_take_only_the_components_they_are_about() {
     load_ok(&observing(&[
         "throughput(sink)",
         "lead_time(sink)",
         "wip(buf1)",
+        "wip(weld)",
+        "wip()",
+        "wip(buf1, weld)",
+        "held(s)",
+        "utilization(cut)",
         "state_shares(cut)",
         "state_shares(cut, weld)",
+        "state_shares(s)",
     ]));
     let mut wrong = Vec::new();
     for name in [
         "throughput(cut)",
         "lead_time(buf1)",
-        "wip(weld)",
+        "wip(sink)",
+        "wip(s)",
+        "wip(buf1, sink)",
+        "held(cut)",
+        "held()",
+        "utilization(buf1)",
+        "utilization(s)",
         "state_shares(buf1)",
         "state_shares(cut, buf1)",
         "state_shares(cut, sink)",
