@@ -99,3 +99,160 @@ fn a_seed_beyond_the_exact_range_is_invalid() {
     assert_eq!(failure.class, FailureClass::Invalid);
     assert_eq!(failure.diagnostics[0].path.as_deref(), Some("--seed"));
 }
+
+fn budget(max_runs: u32, max_seconds: Option<u64>) -> taktsim_run::Budget {
+    taktsim_run::Budget {
+        max_runs: std::num::NonZeroU32::new(max_runs),
+        max_seconds: max_seconds.and_then(std::num::NonZeroU64::new),
+    }
+}
+
+/// What `--seed` names is checked once the model is known (ADR-0025 §4, last row): a
+/// model that draws nothing is one run whatever the list, its length or the budget,
+/// and each unused flag is a warning, never `run.budget_too_small`, `run.no_budget`
+/// or `run.budget_too_large`.
+#[test]
+fn a_model_that_draws_nothing_takes_any_seed_specs_as_one_run() {
+    use taktsim_run::SeedSpec::{One, Range};
+    let dir = TempDir::new();
+    let store = dir.store();
+    let cases: [(&[taktsim_run::SeedSpec], taktsim_run::Budget, &str); 4] = [
+        (&[Range { first: 1, last: 20 }], budget(5, None), "20 seeds"),
+        (
+            &[Range {
+                first: 1,
+                last: 2000,
+            }],
+            budget(0, None),
+            "2000 seeds",
+        ),
+        (
+            &[Range {
+                first: 0,
+                last: (1 << 53) - 1,
+            }],
+            budget(0, None),
+            "9007199254740992 seeds",
+        ),
+        (&[One(4), One(4)], budget(0, None), "2 seeds"),
+    ];
+    for (specs, budget, found) in cases {
+        let request = RunRequest {
+            seed_specs: specs,
+            budget,
+            ..RunRequest::new()
+        };
+        let response = run_text(&exact_model(""), &request, &store).unwrap();
+        assert_eq!(response.result.runs.len(), 1, "{specs:?}");
+        assert_eq!(response.result.runs[0].seed, None);
+        assert_eq!(response.progress, None, "one run, no experiment");
+        let warning = &response.warnings[0];
+        assert_eq!(warning.type_name, "run.seed_unused");
+        assert_eq!(warning.found.as_deref(), Some(found));
+        let unused = response
+            .warnings
+            .iter()
+            .any(|w| w.type_name == "run.flag_unused" && w.path.as_deref() == Some("--max-runs"));
+        assert_eq!(unused, budget.max_runs.is_some(), "{specs:?}");
+    }
+    // One seed named by a spec is the one seed, unused here.
+    let request = RunRequest {
+        seed_specs: &[Range { first: 7, last: 7 }],
+        ..RunRequest::new()
+    };
+    let response = run_text(&exact_model(""), &request, &store).unwrap();
+    assert_eq!(response.warnings[0].found.as_deref(), Some("7"));
+    // A malformed spec is refused, whatever the model.
+    let request = RunRequest {
+        seed_specs: &[Range { first: 5, last: 1 }],
+        ..RunRequest::new()
+    };
+    let failure = run_text(&exact_model(""), &request, &store).unwrap_err();
+    assert_eq!(failure.diagnostics[0].type_name, "run.seed_out_of_range");
+}
+
+/// A precision target with a seed list gets `run.seed_list_with_precision` first, the
+/// error that names the fix, not a budget refusal whose example still fails.
+#[test]
+fn a_precision_target_refuses_seed_specs_before_any_budget() {
+    let dir = TempDir::new();
+    let yaml = drawing_model(", seed: 1").replace(
+        "horizon: 1h}",
+        "horizon: 1h, precision: {\"throughput(sink)\": 5%}}",
+    );
+    let specs = [taktsim_run::SeedSpec::Range { first: 1, last: 20 }];
+    for budget in [
+        budget(10, Some(60)),
+        budget(0, None),
+        budget(2000, Some(60)),
+    ] {
+        let request = RunRequest {
+            seed_specs: &specs,
+            budget,
+            ..RunRequest::new()
+        };
+        let failure = run_text(&yaml, &request, &dir.store()).unwrap_err();
+        assert_eq!(failure.diagnostics.len(), 1, "{budget:?}");
+        assert_eq!(
+            failure.diagnostics[0].type_name, "run.seed_list_with_precision",
+            "{budget:?}"
+        );
+        assert_eq!(failure.diagnostics[0].found.as_deref(), Some("20 seeds"));
+    }
+    // One spec of one seed is the first of the sequence.
+    let request = RunRequest {
+        seed_specs: &[taktsim_run::SeedSpec::One(3)],
+        budget: budget(10, Some(600)),
+        ..RunRequest::new()
+    };
+    let response = run_text(&yaml, &request, &dir.store()).unwrap();
+    assert_eq!(response.result.provenance.seeds.first(), Some(&3));
+}
+
+/// A model that draws, with a list in `seed_specs`: the list's checks hold as they did
+/// in `expand_seeds`, and seeds named both ways join one sorted list.
+#[test]
+fn seed_specs_of_a_drawing_model_are_a_checked_list() {
+    use taktsim_run::SeedSpec::{One, Range};
+    let dir = TempDir::new();
+    let yaml = drawing_model("");
+    let request = RunRequest {
+        seed_specs: &[Range { first: 1, last: 20 }],
+        budget: budget(19, None),
+        ..RunRequest::new()
+    };
+    let failure = run_text(&yaml, &request, &dir.store()).unwrap_err();
+    assert_eq!(failure.diagnostics[0].type_name, "run.budget_too_small");
+    let request = RunRequest {
+        seed_specs: &[Range {
+            first: 1,
+            last: 1001,
+        }],
+        ..RunRequest::new()
+    };
+    let failure = run_text(&yaml, &request, &dir.store()).unwrap_err();
+    assert_eq!(failure.diagnostics.len(), 2);
+    let request = RunRequest {
+        seed_specs: &[Range {
+            first: 0,
+            last: (1 << 53) - 1,
+        }],
+        ..RunRequest::new()
+    };
+    let failure = run_text(&yaml, &request, &dir.store()).unwrap_err();
+    assert_eq!(failure.diagnostics[0].type_name, "run.budget_too_large");
+    let request = RunRequest {
+        seeds: &[3],
+        seed_specs: &[One(9), Range { first: 3, last: 4 }],
+        ..RunRequest::new()
+    };
+    let failure = run_text(&yaml, &request, &dir.store()).unwrap_err();
+    assert_eq!(failure.diagnostics[0].type_name, "run.duplicate_seed");
+    let request = RunRequest {
+        seeds: &[2],
+        seed_specs: &[One(9), Range { first: 3, last: 4 }],
+        ..RunRequest::new()
+    };
+    let response = run_text(&yaml, &request, &dir.store()).unwrap();
+    assert_eq!(response.result.provenance.seeds, [2, 3, 4, 9]);
+}

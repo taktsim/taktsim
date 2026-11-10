@@ -162,6 +162,84 @@ fn no_draw_list_prints_no_interval() {
     assert_eq!(stdout.matches("run: ").count(), 1, "{stdout}");
 }
 
+/// A model that draws nothing is one run whatever `--seed` names (ADR-0025 §4, last
+/// row), and each unused flag is a warning: the binary answers as the library does,
+/// since it checks the list only once the model is loaded.
+#[test]
+fn no_draw_model_takes_any_seed_list_as_one_run() {
+    let dir = workdir("no-draw-any");
+    write_model(
+        &dir,
+        "format: \"1.0\"\nmodel: {name: fixed}\nexperiment: {type: terminating, horizon: 1h}\n\
+         components: [{id: source, type: Source}, {id: cut, type: Machine, cycle_time: 1min}, {id: sink, type: Sink}]\n\
+         flow: [[source, cut, sink]]\n",
+    );
+    for args in [
+        &["--seed", "1..20", "--max-runs", "5"][..],
+        &["--seed", "1..2000"][..],
+        &["--seed", "0..9007199254740991"][..],
+    ] {
+        let mut all = vec!["run", "model.yaml", "--format", "json"];
+        all.extend(args);
+        let out = taktsim(&dir, &all);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert_eq!(out.status.code(), Some(0), "{args:?}: {stderr}");
+        assert!(stderr.contains("\"type\":\"run.seed_unused\""), "{stderr}");
+        assert!(!stderr.contains("\"kind\":\"error\""), "{stderr}");
+        let stdout = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(stdout.matches("\"run_id\": ").count(), 1, "{stdout}");
+    }
+    let out = taktsim(
+        &dir,
+        &[
+            "run",
+            "model.yaml",
+            "--seed",
+            "1..20",
+            "--max-runs",
+            "5",
+            "--format",
+            "json",
+        ],
+    );
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains("\"type\":\"run.flag_unused\"")
+            && stderr.contains("\"path\":\"--max-runs\""),
+        "{stderr}"
+    );
+}
+
+/// A precision model with a seed list: exit 1 with `run.seed_list_with_precision`
+/// (ADR-0025 §4), whatever the budget, not a budget refusal whose example still fails.
+#[test]
+fn precision_with_a_seed_list_names_that_first() {
+    let dir = workdir("precision-list");
+    write_model(
+        &dir,
+        &RANDOM.replace(
+            "horizon: 1h}",
+            "horizon: 1h, precision: {\"throughput(sink)\": 5%}}",
+        ),
+    );
+    for budget in [
+        &["--max-runs", "10", "--max-seconds", "60"][..],
+        &["--max-runs", "20", "--max-seconds", "60"][..],
+        &[][..],
+    ] {
+        let mut all = vec!["run", "model.yaml", "--seed", "1..20", "--format", "json"];
+        all.extend(budget);
+        let out = taktsim(&dir, &all);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert_eq!(out.status.code(), Some(1), "{budget:?}: {stderr}");
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        assert!(
+            stderr.contains("\"type\":\"run.seed_list_with_precision\""),
+            "{budget:?}: {stderr}"
+        );
+    }
+}
+
 /// A real SIGINT while long replications run: exit 4, `cancelled` (ADR-0025 §9). Each
 /// replication has about 260,000 parts, many seconds each, so the signal sent after
 /// one second always arrives while they run.

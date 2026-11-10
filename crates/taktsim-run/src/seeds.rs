@@ -178,7 +178,91 @@ fn check_max_runs(budget: Budget) -> Result<(), Failure> {
     }
 }
 
-/// The seeds `specs` name, sorted. Every length is checked before anything is expanded.
+/// How many seeds `spec` names, once it is checked: its length comes from its two
+/// ends, never from expanding it.
+fn spec_length(spec: SeedSpec) -> Result<u64, Failure> {
+    let (first, last) = match spec {
+        SeedSpec::One(seed) => (seed, seed),
+        SeedSpec::Range { first, last } => (first, last),
+    };
+    if last > max_seed() {
+        return Err(out_of_range(last));
+    }
+    if first > last {
+        return Err(invalid(
+            Diagnostic::error(
+                "run.seed_out_of_range",
+                format!("the range {spec} runs backward"),
+            )
+            .at("--seed")
+            .found(spec.to_string())
+            .allowed("a range whose first seed is not above its last")
+            .example("1..20"),
+        ));
+    }
+    Ok(last - first + 1)
+}
+
+/// The seeds a request names, each checked and all counted before anything is
+/// expanded, so what they ask for is decided once the model is known (ADR-0025 §4).
+struct Asked<'a> {
+    seeds: &'a [u64],
+    specs: &'a [SeedSpec],
+    /// How many seeds, saturating: at most 2^53 per range, so the sum of up to 2^10 of
+    /// them cannot overflow, and the saturating form states it even for more.
+    length: u64,
+}
+
+impl<'a> Asked<'a> {
+    fn of(seeds: &'a [u64], specs: &'a [SeedSpec]) -> Result<Self, Failure> {
+        if let Some(seed) = seeds.iter().copied().find(|seed| *seed > max_seed()) {
+            return Err(out_of_range(seed));
+        }
+        let mut length = u64::try_from(seeds.len()).unwrap_or(u64::MAX);
+        for spec in specs {
+            length = length.saturating_add(spec_length(*spec)?);
+        }
+        Ok(Self {
+            seeds,
+            specs,
+            length,
+        })
+    }
+
+    /// The seed, if exactly one is named.
+    fn single(&self) -> Option<u64> {
+        if self.length != 1 {
+            return None;
+        }
+        self.seeds
+            .first()
+            .copied()
+            .or_else(|| match self.specs.first() {
+                Some(SeedSpec::One(seed) | SeedSpec::Range { first: seed, .. }) => Some(*seed),
+                None => None,
+            })
+    }
+
+    /// Every seed, sorted, once [`check_list_length`] has bounded how many; a seed
+    /// named twice is refused.
+    fn expand(&self) -> Result<Vec<u64>, Failure> {
+        let mut seeds = self.seeds.to_vec();
+        for spec in self.specs {
+            match *spec {
+                SeedSpec::One(seed) => seeds.push(seed),
+                SeedSpec::Range { first, last } => seeds.extend(first..=last),
+            }
+        }
+        check_sorted_unique(&mut seeds)?;
+        Ok(seeds)
+    }
+}
+
+/// The seeds `specs` name, sorted, as a list of seeds: every length is checked before
+/// anything is expanded. [`run`](crate::run) does these checks itself once it knows the
+/// model, on [`RunRequest::seed_specs`], since a model that draws nothing is one run
+/// whatever the list, and a precision target refuses any list (ADR-0025 §4); a client
+/// passes what `--seed` says there rather than expanding it here first.
 ///
 /// # Errors
 ///
@@ -200,42 +284,10 @@ fn check_max_runs(budget: Budget) -> Result<(), Failure> {
 /// # Ok::<(), taktsim_run::Failure>(())
 /// ```
 pub fn expand_seeds(specs: &[SeedSpec], budget: Budget) -> Result<Vec<u64>, Failure> {
-    let mut length: u64 = 0;
-    for spec in specs {
-        let (first, last) = match *spec {
-            SeedSpec::One(seed) => (seed, seed),
-            SeedSpec::Range { first, last } => (first, last),
-        };
-        if last > max_seed() {
-            return Err(out_of_range(last));
-        }
-        if first > last {
-            return Err(invalid(
-                Diagnostic::error(
-                    "run.seed_out_of_range",
-                    format!("the range {spec} runs backward"),
-                )
-                .at("--seed")
-                .found(spec.to_string())
-                .allowed("a range whose first seed is not above its last")
-                .example("1..20"),
-            ));
-        }
-        // At most 2^53 per range, so the sum of up to 2^10 of them cannot overflow; the
-        // checked form states it even for more.
-        length = length.saturating_add(last - first + 1);
-    }
+    let asked = Asked::of(&[], specs)?;
     check_max_runs(budget)?;
-    check_list_length(length, budget)?;
-    let mut seeds = Vec::new();
-    for spec in specs {
-        match *spec {
-            SeedSpec::One(seed) => seeds.push(seed),
-            SeedSpec::Range { first, last } => seeds.extend(first..=last),
-        }
-    }
-    check_sorted_unique(&mut seeds)?;
-    Ok(seeds)
+    check_list_length(asked.length, budget)?;
+    asked.expand()
 }
 
 /// Sorts `seeds`, and refuses a duplicate. The experiment id is over sorted run ids, and
@@ -305,7 +357,8 @@ fn unused_flags(request: &RunRequest<'_>, why: &str) -> Vec<Diagnostic> {
     .collect()
 }
 
-/// The table of ADR-0025 §4.
+/// The table of ADR-0025 §4. Every check of the seeds named comes after the model is
+/// known, so each client gets this answer for the same request.
 pub(crate) fn plan(
     draws: bool,
     request: &RunRequest<'_>,
@@ -313,30 +366,22 @@ pub(crate) fn plan(
 ) -> Result<Mode, Failure> {
     let budget = request.budget;
     let model_seed = document.model().seed();
-    if let Some(seed) = request
-        .seeds
-        .iter()
-        .copied()
-        .find(|seed| *seed > max_seed())
-    {
-        return Err(out_of_range(seed));
-    }
+    let asked = Asked::of(request.seeds, request.seed_specs)?;
     check_max_runs(budget)?;
     if !draws {
-        return Ok(Mode::One(no_draw(request, model_seed)?));
+        return Ok(Mode::One(no_draw(request, &asked, model_seed)?));
     }
     if !document.experiment().precision().is_empty() {
-        return sequence(request, model_seed)
+        return sequence(request, &asked, model_seed)
             .map(|(first, max_runs)| Mode::Sequence { first, max_runs });
     }
-    if let [_, _, ..] = request.seeds {
-        let length = u64::try_from(request.seeds.len()).unwrap_or(u64::MAX);
-        check_list_length(length, budget)?;
-        let mut seeds = request.seeds.to_vec();
-        check_sorted_unique(&mut seeds)?;
-        return Ok(Mode::List { seeds });
+    if asked.length >= 2 {
+        check_list_length(asked.length, budget)?;
+        return Ok(Mode::List {
+            seeds: asked.expand()?,
+        });
     }
-    let mut seeding = effective(true, request.seeds.first().copied(), model_seed)?;
+    let mut seeding = effective(true, asked.single(), model_seed)?;
     seeding
         .warnings
         .extend(unused_flags(request, "one seed is one run"));
@@ -344,25 +389,24 @@ pub(crate) fn plan(
 }
 
 /// A model that draws nothing is one run, whatever the flags ask for.
-fn no_draw(request: &RunRequest<'_>, model_seed: Option<u64>) -> Result<Seeding, Failure> {
-    let option = if let [one] = request.seeds {
-        Some(*one)
-    } else {
-        None
-    };
-    let mut seeding = effective(false, option, model_seed)?;
-    if request.seeds.len() >= 2 {
+fn no_draw(
+    request: &RunRequest<'_>,
+    asked: &Asked<'_>,
+    model_seed: Option<u64>,
+) -> Result<Seeding, Failure> {
+    let mut seeding = effective(false, asked.single(), model_seed)?;
+    if asked.length >= 2 {
         seeding.warnings.insert(
             0,
             Diagnostic::warning(
                 "run.seed_unused",
                 format!(
                     "this model draws nothing, so the {} seeds from --seed are not used",
-                    request.seeds.len()
+                    asked.length
                 ),
             )
             .at("--seed")
-            .found(format!("{} seeds", request.seeds.len())),
+            .found(format!("{} seeds", asked.length)),
         );
     }
     seeding
@@ -372,15 +416,19 @@ fn no_draw(request: &RunRequest<'_>, model_seed: Option<u64>) -> Result<Seeding,
 }
 
 /// A sequential experiment: its first seed and how many at most.
-fn sequence(request: &RunRequest<'_>, model_seed: Option<u64>) -> Result<(u64, u32), Failure> {
-    if request.seeds.len() >= 2 {
+fn sequence(
+    request: &RunRequest<'_>,
+    asked: &Asked<'_>,
+    model_seed: Option<u64>,
+) -> Result<(u64, u32), Failure> {
+    if asked.length >= 2 {
         return Err(invalid(
             Diagnostic::error(
                 "run.seed_list_with_precision",
                 "a list of seeds and `experiment.precision` ask for two different things",
             )
             .at("--seed")
-            .found(format!("{} seeds", request.seeds.len()))
+            .found(format!("{} seeds", asked.length))
             .allowed("one first seed with `experiment.precision`, or a list without it")
             .example("--seed 1"),
         ));
@@ -408,7 +456,7 @@ fn sequence(request: &RunRequest<'_>, model_seed: Option<u64>) -> Result<(u64, u
             .example("100"),
         ));
     }
-    let Some(first) = request.seeds.first().copied().or(model_seed) else {
+    let Some(first) = asked.single().or(model_seed) else {
         return Err(no_seed());
     };
     let final_seed = first.saturating_add(u64::from(max_runs.get()) - 1);

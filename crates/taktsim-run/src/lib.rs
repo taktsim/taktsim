@@ -115,15 +115,29 @@ impl ModelSource<'_> {
 /// How a run is asked for: everything except the model and the store.
 ///
 /// ```
-/// let request = taktsim_run::RunRequest::new();
+/// use taktsim_run::{RunRequest, SeedSpec};
+///
+/// let request = RunRequest::new();
 /// assert!(request.reuse);
 /// assert!(request.seeds.is_empty());
+///
+/// // What `--seed 1..20` says, checked and expanded by `run` once the model is known.
+/// let specs = [SeedSpec::Range { first: 1, last: 20 }];
+/// let list = RunRequest { seed_specs: &specs, ..RunRequest::new() };
+/// assert_eq!(list.seed_specs.len(), 1);
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct RunRequest<'a> {
-    /// The seeds; empty takes the model's (ADR-0024 §5, ADR-0025 §4). Two or more
-    /// are a list; with `experiment.precision`, one is the first of a sequence.
+    /// The seeds; empty, with `seed_specs` empty too, takes the model's (ADR-0024 §5,
+    /// ADR-0025 §4). Two or more, counting those of `seed_specs`, are a list; with
+    /// `experiment.precision`, one is the first of a sequence.
     pub seeds: &'a [u64],
+    /// More seeds, as `--seed` names them: each a seed or a range, not expanded. They
+    /// join `seeds`. Their number comes from each range's two ends, and they are
+    /// expanded only once the model is known to need a list, so a model that draws
+    /// nothing is one run whatever they name, and a precision target refuses a list
+    /// before any budget is checked (ADR-0025 §4).
+    pub seed_specs: &'a [SeedSpec],
     /// What an experiment may spend.
     pub budget: Budget,
     /// The most replications at once.
@@ -155,6 +169,7 @@ impl RunRequest<'_> {
     pub const fn new() -> Self {
         Self {
             seeds: &[],
+            seed_specs: &[],
             budget: Budget::none(),
             threads: None,
             max_memory_mib: None,

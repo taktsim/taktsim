@@ -21,8 +21,8 @@ use clap::Parser;
 use taktsim_components::{Flow, Registry, standard, standard_schema};
 use taktsim_model::Json;
 use taktsim_run::{
-    Budget, Diagnostic, Ended, Failure, ModelSource, RunRequest, SCHEMA_NAMES, Store, expand_seeds,
-    schema_named, schema_names,
+    Budget, Diagnostic, Ended, Failure, ModelSource, RunRequest, SCHEMA_NAMES, Store, schema_named,
+    schema_names,
 };
 
 use crate::args::{Cli, Command, Format, RunArgs};
@@ -205,10 +205,6 @@ fn run(args: &RunArgs, format: Format) -> u8 {
         max_runs: args.max_runs,
         max_seconds: args.max_seconds,
     };
-    let seeds = match expand_seeds(&args.seed, budget) {
-        Ok(seeds) => seeds,
-        Err(failure) => return fail(&failure, format),
-    };
     let cancel = match signal::install() {
         Ok(flag) => Some(flag),
         Err(error) => {
@@ -221,7 +217,10 @@ fn run(args: &RunArgs, format: Format) -> u8 {
         }
     };
     let request = RunRequest {
-        seeds: &seeds,
+        // As parsed: the library checks and expands them once it knows the model
+        // (ADR-0025 §4), so this binary answers as every other client does.
+        seeds: &[],
+        seed_specs: &args.seed,
         budget,
         threads: args.threads,
         max_memory_mib: args.max_memory_mib,
