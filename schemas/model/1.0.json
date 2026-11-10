@@ -8,7 +8,7 @@
           "properties": {
             "capacity": {
               "$ref": "#/$defs/Count",
-              "description": "The places of the buffer, at least 1. A buffer of no places is a direct edge."
+              "description": "The places of the buffer, at least 1. A buffer of no places is a direct edge. The buffers an on-demand Source reaches through buffers alone hold at most 65535 places together."
             },
             "discipline": {
               "description": "Which part leaves first: first into the buffer, last into it, or highest priority, then first into it. Default fifo.",

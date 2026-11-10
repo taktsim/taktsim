@@ -114,6 +114,7 @@ const BEYOND_A_SCHEMA: &[(&str, &str)] = &[
     ("flow-machine-not-entered.yaml", "the flow"),
     ("flow-machine-not-left.yaml", "the flow"),
     ("flow-on-demand-branch-without-station.yaml", "the flow"),
+    ("flow-on-demand-buffers-too-large.yaml", "the flow"),
     ("flow-on-demand-through-buffer.yaml", "the flow"),
     ("flow-on-demand-to-sink.yaml", "the flow"),
     ("flow-second-edge-chains.yaml", "the flow"),
@@ -181,7 +182,7 @@ fn the_schema_rejects_every_malformed_model_it_can() {
     // The corpus files whose rule a schema can state, all rejected; among them
     // rules between keys (`mtbf` with `mttr`, `batch` with `interarrival`) and
     // the length of a variant name.
-    assert_eq!((files, rejected), (47, 18));
+    assert_eq!((files, rejected), (48, 18));
 }
 
 #[test]

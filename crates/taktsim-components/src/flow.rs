@@ -6,12 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
     CatalogError, Component as Entry, ComponentRef, Document, FieldPath, Findings, LoadErrorKind,
-    Place, Segment,
+    Location, Place, Segment,
 };
 
 use crate::buffer::Buffer;
 use crate::machine::Machine;
 use crate::message::{FlowMessage, VariantId};
+use crate::params::MAX_UNITS;
 use crate::run::{BuildError, Domain, Ports, Registry, Roles};
 use crate::sink::Sink;
 use crate::source::Source;
@@ -396,6 +397,73 @@ fn check_on_demand(document: &Document, roles: &Roles, graph: &Graph<'_>, findin
     }
 }
 
+/// The buffers an on-demand Source reaches through buffers alone hold at most
+/// 65,535 places together: it fills them all at time zero, so more could exhaust
+/// memory on one PC and not on another (ADR-0022, "The vocabulary"). A buffer
+/// behind a timed Source, or behind a station, may be larger.
+///
+/// Reported once per buffer, at the `capacity` of the largest buffer the Source
+/// fills (the first in document order of equal ones), with the capacity that
+/// would bring the total to the limit as the example.
+fn check_on_demand_places(document: &Document, graph: &Graph<'_>, findings: &mut Findings) {
+    let buffers: BTreeSet<&str> = document
+        .components()
+        .iter()
+        .filter(|c| c.params::<Buffer>().is_some())
+        .map(Entry::id)
+        .collect();
+    let mut reported = BTreeSet::new();
+    for source in document.components() {
+        if !source.params::<Source>().is_some_and(Source::on_demand) {
+            continue;
+        }
+        let reached = graph.reached(source.id(), |id| buffers.contains(id));
+        // In document order, with their places and where `capacity` is written.
+        let filled: Vec<(&Entry, u64, Location)> = document
+            .components()
+            .iter()
+            .filter(|c| reached.contains(c.id()))
+            .filter_map(|c| {
+                let (places, at) = c.params::<Buffer>()?.capacity();
+                Some((c, places.get(), at))
+            })
+            .collect();
+        let total = filled
+            .iter()
+            .fold(0_u64, |sum, (_, places, _)| sum.saturating_add(*places));
+        let largest = filled
+            .iter()
+            .copied()
+            .reduce(|best, next| if next.1 > best.1 { next } else { best });
+        let Some((entry, places, at)) = largest else {
+            continue;
+        };
+        if total <= MAX_UNITS || !reported.insert(entry.id()) {
+            continue;
+        }
+        let names: Vec<String> = filled
+            .iter()
+            .map(|(c, _, _)| format!("`{}`", c.id()))
+            .collect();
+        let fits = MAX_UNITS.saturating_sub(total - places).max(1);
+        let place = Place::new(entry.place().file().map(str::to_owned), at);
+        let path = entry.path().child(Segment::Key("capacity".to_owned()));
+        not_allowed(
+            findings,
+            (&place, &path),
+            format!(
+                "{total} places in {}, which on-demand `{}` fills at time zero",
+                names.join(", "),
+                source.id()
+            ),
+            "at most 65535 places in the buffers an on-demand Source reaches through buffers \
+             alone, since it fills them at time zero; a Source with `interarrival` may feed a \
+             larger buffer",
+            &format!("{fits} parts"),
+        );
+    }
+}
+
 /// Matrix names are declared by some Source, and the model's names fit a
 /// `VariantId`.
 /// Reports `total` variant names, more than a model holds, at the Source whose
@@ -475,6 +543,7 @@ impl Domain for Flow {
         check_one_edge_per_source(document, &graph, findings);
         check_no_loops(document, roles, &graph, findings);
         check_on_demand(document, roles, &graph, findings);
+        check_on_demand_places(document, &graph, findings);
         check_variants(document, findings);
     }
 

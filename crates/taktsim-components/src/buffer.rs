@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use taktsim_core::{Component, ComponentError, Context, Delivery, ItemId, Violation};
 use taktsim_model::{
-    ComponentParams, Decode, Decoder, Encode, Fields, Json, LoadErrorKind, Node, Schemas,
+    ComponentParams, Decode, Decoder, Encode, Fields, Json, LoadErrorKind, Location, Node, Schemas,
 };
 use taktsim_units::Count;
 
@@ -116,7 +116,16 @@ impl Decode for Discipline {
 #[derive(Debug, Clone, Copy)]
 pub struct Buffer {
     capacity: Count,
+    /// Where `capacity` is written; not part of the model.
+    capacity_at: Location,
     discipline: Option<Discipline>,
+}
+
+impl Buffer {
+    /// Its places, and where `capacity` is written.
+    pub(crate) const fn capacity(&self) -> (Count, Location) {
+        (self.capacity, self.capacity_at)
+    }
 }
 
 impl Encode for Buffer {
@@ -134,8 +143,10 @@ impl ComponentParams for Buffer {
     fn decode(fields: &mut Fields<'_, '_>) -> Option<Self> {
         let capacity = fields.required::<Places>("capacity");
         let discipline = fields.optional("discipline");
+        let Places(capacity, capacity_at) = capacity?;
         Some(Self {
-            capacity: capacity?.0,
+            capacity,
+            capacity_at,
             discipline: discipline?,
         })
     }

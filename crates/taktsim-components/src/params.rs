@@ -2,12 +2,16 @@
 //! with the rules each adds to its base type (ADR-0022, "The vocabulary").
 
 use taktsim_model::expr::ComponentId;
-use taktsim_model::{ComponentRef, Decode, Decoder, Distribution, Encode, Json, Node, Schemas};
+use taktsim_model::{
+    ComponentRef, Decode, Decoder, Distribution, Encode, Json, Location, Node, Schemas,
+};
 use taktsim_units::{Count, SimDuration};
 
-/// The most parts of a batch and the highest capacity of a machine: a batch is
-/// created in one instant, so a larger one could exhaust memory on one PC and
-/// not on another, and a model that loads must run the same everywhere.
+/// The most parts of a batch, the highest capacity of a machine, and the most
+/// places an on-demand Source reaches through buffers alone: a batch is created
+/// in one instant and an on-demand Source fills those buffers at time zero, so
+/// more could exhaust memory on one PC and not on another, and a model that
+/// loads must run the same everywhere.
 pub(crate) const MAX_UNITS: u64 = 65_535;
 
 /// The longest variant name in bytes, so its note always fits a record.
@@ -43,8 +47,10 @@ impl Decode for Units {
 }
 
 /// A Buffer's `capacity`: above zero. A buffer of zero places is a direct edge.
+/// With where it is written, for the check of what an on-demand Source fills
+/// (ADR-0022, "The vocabulary").
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Places(pub(crate) Count);
+pub(crate) struct Places(pub(crate) Count, pub(crate) Location);
 
 impl Decode for Places {
     const EXPECTED: &'static str = "a count of at least 1 parts, such as `20 parts`";
@@ -61,13 +67,15 @@ impl Decode for Places {
             );
             return None;
         }
-        Some(Self(count))
+        Some(Self(count, node.start()))
     }
 
     fn schema(schemas: &mut Schemas) -> Json {
         schemas.of::<Count>().with(
             "description",
-            &"The places of the buffer, at least 1. A buffer of no places is a direct edge.",
+            &"The places of the buffer, at least 1. A buffer of no places is a direct edge. The \
+              buffers an on-demand Source reaches through buffers alone hold at most 65535 \
+              places together.",
         )
     }
 }

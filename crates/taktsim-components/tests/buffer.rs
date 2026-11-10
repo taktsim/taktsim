@@ -4,7 +4,7 @@ mod support;
 
 use std::collections::BTreeMap;
 
-use support::{document, t};
+use support::{document, load, t, try_load};
 use taktsim_components::FlowMessage;
 use taktsim_core::ItemId;
 
@@ -162,4 +162,117 @@ fn fill_never_passes_capacity_and_a_full_buffer_blocks() {
         r.state_shares("a")[usize::from(taktsim_components::MachineState::Blocked.code())] > 0.5
     );
     assert_eq!(r.delivered()[1].0, t("21s"));
+}
+
+/// An on-demand Source in front of buffers of `places`, in this order, then a
+/// machine and a sink.
+fn on_demand_into(places: &[&str]) -> String {
+    let ids: Vec<String> = (1..=places.len()).map(|n| format!("buf{n}")).collect();
+    let mut lines = vec!["  - {id: source, type: Source}".to_owned()];
+    for (id, capacity) in ids.iter().zip(places) {
+        lines.push(format!(
+            "  - {{id: {id}, type: Buffer, capacity: {capacity}}}"
+        ));
+    }
+    lines.push("  - {id: cut, type: Machine, cycle_time: 1min}".to_owned());
+    lines.push("  - {id: sink, type: Sink}".to_owned());
+    let components = lines.join("\n");
+    document(
+        "1h",
+        &components,
+        &format!("  - [source, {}, cut, sink]", ids.join(", ")),
+    )
+}
+
+/// Question 22 (a) of ADR-0022: an on-demand Source fills the buffers it reaches
+/// through buffers alone at time zero, so they hold at most 65,535 places, and the
+/// error is at the largest one's `capacity`, with a capacity that fits.
+#[test]
+fn an_on_demand_source_fills_at_most_65535_places() {
+    let errors = try_load(&on_demand_into(&["1000000000000 parts"])).unwrap_err();
+    assert_eq!(errors.len(), 1, "{errors}");
+    let e = errors.first();
+    assert_eq!(e.path().to_string(), "components[1].capacity");
+    let kind = e.kind();
+    assert_eq!(
+        kind.found().as_deref(),
+        Some("1000000000000 places in `buf1`, which on-demand `source` fills at time zero")
+    );
+    assert_eq!(
+        kind.allowed().as_deref(),
+        Some(
+            "at most 65535 places in the buffers an on-demand Source reaches through buffers \
+             alone, since it fills them at time zero; a Source with `interarrival` may feed a \
+             larger buffer"
+        )
+    );
+    assert_eq!(kind.example().as_deref(), Some("65535 parts"));
+    assert!(
+        e.to_string().starts_with("6:40: components[1].capacity: "),
+        "{e}"
+    );
+
+    // The boundary, for one buffer and for two counted together.
+    load(&on_demand_into(&["65535 parts"]));
+    let errors = try_load(&on_demand_into(&["65536 parts"])).unwrap_err();
+    assert_eq!(errors.first().path().to_string(), "components[1].capacity");
+    assert_eq!(
+        errors.first().kind().example().as_deref(),
+        Some("65535 parts")
+    );
+    load(&on_demand_into(&["25535 parts", "40000 parts"]));
+    let errors = try_load(&on_demand_into(&["25536 parts", "40000 parts"])).unwrap_err();
+    assert_eq!(errors.len(), 1, "{errors}");
+    // At the larger buffer, with the capacity that brings the total to the limit.
+    assert_eq!(errors.first().path().to_string(), "components[2].capacity");
+    assert_eq!(
+        errors.first().kind().example().as_deref(),
+        Some("39999 parts")
+    );
+    assert_eq!(
+        errors.first().kind().found().as_deref(),
+        Some("65536 places in `buf1`, `buf2`, which on-demand `source` fills at time zero")
+    );
+    load(&on_demand_into(&["25536 parts", "39999 parts"]));
+}
+
+/// The rule is about what an on-demand Source fills at time zero: a timed Source,
+/// or a station between, feeds a buffer at a rate, so it stays uncapped (page 5
+/// needs large buffers).
+#[test]
+fn a_buffer_fed_at_a_rate_stays_uncapped() {
+    let huge = "1000000000000 parts";
+    load(&document(
+        "1h",
+        &format!(
+            "  - {{id: source, type: Source, interarrival: 1min}}\n  \
+             - {{id: buf, type: Buffer, capacity: {huge}}}\n  \
+             - {{id: cut, type: Machine, cycle_time: 1min}}\n  - {{id: sink, type: Sink}}"
+        ),
+        "  - [source, buf, cut, sink]",
+    ));
+    load(&document(
+        "1h",
+        &format!(
+            "  - {{id: source, type: Source}}\n  - {{id: cut, type: Machine, cycle_time: 1min}}\n  \
+             - {{id: buf, type: Buffer, capacity: {huge}}}\n  \
+             - {{id: weld, type: Machine, cycle_time: 1min}}\n  - {{id: sink, type: Sink}}"
+        ),
+        "  - [source, cut, buf, weld, sink]",
+    ));
+}
+
+/// A buffer two on-demand Sources fill is reported once.
+#[test]
+fn a_buffer_two_on_demand_sources_fill_is_reported_once() {
+    let errors = try_load(&document(
+        "1h",
+        "  - {id: a, type: Source}\n  - {id: b, type: Source}\n  \
+         - {id: buf, type: Buffer, capacity: 70000 parts}\n  \
+         - {id: cut, type: Machine, cycle_time: 1min}\n  - {id: sink, type: Sink}",
+        "  - {from: [a, b], to: buf}\n  - [buf, cut, sink]",
+    ))
+    .unwrap_err();
+    assert_eq!(errors.len(), 1, "{errors}");
+    assert_eq!(errors.first().path().to_string(), "components[2].capacity");
 }
