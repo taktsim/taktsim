@@ -134,6 +134,7 @@ fn a_new_state_changes_no_other_type() {
             Err(taktsim_components::BuildError::UnknownVariant {
                 path: taktsim_model::FieldPath::default(),
                 name: "never".to_owned(),
+                declared: Vec::new(),
             })
         }
     }

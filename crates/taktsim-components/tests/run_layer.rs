@@ -546,6 +546,12 @@ impl taktsim_core::Component<taktsim_components::FlowMessage> for BrokenBehaviou
 
 impl taktsim_components::ComponentType<taktsim_components::Flow> for Broken {
     const PORTS: taktsim_components::Ports = taktsim_components::Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn build(
         &self,
@@ -632,6 +638,12 @@ impl taktsim_core::Component<taktsim_components::FlowMessage> for FailsLateBehav
 
 impl taktsim_components::ComponentType<taktsim_components::Flow> for FailsLate {
     const PORTS: taktsim_components::Ports = taktsim_components::Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn build(
         &self,
