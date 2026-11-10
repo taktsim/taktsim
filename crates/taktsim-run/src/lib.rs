@@ -52,7 +52,7 @@ use std::sync::atomic::AtomicBool;
 
 use taktsim_components::{Domain, Registry, RunFailure, RunOptions, RunReport};
 use taktsim_core::{ENGINE_NAME, ENGINE_VERSION};
-use taktsim_model::{Document, Format, LoadErrors, Loader, Model};
+use taktsim_model::{Document, Encode, Format, LoadErrors, Loader, Model};
 use taktsim_trace::{
     FORMAT_VERSION, RECORD_FORMAT, ReplayError, Summary, TraceHash, TraceMessage, TraceReader,
     WriteError,
@@ -493,7 +493,8 @@ fn result_document<D: Domain>(
 /// A run that reached its end is checked, kept and named by its run id. A run
 /// stopped by a limit has `complete: false`, is not kept and has no id; it is still
 /// returned. A stored run is returned without running, unless the request says not
-/// to reuse it; then the new trace is compared with it, and it is never overwritten.
+/// to reuse it; then the new run's trace and result are compared with it, it is
+/// never overwritten, and on a match its stored bytes are returned.
 ///
 /// # Errors
 ///
@@ -624,7 +625,7 @@ pub fn run<D: Domain>(
             document: result,
             text,
         },
-        Commit::AlreadyThere => compare_with_stored(store, &id, &model, &written)?,
+        Commit::AlreadyThere => compare_with_stored(store, &id, &model, &result, &written)?,
     };
     Ok(RunResponse {
         result: stored.document,
@@ -722,12 +723,16 @@ fn check_filed_under(result: &ResultDocument, id: &RunId, model: &Model) -> Resu
     Ok(())
 }
 
-/// A run with this id is in the store already: its stream must be the same. A
-/// difference means the engine changed or determinism broke.
+/// A run with this id is in the store already: it must be the run just made. Its
+/// stream must be the same, or the engine changed or determinism broke; and so must
+/// everything its result states but `provenance.platform`, or the stored numbers
+/// are not this run's (ADR-0024 §8). The stored bytes are returned, so a key this
+/// build does not read is kept.
 fn compare_with_stored(
     store: &Store,
     id: &RunId,
     model: &Model,
+    result: &ResultDocument,
     written: &Summary,
 ) -> Result<StoredResult, Failure> {
     let stored = store.read_result(id)?;
@@ -739,21 +744,50 @@ fn compare_with_stored(
         .flat_map(|stored| &stored.document.runs)
         .find_map(|run| run.trace.as_ref())
         .map(|trace| trace.stream_hash);
-    match stored {
-        Some(stored) if stored_hash == Some(written.hash) => Ok(stored),
-        Some(_) | None => Err(Failure::one(
+    let stored = match stored {
+        Some(stored) if stored_hash == Some(written.hash) => stored,
+        Some(_) | None => {
+            return Err(Failure::one(
+                FailureClass::RunFailed,
+                Diagnostic::error(
+                    "run.store_differs",
+                    format!(
+                        "run {id} is in the store with another trace: the engine changed or determinism broke"
+                    ),
+                )
+                .at("--no-reuse")
+                .found(written.hash.to_string())
+                .allowed(
+                    stored_hash.map_or_else(|| "no stored hash".to_owned(), |h| h.to_string()),
+                ),
+            ));
+        }
+    };
+    let mut made = result.clone();
+    made.provenance
+        .platform
+        .clone_from(&stored.document.provenance.platform);
+    let (made, kept) = (made.encode(), stored.document.encode());
+    let differs = made
+        .as_object()
+        .into_iter()
+        .flatten()
+        .find(|(key, value)| kept[key.as_str()] != **value);
+    if let Some((key, value)) = differs {
+        return Err(Failure::one(
             FailureClass::RunFailed,
             Diagnostic::error(
                 "run.store_differs",
                 format!(
-                    "run {id} is in the store with another trace: the engine changed or determinism broke"
+                    "run {id} is in the store with the same trace but another `{key}`: the stored result is not what this run gives"
                 ),
             )
             .at("--no-reuse")
-            .found(written.hash.to_string())
-            .allowed(stored_hash.map_or_else(|| "no stored hash".to_owned(), |h| h.to_string())),
-        )),
+            .found(value.to_string())
+            .allowed(kept[key.as_str()].to_string()),
+        ));
     }
+    Ok(stored)
 }
 
 /// The header of the stored trace at `path` must name the stored model and the
