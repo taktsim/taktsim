@@ -1008,42 +1008,102 @@ fn flags_reach_the_result() {
 // Bad invocations
 // ---------------------------------------------------------------------------
 
+/// The arguments of each bad invocation, the path its error must name, and the type of that error, or
+/// the prefix of the type when it ends with a dot.
+type BadInvocation = (&'static [&'static str], &'static str, &'static str);
+
+const BAD_INVOCATIONS: &[BadInvocation] = &[
+    (&[], "<command>", "args."),
+    (&["frobnicate"], "<command>", "args."),
+    (&["run"], "<model>", "args."),
+    (&["validate"], "<model>", "args."),
+    (&["schema"], "<type>", "args."),
+    (&["run", "m.yaml", "--seed", "abc"], "--seed", "args."),
+    (&["run", "m.yaml", "--seed", "-1"], "--seed", "args."),
+    (&["run", "m.yaml", "--seed", "1.5"], "--seed", "args."),
+    (
+        &["run", "m.yaml", "--seed", "1", "--seed", "1"],
+        "--seed",
+        "run.duplicate_seed",
+    ),
+    (
+        &["run", "m.yaml", "--seed", "18446744073709551616"],
+        "--seed",
+        "args.",
+    ),
+    (&["run", "m.yaml", "--seed"], "--seed", "args."),
+    (
+        &["run", "m.yaml", "--horizon", "soon"],
+        "--horizon",
+        "args.",
+    ),
+    (&["run", "m.yaml", "--horizon", "10"], "--horizon", "args."),
+    (
+        &["run", "m.yaml", "--horizon", "5 parts"],
+        "--horizon",
+        "args.",
+    ),
+    (&["run", "m.yaml", "--horizon", "-5s"], "--horizon", "args."),
+    (&["run", "m.yaml", "--horizon"], "--horizon", "args."),
+    (
+        &["run", "m.yaml", "--max-events", "many"],
+        "--max-events",
+        "args.",
+    ),
+    (
+        &["run", "m.yaml", "--max-events", "-5"],
+        "--max-events",
+        "args.",
+    ),
+    (
+        &["run", "m.yaml", "--max-events", "1.5"],
+        "--max-events",
+        "args.",
+    ),
+    (
+        &["run", "m.yaml", "--max-runs", "many"],
+        "--max-runs",
+        "args.",
+    ),
+    (&["run", "m.yaml", "--max-runs", "0"], "--max-runs", "args."),
+    (&["run", "m.yaml", "--max-runs"], "--max-runs", "args."),
+    (
+        &["run", "m.yaml", "--max-seconds", "1.5"],
+        "--max-seconds",
+        "args.",
+    ),
+    (
+        &["run", "m.yaml", "--max-seconds", "0"],
+        "--max-seconds",
+        "args.",
+    ),
+    (&["run", "m.yaml", "--threads", "x"], "--threads", "args."),
+    (&["run", "m.yaml", "--threads", "0"], "--threads", "args."),
+    (
+        &["run", "m.yaml", "--max-memory-mib", "-1"],
+        "--max-memory-mib",
+        "args.",
+    ),
+    (&["run", "m.yaml", "--bogus"], "--bogus", "args."),
+];
+
 /// ADR-0024 §9: a bad flag or value is exit 1, not clap's 2; stdout is empty; one error line, `type`
 /// `args.*` for what the parser refuses, with `path` the flag or argument, and `found`, `allowed` and
 /// `example`. Each case's path comes from the ADR's words: "the flag or argument (`--horizon`,
 /// `<model>`)".
+///
+/// ADR-0025 §4 makes a repeated `--seed` a list, so `--seed 1 --seed 2` is no longer refused; the
+/// repeated case becomes a seed named twice, which §4 refuses after parsing, as `run.duplicate_seed`
+/// at the same path. ADR-0025 §4 and §8 add four flags; a value each cannot take is refused as any
+/// other flag's is.
 #[test]
 fn bad_invocations_are_exit_1_with_the_flag_as_the_path() {
     let dir = fresh("bad_args");
     write(&dir, "m.yaml", DRAWN);
-    let cases: &[(&[&str], &str)] = &[
-        (&[], "<command>"),
-        (&["frobnicate"], "<command>"),
-        (&["run"], "<model>"),
-        (&["validate"], "<model>"),
-        (&["schema"], "<type>"),
-        (&["run", "m.yaml", "--seed", "abc"], "--seed"),
-        (&["run", "m.yaml", "--seed", "-1"], "--seed"),
-        (&["run", "m.yaml", "--seed", "1.5"], "--seed"),
-        (&["run", "m.yaml", "--seed", "1", "--seed", "2"], "--seed"),
-        (
-            &["run", "m.yaml", "--seed", "18446744073709551616"],
-            "--seed",
-        ),
-        (&["run", "m.yaml", "--seed"], "--seed"),
-        (&["run", "m.yaml", "--horizon", "soon"], "--horizon"),
-        (&["run", "m.yaml", "--horizon", "10"], "--horizon"),
-        (&["run", "m.yaml", "--horizon", "5 parts"], "--horizon"),
-        (&["run", "m.yaml", "--horizon", "-5s"], "--horizon"),
-        (&["run", "m.yaml", "--horizon"], "--horizon"),
-        (&["run", "m.yaml", "--max-events", "many"], "--max-events"),
-        (&["run", "m.yaml", "--max-events", "-5"], "--max-events"),
-        (&["run", "m.yaml", "--max-events", "1.5"], "--max-events"),
-        (&["run", "m.yaml", "--bogus"], "--bogus"),
-    ];
+    let cases = BAD_INVOCATIONS;
     let error_schema = schema_of(&dir, "error");
     let mut wrong = Vec::new();
-    for (args, path) in cases {
+    for (args, path, kind) in cases {
         let mut args = args.to_vec();
         args.extend(["--format", "json"]);
         let out = taktsim(&dir, &args);
@@ -1056,10 +1116,14 @@ fn bad_invocations_are_exit_1_with_the_flag_as_the_path() {
         if line["path"] != *path {
             wrong.push(format!("{args:?}: wanted {path}, got {line}"));
         }
-        assert!(
-            line["type"].as_str().unwrap().starts_with("args."),
-            "{args:?}: {line}"
-        );
+        if kind.ends_with('.') {
+            assert!(
+                line["type"].as_str().unwrap().starts_with(kind),
+                "{args:?}: {line}"
+            );
+        } else {
+            assert_eq!(line["type"], *kind, "{args:?}");
+        }
         for key in ["message", "found", "allowed", "example"] {
             assert!(
                 line[key].as_str().is_some_and(|s| !s.is_empty()),
@@ -1531,13 +1595,15 @@ fn malformed_models_are_rejected_at_their_path() {
             ),
             "experiment.precision[\"nonsense(sink)\"]",
         ),
+        // ADR-0025 §2 widens `wip` to Machines, so `wip(cut)` is valid now; a Sink still cannot
+        // answer it.
         (
             "precision on a component that cannot answer it",
             EXACT.replace(
                 "horizon: 125s}",
-                "horizon: 125s, precision: {wip(cut): 2%}}",
+                "horizon: 125s, precision: {wip(sink): 2%}}",
             ),
-            "experiment.precision[\"wip(cut)\"]",
+            "experiment.precision[\"wip(sink)\"]",
         ),
         ("unknown top-level key", format!("{EXACT}colour: red\n"), "colour"),
         (
@@ -1914,34 +1980,74 @@ fn describe_is_the_committed_file() {
     assert_matches_schema(&doc["schema"], &doc, "describe");
 }
 
+/// One row of the table of commands: its name, its arguments, its exit codes, whether it writes, and
+/// whether it is long-running.
+struct CommandRow {
+    name: &'static str,
+    flags: &'static [&'static str],
+    codes: &'static [i128],
+    writes: bool,
+    long_running: bool,
+}
+
+const COMMAND_TABLE: &[CommandRow] = &[
+    CommandRow {
+        name: "describe",
+        flags: &["--format"],
+        codes: &[0, 1, 7, 101],
+        writes: false,
+        long_running: false,
+    },
+    CommandRow {
+        name: "schema",
+        flags: &["<type>", "--format"],
+        codes: &[0, 1, 7, 101],
+        writes: false,
+        long_running: false,
+    },
+    CommandRow {
+        name: "validate",
+        flags: &["<model>", "--format"],
+        codes: &[0, 1, 7, 101],
+        writes: false,
+        long_running: false,
+    },
+    CommandRow {
+        name: "run",
+        flags: &[
+            "<model>",
+            "--format",
+            "--seed",
+            "--horizon",
+            "--store",
+            "--max-events",
+            "--no-reuse",
+            "--max-runs",
+            "--max-seconds",
+            "--threads",
+            "--max-memory-mib",
+        ],
+        codes: &[0, 1, 2, 3, 4, 7, 101],
+        writes: true,
+        long_running: true,
+    },
+];
+
 /// §10's table: the four commands and their flags. §9: per command only the codes it can give: `run`
 /// has 0, 1, 2, 3, 7; `validate` 0, 1, 7; and every command 101, the invariant-violation path. Codes
 /// 4, 5, 6 are on no M7 command. Spec §5: what each writes,
 /// whether it needs a budget or a person, and one example, which must itself run.
+///
+/// M8 widens `run` on purpose. ADR-0025 §4 and §8 add `--max-runs`, `--max-seconds`, `--threads` and
+/// `--max-memory-mib`; ADR-0025 §9 makes `run` long-running, lists exit 4 for a signal, and gives it a
+/// `budget` entry naming the two budget flags. The other three commands are unchanged and have no
+/// `budget` entry.
 #[test]
 fn describe_states_the_table_of_commands() {
     let dir = fresh("describe_table");
     write(&dir, "line.yaml", DRAWN);
     let doc = describe(&dir);
-    let want: &[(&str, &[&str], &[i128], bool)] = &[
-        ("describe", &["--format"], &[0, 1, 7, 101], false),
-        ("schema", &["<type>", "--format"], &[0, 1, 7, 101], false),
-        ("validate", &["<model>", "--format"], &[0, 1, 7, 101], false),
-        (
-            "run",
-            &[
-                "<model>",
-                "--format",
-                "--seed",
-                "--horizon",
-                "--store",
-                "--max-events",
-                "--no-reuse",
-            ],
-            &[0, 1, 2, 3, 7, 101],
-            true,
-        ),
-    ];
+    let want = COMMAND_TABLE;
     let listed: Vec<&str> = doc["commands"]
         .as_array()
         .unwrap()
@@ -1949,7 +2055,14 @@ fn describe_states_the_table_of_commands() {
         .map(|c| c["name"].as_str().unwrap())
         .collect();
     assert_eq!(listed.len(), want.len(), "{listed:?}");
-    for (name, flags, codes, writes) in want {
+    for CommandRow {
+        name,
+        flags,
+        codes,
+        writes,
+        long_running,
+    } in want
+    {
         let entry = command(&doc, name);
         let mut have: Vec<&str> = entry["arguments"]
             .as_array()
@@ -1973,7 +2086,18 @@ fn describe_states_the_table_of_commands() {
             })
             .collect();
         assert_eq!(have_codes, *codes, "{name}");
-        assert_eq!(entry["long_running"], false, "{name}");
+        assert_eq!(entry["long_running"], *long_running, "{name}");
+        if *long_running {
+            let budget: Vec<&str> = entry["budget"]["flags"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| f.as_str().unwrap())
+                .collect();
+            assert_eq!(budget, ["--max-runs", "--max-seconds"], "{name}");
+        } else {
+            assert!(entry.as_object().unwrap().get("budget").is_none(), "{name}");
+        }
         assert_eq!(entry["needs_person"], false, "{name}");
         assert_eq!(entry["writes"] != "nothing", *writes, "{name}");
 
@@ -2021,7 +2145,12 @@ fn describe_tells_how_to_use_each_flag() {
             "--store" => "here",
             "--max-events" => "1000000000",
             "--no-reuse" => "",
-            other => panic!("{other} is not in ADR-0024 §10"),
+            // ADR-0025 §4 and §8.
+            "--max-runs" => "10",
+            "--max-seconds" => "600",
+            "--threads" => "2",
+            "--max-memory-mib" => "512",
+            other => panic!("{other} is not in ADR-0024 §10 or ADR-0025 §4 and §8"),
         };
         assert_eq!(takes, !good.is_empty(), "{name}");
         let mut args = vec!["run", "line.yaml", name];
