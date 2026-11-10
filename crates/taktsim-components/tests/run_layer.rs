@@ -567,3 +567,100 @@ fn a_prepared_run_checks_invariants_unless_told_not_to() {
         .unwrap();
     assert_eq!(report.summary.outcome, RunOutcome::Horizon);
 }
+
+/// A component that fails at 10 min: for what a failed run leaves in its trace.
+#[derive(Debug)]
+struct FailsLate {}
+
+impl Encode for FailsLate {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
+
+impl ComponentParams for FailsLate {
+    const TYPE: &'static str = "FailsLate";
+    const EXAMPLE: &'static str = "{id: late, type: FailsLate}";
+    fn decode(_: &mut Fields<'_, '_>) -> Option<Self> {
+        Some(Self {})
+    }
+}
+
+struct FailsLateBehaviour;
+
+impl taktsim_core::Component<taktsim_components::FlowMessage> for FailsLateBehaviour {
+    fn start(
+        &mut self,
+        ctx: &mut taktsim_core::Context<'_, taktsim_components::FlowMessage>,
+    ) -> Result<(), taktsim_core::ComponentError> {
+        ctx.schedule(d("10min"), taktsim_components::FlowMessage::NextArrival)?;
+        Ok(())
+    }
+
+    fn handle(
+        &mut self,
+        _: taktsim_core::Delivery<'_, taktsim_components::FlowMessage>,
+        _: &mut taktsim_core::Context<'_, taktsim_components::FlowMessage>,
+    ) -> Result<(), taktsim_core::ComponentError> {
+        Err(taktsim_core::ComponentError::Unexpected {
+            state: "late",
+            event: "its own timer".to_owned(),
+        })
+    }
+}
+
+impl taktsim_components::ComponentType<taktsim_components::Flow> for FailsLate {
+    const PORTS: taktsim_components::Ports = taktsim_components::Ports::None;
+
+    fn build(
+        &self,
+        _: &taktsim_components::Wiring<'_, taktsim_components::FlowShared>,
+    ) -> Result<Box<dyn taktsim_core::Component<taktsim_components::FlowMessage>>, BuildError> {
+        Ok(Box::new(FailsLateBehaviour))
+    }
+}
+
+/// Spec §4: a failure aborts the run with the event trace that led to it. The
+/// records up to the failure reach the output, which reads as cut off
+/// (ADR-0021), and `&mut out` keeps an in-memory output.
+#[test]
+fn a_failed_run_keeps_the_trace_that_led_to_it() {
+    let registry = taktsim_components::standard()
+        .unwrap()
+        .with::<FailsLate>()
+        .unwrap();
+    let yaml = "format: \"1.0\"\nmodel: {name: m, seed: 1}\nexperiment: {type: terminating, horizon: 1h}\n\
+                components:\n  - {id: source, type: Source, interarrival: 1min}\n  \
+                - {id: m, type: Machine, cycle_time: 30s}\n  - {id: buf, type: Buffer, capacity: 2 parts}\n  \
+                - {id: sink, type: Sink}\n  - {id: late, type: FailsLate}\n\
+                flow: [[source, m, buf, sink]]\n";
+    let model = Loader::new(registry.catalog())
+        .load_str(yaml, Format::Yaml)
+        .unwrap();
+    let mut bytes = Vec::new();
+    let failure = registry
+        .prepare(&model, RunOptions::new())
+        .unwrap()
+        .run_traced(&mut bytes)
+        .unwrap_err();
+    assert!(matches!(failure, RunFailure::Run(_)), "{failure}");
+    assert!(failure.to_string().contains("its own timer"), "{failure}");
+
+    let reader = TraceReader::<_, taktsim_components::FlowMessage>::new(bytes.as_slice()).unwrap();
+    let mut times = Vec::new();
+    let mut error = None;
+    for record in reader {
+        match record {
+            Ok(record) => times.push(record.time()),
+            Err(e) => error = Some(e),
+        }
+    }
+    assert!(
+        matches!(error, Some(taktsim_trace::ReadError::Truncated { .. })),
+        "{error:?}"
+    );
+    // Parts arrive each minute up to the failure, all of them recorded.
+    assert!(times.len() > 20, "{} records", times.len());
+    assert!(times.iter().all(|time| *time <= t("10min")));
+    assert!(times.contains(&t("9min")), "{times:?}");
+}

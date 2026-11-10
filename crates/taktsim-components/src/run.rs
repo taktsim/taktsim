@@ -812,10 +812,15 @@ impl<'a, D: Domain> Prepared<'a, D> {
     /// Runs and writes the trace to `out`, always stating how the run ended
     /// (ADR-0022 §9). Returns `out` and the report.
     ///
+    /// If the run fails, every record up to the failure is still written and
+    /// `out` flushed, without an end marker, so the trace reads as cut off
+    /// after the event trace that led to the failure (spec §4, ADR-0021). Pass
+    /// `&mut out` to keep an in-memory output on failure.
+    ///
     /// # Errors
     ///
     /// [`RunFailure::Write`] if the trace cannot be written, [`RunFailure::Run`]
-    /// if the run fails.
+    /// if the run fails (whether or not its trace could be written).
     ///
     /// ```
     /// use taktsim_components::RunOptions;
@@ -839,10 +844,16 @@ impl<'a, D: Domain> Prepared<'a, D> {
         let mut writer = TraceWriter::<W, D::Message>::new(out, &self.header)
             .map_err(|e| RunFailure::Write(Box::new(e)))?;
         let limits = self.limits();
-        let summary = self
-            .engine
-            .run(limits, &mut writer)
-            .map_err(|e| RunFailure::Run(Box::new(e)))?;
+        let summary = match self.engine.run(limits, &mut writer) {
+            Ok(summary) => summary,
+            Err(e) => {
+                // The records that led to the failure reach `out` (spec §4).
+                // The run's error is the one to report; if the trace cannot be
+                // written either, it reads as cut off earlier.
+                drop(writer.abandon());
+                return Err(RunFailure::Run(Box::new(e)));
+            }
+        };
         writer.run_ended(&summary);
         let (out, trace) = writer
             .finish()
