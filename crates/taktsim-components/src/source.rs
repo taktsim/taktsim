@@ -597,4 +597,23 @@ mod tests {
         s.mix.clear();
         assert!(s.next_attrs().is_err());
     }
+
+    /// Each variant takes the draws from the cumulative fraction before it up
+    /// to, not including, its own: a draw on a boundary goes to the next name.
+    /// The boundary is reachable: `{a: 60%, b: 40%}` puts it at 0.6, an odd
+    /// multiple of 2^-53, which `next_open01` returns for one mantissa.
+    #[test]
+    fn a_draw_on_a_boundary_goes_to_the_next_variant() {
+        let key = taktsim_core::random::StreamKey::new("source", "variant");
+        let draw = Stream::new(7, key).next_open01();
+        let choose = |boundary: f64| {
+            let mut s = source(false);
+            s.mix = vec![(VariantId::new(0), boundary), (VariantId::new(1), 1.0)];
+            s.variant_stream = Some(Stream::new(7, key));
+            s.next_attrs().unwrap().variant
+        };
+        assert_eq!(choose(draw), VariantId::new(1));
+        assert_eq!(choose(draw.next_up()), VariantId::new(0));
+        assert_eq!(choose(draw.next_down()), VariantId::new(1));
+    }
 }
