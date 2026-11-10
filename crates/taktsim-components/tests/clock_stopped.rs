@@ -1,4 +1,4 @@
-//! The budget of events per instant (ADR-0022 §6, question 23 b): a run whose
+//! The budget of events per instant (ADR-0022 §6, question 21 b): a run whose
 //! clock stops moving ends with a typed failure naming the component and the
 //! instant, the same way on every PC, and a legitimate run is not touched.
 
@@ -17,7 +17,7 @@ use taktsim_units::SimTime;
 
 /// Disagreement 20: a gamma of mean 1 s and cv 10⁶ draws 0 ns almost always, so
 /// `cut`'s cycles keep ending at time zero.
-fn stalling() -> Model {
+fn stopping_clock() -> Model {
     load(&document(
         "1h",
         "  - {id: source, type: Source}\n  \
@@ -28,8 +28,8 @@ fn stalling() -> Model {
 }
 
 /// The failure's fields, to compare two runs; `None` for another failure.
-fn stalled(failure: &RunFailure) -> Option<(String, String, String, u64, u64)> {
-    let RunFailure::Stalled {
+fn clock_stopped(failure: &RunFailure) -> Option<(String, String, String, u64, u64)> {
+    let RunFailure::ClockStopped {
         path,
         component,
         time,
@@ -50,14 +50,15 @@ fn stalled(failure: &RunFailure) -> Option<(String, String, String, u64, u64)> {
 
 #[test]
 fn a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant() {
-    let model = stalling();
+    let model = stopping_clock();
     let registry = registry();
     let failure = registry
         .prepare(&model, RunOptions::new().seed(1))
         .unwrap()
         .run(&mut NoTrace)
         .unwrap_err();
-    let (path, component, time, timers, events) = stalled(&failure).expect("a stalled clock");
+    let (path, component, time, timers, events) =
+        clock_stopped(&failure).expect("a clock that stopped");
     assert_eq!(
         (path.as_str(), component.as_str(), time.as_str()),
         ("components[1]", "cut", "0s")
@@ -101,7 +102,7 @@ fn a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant() {
         .unwrap()
         .run_traced(std::io::sink())
         .unwrap_err();
-    assert_eq!(stalled(&again), stalled(&failure));
+    assert_eq!(clock_stopped(&again), clock_stopped(&failure));
 }
 
 /// The budget counts events, never wall-clock time: an event limit below it ends
@@ -109,7 +110,10 @@ fn a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant() {
 #[test]
 fn an_event_limit_below_the_budget_still_ends_the_run() {
     let report = registry()
-        .prepare(&stalling(), RunOptions::new().seed(1).max_events(1000))
+        .prepare(
+            &stopping_clock(),
+            RunOptions::new().seed(1).max_events(1000),
+        )
         .unwrap()
         .run(&mut NoTrace)
         .unwrap();

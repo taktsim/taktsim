@@ -3931,7 +3931,7 @@ fn every_limit_is_accepted_exactly_at_the_limit() {
 /// its horizon. Given 100,000 events, a clock that is still at zero is the hang the
 /// rule exists to prevent.
 #[test]
-fn a_distribution_that_is_always_zero_cannot_stall_a_run() {
+fn a_distribution_that_is_always_zero_cannot_stop_the_clock() {
     let zeros = [
         "{dist: uniform, min: 0s, max: 0s}",
         "{dist: normal, mean: 0s, sd: 0s}",
@@ -3942,7 +3942,7 @@ fn a_distribution_that_is_always_zero_cannot_stall_a_run() {
         "{dist: erlang, mean: 0s, k: 2}",
         "{dist: weibull, scale: 0s, shape: 1}",
     ];
-    let mut stalled = Vec::new();
+    let mut stopped = Vec::new();
     for zero in zeros {
         let keys = [
             (
@@ -3993,15 +3993,15 @@ fn a_distribution_that_is_always_zero_cannot_stall_a_run() {
                     .unwrap()
                     .1;
                 if report.summary.now == SimTime::START {
-                    stalled.push(format!("{key}: {zero}"));
+                    stopped.push(format!("{key}: {zero}"));
                 }
             }
         }
     }
     assert!(
-        stalled.is_empty(),
+        stopped.is_empty(),
         "loaded, and the clock never moved:\n{}",
-        stalled.join("\n")
+        stopped.join("\n")
     );
 }
 

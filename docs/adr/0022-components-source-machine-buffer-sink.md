@@ -494,12 +494,14 @@ does not fit is after the horizon anyway.
 0 ns, such as `{dist: gamma, mean: 1s, cv: 1000000}`, loads: whether a draw is
 zero depends on the seed, as the end of the clock does. Its timer then keeps
 landing at the instant it was set, and the clock would stay there. The run layer
-ends such a run with `RunFailure::Stalled` once one component has addressed more
-than `TIMERS_PER_INSTANT` = 1,000,000 events to itself at one instant, naming the
-component (its id and the field path of its entry), the instant, and the events of
-every component at that instant. The records up to that event are in the trace,
+ends such a run with `RunFailure::ClockStopped` once one component has addressed
+more than `TIMERS_PER_INSTANT` = 1,000,000 events to itself at one instant, naming
+the component (its id and the field path of its entry), the instant, and the events
+of every component at that instant. The records up to that event are in the trace,
 which has no end marker, as for any failed run. The budget is always on and counts
 events, never wall-clock time or memory, so the failure is the same on every PC.
+The name is not "stalled": the project keeps that word for a run that has no
+events left while parts are still in it, a different case.
 
 Counted per component, of the events it addresses to itself (its timers), because
 that is what the model's limits bound. A component's timers at one instant are at
@@ -888,7 +890,7 @@ below is after v0.1 ships.
 | Failure rules (calendar, any state, resume) | throughput of unreliable lines | every result with failures | `failure_while_blocked_or_idle`, `interrupted_cycle_resumes_with_remaining_time` |
 | A wait past the end of the clock never ends (§6) | what a very long duration means, the trace of such a run | results of models with durations of centuries; refusing them instead breaks those models | `a_cycle_past_the_clock_never_ends_and_the_run_reaches_its_horizon`, `a_paused_cycle_whose_rest_ends_past_the_clock_never_ends`, `long_durations_never_fail_a_run` |
 | On-demand Sources fill at most 65,535 buffer places through buffers alone (vocabulary, question 20) | which models load; the error's path, at the largest buffer's `capacity` | relaxing it is free; tightening it, or extending it to timed Sources (question 20 b), breaks models that load | `an_on_demand_source_fills_at_most_65535_places`, `a_buffer_fed_at_a_rate_stays_uncapped`, `a_buffer_two_on_demand_sources_fill_is_reported_once`, `malformed` corpus |
-| `RunFailure::Stalled` past 1,000,000 events one component addresses to itself at one instant (§6, question 21) | which runs end with a failure, and where the trace stops; the failure's fields | raising the number is free for a model that loads today; lowering it, counting all events of an instant instead, or making it an option, changes which runs fail | `a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant`, `the_most_timers_a_model_allows_at_one_instant_run_untouched`, `an_event_limit_past_one_step_is_the_engine_s` |
+| `RunFailure::ClockStopped` past 1,000,000 events one component addresses to itself at one instant (§6, question 21) | which runs end with a failure, and where the trace stops; the failure's fields | raising the number is free for a model that loads today; lowering it, counting all events of an instant instead, or making it an option, changes which runs fail | `a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant`, `the_most_timers_a_model_allows_at_one_instant_run_untouched`, `an_event_limit_past_one_step_is_the_engine_s` |
 | Blocked Source (S2) | offered load under blocking | results of overloaded lines | `blocked_source_holds_and_loses_nothing`, `created_equals_emitted_plus_held` |
 | Setup rules (first unit free, FIFO, one variant at a time, `0s` is no changeover) | throughput with variants | results with setups | `first_unit_costs_no_setup`, `changeover_waits_for_units_in_cycle`, `zero_matrix_entry_is_no_changeover` |
 | Flow defaults (one edge per source, first free in list order, oldest offer first, event order when room opens at one instant) | M6's defaults, every branch and merge | every model with a branch | `branch_ties_go_to_the_first_declared`, `branch_room_opening_together_follows_event_order`, `merge_serves_oldest_offer`, `withdrawn_offer_loses_its_place`, `second_edge_from_a_component_is_rejected` |
@@ -1045,5 +1047,6 @@ the M5 pull request merges.
     with a typed error naming the component. *Recommended:* (b), because it covers
     every distribution with one rule and fails the same way everywhere.
     **Implemented** as §6 describes: per component, of the events it addresses to
-    itself, 1,000,000, in the run layer, always on. Confirm the number and the
-    counting, or name another.
+    itself, 1,000,000, in the run layer, always on, ending the run with
+    `RunFailure::ClockStopped`. Confirm the number and the counting, or name
+    another.

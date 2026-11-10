@@ -774,7 +774,7 @@ impl<D: Domain> Prepared<'_, D> {
                 .map_err(|e| RunFailure::Run(Box::new(e)))?;
             events += summary.events;
             if watch.most > TIMERS_PER_INSTANT {
-                return Err(self.stalled(&watch));
+                return Err(self.clock_stopped(&watch));
             }
             let limit_reached = self.max_events == Some(events);
             match summary.outcome {
@@ -795,9 +795,9 @@ impl<D: Domain> Prepared<'_, D> {
 
     /// The failure of a run whose clock stopped moving, naming the component
     /// that kept addressing events to itself.
-    fn stalled(&self, watch: &Watch<'_, D::Message>) -> RunFailure {
+    fn clock_stopped(&self, watch: &Watch<'_, D::Message>) -> RunFailure {
         let index = watch.who.map_or(0, ComponentId::index);
-        RunFailure::Stalled {
+        RunFailure::ClockStopped {
             path: self.paths.get(index).cloned().unwrap_or_default(),
             component: self
                 .header
@@ -839,7 +839,7 @@ impl<D: Domain> Prepared<'_, D> {
     ///
     /// # Errors
     ///
-    /// [`RunFailure::Run`] if the run fails, [`RunFailure::Stalled`] if its
+    /// [`RunFailure::Run`] if the run fails, [`RunFailure::ClockStopped`] if its
     /// clock stops moving.
     ///
     /// ```
@@ -878,7 +878,7 @@ impl<D: Domain> Prepared<'_, D> {
     /// # Errors
     ///
     /// [`RunFailure::Write`] if the trace cannot be written, [`RunFailure::Run`]
-    /// if the run fails and [`RunFailure::Stalled`] if its clock stops moving
+    /// if the run fails and [`RunFailure::ClockStopped`] if its clock stops moving
     /// (whether or not its trace could be written).
     ///
     /// ```
@@ -928,7 +928,7 @@ impl<D: Domain> Prepared<'_, D> {
 }
 
 /// The most events one component may address to itself at one instant, its
-/// timers, before a run ends with [`RunFailure::Stalled`] (ADR-0022 §6).
+/// timers, before a run ends with [`RunFailure::ClockStopped`] (ADR-0022 §6).
 ///
 /// A duration whose draws almost always round to 0 ns, such as a gamma of mean
 /// 1 s and cv 10⁶, loads, and then keeps its timer landing at the instant it was
@@ -1302,7 +1302,7 @@ pub enum RunFailure {
     #[error(
         "{path}: `{component}` addressed {timers} events to itself at {time} without the clock moving ({events} events in all), more than the {TIMERS_PER_INSTANT} a run allows at one instant; give it durations whose draws are not almost all 0 ns, e.g. `{{dist: lognormal, mean: 42s, sigma: 0.08}}`"
     )]
-    Stalled {
+    ClockStopped {
         /// The component's entry.
         path: FieldPath,
         /// The component's id.
@@ -1332,7 +1332,7 @@ impl RunFailure {
     #[must_use]
     pub fn path(&self) -> Option<&FieldPath> {
         match self {
-            Self::NoSeed { path } | Self::Stalled { path, .. } => Some(path),
+            Self::NoSeed { path } | Self::ClockStopped { path, .. } => Some(path),
             Self::Build(error) => error.path(),
             Self::Run(_) | Self::Write(_) => None,
         }
@@ -1354,7 +1354,7 @@ impl RunFailure {
             Self::Build(error) => error.found(),
             Self::Run(error) => Some(error.to_string()),
             Self::Write(error) => Some(error.to_string()),
-            Self::Stalled {
+            Self::ClockStopped {
                 component,
                 time,
                 timers,
@@ -1387,7 +1387,7 @@ impl RunFailure {
                     .to_owned(),
             ),
             Self::Build(error) => error.allowed(),
-            Self::Stalled { .. } => Some(format!(
+            Self::ClockStopped { .. } => Some(format!(
                 "at most {TIMERS_PER_INSTANT} events a component addresses to itself at one \
                  instant: durations whose draws are not almost all 0 ns"
             )),
@@ -1409,7 +1409,9 @@ impl RunFailure {
         match self {
             Self::NoSeed { .. } => Some("model: {name: line-a, seed: 42}".to_owned()),
             Self::Build(error) => error.example(),
-            Self::Stalled { .. } => Some("{dist: lognormal, mean: 42s, sigma: 0.08}".to_owned()),
+            Self::ClockStopped { .. } => {
+                Some("{dist: lognormal, mean: 42s, sigma: 0.08}".to_owned())
+            }
             Self::Run(_) | Self::Write(_) => None,
         }
     }
