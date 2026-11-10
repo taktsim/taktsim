@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, VecDeque};
 use taktsim_core::random::{DurationDistribution, Stream};
 use taktsim_core::{Component, ComponentError, Context, Delivery, ItemId, Violation};
 use taktsim_model::{
-    ComponentParams, Decode, Decoder, Distribution, Encode, Fields, Json, LoadErrorKind, Node,
-    Schemas, Segment, Value,
+    ComponentParams, Decode, Decoder, Distribution, Encode, Fields, Json, LoadErrorKind, Location,
+    Node, Schemas, Segment, Value,
 };
 use taktsim_units::{Count, Ratio};
 
@@ -22,9 +22,13 @@ use crate::state::SourceState;
 /// percentage as an `f64`.
 const SHARE_TOLERANCE: f64 = 1e-9;
 
-/// The variants of a Source with their shares, sorted by name.
+/// The variants of a Source with their shares, sorted by name, and where the
+/// mapping is written, for a check over the whole model.
 #[derive(Debug, Clone)]
-pub(crate) struct VariantMix(BTreeMap<String, Ratio>);
+pub(crate) struct VariantMix {
+    shares: BTreeMap<String, Ratio>,
+    at: Location,
+}
 
 impl Decode for VariantMix {
     const EXPECTED: &'static str =
@@ -91,7 +95,10 @@ impl Decode for VariantMix {
             );
             return None;
         }
-        Some(Self(shares))
+        Some(Self {
+            shares,
+            at: node.start(),
+        })
     }
 
     fn schema(schemas: &mut Schemas) -> Json {
@@ -120,7 +127,7 @@ impl Decode for VariantMix {
 impl Encode for VariantMix {
     fn encode(&self) -> Json {
         Json::Object(
-            self.0
+            self.shares
                 .iter()
                 .map(|(name, share)| (name.clone(), share.encode()))
                 .collect(),
@@ -231,7 +238,12 @@ impl Source {
     pub(crate) fn variant_names(&self) -> Option<impl Iterator<Item = &str>> {
         self.variants
             .as_ref()
-            .map(|mix| mix.0.keys().map(String::as_str))
+            .map(|mix| mix.shares.keys().map(String::as_str))
+    }
+
+    /// Where its `variants` are written; `None` if it declares none.
+    pub(crate) fn variants_at(&self) -> Option<Location> {
+        self.variants.as_ref().map(|mix| mix.at)
     }
 }
 
@@ -303,7 +315,8 @@ impl ComponentType<Flow> for Source {
         let declared: Vec<(&str, f64)> = self.variants.as_ref().map_or_else(
             || default.to_vec(),
             |m| {
-                m.0.iter()
+                m.shares
+                    .iter()
                     .map(|(name, share)| (name.as_str(), share.as_fraction()))
                     .collect()
             },

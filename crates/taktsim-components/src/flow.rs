@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
     CatalogError, Component as Entry, ComponentRef, Document, FieldPath, Findings, LoadErrorKind,
-    Place,
+    Place, Segment,
 };
 
 use crate::buffer::Buffer;
@@ -115,14 +115,19 @@ fn declared_variants(document: &Document) -> BTreeSet<&str> {
         .iter()
         .filter_map(|c| c.params::<Source>())
     {
-        match source.variant_names() {
-            Some(declared) => names.extend(declared),
-            None => {
-                names.insert(DEFAULT_VARIANT);
-            }
-        }
+        add_names(&mut names, source);
     }
     names
+}
+
+/// Adds the variant names `source` makes to `names`: its own, or `default`.
+fn add_names<'a>(names: &mut BTreeSet<&'a str>, source: &'a Source) {
+    match source.variant_names() {
+        Some(declared) => names.extend(declared),
+        None => {
+            names.insert(DEFAULT_VARIANT);
+        }
+    }
 }
 
 /// The flow as a graph.
@@ -363,18 +368,51 @@ fn check_on_demand(document: &Document, roles: &Roles, graph: &Graph<'_>, findin
 
 /// Matrix names are declared by some Source, and the model's names fit a
 /// `VariantId`.
+/// Reports `total` variant names, more than a model holds, at the Source whose
+/// names, in document order, pass the limit: at its `variants`, or at the entry
+/// of a Source that declares none and so adds `default`.
+fn too_many_variants(document: &Document, total: usize, findings: &mut Findings) {
+    let mut names = BTreeSet::new();
+    for c in document.components() {
+        let Some(source) = c.params::<Source>() else {
+            continue;
+        };
+        add_names(&mut names, source);
+        if names.len() <= MAX_VARIANTS {
+            continue;
+        }
+        let allowed = "at most 65535 variant names in a model";
+        match source.variants_at() {
+            Some(at) => {
+                let place = Place::new(c.place().file().map(str::to_owned), at);
+                let path = c.path().child(Segment::Key("variants".to_owned()));
+                not_allowed(
+                    findings,
+                    (&place, &path),
+                    format!("{total} variant names in the model"),
+                    allowed,
+                    "{basic: 80%, premium: 20%}",
+                );
+            }
+            None => not_allowed(
+                findings,
+                (c.place(), c.path()),
+                format!(
+                    "{total} variant names in the model, counting `{DEFAULT_VARIANT}` for this \
+                     Source, which declares none"
+                ),
+                allowed,
+                "{id: source, type: Source, interarrival: 1min, variants: {basic: 100%}}",
+            ),
+        }
+        return;
+    }
+}
+
 fn check_variants(document: &Document, findings: &mut Findings) {
     let declared = declared_variants(document);
-    if declared.len() > MAX_VARIANTS
-        && let Some(first) = document.components().first()
-    {
-        not_allowed(
-            findings,
-            (first.place(), first.path()),
-            format!("{} variant names in the model", declared.len()),
-            "at most 65535 variant names in a model",
-            "{basic: 80%, premium: 20%}",
-        );
+    if declared.len() > MAX_VARIANTS {
+        too_many_variants(document, declared.len(), findings);
     }
     for c in document.components() {
         let Some(setup) = c.params::<Machine>().and_then(Machine::setup) else {

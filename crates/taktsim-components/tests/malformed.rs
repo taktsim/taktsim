@@ -328,9 +328,49 @@ fn a_model_holds_at_most_65535_variant_names() {
     let errors = try_load(&many_variants(65_536)).unwrap_err();
     assert_eq!(errors.len(), 1, "{errors}");
     let e = errors.first();
-    assert_eq!(e.path().to_string(), "components[0]");
+    assert_eq!(e.path().to_string(), "components[0].variants");
     assert_eq!(
         e.kind().found().as_deref(),
         Some("65536 variant names in the model")
+    );
+}
+
+/// The limit is reported where it can be fixed: at the Source whose names pass
+/// it, whatever entry comes first, and at the entry of a Source that adds the
+/// implicit `default`.
+#[test]
+fn too_many_variant_names_are_reported_at_the_source_that_passes_the_limit() {
+    // A Sink listed before the Source.
+    let doc = many_variants(65_536);
+    let (head, rest) = doc.split_once("  - {id: source").unwrap();
+    let (source, tail) = rest.split_once("\n  - {id: sink, type: Sink}").unwrap();
+    let doc = format!("{head}  - {{id: sink, type: Sink}}\n  - {{id: source{source}{tail}");
+    let errors = try_load(&doc).unwrap_err();
+    assert_eq!(errors.len(), 1, "{errors}");
+    let e = errors.first();
+    assert_eq!(e.path().to_string(), "components[1].variants");
+    assert_eq!(
+        e.kind().found().as_deref(),
+        Some("65536 variant names in the model")
+    );
+
+    // 65,535 names, then a Source without variants, which makes `default`.
+    let doc = many_variants(65_535).replace(
+        "  - {id: sink, type: Sink}",
+        "  - {id: sink, type: Sink}\n  - {id: plain, type: Source, interarrival: 1min}",
+    );
+    let doc = doc.replace(
+        "  - [source, sink]",
+        "  - [source, sink]\n  - [plain, sink]",
+    );
+    let errors = try_load(&doc).unwrap_err();
+    assert_eq!(errors.len(), 1, "{errors}");
+    let e = errors.first();
+    assert_eq!(e.path().to_string(), "components[2]");
+    assert_eq!(
+        e.kind().found().as_deref(),
+        Some(
+            "65536 variant names in the model, counting `default` for this Source, which declares none"
+        )
     );
 }
