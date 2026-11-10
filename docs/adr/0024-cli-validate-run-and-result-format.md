@@ -443,8 +443,11 @@ directory, else `.taktsim/` here, `--store` overrides. Layout below it:
   hashes other than its model's, names a trace other than `runs/<id>/trace.takt`, or
   holds more than its one run, is exit 2, `run.stored_run_differs`, not this run. With `--max-events` too: nothing runs, so no limit is
   reached, and it is exit 0. `--no-reuse` runs anyway and, if the new run reached its
-  end, compares the stream hash with the stored one, never overwriting: a difference is
-  exit 2 and means the engine changed or determinism broke. This also matters while the
+  end, compares it with the stored run, never overwriting: first the stream hash, where a
+  difference means the engine changed or determinism broke, then every field of the
+  result but `provenance.platform`, where a difference means the stored numbers are not
+  what this run gives. Either is exit 2, `run.store_differs`; on a match the stored bytes
+  are printed, as on reuse. This also matters while the
   version stays `0.0.0`. A `--no-reuse` run stopped by a limit compares nothing, since a
   shorter stream says nothing about the engine, and is exit 3.
 - **Partial runs are not kept and have no id.** The run id does not cover the limit, and
@@ -630,7 +633,7 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | A stall is exit 2 in M7; `drained` for an empty system; `stalled` reserved | every reader's idea of a finished run; v0.2's stalls | an exit code's use (semver major) | `stall_is_exit_2_and_not_kept`, `drained_is_complete` |
 | Metric names `created`, `delivered`, `scrapped`, `consumed`, `items_alive`, unit `items` | scripts reading M7's result | a deprecation | `metrics_equal_item_counts`, `any_component_may_create_items`, CLI snapshots |
 | Run id and experiment id definition, ids only on stored runs | every stored run, every later reference | all stores go stale | `run_id_is_pinned`, `horizon_changes_the_run_id`, `run_id_names_the_engine`, `package_version_changes_the_run_id`, `experiment_id_is_over_sorted_runs`, `partial_document_has_no_ids` |
-| Store layout, `store_format`, reuse rule | every store, `trace query`, `compare` | a store migration | `store_layout_is_pinned`, `second_run_is_reused`, `no_reuse_detects_a_different_trace`, `truncated_no_reuse_exits_3_without_comparing`, `partial_run_is_not_kept`, `model_json_hashes_to_the_model_hash`, `unknown_store_format_is_refused`, `processes_racing_on_one_store_all_succeed`, `a_reused_result_prints_what_is_stored`, `a_result_filed_under_another_run_is_not_returned`, `replay_refuses_a_run_filed_under_another_id` |
+| Store layout, `store_format`, reuse rule | every store, `trace query`, `compare` | a store migration | `store_layout_is_pinned`, `second_run_is_reused`, `no_reuse_detects_a_different_trace`, `no_reuse_compares_the_whole_stored_result`, `no_reuse_returns_the_stored_bytes`, `truncated_no_reuse_exits_3_without_comparing`, `partial_run_is_not_kept`, `model_json_hashes_to_the_model_hash`, `unknown_store_format_is_refused`, `processes_racing_on_one_store_all_succeed`, `a_reused_result_prints_what_is_stored`, `a_result_filed_under_another_run_is_not_returned`, `replay_refuses_a_run_filed_under_another_id` |
 | Trace header: `has seed`, file format 3 | every trace reader | a format version | `header_bytes_are_pinned`, `absent_seed_round_trips`, `run_without_seed_replays`, the unchanged stream hashes in the snapshots |
 | Seed rules: no-draw models have none, K2, refusal | which runs count as the same; replication counts | different ids and refusals | `no_seed_refused_when_the_model_draws`, `draws_nothing_runs_with_empty_seeds`, `seed_option_is_recorded_over_model_seed`, `no_draw_claim_is_true`, `no_draw_claim_holds_on_generated_models`, `false_no_draw_claim_exits_2_and_is_not_kept` |
 | `ComponentType::draws_random`, `Domain::draws_random`, `Domain::PACKAGE`, `Domain::PACKAGE_VERSION`, `RunOptions::no_seed`, `RunOptions::no_seed_check`, `ENGINE_NAME` | every later package; core's public API | every package | `no_draw_claim_is_true`, doc tests, `record_format_names_the_engine`, `message_format_names_the_package` |
