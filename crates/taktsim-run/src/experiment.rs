@@ -794,6 +794,42 @@ impl Coordinator<'_> {
     }
 }
 
+/// What a worker tells the coordinator about its replication.
+#[derive(Debug)]
+enum Report {
+    /// It returned.
+    Done(Result<Worked, Failure>),
+    /// It panicked. rayon raises the panic again when the scope ends, so it reaches
+    /// ADR-0007's path once the coordinator stops waiting and cuts the others.
+    Panicked,
+}
+
+/// A worker's way back to the coordinator. Dropped unsent, as a panicking worker
+/// unwinds, it says `Panicked`, so the coordinator never waits for a report that will
+/// not come.
+struct Reporter {
+    sender: Option<mpsc::Sender<(u32, Report)>>,
+    index: u32,
+}
+
+impl Reporter {
+    fn send(mut self, worked: Result<Worked, Failure>) {
+        if let Some(sender) = self.sender.take() {
+            // The coordinator holds the receiver until every worker has reported; a
+            // failed send drops the run, and its temp directory.
+            let _ = sender.send((self.index, Report::Done(worked)));
+        }
+    }
+}
+
+impl Drop for Reporter {
+    fn drop(&mut self) {
+        if let Some(sender) = self.sender.take() {
+            let _ = sender.send((self.index, Report::Panicked));
+        }
+    }
+}
+
 /// Where the workers run and what they share.
 struct Work<'r, D: Domain> {
     registry: &'r Registry<D>,
@@ -812,6 +848,29 @@ impl<'r, D: Domain> Work<'r, D> {
             .is_some_and(|c| c.load(Ordering::Relaxed))
     }
 
+    /// Runs the replication of `seed` on the pool, cut by `flag`; it reports through
+    /// `reporter`, even when it panics.
+    fn spawn(
+        &self,
+        scope: &rayon::Scope<'r>,
+        reporter: Reporter,
+        seed: Option<u64>,
+        flag: Option<&'r AtomicBool>,
+    ) {
+        let Work {
+            registry,
+            model,
+            request,
+            store,
+            ..
+        } = *self;
+        scope.spawn(move |_| {
+            let reporter = reporter;
+            let worked = crate::work_one(registry, model, seed, request, flag, store);
+            reporter.send(worked);
+        });
+    }
+
     /// Starts replications while the window allows, waits for one, polls the signal
     /// and the clock, until the sequencer has decided and nothing runs. At most
     /// `at_once` seeds run past the decision point, so waste is bounded.
@@ -820,7 +879,7 @@ impl<'r, D: Domain> Work<'r, D> {
         scope: &rayon::Scope<'r>,
         coordinator: &mut Coordinator<'r>,
     ) -> Result<Option<NonZeroUsize>, Failure> {
-        let (sender, receiver) = mpsc::channel::<(u32, Result<Worked, Failure>)>();
+        let (sender, receiver) = mpsc::channel::<(u32, Report)>();
         let started = Instant::now();
         let deadline = self
             .request
@@ -858,7 +917,10 @@ impl<'r, D: Domain> Work<'r, D> {
                     }
                     Ok(None) => {
                         running += 1;
-                        let sender = sender.clone();
+                        let reporter = Reporter {
+                            sender: Some(sender.clone()),
+                            index,
+                        };
                         let flag = coordinator.flags.get(index as usize);
                         if cancelled {
                             // Signalled before anything ran: the lowest seed starts cut,
@@ -868,20 +930,7 @@ impl<'r, D: Domain> Work<'r, D> {
                                 flag.store(true, Ordering::Relaxed);
                             }
                         }
-                        let Work {
-                            registry,
-                            model,
-                            request,
-                            store,
-                            ..
-                        } = *self;
-                        scope.spawn(move |_| {
-                            let worked =
-                                crate::work_one(registry, model, seed, request, flag, store);
-                            // The coordinator holds the receiver until every worker has
-                            // reported; a failed send drops the run, and its temp directory.
-                            let _ = sender.send((index, worked));
-                        });
+                        self.spawn(scope, reporter, seed, flag);
                     }
                     Err(failure) => coordinator.finished(index, Err(failure))?,
                 }
@@ -895,7 +944,14 @@ impl<'r, D: Domain> Work<'r, D> {
                 ));
             }
             match receiver.recv_timeout(POLL) {
-                Ok((index, worked)) => {
+                Ok((index, Report::Panicked)) => {
+                    // The caller cuts every other replication, and the scope then
+                    // raises the panic.
+                    return Err(internal_line(&format!(
+                        "the replication at index {index} panicked"
+                    )));
+                }
+                Ok((index, Report::Done(worked))) => {
                     running -= 1;
                     if let (None, Ok(Worked::Ready(ready))) = (at_once, &worked) {
                         at_once = Some(memory::parallel(

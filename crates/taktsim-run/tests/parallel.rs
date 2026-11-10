@@ -274,3 +274,83 @@ fn progress_states_the_count_and_the_budget() {
     let one = run_text(&line(""), &RunRequest::new(), &dir.store()).unwrap();
     assert_eq!(one.progress, None);
 }
+
+/// `type: Snap`: a component type whose build panics, as a violated invariant does
+/// (ADR-0007). It draws, so a seed list is an experiment.
+#[derive(Debug)]
+struct Snap;
+
+impl taktsim_model::Encode for Snap {
+    fn encode(&self) -> taktsim_model::Json {
+        taktsim_model::Json::object([])
+    }
+}
+
+impl taktsim_model::ComponentParams for Snap {
+    const TYPE: &'static str = "Snap";
+    const EXAMPLE: &'static str = "{id: s, type: Snap}";
+    fn decode(_: &mut taktsim_model::Fields<'_, '_>) -> Option<Self> {
+        Some(Self)
+    }
+}
+
+impl taktsim_components::ComponentType<taktsim_components::Flow> for Snap {
+    const PORTS: taktsim_components::Ports = taktsim_components::Ports::Outlet;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::InSystem;
+
+    fn places(&self) -> u32 {
+        1
+    }
+
+    #[allow(clippy::panic)] // The point of this type: a panic on a replication's thread.
+    fn build(
+        &self,
+        _: &taktsim_components::Wiring<'_, taktsim_components::FlowShared>,
+    ) -> Result<
+        Box<dyn taktsim_core::Component<taktsim_components::FlowMessage>>,
+        taktsim_components::BuildError,
+    > {
+        panic!("a broken component type");
+    }
+}
+
+/// A panic on a replication's thread reaches the caller once the others are cut, as
+/// ADR-0007's path, and never leaves the experiment waiting for a report that will not
+/// come (ADR-0025 §8).
+#[test]
+fn a_panicking_replication_reaches_the_caller() {
+    let (finished, waited) = std::sync::mpsc::channel::<()>();
+    let worker = std::thread::spawn(move || {
+        let dir = TempDir::new();
+        let registry = taktsim_components::standard()
+            .unwrap()
+            .with::<Snap>()
+            .unwrap();
+        let yaml = model(
+            ", seed: 1",
+            "  - {id: snap, type: Snap}\n  - {id: sink, type: Sink}",
+            "  - [snap, sink]",
+        );
+        let seeds = [1, 2, 3];
+        let request = RunRequest {
+            seeds: &seeds,
+            threads: threads(2),
+            ..RunRequest::new()
+        };
+        let _ = support::run_with(&registry, &yaml, &request, &dir.store());
+        // Not reached: the panic unwinds through here and drops the sender.
+        let _ = finished.send(());
+    });
+    let outcome = waited.recv_timeout(Duration::from_secs(60));
+    assert_eq!(
+        outcome,
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected),
+        "the experiment still waits after a replication panicked"
+    );
+    let payload = worker.join().unwrap_err();
+    assert_eq!(
+        payload.downcast_ref::<&str>().copied(),
+        Some("a broken component type")
+    );
+}
