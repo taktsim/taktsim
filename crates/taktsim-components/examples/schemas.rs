@@ -23,12 +23,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         .ok_or("usage: schemas <schemas directory>")?;
     let dir = root.join("model");
     std::fs::create_dir_all(&dir)?;
-    let mut text = model_schema(standard()?.catalog())
-        .with(
-            "description",
-            &"A taktsim model (spec §4) of the standard production catalog: Source, Machine, \
-              Buffer, Sink. Generated from the Rust types; do not edit.",
-        )
+    let registry = standard()?;
+    let catalog = registry.catalog();
+    // The types named from the catalog too, so the description cannot fall
+    // behind it.
+    let types: Vec<&str> = catalog.types().collect();
+    let description = format!(
+        "A taktsim model (spec §4) of the standard production catalog: {}. Generated from \
+         the Rust types; do not edit.",
+        types.join(", ")
+    );
+    let mut text = model_schema(catalog)
+        .with("description", &description.as_str())
         .to_pretty();
     text.push('\n');
     std::fs::write(dir.join(format!("{FORMAT_VERSION}.json")), text)?;

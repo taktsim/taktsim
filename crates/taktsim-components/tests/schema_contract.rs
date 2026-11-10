@@ -48,6 +48,15 @@ fn the_committed_schema_has_every_entry_closed_to_other_keys() {
         text.contains("\"const\": \"Machine\""),
         "regenerate schemas/"
     );
+    // The description names the catalog's types as the catalog lists them
+    // (ADR-0022 §11: no list of the generator's own).
+    let types: Vec<&str> = registry().catalog().types().collect();
+    let committed = tree(&text);
+    let description = committed["description"].as_str().unwrap();
+    assert!(
+        description.contains(&format!("catalog: {}.", types.join(", "))),
+        "{description}"
+    );
     let schema = schema();
     let entries = schema["$defs"]["Component"]["oneOf"].as_array().unwrap();
     assert_eq!(entries.len(), 4);
