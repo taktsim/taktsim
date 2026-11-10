@@ -333,3 +333,39 @@ fn malformed_invocations_exit_1_at_their_path() {
     assert_eq!(big.code, 1);
     assert_eq!(big.lines()[0]["type"], "run.seed_out_of_range");
 }
+
+/// ADR-0022's load rule (vocabulary, question 20 a): an on-demand Source fills at
+/// most 65,535 buffer places, so 40,000 and 30,000 places behind one are refused
+/// at the larger buffer's `capacity`. The CLI shows it as any model error: exit 1,
+/// at its path, with the line and column, from `validate` and `run` alike.
+#[test]
+fn an_on_demand_source_filling_too_many_places_exits_1_at_the_capacity() {
+    let model = repo(&[
+        "crates",
+        "taktsim-components",
+        "tests",
+        "data",
+        "malformed",
+        "flow-on-demand-buffers-too-large.yaml",
+    ]);
+    let name = model.display().to_string();
+    let dir = Dir::new();
+    for command in ["validate", "run"] {
+        let outcome = dir.taktsim(&[command, &name, "--format", "json"]);
+        assert_eq!(outcome.code, 1, "{command}: {}", outcome.stderr);
+        let lines = outcome.lines();
+        assert_eq!(lines.len(), 1, "{command}: {}", outcome.stderr);
+        let line = &lines[0];
+        assert_eq!(line["type"], "model.not_allowed", "{command}: {line}");
+        assert_eq!(line["path"], "components[1].capacity", "{command}: {line}");
+        assert_eq!(line["file"].as_str(), Some(name.as_str()), "{command}");
+        assert_eq!(
+            (line["line"].clone(), line["column"].clone()),
+            (Json::from(6), Json::from(40)),
+            "{command}: {line}"
+        );
+        assert!(line["found"].as_str().is_some(), "{command}: {line}");
+        assert!(line["allowed"].as_str().is_some(), "{command}: {line}");
+    }
+    assert!(dir.store_is_empty());
+}
