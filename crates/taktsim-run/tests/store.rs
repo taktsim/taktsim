@@ -531,31 +531,18 @@ fn replay_refuses_a_trace_whose_header_names_another_run() {
     assert!(replay_stored(&registry, &store, &b_id).is_ok());
 }
 
-/// A result whose stated run id alone, or whose `provenance.seeds` alone, disagrees
-/// is not the run it is filed under, though its other fields still compute to that
-/// id: neither reuse nor replay accepts it (ADR-0024 §6). Nor one that says it is
-/// partial, since a partial run is never stored (§8), or states an experiment id
-/// other than the one over its run alone.
-#[test]
-fn a_result_that_disagrees_with_itself_in_one_field_is_refused() {
-    let registry = standard().unwrap();
-    let dir = TempDir::new();
-    let store = dir.store();
-    let yaml = drawing_model(", seed: 1");
-    let response = run_text(&yaml, &RunRequest::new(), &store).unwrap();
-    let id = response.result.runs[0].run_id.clone().unwrap();
-    let file = store
-        .root()
-        .join("runs")
-        .join(id.as_str())
-        .join("result.json");
-    let text = std::fs::read_to_string(&file).unwrap();
+/// The stored result `text` of `response` with one field forged, by name.
+#[allow(clippy::unwrap_used)] // Test helper.
+fn forged_results(response: &taktsim_run::RunResponse, text: &str) -> Vec<(&'static str, String)> {
+    let id = response.result.runs[0].run_id.as_ref().unwrap();
     let other_id = format!("taktsim-core-{}", "a".repeat(64));
     let experiment = response.result.experiment_id.clone().unwrap();
+    let provenance = &response.result.provenance;
+    let trace = response.result.runs[0].trace.as_ref().unwrap();
     let complete = "\"complete\": true";
     let last = text.rfind(complete).unwrap();
     assert_ne!(text.find(complete), Some(last), "the document and its run");
-    let cases = [
+    vec![
         (
             "document's complete",
             text.replacen(complete, "\"complete\": false", 1),
@@ -586,7 +573,89 @@ fn a_result_that_disagrees_with_itself_in_one_field_is_refused() {
                 "\"seeds\": [\n      43\n    ]",
             ),
         ),
-    ];
+        // Each input of the run id the result states, alone.
+        (
+            "engine",
+            text.replace(
+                &format!("\"engine\": \"{}\"", provenance.engine),
+                "\"engine\": \"other-core\"",
+            ),
+        ),
+        (
+            "engine version",
+            text.replace(
+                &format!("\"engine_version\": \"{}\"", provenance.engine_version),
+                "\"engine_version\": \"9.9.9\"",
+            ),
+        ),
+        (
+            "record format",
+            text.replace(
+                &format!("\"record_format\": \"{}\"", trace.record_format),
+                "\"record_format\": \"taktsim-core/1\"",
+            ),
+        ),
+        (
+            "message format",
+            text.replace(
+                &format!("\"message_format\": \"{}\"", trace.message_format),
+                "\"message_format\": \"taktsim-components/9\"",
+            ),
+        ),
+        // What the loaded model fixes: its hashes.
+        (
+            "system hash",
+            text.replace(&provenance.system_hash.to_string(), &"0".repeat(64)),
+        ),
+        (
+            "model hash",
+            text.replace(&provenance.model_hash.to_string(), &"0".repeat(64)),
+        ),
+        // The trace filed with it, and no other.
+        (
+            "trace path",
+            text.replace(&trace.path, "runs/other/trace.takt"),
+        ),
+        ("no trace", {
+            let mut document = response.result.clone();
+            document.runs[0].trace = None;
+            document.to_text()
+        }),
+        // One run, which its experiment id is over.
+        ("second run", {
+            let mut document = response.result.clone();
+            let mut extra = document.runs[0].clone();
+            extra.run_id = None;
+            extra.trace = None;
+            document.runs.push(extra);
+            document.to_text()
+        }),
+    ]
+}
+
+/// A result whose stated run id alone, or whose `provenance.seeds` alone, disagrees
+/// is not the run it is filed under, though its other fields still compute to that
+/// id: neither reuse nor replay accepts it (ADR-0024 §6). Nor one that says it is
+/// partial, since a partial run is never stored (§8), or states an experiment id
+/// other than the one over its run alone. Nor one where any one input of the run id
+/// is forged, which then computes to another id; nor one that states hashes the
+/// model does not have, names no trace or another run's, or holds a second run that
+/// its experiment id is not over (§3).
+#[test]
+fn a_result_that_disagrees_with_itself_in_one_field_is_refused() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let store = dir.store();
+    let yaml = drawing_model(", seed: 1");
+    let response = run_text(&yaml, &RunRequest::new(), &store).unwrap();
+    let id = response.result.runs[0].run_id.clone().unwrap();
+    let file = store
+        .root()
+        .join("runs")
+        .join(id.as_str())
+        .join("result.json");
+    let text = std::fs::read_to_string(&file).unwrap();
+    let cases = forged_results(&response, &text);
     for (name, forged) in cases {
         assert_ne!(forged, text, "{name}");
         std::fs::write(&file, &forged).unwrap();
@@ -815,4 +884,36 @@ fn a_tmp_that_cannot_be_written_is_an_io_failure() {
     } else {
         assert!(outcome.unwrap().result.complete);
     }
+}
+
+/// A model and a trace from another run, filed together as this run's: the trace's
+/// header names the swapped model, and the two models differ only in their name, so
+/// their system hashes and records are the same. Only the result's model hash tells
+/// the stored model is not this run's (ADR-0024 §1).
+#[test]
+fn replay_refuses_the_model_and_trace_of_another_run_filed_together() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let store = dir.store();
+    let a = run_text(&drawing_model("a, seed: 1"), &RunRequest::new(), &store).unwrap();
+    let b = run_text(&drawing_model("b, seed: 1"), &RunRequest::new(), &store).unwrap();
+    assert_eq!(
+        a.result.provenance.system_hash, b.result.provenance.system_hash,
+        "the names are outside the system"
+    );
+    let a_id = a.result.runs[0].run_id.clone().unwrap();
+    let b_id = b.result.runs[0].run_id.clone().unwrap();
+    let run_dir = |id: &taktsim_run::RunId| store.root().join("runs").join(id.as_str());
+    for name in ["model.json", "trace.takt"] {
+        std::fs::copy(run_dir(&a_id).join(name), run_dir(&b_id).join(name)).unwrap();
+    }
+    let failure = replay_stored(&registry, &store, &b_id).unwrap_err();
+    assert_eq!(failure.class, FailureClass::RunFailed);
+    assert_eq!(failure.diagnostics[0].type_name, "run.stored_run_differs");
+    assert!(
+        failure.diagnostics[0].message.contains("hashes"),
+        "{}",
+        failure.diagnostics[0].message
+    );
+    assert!(replay_stored(&registry, &store, &a_id).is_ok());
 }
