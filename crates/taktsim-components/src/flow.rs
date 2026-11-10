@@ -562,16 +562,31 @@ fn check_split(document: &Document, findings: &mut Findings) {
 
 /// What a condition can read: `variant` as an enum of the model's names and
 /// `priority` as an int, no functions and no components. So conditions are about the
-/// unit, never about observables, and none can compare a float (ADR-0023 §2).
+/// unit, never about observables, and none can compare a float (ADR-0023 §2). A model
+/// that declares no variant names, having no `Source`, has no `variant` to read, so a
+/// condition naming it is an error at that condition.
 fn condition_env(document: &Document) -> Result<TypeEnv, EnvError> {
-    TypeEnv::new()
-        .with_enum("variant", declared_variants(document))?
-        .with_path("variant", Type::Enum("variant".to_owned()))?
-        .with_path("priority", Type::Int)
+    let declared = declared_variants(document);
+    let env = if declared.is_empty() {
+        TypeEnv::new()
+    } else {
+        TypeEnv::new()
+            .with_enum("variant", declared)?
+            .with_path("variant", Type::Enum("variant".to_owned()))?
+    };
+    env.with_path("priority", Type::Int)
+}
+
+/// Whether some edge has a `when`: otherwise the model says nothing about conditions.
+fn has_conditions(document: &Document) -> bool {
+    document.flow().iter().any(|edge| edge.when().is_some())
 }
 
 /// Each `when` has type bool in that environment, and names a declared variant.
 fn check_conditions(document: &Document, findings: &mut Findings) {
+    if !has_conditions(document) {
+        return;
+    }
     let env = match condition_env(document) {
         Ok(env) => env,
         Err(error) => {
@@ -1251,9 +1266,8 @@ fn route_tables(
     gate_returns: &BTreeSet<(&str, &str)>,
     variants: &Arc<Vec<String>>,
 ) -> Result<BTreeMap<String, Arc<RouteTable>>, BuildError> {
-    let env = condition_env(document).map_err(|source| BuildError::Conditions {
-        source: Box::new(source),
-    })?;
+    // Built at the first `when`: a model without one says nothing about conditions.
+    let mut env: Option<TypeEnv> = None;
     let mut tables = BTreeMap::new();
     for (id, edges) in leaving_edges(document) {
         let plain = matches!(edges.as_slice(), [(edge, _)]
@@ -1274,8 +1288,16 @@ fn route_tables(
             let when = match (edge.when(), edge.when_written()) {
                 (Some(expr), Some((text, _, path))) => {
                     has_when = true;
+                    let env = match env {
+                        Some(ref env) => env,
+                        None => env.insert(condition_env(document).map_err(|source| {
+                            BuildError::Conditions {
+                                source: Box::new(source),
+                            }
+                        })?),
+                    };
                     let condition =
-                        Condition::new(expr, &env).map_err(|error| BuildError::Condition {
+                        Condition::new(expr, env).map_err(|error| BuildError::Condition {
                             path: path.clone(),
                             text: text.to_owned(),
                             source: Box::new(error),

@@ -279,3 +279,40 @@ fn every_item_stays_accounted_for_at_every_event() {
     assert_eq!(created, r.report.items.created.get());
     alive(&r, "20min");
 }
+
+/// A model with no `Source` declares no variant names. Without a `when` it says nothing
+/// about conditions, so nothing about them is checked; a condition on `priority` alone
+/// still loads, and one on `variant` is an error at that condition.
+#[test]
+fn a_model_without_a_source_loads_unless_a_condition_names_a_variant() {
+    let components = "  - {id: a, type: Machine, cycle_time: 1s}\n  \
+                      - {id: b, type: Machine, cycle_time: 1s}\n  - {id: sink, type: Sink}";
+    let plain = document(
+        "1h",
+        components,
+        "  - [a, b]\n  - {from: b, split: {a: 50%, sink: 50%}}",
+    );
+    let r = run(&plain, 1);
+    assert_eq!(r.events().len(), 0);
+    let by_priority = document(
+        "1h",
+        components,
+        "  - [a, b]\n  - {from: b, to: sink, when: \"priority > 0\"}\n  \
+         - {from: b, split: {a: 50%, sink: 50%}}",
+    );
+    let r = run(&by_priority, 1);
+    assert_eq!(r.events().len(), 0);
+    let by_variant = document(
+        "1h",
+        components,
+        "  - [a, b]\n  - {from: b, to: sink, when: \"variant == 'red'\"}\n  \
+         - {from: b, split: {a: 50%, sink: 50%}}",
+    );
+    let errors = support::try_load(&by_variant).unwrap_err();
+    assert_eq!(errors.len(), 1, "{errors}");
+    assert_eq!(
+        errors.first().path().to_string(),
+        "flow[1].when",
+        "{errors}"
+    );
+}
