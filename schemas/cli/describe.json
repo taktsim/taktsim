@@ -422,6 +422,11 @@
                   ]
                 },
                 "then": {
+                  "properties": {
+                    "interval": {
+                      "$ref": "#/$defs/SamplingInterval"
+                    }
+                  },
                   "required": [
                     "interval"
                   ]
@@ -439,6 +444,14 @@
                   ]
                 },
                 "then": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
                   "required": [
                     "reason",
                     "detail"
@@ -449,10 +462,10 @@
             "description": "What can be said about a value's error. Read a kind you do not know as no statement, never as an error.",
             "properties": {
               "detail": {
-                "type": "string"
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` and `detail` under `none`."
               },
               "interval": {
-                "$ref": "#/$defs/SamplingInterval"
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` and `detail` under `none`."
               },
               "kind": {
                 "type": "string"
@@ -461,7 +474,7 @@
                 "type": "boolean"
               },
               "reason": {
-                "type": "string"
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` and `detail` under `none`."
               },
               "target": {
                 "$ref": "#/$defs/AccuracyTarget"
