@@ -1452,6 +1452,97 @@ mod tests {
         assert!(!Outlet::with_unoffered_target().answers_a_unit_gone(0, |_| false));
     }
 
+    /// A routed outlet with one status edge to two targets, and one part on it.
+    fn status_outlet() -> Outlet {
+        let plan = || crate::route::TargetPlan {
+            taker: None,
+            places: 1,
+            returns: false,
+        };
+        let table = RouteTable {
+            edges: vec![crate::route::RouteEdge {
+                when: None,
+                targets: vec![0, 1],
+                pick: Pick::Status(StatusRule::Preferred),
+            }],
+            targets: vec![plan(), plan()],
+            has_when: false,
+            has_split: false,
+            variants: Arc::new(Vec::new()),
+        };
+        let target = |index| Target {
+            id: ComponentId::from_index(index),
+            offered: false,
+            crossing_at: None,
+        };
+        let mut routed = Routed::new(Arc::new(table), None);
+        routed.on_edge[0] = 1;
+        Outlet {
+            targets: vec![target(1), target(2)],
+            table: None,
+            routed: Some(Box::new(routed)),
+        }
+    }
+
+    fn routed_mut(outlet: &mut Outlet) -> &mut Routed {
+        outlet.routed.as_deref_mut().unwrap()
+    }
+
+    #[test]
+    fn an_offer_standing_where_there_is_no_room_beside_a_target_with_room_is_a_violation() {
+        let mut outlet = status_outlet();
+        let routed = routed_mut(&mut outlet);
+        routed.standing[0].as_mut().unwrap().stand = Some(0);
+        routed.known[0].room = false;
+        let violation = outlet.check_standing_offers().unwrap_err();
+        assert_eq!(
+            violation.invariant,
+            "an up holder with an offer at a target it knows has no room knows of no target \
+             on that edge with room"
+        );
+        assert_eq!(violation.detail, "the offer stands at #1, and #2 has room");
+        // While the target's `Accept` is on its way, the part is leaving: nothing moves.
+        routed_mut(&mut outlet).known[0].accept_due = true;
+        assert!(outlet.check_standing_offers().is_ok());
+        // With no room anywhere, the offer stands where it ranks best.
+        let routed = routed_mut(&mut outlet);
+        routed.known[0].accept_due = false;
+        routed.known[1].room = false;
+        assert!(outlet.check_standing_offers().is_ok());
+        // Where it stands has room.
+        routed_mut(&mut outlet).known[0].room = true;
+        assert!(outlet.check_standing_offers().is_ok());
+        // A plain outlet has no standing offers.
+        assert!(
+            Outlet::with_unoffered_target()
+                .check_standing_offers()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_part_on_a_status_edge_needs_its_one_offer_standing() {
+        let mut outlet = status_outlet();
+        // Nowhere to stand yet: not offered.
+        assert!(!outlet.parts_offered());
+        routed_mut(&mut outlet).standing[0].as_mut().unwrap().stand = Some(1);
+        assert!(!outlet.parts_offered());
+        // An offer to the other target does not count.
+        outlet.targets[0].offered = true;
+        assert!(!outlet.parts_offered());
+        outlet.targets[1].offered = true;
+        assert!(outlet.parts_offered());
+        // No part on the edge: nothing needs to stand.
+        let mut idle = status_outlet();
+        routed_mut(&mut idle).on_edge[0] = 0;
+        assert!(idle.parts_offered());
+        // A part meant for one target needs an offer to it.
+        routed_mut(&mut idle).meant[1] = 1;
+        assert!(!idle.parts_offered());
+        idle.targets[1].offered = true;
+        assert!(idle.parts_offered());
+    }
+
     #[test]
     fn worked_per_place_is_exact_and_rounds_down() {
         let known = Known {
