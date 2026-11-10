@@ -595,3 +595,57 @@ fn an_experiment_document_round_trips() {
         taktsim_model::decode_str(&text, taktsim_model::Format::Json).unwrap();
     assert_eq!(read.to_text(), text);
 }
+
+/// A run that delivered nothing has no lead time row, but the units inside at its end
+/// count all the same (ADR-0025 §3): seed 6 delivers nothing with one unit in `cut`,
+/// seeds 1 and 2 deliver their one unit each and end empty, so every lead time row
+/// over the three carries `censored` with 1/3 unit inside. Run alone, seed 4 states
+/// its own entry, and a part held at a Source is no unit inside.
+#[test]
+fn censored_counts_the_units_inside_a_run_that_delivered_nothing() {
+    let dir = TempDir::new();
+    let yaml = "format: \"1.0\"\nmodel: {name: rare}\nexperiment: {type: terminating, horizon: 30min}\n\
+                components:\n\
+                - {id: source, type: Source, interarrival: {dist: exponential, mean: 30min}}\n\
+                - {id: cut, type: Machine, cycle_time: 10min}\n\
+                - {id: sink, type: Sink}\n\
+                flow: [[source, cut, sink]]\nobserve: [\"lead_time(sink)\"]\n";
+    let store = dir.store();
+    let inside = |seeds: &[u64]| -> Vec<Option<f64>> {
+        let request = RunRequest {
+            seeds,
+            ..RunRequest::new()
+        };
+        let response = run_text(yaml, &request, &store).unwrap();
+        let lead = response
+            .result
+            .metrics
+            .iter()
+            .find(|m| m.name == "lead_time(sink)")
+            .unwrap();
+        assert_eq!(lead.values.len(), 7);
+        lead.values
+            .iter()
+            .map(|value| {
+                value.accuracy.iter().find_map(|a| match a.kind {
+                    AccuracyKind::Censored { units_inside, .. } => Some(units_inside),
+                    AccuracyKind::Sampling(_)
+                    | AccuracyKind::None { .. }
+                    | AccuracyKind::PartlyUndefined { .. }
+                    | AccuracyKind::Unknown { .. } => None,
+                })
+            })
+            .collect()
+    };
+    assert_eq!(inside(&[1, 2, 6]), vec![Some(1.0 / 3.0); 7]);
+    // Fresh or reused, the same: the second call reads every run from the store.
+    assert_eq!(inside(&[1, 2, 6]), vec![Some(1.0 / 3.0); 7]);
+    // Seed 4 delivers one unit and ends with another inside: its own entry counts.
+    assert_eq!(inside(&[1, 4]), vec![Some(0.5); 7]);
+    // Seed 45 delivers nothing, with one unit in `cut` and one part held at the Source:
+    // one unit inside, not the two items alive.
+    assert_eq!(inside(&[1, 45]), vec![Some(0.5); 7]);
+    // Seed 3 delivers nothing and ends empty.
+    assert_eq!(inside(&[1, 3]), vec![None; 7]);
+    assert_eq!(inside(&[1, 2]), vec![None; 7]);
+}

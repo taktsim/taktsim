@@ -184,6 +184,13 @@ impl Fold {
         self.total(|r| r.created).saturating_sub(disposed)
     }
 
+    /// The units inside the system at the end, released and not disposed of: what a
+    /// lead time row's `censored` entry states (ADR-0025 §3). A part held at a Source
+    /// is not one.
+    pub(crate) fn wip_end(&self) -> u64 {
+        self.kpis.report.wip_end()
+    }
+
     /// What one replication like this one takes in memory, in bytes (ADR-0025 §8).
     pub(crate) fn memory_estimate(&self) -> u64 {
         crate::memory::estimate(self.total(|r| r.delivered), self.peak_alive)
@@ -285,7 +292,7 @@ impl Fold {
         accuracy: &Accuracy,
         targets: Option<&Targets>,
     ) -> Vec<MetricValue> {
-        let inside = self.kpis.report.wip_end();
+        let inside = self.wip_end();
         let target = targets.and_then(|targets| targets.get(&spec.metric));
         kpi_rows(spec, &self.kpis)
             .into_iter()

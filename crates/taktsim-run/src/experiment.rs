@@ -16,6 +16,7 @@ use taktsim_stats::{ReplicationControl, ReplicationPlan, ReplicationStatus, Stat
 use taktsim_units::{Ratio, SimDuration};
 
 use crate::diagnostic::{Diagnostic, Failure, FailureClass};
+use crate::facts::Places;
 use crate::id::ExperimentId;
 use crate::memory;
 use crate::metrics::{self, KpiSpec, Labels, Targets};
@@ -23,7 +24,7 @@ use crate::result::{
     Accuracy, AccuracyKind, AccuracyPlan, Metric, MetricValue, Over, Provenance, ResultDocument,
     Scalar,
 };
-use crate::store::{Store, StoredResult};
+use crate::store::{Store, StoredResult, TRACE_FILE};
 use crate::{One, Ready, RunRequest, RunResponse, Worked};
 
 /// What a long command may spend (ADR-0019 item 4, ADR-0025 §4). Each is a flag; which
@@ -525,10 +526,12 @@ impl RowPlan {
             .collect()
     }
 
-    /// The metrics over these counted runs.
+    /// The metrics over these counted runs; `inside` holds the units inside at the end
+    /// of each.
     pub(crate) fn metrics(
         &self,
         runs: &[&ResultDocument],
+        inside: &[f64],
         sequential: bool,
         end: SimDuration,
     ) -> Result<Vec<Metric>, StatsError> {
@@ -568,7 +571,7 @@ impl RowPlan {
                     continue;
                 };
                 let mut accuracy = row.accuracy;
-                if let Some(inside) = censored_mean(metric, label.as_ref(), runs) {
+                if let Some(inside) = censored_mean(metric, inside) {
                     accuracy.insert(1, Accuracy::censored(inside));
                 }
                 values.push(MetricValue {
@@ -604,39 +607,91 @@ impl RowPlan {
 }
 
 /// The mean of the units inside at the end over the runs, for a lead time row, if any
-/// run had some.
-fn censored_mean(
-    metric: &PlanMetric,
-    labels: Option<&Labels>,
-    runs: &[&ResultDocument],
-) -> Option<f64> {
+/// run had some (ADR-0025 §3).
+fn censored_mean(metric: &PlanMetric, inside: &[f64]) -> Option<f64> {
     metric
         .spec
         .as_ref()
         .filter(|spec| spec.kpi == Kpi::Transit)?;
-    let inside: Vec<f64> = runs
-        .iter()
-        .map(|run| {
-            run.metrics
-                .iter()
-                .find(|m| m.name == metric.name)
-                .and_then(|m| m.values.iter().find(|v| v.labels.as_ref() == labels))
-                .and_then(|v| {
-                    v.accuracy.iter().find_map(|a| match &a.kind {
-                        AccuracyKind::Censored { units_inside, .. } => Some(*units_inside),
-                        AccuracyKind::Sampling(_)
-                        | AccuracyKind::None { .. }
-                        | AccuracyKind::PartlyUndefined { .. }
-                        | AccuracyKind::Unknown { .. } => None,
-                    })
-                })
-                .unwrap_or(0.0)
-        })
-        .collect();
     let sum: f64 = inside.iter().sum();
     #[allow(clippy::cast_precision_loss)] // At most 100,000 runs.
     let n = inside.len() as f64;
     (sum > 0.0).then(|| sum / n)
+}
+
+/// What a run's `censored` entry states on a lead time row: its units inside at the
+/// end, or 0 without one.
+fn censored_entry(value: &MetricValue) -> f64 {
+    value
+        .accuracy
+        .iter()
+        .find_map(|a| match &a.kind {
+            AccuracyKind::Censored { units_inside, .. } => Some(*units_inside),
+            AccuracyKind::Sampling(_)
+            | AccuracyKind::None { .. }
+            | AccuracyKind::PartlyUndefined { .. }
+            | AccuracyKind::Unknown { .. } => None,
+        })
+        .unwrap_or(0.0)
+}
+
+/// The units inside at the end of each counted run, for the `censored` entry of the
+/// lead time rows (ADR-0025 §3). Each run's result states them on every lead time row
+/// it has, the same number on each. A run with none delivered nothing at any Sink, and
+/// its result does not state them: they are 0 if nothing was alive at its end, and
+/// otherwise come from its stored trace, the fold its result caches, fresh or reused
+/// alike. `items_alive` would count a part held at a Source, which is no unit inside.
+fn units_inside<D: Domain>(
+    registry: &Registry<D>,
+    model: &Model,
+    store: &Store,
+    plan: &RowPlan,
+    counted: &[One],
+) -> Result<Vec<f64>, Failure> {
+    let transit: Vec<&str> = plan
+        .metrics
+        .iter()
+        .filter(|metric| {
+            metric
+                .spec
+                .as_ref()
+                .is_some_and(|spec| spec.kpi == Kpi::Transit)
+        })
+        .map(|metric| metric.name.as_str())
+        .collect();
+    if transit.is_empty() {
+        return Ok(vec![0.0; counted.len()]);
+    }
+    let places = Places::of(registry, model.document());
+    counted
+        .iter()
+        .map(|one| {
+            let result = &one.result;
+            let row = result
+                .metrics
+                .iter()
+                .filter(|metric| transit.contains(&metric.name.as_str()))
+                .find_map(|metric| metric.values.first());
+            if let Some(value) = row {
+                return Ok(censored_entry(value));
+            }
+            let alive = result
+                .metrics
+                .iter()
+                .find(|metric| metric.name == "items_alive")
+                .and_then(|metric| metric.values.first())
+                .and_then(|value| value.value.as_f64());
+            if alive == Some(0.0) {
+                return Ok(0.0);
+            }
+            let Some(id) = result.runs.first().and_then(|run| run.run_id.as_ref()) else {
+                return Err(internal_line("a counted run has no run id"));
+            };
+            let fold = crate::fold_trace::<D>(&store.run_file(id, TRACE_FILE), &places)?;
+            #[allow(clippy::cast_precision_loss)] // A count of units in a line.
+            Ok(fold.wip_end() as f64)
+        })
+        .collect()
 }
 
 fn internal(error: &StatsError) -> Failure {
@@ -1201,10 +1256,12 @@ pub(crate) fn run_experiment<D: Domain>(
             progress,
         });
     }
+    let inside = units_inside(registry, model, store, &plan, &counted)?;
     let result = experiment_document(
         document,
         &plan,
         &counted,
+        &inside,
         seeds.sequential(),
         (ended, stop_reason),
     )?;
@@ -1238,6 +1295,7 @@ fn experiment_document(
     document: &Document,
     plan: &RowPlan,
     counted: &[One],
+    inside: &[f64],
     sequential: bool,
     (ended, stop_reason): (Ended, &str),
 ) -> Result<ResultDocument, Failure> {
@@ -1259,7 +1317,7 @@ fn experiment_document(
     }
     let documents: Vec<&ResultDocument> = counted.iter().map(|one| &one.result).collect();
     let metrics = plan
-        .metrics(&documents, sequential, end)
+        .metrics(&documents, inside, sequential, end)
         .map_err(|e| internal(&e))?;
     let runs: Vec<_> = counted
         .iter()
