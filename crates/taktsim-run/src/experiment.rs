@@ -257,6 +257,9 @@ impl Sequencer {
     /// The replication at `index` finished with `outcome`.
     pub(crate) fn on_finished(&mut self, index: u32, outcome: Outcome) -> Result<Step, StatsError> {
         if self.stop.is_some() || index < self.committed() || index >= self.total {
+            if let Some(step) = self.settle_lowest(index, outcome)? {
+                return Ok(step);
+            }
             return Ok(Step {
                 committed: Vec::new(),
                 cancel_from: Some(self.committed()),
@@ -293,6 +296,45 @@ impl Sequencer {
             committed,
             cancel_from,
         })
+    }
+
+    /// After a clock stop or a signal with nothing committed, the lowest seed's own
+    /// ending settles what is left (ADR-0025 §5). The cut reaches a run only while it
+    /// processes events, so the lowest seed can still arrive finished, while it folds
+    /// and writes its result: it is then the one run counted, since the document needs
+    /// one and a finished run says more than a partial one. Its failure is the
+    /// experiment's. Its event limit leaves the stop, and its partial document is what
+    /// is left. `Some` if this commits it.
+    fn settle_lowest(&mut self, index: u32, outcome: Outcome) -> Result<Option<Step>, StatsError> {
+        let open = match self.stop {
+            Some(Stop::Clock | Stop::Cancelled) => index == 0 && self.committed() == 0,
+            Some(
+                Stop::SeedsFinished
+                | Stop::PrecisionReached
+                | Stop::BudgetExhausted
+                | Stop::EventLimit(_)
+                | Stop::Failed(_),
+            )
+            | None => false,
+        };
+        if !open {
+            return Ok(None);
+        }
+        match outcome {
+            Outcome::Values(values) => {
+                self.push_controls(&values)?;
+                self.matrix.push(values);
+                Ok(Some(Step {
+                    committed: vec![0],
+                    cancel_from: Some(1),
+                }))
+            }
+            Outcome::Failed => {
+                self.stop = Some(Stop::Failed(0));
+                Ok(None)
+            }
+            Outcome::EventLimit => Ok(None),
+        }
     }
 
     /// The clock ran out: the committed prefix is the experiment.
@@ -757,7 +799,10 @@ impl Coordinator<'_> {
                 Outcome::Failed
             }
         };
-        if index >= self.limit {
+        // Past the limit only the lowest seed still counts, while nothing is committed:
+        // the sequencer decides whether it settles the stop.
+        let lowest = index == 0 && self.sequencer.committed() == 0;
+        if index >= self.limit && !lowest {
             self.waiting.remove(&index);
             return Ok(());
         }
@@ -1415,6 +1460,101 @@ mod tests {
             Some(Stop::Cancelled),
             "the first stop stays"
         );
+    }
+
+    /// After a clock stop or a signal with nothing committed, the lowest seed's own
+    /// ending settles what is left: a run that finished all the same is the one
+    /// counted, and a failure is the experiment's. Nothing above it is.
+    #[test]
+    fn the_lowest_seed_settles_a_stop_with_nothing_committed() {
+        for stop in [Sequencer::on_deadline, Sequencer::on_cancel] {
+            let mut sequencer = Sequencer::new(&[target("5%")], 3, true, 2).unwrap();
+            stop(&mut sequencer);
+            let before = sequencer.stop();
+            let step = sequencer
+                .on_finished(1, Outcome::Values(vec![Some(1.0)]))
+                .unwrap();
+            assert_eq!(step.committed, Vec::<u32>::new());
+            let step = sequencer
+                .on_finished(0, Outcome::Values(vec![Some(2.0)]))
+                .unwrap();
+            assert_eq!(step.committed, [0]);
+            assert_eq!(step.cancel_from, Some(1));
+            assert_eq!(sequencer.stop(), before, "the stop stays");
+            assert_eq!(sequencer.matrix(), [vec![Some(2.0)]]);
+            let step = sequencer
+                .on_finished(0, Outcome::Values(vec![Some(3.0)]))
+                .unwrap();
+            assert_eq!(step.committed, Vec::<u32>::new(), "once only");
+
+            let mut failed = Sequencer::new(&[], 3, false, 10).unwrap();
+            stop(&mut failed);
+            failed.on_finished(0, Outcome::Failed).unwrap();
+            assert_eq!(failed.stop(), Some(Stop::Failed(0)));
+            assert_eq!(failed.committed(), 0);
+
+            let mut limited = Sequencer::new(&[], 3, false, 10).unwrap();
+            stop(&mut limited);
+            limited.on_finished(0, Outcome::EventLimit).unwrap();
+            assert_eq!(
+                limited.stop(),
+                before,
+                "its partial document is what is left"
+            );
+        }
+        // A stop the sequencer decided is not reopened.
+        let mut finished = Sequencer::new(&[], 1, false, 10).unwrap();
+        finished.on_finished(0, Outcome::Values(vec![])).unwrap();
+        let step = finished.on_finished(0, Outcome::Values(vec![])).unwrap();
+        assert_eq!(step.committed, Vec::<u32>::new());
+    }
+
+    /// The clock runs out while the lowest seed folds and writes its result, after its
+    /// last event, so the cut cannot stop it: it arrives finished, and is the one run
+    /// counted, not dropped for an internal error.
+    #[test]
+    fn a_lowest_seed_that_finishes_after_the_clock_is_counted() {
+        let registry = taktsim_components::standard().unwrap();
+        let model = taktsim_model::Loader::new(registry.catalog())
+            .load_str(
+                "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+                 components: [{id: source, type: Source, interarrival: {dist: exponential, mean: 1min}}, {id: sink, type: Sink}]\n\
+                 flow: [[source, sink]]\n",
+                taktsim_model::Format::Yaml,
+            )
+            .unwrap();
+        let dir =
+            std::env::temp_dir().join(format!("taktsim-run-late-lowest-{}", std::process::id()));
+        let store = Store::open(&dir).unwrap();
+        let request = RunRequest::new();
+        let worked = crate::work_one(&registry, &model, Some(1), &request, None, &store).unwrap();
+        assert!(matches!(worked, Worked::Ready(_)));
+        let plan = RowPlan::of(&registry, model.document());
+        let flags: Vec<AtomicBool> = (0..3).map(|_| AtomicBool::new(false)).collect();
+        let mut coordinator = Coordinator {
+            sequencer: Sequencer::new(&plan.targets(), 3, false, 10).unwrap(),
+            plan: &plan,
+            model: &model,
+            store: &store,
+            flags: &flags,
+            limit: 3,
+            waiting: BTreeMap::new(),
+            counted: Vec::new(),
+            lowest_partial: None,
+            failures: BTreeMap::new(),
+        };
+        coordinator.sequencer.on_deadline();
+        coordinator.cut(0);
+        coordinator
+            .finished(0, Ok(Arrived::Worked(worked)))
+            .unwrap();
+        let counted = coordinator.counted.len();
+        let stop = coordinator.sequencer.stop();
+        let cut = flags.iter().all(|flag| flag.load(Ordering::Relaxed));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(counted, 1);
+        assert_eq!(stop, Some(Stop::Clock));
+        assert!(cut);
     }
 
     #[test]
