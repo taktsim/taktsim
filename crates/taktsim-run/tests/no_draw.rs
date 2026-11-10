@@ -4,12 +4,19 @@
 
 mod support;
 
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use proptest::prelude::*;
 use support::{TempDir, exact_model, model, run_with, test_registry};
-use taktsim_components::{RunOptions, standard};
-use taktsim_core::RunOutcome;
-use taktsim_model::{Format, Loader};
-use taktsim_run::{FailureClass, RunRequest};
+use taktsim_components::{
+    BuildError, ComponentType, Flow, FlowMessage, FlowShared, ItemAttrs, Ports, RunOptions,
+    VariantId, Wiring, standard,
+};
+use taktsim_core::random::Stream;
+use taktsim_core::{Component, ComponentError, Context, Delivery, RunOutcome};
+use taktsim_model::{ComponentParams, Encode, Fields, Format, Json, Loader};
+use taktsim_run::{FailureClass, RunRequest, replay_stored};
 
 /// A time: mostly a constant, so many generated models draw nothing.
 fn time() -> impl Strategy<Value = String> {
@@ -191,4 +198,136 @@ fn a_true_claim_is_kept_and_then_reused() {
     assert!(first.result.runs[0].run_id.is_some());
     let second = run_with(&registry, &yaml, &RunRequest::new(), &store).unwrap();
     assert!(second.reused);
+}
+
+/// How often `Forger` was built in this process, and what its first build drew.
+static BUILDS: AtomicUsize = AtomicUsize::new(0);
+static DRAWN: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+
+/// `type: Forger`: says it draws nothing and draws, like `Liar`, but its second
+/// build, the check run, gives back what the first drew, so the check passes and a
+/// false claim is stored. A store can come to hold such a run in other ways too: by
+/// hand, copied in, or from a domain whose `draws_random` is wrong.
+#[derive(Debug)]
+struct Forger;
+
+impl Encode for Forger {
+    fn encode(&self) -> Json {
+        Json::object([])
+    }
+}
+
+impl ComponentParams for Forger {
+    const TYPE: &'static str = "Forger";
+    const EXAMPLE: &'static str = "{id: f, type: Forger}";
+    fn decode(_: &mut Fields<'_, '_>) -> Option<Self> {
+        Some(Self)
+    }
+}
+
+impl ComponentType<Flow> for Forger {
+    const PORTS: Ports = Ports::Outlet;
+
+    fn draws_random(&self) -> bool {
+        false
+    }
+
+    fn build(
+        &self,
+        wiring: &Wiring<'_, FlowShared>,
+    ) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
+        Ok(Box::new(ForgerBehaviour {
+            to: wiring.downstream()[0].clone(),
+            stream: None,
+            build: BUILDS.fetch_add(1, Ordering::SeqCst),
+            given_back: 0,
+        }))
+    }
+}
+
+struct ForgerBehaviour {
+    to: String,
+    stream: Option<Stream>,
+    build: usize,
+    given_back: usize,
+}
+
+impl ForgerBehaviour {
+    #[allow(clippy::unwrap_used)] // Test component.
+    fn draw(&mut self) -> u64 {
+        let drawn = self.stream.as_mut().map_or(0, Stream::next_u64);
+        let mut first = DRAWN.lock().unwrap();
+        match self.build {
+            0 => {
+                first.push(drawn);
+                drawn
+            }
+            1 => {
+                self.given_back += 1;
+                first.get(self.given_back - 1).copied().unwrap_or(drawn)
+            }
+            _ => drawn,
+        }
+    }
+
+    fn next(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
+        let seconds = 1 + self.draw() % 60;
+        ctx.schedule(
+            taktsim_units::SimDuration::from_secs(seconds)?,
+            FlowMessage::NextArrival,
+        )?;
+        Ok(())
+    }
+}
+
+impl Component<FlowMessage> for ForgerBehaviour {
+    fn start(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
+        self.stream = Some(ctx.stream("lie")?);
+        self.next(ctx)
+    }
+
+    fn handle(
+        &mut self,
+        _: Delivery<'_, FlowMessage>,
+        ctx: &mut Context<'_, FlowMessage>,
+    ) -> Result<(), ComponentError> {
+        let item = ctx.create_item();
+        let to = ctx.lookup(&self.to)?;
+        ctx.transfer(
+            item,
+            to,
+            FlowMessage::Arrive(ItemAttrs::new(VariantId::new(0), 0)),
+        )?;
+        self.next(ctx)
+    }
+}
+
+/// A stored run with no seed is replayed under another internal seed than the one
+/// it ran under (ADR-0024 §1, §5), so a false claim of drawing nothing that got into
+/// the store diverges on replay instead of reproducing its own trace.
+#[test]
+fn replay_of_a_false_no_draw_claim_diverges() {
+    let registry = test_registry().with::<Forger>().unwrap();
+    let yaml = model(
+        "",
+        "  - {id: forger, type: Forger}\n  - {id: keep, type: Keep, how: delivered}",
+        "  - [forger, keep]",
+    );
+    let dir = TempDir::new();
+    let store = dir.store();
+    let stored = run_with(&registry, &yaml, &RunRequest::new(), &store).unwrap();
+    assert_eq!(
+        BUILDS.load(Ordering::SeqCst),
+        2,
+        "the run and its check run"
+    );
+    assert_eq!(
+        stored.result.runs[0].seed, None,
+        "stored as drawing nothing"
+    );
+    assert!(DRAWN.lock().unwrap().len() > 1, "it drew");
+    let id = stored.result.runs[0].run_id.clone().unwrap();
+    let failure = replay_stored(&registry, &store, &id).unwrap_err();
+    assert_eq!(failure.class, FailureClass::RunFailed);
+    assert_eq!(failure.diagnostics[0].type_name, "run.replay_differs");
 }
