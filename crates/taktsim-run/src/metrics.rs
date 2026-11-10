@@ -620,7 +620,7 @@ pub(crate) fn targets(document: &Document) -> Targets {
 
 #[cfg(test)]
 mod tests {
-    use taktsim_components::{FlowMessage, RunOptions, standard};
+    use taktsim_components::{Flow, FlowMessage, RunOptions, standard};
     use taktsim_model::{Format, Loader};
     use taktsim_units::Count;
 
@@ -629,8 +629,34 @@ mod tests {
     /// The guard behind `run.metrics_differ`: on a correct run the fold equals the
     /// engine's counters, so only a hand-made disagreement shows that each of the
     /// four sums is compared, and reported with its name, sum and counter.
+    /// The fold of a run of a short line, for its KPI facts.
+    fn folded_line() -> Fold {
+        let registry = standard().unwrap();
+        let model = Loader::new(registry.catalog())
+            .load_str(
+                "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+                 components: [{id: source, type: Source}, {id: cut, type: Machine, cycle_time: 1min}, {id: sink, type: Sink}]\n\
+                 flow: [[source, cut, sink]]\n",
+                Format::Yaml,
+            )
+            .unwrap();
+        let (trace, _) = registry
+            .prepare(&model, RunOptions::new().no_seed())
+            .unwrap()
+            .run_traced(Vec::new())
+            .unwrap();
+        let places = Places::of(&registry, model.document());
+        fold::<_, Flow>(
+            TraceReader::<_, FlowMessage>::new(trace.as_slice()).unwrap(),
+            &places,
+        )
+        .unwrap()
+    }
+
     #[test]
     fn each_sum_that_differs_from_the_engine_is_reported() {
+        // The rows are made by hand; the rest is a real fold's, which
+        // `differs_from` does not read.
         let fold = Fold {
             rows: vec![
                 Row {
@@ -648,6 +674,7 @@ mod tests {
             ],
             last_event: SimTime::from_nanos(0),
             recent: Vec::new(),
+            ..folded_line()
         };
         let same = ItemCounts {
             created: Count::new(4),
@@ -718,7 +745,12 @@ mod tests {
             .unwrap()
             .run_traced(Vec::new())
             .unwrap();
-        let folded = fold(TraceReader::<_, FlowMessage>::new(trace.as_slice()).unwrap()).unwrap();
+        let places = Places::of(&registry, model.document());
+        let folded = fold::<_, Flow>(
+            TraceReader::<_, FlowMessage>::new(trace.as_slice()).unwrap(),
+            &places,
+        )
+        .unwrap();
 
         let mut reader = TraceReader::<_, FlowMessage>::new(trace.as_slice()).unwrap();
         let names = reader.header().components.clone();

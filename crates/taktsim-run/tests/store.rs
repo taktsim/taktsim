@@ -755,7 +755,7 @@ fn the_text_of_a_response_is_the_document() {
     .unwrap();
     assert_eq!(kept.text, stored);
     let limited = RunRequest {
-        seed: Some(2),
+        seeds: &[2],
         max_events: Some(1),
         ..RunRequest::new()
     };

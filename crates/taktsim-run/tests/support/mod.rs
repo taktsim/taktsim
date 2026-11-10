@@ -497,6 +497,12 @@ impl ComponentParams for Faulty {
 
 impl ComponentType<Flow> for Faulty {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: Creation = Creation::HeldUntilFirstMove;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false

@@ -382,6 +382,7 @@ fn a_whole_float_reads_back_as_a_float() {
         std_dev: 0.0,
         replications: 20,
         level: 1.0,
+        stopping: None,
     };
     let accuracy = Accuracy {
         kind: AccuracyKind::Sampling(interval),
@@ -397,7 +398,7 @@ fn a_whole_float_reads_back_as_a_float() {
             from: "0s".parse().unwrap(),
             to: "8h".parse().unwrap(),
         },
-        observable: None,
+        observables: Vec::new(),
         values: [2.0, -4.0, 0.0, 1e17, 1e300]
             .into_iter()
             .map(|x| MetricValue {

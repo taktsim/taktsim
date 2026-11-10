@@ -1032,9 +1032,9 @@ fn seed_changes_the_stream_and_the_id_and_nothing_else() {
     let (root, store) = fresh_store("two_seeds");
     let text = model(None, "2h", RANDOM, FLOW_LINE);
     let mut one = RunRequest::new();
-    one.seed = Some(1);
+    one.seeds = &[1];
     let mut two = RunRequest::new();
-    two.seed = Some(2);
+    two.seeds = &[2];
     let a = go(&text, &store, &one).unwrap().result;
     let b = go(&text, &store, &two).unwrap().result;
     assert_ne!(a.runs[0].run_id, b.runs[0].run_id);
@@ -1059,7 +1059,7 @@ fn seed_option_over_model_seed_is_recorded_not_written_into_the_model() {
     let says_one = model(Some(1), "2h", RANDOM, FLOW_LINE);
     let says_two = model(Some(2), "2h", RANDOM, FLOW_LINE);
     let mut request = RunRequest::new();
-    request.seed = Some(2);
+    request.seeds = &[2];
     let over = go(&says_one, &store, &request).unwrap().result;
     let own = ok(&says_two, &store);
     assert_eq!(over.provenance.seeds, [2]);
@@ -1428,7 +1428,7 @@ fn the_stored_model_reproduces_the_run() {
     let first_root = dir.join("first");
     let first_store = Store::open(&first_root).unwrap();
     let mut request = RunRequest::new();
-    request.seed = Some(9);
+    request.seeds = &[9];
     let first = run(
         &registry,
         ModelSource::Path(&dir.join("line.yaml")),
@@ -1551,7 +1551,7 @@ fn what_draws_follows_the_table() {
             FLOW_LINE,
         );
         let mut request = RunRequest::new();
-        request.seed = Some(7);
+        request.seeds = &[7];
         let response = go(&text, &store, &request).unwrap();
         if draws {
             assert_eq!(response.result.provenance.seeds, [7], "{name}");
@@ -1601,10 +1601,10 @@ fn the_seed_has_a_largest_value() {
     let (_, store) = fresh_store("seed_limit");
     let text = model(None, "1min", RANDOM, FLOW_LINE);
     let mut request = RunRequest::new();
-    request.seed = Some(9_007_199_254_740_991);
+    request.seeds = &[9_007_199_254_740_991];
     let largest = go(&text, &store, &request).unwrap();
     assert_eq!(largest.result.provenance.seeds, [9_007_199_254_740_991_u64]);
-    request.seed = Some(9_007_199_254_740_992);
+    request.seeds = &[9_007_199_254_740_992];
     let failure = go(&text, &store, &request).unwrap_err();
     assert_eq!(failure.class, FailureClass::Invalid);
     assert_eq!(failure.diagnostics[0].path.as_deref(), Some("--seed"));
@@ -1623,9 +1623,9 @@ fn a_model_that_draws_nothing_has_one_run_whatever_the_seed() {
     ];
     let text = model(None, "1h", list, FLOW_LINE);
     let mut seven = RunRequest::new();
-    seven.seed = Some(7);
+    seven.seeds = &[7];
     let mut eight = RunRequest::new();
-    eight.seed = Some(8);
+    eight.seeds = &[8];
     let a = go(&text, &store, &seven).unwrap();
     let b = go(&text, &store, &eight).unwrap();
     assert!(!a.reused && b.reused);
@@ -1711,7 +1711,7 @@ fn declared_observables_are_answered_or_unreported() {
             "wip(buf)"
         ]
     );
-    assert!(doc.metrics.iter().all(|m| m.observable.is_none()));
+    assert!(doc.metrics.iter().all(|m| m.observables.is_empty()));
     assert!(doc.unreported.iter().all(|u| !u.reason.is_empty()));
 }
 
@@ -2229,6 +2229,8 @@ impl Domain for Lax {
 
     fn check(_: &Document, _: &Roles, _: &mut Findings) {}
 
+    fn read_message(_: &FlowMessage, _: &mut dyn FnMut(taktsim_components::MessageFact<'_>)) {}
+
     fn prepare(_: &Document, _: &Roles) -> Result<(), BuildError> {
         Ok(())
     }
@@ -2290,6 +2292,12 @@ no_params!(Hoard, "Hoard");
 
 impl ComponentType<Lax> for Hoard {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::InSystem;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2326,6 +2334,12 @@ no_params!(Spend, "Spend");
 
 impl ComponentType<Lax> for Spend {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::InSystem;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2371,6 +2385,12 @@ no_params!(Liar, "Liar");
 
 impl ComponentType<Lax> for Liar {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2398,6 +2418,12 @@ no_params!(Quiet, "Quiet");
 
 impl ComponentType<Lax> for Quiet {
     const PORTS: Ports = Ports::Both;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2425,6 +2451,12 @@ no_params!(Silent, "Silent");
 
 impl ComponentType<Lax> for Silent {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn build(&self, _: &Wiring<'_, ()>) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
         Ok(Box::new(SilentBehaviour))
@@ -2443,6 +2475,8 @@ impl Domain for Routed {
 
     fn check(_: &Document, _: &Roles, _: &mut Findings) {}
 
+    fn read_message(_: &FlowMessage, _: &mut dyn FnMut(taktsim_components::MessageFact<'_>)) {}
+
     fn prepare(_: &Document, _: &Roles) -> Result<(), BuildError> {
         Ok(())
     }
@@ -2454,6 +2488,12 @@ impl Domain for Routed {
 
 impl ComponentType<Routed> for Quiet {
     const PORTS: Ports = Ports::Both;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2642,7 +2682,7 @@ fn a_run_with_no_event_at_all_is_drained() {
     let (_, store) = fresh_store("nothing");
     let text = one_of("Silent");
     let mut request = RunRequest::new();
-    request.seed = Some(1);
+    request.seeds = &[1];
     let doc = run(
         &lax(),
         ModelSource::Text(&text, Format::Yaml),
@@ -2717,6 +2757,12 @@ no_params!(Breaks, "Breaks");
 
 impl ComponentType<Lax> for Breaks {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2762,6 +2808,12 @@ no_params!(Violates, "Violates");
 
 impl ComponentType<Lax> for Violates {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2795,6 +2847,12 @@ no_params!(Loses, "Loses");
 
 impl ComponentType<Lax> for Loses {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::InSystem;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2826,6 +2884,12 @@ impl ComponentParams for Unbuildable {
 
 impl ComponentType<Lax> for Unbuildable {
     const PORTS: Ports = Ports::None;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2861,6 +2925,12 @@ no_params!(In, "In");
 
 impl ComponentType<Lax> for Out {
     const PORTS: Ports = Ports::Outlet;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -2873,6 +2943,12 @@ impl ComponentType<Lax> for Out {
 
 impl ComponentType<Lax> for In {
     const PORTS: Ports = Ports::Inlet;
+    const STATES: &'static [&'static str] = &[];
+    const CREATION: taktsim_components::Creation = taktsim_components::Creation::Never;
+
+    fn places(&self) -> u32 {
+        1
+    }
 
     fn draws_random(&self) -> bool {
         false
@@ -3069,7 +3145,7 @@ fn a_seed_option_equal_to_the_model_seed_is_the_same_run() {
     let text = model(Some(42), "10min", RANDOM, FLOW_LINE);
     let plain = go(&text, &store, &RunRequest::new()).unwrap();
     let mut request = RunRequest::new();
-    request.seed = Some(42);
+    request.seeds = &[42];
     let flagged = go(&text, &store, &request).unwrap();
     assert!(flagged.reused);
     assert_eq!(plain.result, flagged.result);
@@ -3536,7 +3612,7 @@ fn the_failure_clock_runs_while_idle_and_a_down_machine_takes_nothing() {
 fn the_largest_seed_has_a_canonical_id() {
     let (_, store) = fresh_store("largest_seed_id");
     let mut request = RunRequest::new();
-    request.seed = Some(9_007_199_254_740_991);
+    request.seeds = &[9_007_199_254_740_991];
     let doc = go(&model(None, "1min", RANDOM, FLOW_LINE), &store, &request)
         .unwrap()
         .result;
