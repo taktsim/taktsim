@@ -485,6 +485,16 @@ end exactly at the limit still happens. A very long `mtbf` meaning "practically 
 therefore means that. If nothing else is due, the run ends at its horizon with the
 outcome `idle`, as core defines it: no events are left.
 
+**Not a stall.** That `idle` can come with items still in the system, held by the wait
+that never ends, which ADR-0024 §3 (proposed) would otherwise read as a stall and fail
+with exit 2: the two rules together failed a model that loads, such as an
+`interarrival` of 150,000 d, a `cycle_time` of 100,000 d and a horizon of 200,000 d. So
+a component that drops such a wait says so on the run's `ClockEnd`, which every
+builder reaches through `Wiring::clock_end`, and `RunReport::wait_never_ends` carries it
+to the caller. Core, the trace and its bytes do not change. ADR-0024 §3 reads `idle`
+with it as the horizon: complete, whatever the items. Once said it stays said, because
+such a wait is pending for the rest of the run.
+
 Refusing such values at load was the alternative. It cannot be decided for a
 distribution, whose reach past the limit depends on the seed, and for a constant it
 would refuse `cycle_time: 150000d` with a horizon of 213,000 days, where the end that
@@ -891,7 +901,7 @@ below is after v0.1 ships.
 | Six states, their definitions and codes | KPIs, viewer colours, what users report | every state share, every comparison with history | `state_equals_what_the_machine_holds`, `every_transition_in_the_table`, `idle_when_a_source_reaches_it_through_non_stations` |
 | Blocking after service and the handshake | every golden trace, every queueing result | every trace; throughput of every finite-buffer line | `two_stations_without_buffer_give_two_thirds`, `reservation_never_lasts_past_its_instant`, golden cases |
 | Failure rules (calendar, any state, resume) | throughput of unreliable lines | every result with failures | `failure_while_blocked_or_idle`, `interrupted_cycle_resumes_with_remaining_time` |
-| A wait past the end of the clock never ends (§6) | what a very long duration means, the trace of such a run | results of models with durations of centuries; refusing them instead breaks those models | `a_cycle_past_the_clock_never_ends_and_the_run_reaches_its_horizon`, `a_paused_cycle_whose_rest_ends_past_the_clock_never_ends`, `long_durations_never_fail_a_run` |
+| A wait past the end of the clock never ends (§6), and the run says so on its `ClockEnd` | what a very long duration means, the trace of such a run, how its end is read (ADR-0024 §3) | results of models with durations of centuries; refusing them instead breaks those models | `a_cycle_past_the_clock_never_ends_and_the_run_reaches_its_horizon`, `a_paused_cycle_whose_rest_ends_past_the_clock_never_ends`, `long_durations_never_fail_a_run`, `each_wait_past_the_clock_reaches_the_report`, `items_left_with_no_event_always_have_a_wait_past_the_clock` |
 | On-demand Sources fill at most 65,535 buffer places through buffers alone (vocabulary, question 20) | which models load; the error's path, at the largest buffer's `capacity` | relaxing it is free; tightening it, or extending it to timed Sources (question 20 b), breaks models that load | `an_on_demand_source_fills_at_most_65535_places`, `a_buffer_fed_at_a_rate_stays_uncapped`, `a_buffer_two_on_demand_sources_fill_is_reported_once`, `malformed` corpus |
 | `RunFailure::ClockStopped` past 1,000,000 events one component addresses to itself at one instant (§6, question 21) | which runs end with a failure, and where the trace stops; the failure's fields | raising the number is free for a model that loads today; lowering it, counting all events of an instant instead, or making it an option, changes which runs fail | `a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant`, `the_most_timers_a_model_allows_at_one_instant_run_untouched`, `an_event_limit_past_one_step_is_the_engine_s` |
 | Blocked Source (S2) | offered load under blocking | results of overloaded lines | `blocked_source_holds_and_loses_nothing`, `created_equals_emitted_plus_held` |
@@ -1032,7 +1042,8 @@ the M5 pull request merges.
     cases pin it. *Recommended:* yes, and replace the sentence in §4.
 19. **A wait past the end of the clock (§6).** It never ends, rather than failing the
     run or being refused at load, and a run with nothing else due ends `idle` at its
-    horizon. *Recommended:* yes. Implementation proceeds on this.
+    horizon. *Recommended:* yes. Implementation proceeds on this. Its interaction with
+    ADR-0024 §3's stalls is ADR-0024's question 17.
 20. **Buffer memory (vocabulary; the M5 pull request's question 22, disagreement
     13).** (a) Refuse at load, with the path of the buffer's `capacity`, more than
     65,535 places that an on-demand Source reaches through buffers alone, since it
