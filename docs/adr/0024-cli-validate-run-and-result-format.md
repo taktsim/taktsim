@@ -210,6 +210,7 @@ together with the item counts and `RunReport::wait_never_ends`:
 | `Idle`, without one | above 0 | no result: error `run.stalled` | | 2 |
 | `EventLimit` | any | `event_limit` | `false` | 3 |
 | `Cancelled` | any | `cancelled` | `false` | 4 (not from M7's CLI, §9) |
+| none: the run layer ends it, `RunFailure::ClockStopped` | any | no result: error `run.clock_stopped` | | 2 |
 
 `idle` is not a word of the result, because in the glossary it is a machine state that
 means no demand. The trace's end marker keeps core's word (§7).
@@ -244,6 +245,16 @@ gives the time of the last event, `items_alive` and `recent`, read from the temp
 never be reused. v0.2 brings stalls that belong to the model, such as an Assembly waiting
 on an empty Store. Whether those become a result with `complete: false` and `stop_reason:
 stalled` is for the ADR of those components; the word is reserved for it.
+
+**A clock that stops moving is not a stall either.** ADR-0022 §6 ends a run in the run
+layer, before core reports any outcome, once one component has addressed more than
+`TIMERS_PER_INSTANT` = 1,000,000 events to itself at one instant, as a duration whose draws
+almost all round to 0 ns makes it do (a gamma of mean 1 s and cv 10⁶). That run has events
+left, too many at one instant, which is the opposite of a stall, so it gets its own error,
+`run.clock_stopped`, exit 2, and nothing is stored, as for every failed run (§8). The line
+carries `path` (the component's entry), `time` (the instant), `found`, `allowed` and an
+`example`, all taken from the failure (§9). It has no `recent`: the last events are a
+million of the same timer, and the trace is cut off at the failure.
 
 **The horizon and `observe`.** `run --horizon` goes through `Model::with_horizon`
 before hashing, as ADR-0022 §2 says, so the stored model, its hash and the header
@@ -483,7 +494,7 @@ directory, else `.taktsim/` here, `--store` overrides. Layout below it:
   every run has a `run_id`.** So M8's `budget_exhausted`, 14 finished runs out of 20, has an
   experiment id over those 14 and `complete: false` at the top.
 - A failed run (exit 2) is not kept either; its error has the last events. That includes a
-  stall (§3) and a false claim of drawing nothing (§5).
+  stall (§3), a clock that stops moving (§3) and a false claim of drawing nothing (§5).
 - `trace.path` is relative to the store and uses `/` on every target. The stored
   document holds no absolute path, so a `progress` line on stderr states where the
   store is and whether the run was reused. A `store.json` with an unknown
@@ -512,7 +523,7 @@ The exit codes are ADR-0019's. Which appear in M7:
 | --- | --- |
 | 0 | success |
 | 1 | a bad flag or value, a model that fails to load, `run.no_seed`, a zero horizon. `validate` on an invalid model |
-| 2 | invariant or conservation violation, engine error, `--no-reuse` mismatch, a stored result that is not its run's, `run.stalled` (§3), `run.no_draw_claim_false` (§5) |
+| 2 | invariant or conservation violation, engine error, `--no-reuse` mismatch, a stored result that is not its run's, `run.stalled` (§3), `run.clock_stopped` (§3), `run.no_draw_claim_false` (§5) |
 | 3 | `--max-events` reached, with the partial result on stdout |
 | 7 | the model file, an included file or the store cannot be read or written (`LoadErrorKind::is_io`), or stdout cannot be written (`io.stdout`) |
 | 101 | the invariant-violation path of ADR-0007; a panic hook writes it as one JSON line first when `--format json` was asked for |
@@ -544,7 +555,10 @@ An error line on stderr, with `--format json`, is one JSON object per line:
 - `found`, `allowed` and `example` are required for exit 1. **For exit 2 and 7 `example`
   is absent,** as there is no valid value of a broken invariant. Exit 2 carries instead:
   `path` of `components[i]` where a component is known, the simulation `time`, and
-  `recent`, the last events. This amends ADR-0019 item 3.
+  `recent`, the last events. This amends ADR-0019 item 3. **One exception:**
+  `run.clock_stopped` (§3) has a fix in the model, a duration whose draws are not almost
+  all 0 ns, so it carries `found`, `allowed` and `example` from `RunFailure::ClockStopped`,
+  and `time`, but no `recent`.
 - Text mode renders the same typed `Diagnostic`.
 
 **`validate`.** Its result is a report, as ADR-0005 wants: `{format:
@@ -645,6 +659,9 @@ stores with byte-identical `result.json` and `trace.takt`.
 - M5's API also gains `ClockEnd`, `Wiring::clock_end` and `RunReport::wait_never_ends` (§3).
   Every timer of the standard catalog goes through one helper that says so; an M6 component that
   waits on a duration must use it too, or a wait past the clock reads as a stall again.
+- M5's `RunFailure::ClockStopped` (ADR-0022 §6) maps to `run.clock_stopped`, exit 2, in
+  `taktsim-run`; `describe` lists it under `run`'s exit 2. `RunFailure` is
+  `#[non_exhaustive]`, so a later variant still reaches `run.engine` until it is mapped.
 - A model that declares `experiment.precision` runs once in M7, with the KPI under
   `unreported`. From M8 it needs a budget (ADR-0019 item 4). Both ship in v0.1, so no
   released behaviour changes.
@@ -659,12 +676,13 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | --- | --- | --- | --- |
 | Commands and flags | every script and agent | semver major (ADR-0019) | `describe_is_fresh`, `walkthrough_uses_only_describe`, CLI snapshots |
 | Exit code use per command | every caller's error handling | semver major | `documented_exit_codes`, `malformed_models_exit_1_with_a_path` |
-| Error line (`kind`, `type`, `path`, `found`, `allowed`, `example`; none for exit 2 and 7), and `io.stdout` | every agent's error handling | semver major | `error_lines_match_their_schema`, `a_broken_stdout_does_not_blame_the_store`, CLI snapshots |
+| Error line (`kind`, `type`, `path`, `found`, `allowed`, `example`; none for exit 2 and 7 but `run.clock_stopped`), and `io.stdout` | every agent's error handling | semver major | `error_lines_match_their_schema`, `a_broken_stdout_does_not_blame_the_store`, CLI snapshots |
 | Result document: fields and `taktsim-result/1`, including `labels` and `observable` | M8, M11, M12, every reader | a new format; every stored result | `result_round_trips`, `emitted_results_match_the_schema`, `unknown_keys_are_ignored`, `labels_and_observable_round_trip`, `declared_observable_is_answered_or_unreported`, CLI snapshots |
 | Accuracy: required list, tags, reader rule, `none` | what every number claims | a new format | `every_value_has_accuracy`, `unknown_kind_reads_as_no_statement`, `single_run_states_no_interval`, `sampling_wraps_the_interval` |
 | `complete` as the reader's only test, `stop_reason` as an open explanation | every reader of partial results | a new format | `complete_decides_and_stop_reason_only_explains`, `event_limit_is_partial_and_exits_3` |
 | A stall is exit 2 in M7; `drained` for an empty system; `stalled` reserved | every reader's idea of a finished run; v0.2's stalls | an exit code's use (semver major) | `stall_is_exit_2_and_not_kept`, `drained_is_complete` |
 | A wait past the end of the clock is the horizon, never a stall, with or without items; `ClockEnd`, `Wiring::clock_end`, `RunReport::wait_never_ends` | how a run with durations of centuries ends; every package whose waits can pass the clock | an exit code's use and a stored result's `stop_reason` (semver major); every package that says it | `items_held_by_a_wait_past_the_clock_reach_the_horizon`, `a_wait_past_the_clock_in_an_empty_system_is_the_horizon_too`, `a_wait_past_the_clock_runs_to_its_horizon`, `each_wait_past_the_clock_reaches_the_report`, `items_left_with_no_event_always_have_a_wait_past_the_clock`, doc tests |
+| A clock that stops moving is exit 2, `run.clock_stopped`, not kept, never `run.stalled`; its line has `path`, `time`, `found`, `allowed` and `example` | every agent's handling of a run that cannot advance; what `run.stalled` means | an exit code's use and an error type (semver major) | `a_clock_that_stops_moving_exits_2_and_is_not_kept`, `a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant`, `describe_is_fresh` |
 | Metric names `created`, `delivered`, `scrapped`, `consumed`, `items_alive`, unit `items` | scripts reading M7's result | a deprecation | `metrics_equal_item_counts`, `any_component_may_create_items`, CLI snapshots |
 | Run id and experiment id definition, ids only on stored runs | every stored run, every later reference | all stores go stale | `run_id_is_pinned`, `horizon_changes_the_run_id`, `run_id_names_the_engine`, `package_version_changes_the_run_id`, `experiment_id_is_over_sorted_runs`, `partial_document_has_no_ids` |
 | Store layout, `store_format`, reuse rule | every store, `trace query`, `compare` | a store migration | `store_layout_is_pinned`, `second_run_is_reused`, `no_reuse_detects_a_different_trace`, `no_reuse_compares_the_whole_stored_result`, `no_reuse_returns_the_stored_bytes`, `truncated_no_reuse_exits_3_without_comparing`, `partial_run_is_not_kept`, `model_json_hashes_to_the_model_hash`, `unknown_store_format_is_refused`, `a_directory_that_is_not_a_store_is_not_made_one`, `a_store_writes_its_own_files_once`, `processes_racing_on_one_store_all_succeed`, `a_reused_result_prints_what_is_stored`, `a_result_filed_under_another_run_is_not_returned`, `replay_refuses_a_run_filed_under_another_id` |
@@ -695,6 +713,7 @@ Before v0.1 ships, each costs regenerated files. The cost below is after that.
 | 15 | With `--format json`, stdout carries exactly one JSON document of the command's result type and never free text; `--help --format json` and `run --help --format json` print clap's text, exit 0 | ADR-0019 item 2, spec §5, §10 here | either record it here as amending ADR-0019 item 2 for help (help is for people; an agent reads `describe`), or refuse `--help` beside `--format json` with exit 1 and a typed `args.*` error that names `taktsim describe`, as `--version` beside anything already is. *Recommended:* the refusal, which keeps ADR-0019 item 2 true without an amendment. Until the owner decides, the code keeps clap's text (question 15) |
 | 16 | CLAUDE.md: every error variant can produce a field path, what was found, what is allowed and one valid example. §9 drops only `example` for exit 2 and 7, but no exit-2 line carries `found` or `allowed` (`run.stored_run_differs`, `run.replay_differs`, `run.trace_format`, `run.engine`, `run.stalled`, `run.metrics_differ`, `run.no_draw_claim_false`), and several carry no `path` or `time` either; the error schema requires `found` and `allowed` for `args.*` and `model.*` only | CLAUDE.md "Rust rules", §9, `diagnostic_schema` | decide whether exit-2 lines need `found` and `allowed`. *Recommended:* yes where there are two values to compare (a stored and a computed hash, a trace's seed and the result's, a fold's sum and the engine's counter), as the check of a trace's header already does; no for a broken invariant, which states `time` and `recent`. Then §9 says so, CLAUDE.md's rule gets the exception, and the error schema requires what §9 requires (question 16) |
 | 17 | ADR-0022 §6 (proposed) lets a wait past the end of the clock never end, and a run with nothing else due ends `idle`; §3 read every `Idle` with items as a stall. Together a model that loads exited 2 with `run.stalled` (interarrival 150,000 d, cycle 100,000 d, horizon 200,000 d), and `a_clock_that_overflows_is_a_failed_run` still expected the overflow failure M5 removed | ADR-0022 §6, §3 here, `crates/taktsim-cli/tests/independent_m7.rs` | such a wait is no stall: the horizon's row (§3, question 17). The test pinned an obsolete expectation, so it became `a_wait_past_the_clock_runs_to_its_horizon`; the commit says why |
+| 18 | §9 had no example on any exit-2 line, but M5's `RunFailure::ClockStopped` (ADR-0022 §6) is a failed run with a fix in the model, and gives one | §9, ADR-0022 §6 | `run.clock_stopped`, exit 2, with the failure's `found`, `allowed` and `example` (§3, §9, question 18) |
 
 ## Questions for the owner
 
@@ -745,3 +764,9 @@ merges.
     refusing such durations at load, which ADR-0022 §6 rejects because for a distribution it
     depends on the seed, or a stored result with `complete: false`, which would call a run that
     did all it was asked partial. Owner to confirm.
+18. **A clock that stops moving (§3, §9, disagreement 18).** M5 ends a run whose component
+    addresses more than 1,000,000 events to itself at one instant with
+    `RunFailure::ClockStopped`. Exit 2 with its own type `run.clock_stopped`, not kept, and,
+    unlike other exit-2 lines, with an `example`, since the fix is a duration in the model?
+    *Recommended, and implemented:* yes. `run.stalled` keeps its meaning, no events left
+    while items remain.
