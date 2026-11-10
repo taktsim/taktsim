@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use taktsim_components::{
-    BuildError, ComponentType, Flow, FlowMessage, FlowShared, ItemAttrs, Ports, Registry,
+    BuildError, ClockEnd, ComponentType, Flow, FlowMessage, FlowShared, ItemAttrs, Ports, Registry,
     VariantId, Wiring, standard,
 };
 use taktsim_core::random::Stream;
@@ -195,7 +195,8 @@ impl Component<FlowMessage> for BurstBehaviour {
 }
 
 /// `type: Keep`: receives items, and holds them for ever (`how: hold`) or disposes
-/// of them.
+/// of them. `how: never` holds them too, in a wait it says from the start ends past
+/// the end of the clock (ADR-0022 §6), as a Machine's cycle of centuries does.
 #[derive(Debug)]
 pub struct Keep {
     how: String,
@@ -226,11 +227,12 @@ impl ComponentType<Flow> for Keep {
 
     fn build(
         &self,
-        _: &Wiring<'_, FlowShared>,
+        wiring: &Wiring<'_, FlowShared>,
     ) -> Result<Box<dyn Component<FlowMessage>>, BuildError> {
         Ok(Box::new(KeepBehaviour {
+            never: (self.how == "never").then(|| wiring.clock_end().clone()),
             how: match self.how.as_str() {
-                "hold" => None,
+                "hold" | "never" => None,
                 "delivered" => Some(Disposal::Delivered),
                 "scrapped" => Some(Disposal::Scrapped),
                 "consumed" => Some(Disposal::Consumed),
@@ -244,9 +246,17 @@ impl ComponentType<Flow> for Keep {
 struct KeepBehaviour {
     how: Option<Disposal>,
     held: Vec<ItemId>,
+    never: Option<ClockEnd>,
 }
 
 impl Component<FlowMessage> for KeepBehaviour {
+    fn start(&mut self, _: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
+        if let Some(clock_end) = &self.never {
+            clock_end.wait_never_ends();
+        }
+        Ok(())
+    }
+
     fn handle(
         &mut self,
         d: Delivery<'_, FlowMessage>,

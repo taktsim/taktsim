@@ -579,7 +579,11 @@ pub fn run<D: Domain>(
             &fold,
         ));
     }
-    let (stop_reason, complete) = match ending::ending(report.summary.outcome, fold.items_alive()) {
+    let (stop_reason, complete) = match ending::ending(
+        report.summary.outcome,
+        fold.items_alive(),
+        report.wait_never_ends,
+    ) {
         Ending::Ended {
             stop_reason,
             complete,
