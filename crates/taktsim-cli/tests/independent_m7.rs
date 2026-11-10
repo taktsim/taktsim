@@ -318,6 +318,14 @@ fn check(schema: &Json, root: &Json, value: &Json, at: &str, errors: &mut Vec<St
                     }
                 }
             }
+            "maxLength" => {
+                // JSON Schema counts characters (code points), not bytes.
+                if let (Some(text), Json::Integer(most)) = (value.as_str(), rule)
+                    && (text.chars().count() as i128) > *most
+                {
+                    errors.push(format!("{at}: {text} is longer than {most} characters"));
+                }
+            }
             "minimum" => {
                 if let (Some(number), Some(least)) = (value.as_f64(), rule.as_f64())
                     && number < least
