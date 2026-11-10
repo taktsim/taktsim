@@ -8,4 +8,4 @@ components:
 flow:
   - {from: source, to: a, when: "variant =="}
   - {from: source, to: b}
-# expect: flow[0].when @ 9:44 Expression
+# expect: flow[0].when @ 9:44 Condition

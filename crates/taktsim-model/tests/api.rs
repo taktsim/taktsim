@@ -468,6 +468,10 @@ fn document_kinds() -> Vec<LoadErrorKind> {
             text: "a +".into(),
             error: parse("a +").unwrap_err(),
         },
+        LoadErrorKind::Condition {
+            text: "variant =".into(),
+            error: parse("variant =").unwrap_err(),
+        },
         LoadErrorKind::NotAllowed {
             found: "0s".into(),
             allowed: "> 0s".into(),
@@ -592,6 +596,7 @@ fn listed(kind: &LoadErrorKind) {
         | LoadErrorKind::Unit(_)
         | LoadErrorKind::Distribution(_)
         | LoadErrorKind::Expression { .. }
+        | LoadErrorKind::Condition { .. }
         | LoadErrorKind::NotAllowed { .. }
         | LoadErrorKind::BareShare { .. }
         | LoadErrorKind::UnsupportedFormat { .. }

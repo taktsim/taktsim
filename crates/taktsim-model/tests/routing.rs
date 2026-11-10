@@ -348,7 +348,7 @@ fn a_condition_is_parsed_with_its_path_and_a_limit() {
         &with_flow("  - {from: a, to: b, when: \"variant == \"}"),
         &routed(),
     );
-    assert_eq!(e, ["flow[0].when @ 9:39 Expression"]);
+    assert_eq!(e, ["flow[0].when @ 9:39 Condition"]);
     let long = "x".repeat(4097);
     let e = errors(
         &with_flow(&format!("  - {{from: a, to: b, when: \"{long}\"}}")),

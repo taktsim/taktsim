@@ -607,7 +607,7 @@ fn check_conditions(document: &Document, findings: &mut Findings) {
             continue;
         };
         if let Err(error) = Condition::new(expr, &env) {
-            let kind = LoadErrorKind::Expression {
+            let kind = LoadErrorKind::Condition {
                 text: text.to_owned(),
                 error,
             };

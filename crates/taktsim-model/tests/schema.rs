@@ -82,6 +82,7 @@ fn schema_can_state(kind: &LoadErrorKind) -> bool {
             | LoadErrorKind::SelfLoop { .. }
             | LoadErrorKind::DuplicateEdge { .. }
             | LoadErrorKind::Expression { .. }
+            | LoadErrorKind::Condition { .. }
             | LoadErrorKind::NotAnObservable { .. }
             | LoadErrorKind::DuplicateObservable { .. }
             | LoadErrorKind::Distribution(_)

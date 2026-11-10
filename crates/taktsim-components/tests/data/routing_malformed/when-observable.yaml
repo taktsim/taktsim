@@ -8,4 +8,4 @@ components:
 flow:
   - {from: source, to: a, when: "throughput(a) > 1 parts/min"}
   - {from: source, to: b}
-# expect: flow[0].when @ 9:33 Expression
+# expect: flow[0].when @ 9:33 Condition

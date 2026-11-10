@@ -824,7 +824,7 @@ impl Run<'_> {
                 Ok(parsed) => *expr = Some(parsed),
                 Err(error) => {
                     let at = self.expression_location(place, written, error.span().start);
-                    let kind = LoadErrorKind::Expression {
+                    let kind = LoadErrorKind::Condition {
                         text: written.to_owned(),
                         error,
                     };

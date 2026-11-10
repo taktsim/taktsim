@@ -495,3 +495,38 @@ fn a_loaded_routed_model_always_builds() {
             .is_ok()
     );
 }
+
+/// A condition that does not parse or type-check is told what a condition may read,
+/// with an example that loads in its place (ADR-0023 §2).
+#[test]
+fn a_bad_condition_gets_an_example_that_loads() {
+    let components = "  - {id: source, type: Source, interarrival: 1min, variants: {basic: 80%, premium: 20%}}\n  \
+                      - {id: a, type: Sink}\n  - {id: b, type: Sink}";
+    let with = |when: &str| {
+        document(
+            "1h",
+            components,
+            &format!("  - {{from: source, to: a, when: \"{when}\"}}\n  - {{from: source, to: b}}"),
+        )
+    };
+    for bad in [
+        "variant = 'basic'",
+        "variant == 'c'",
+        "priority",
+        "throughput(a)",
+        "variant ==",
+    ] {
+        let errors = try_load(&with(bad)).unwrap_err();
+        assert_eq!(errors.len(), 1, "{bad}: {errors}");
+        let e = errors.first();
+        assert_eq!(e.path().to_string(), "flow[0].when", "{bad}: {e}");
+        assert!(
+            matches!(e.kind(), LoadErrorKind::Condition { .. }),
+            "{bad}: {e}"
+        );
+        let allowed = e.kind().allowed().unwrap();
+        assert!(allowed.contains("`variant` and `priority`"), "{allowed}");
+        let example = e.kind().example().unwrap();
+        load(&with(&example));
+    }
+}

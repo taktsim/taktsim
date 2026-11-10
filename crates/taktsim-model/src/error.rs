@@ -667,6 +667,15 @@ pub enum LoadErrorKind {
         /// What is wrong; its span is a byte range of `text`.
         error: ExprError,
     },
+    /// An edge's `when` that does not parse or type-check: a condition reads only
+    /// the unit's `variant` and `priority`, and has type bool (ADR-0023 §2).
+    #[error("in condition `{text}`: {error}")]
+    Condition {
+        /// The condition as written.
+        text: String,
+        /// What is wrong; its span is a byte range of `text`.
+        error: ExprError,
+    },
     /// A share written as a bare number (`0.02`): shares carry their unit
     /// (`2%`), like every other quantity.
     #[error("the share `{found}` needs its unit: write `{fix}`")]
@@ -873,6 +882,7 @@ impl LoadErrorKind {
             | Self::IntegerRange { text }
             | Self::NotFinite { text }
             | Self::Expression { text, .. }
+            | Self::Condition { text, .. }
             | Self::NotAnObservable { text }
             | Self::DuplicateObservable { text, .. }
             | Self::UnknownField { field: text, .. }
@@ -936,6 +946,10 @@ impl LoadErrorKind {
             Self::Unit(error) => return Some(unit_allowed(error)),
             Self::Distribution(_) => "the parameter rules of ADR-0003",
             Self::Expression { .. } => "an expression of the right type (ADR-0009)",
+            Self::Condition { .. } => {
+                "a boolean condition over the unit's `variant` and `priority`, with no \
+                 functions or component ids (ADR-0023 §2)"
+            }
             Self::NotAllowed { allowed, .. } => return Some(allowed.clone()),
             Self::BareShare { .. } => "a percentage with its unit, such as `2%`",
             Self::UnsupportedFormat { .. } => "\"1.0\"",
@@ -1032,6 +1046,7 @@ impl LoadErrorKind {
             Self::Unit(error) => return unit_example(error),
             Self::Distribution(_) => "{dist: lognormal, mean: 42s, sigma: 0.08}",
             Self::Expression { .. } | Self::NotAnObservable { .. } => "throughput(sink)",
+            Self::Condition { .. } => "variant == 'premium'",
             Self::NotAllowed { example, .. } => return Some(example.clone()),
             Self::BareShare { fix, .. } => return Some(fix.clone()),
             Self::InvalidId { .. } => "weld-1",

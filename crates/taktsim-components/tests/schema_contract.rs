@@ -102,6 +102,7 @@ fn schema_can_state(kind: &LoadErrorKind) -> bool {
         kind,
         LoadErrorKind::NotAllowed { .. }
             | LoadErrorKind::Expression { .. }
+            | LoadErrorKind::Condition { .. }
             | LoadErrorKind::Unit(_)
             | LoadErrorKind::Distribution(_)
             | LoadErrorKind::BareShare { .. }
