@@ -218,6 +218,7 @@ fn facts(command: &Command) -> Facts {
                         "run.failed",
                         "run.metrics_differ",
                         "run.stalled",
+                        "run.clock_stopped",
                         "run.no_draw_claim_false",
                         "run.store_differs",
                         "run.stored_run_differs",

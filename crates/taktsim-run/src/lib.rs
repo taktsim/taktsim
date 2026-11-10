@@ -316,11 +316,29 @@ fn from_run_failure(failure: RunFailure, document: &Document) -> Failure {
             FailureClass::RunFailed,
             Diagnostic::error("run.replay_differs", error.to_string()),
         ),
+        RunFailure::ClockStopped { time, .. } => Failure::one(
+            FailureClass::RunFailed,
+            clock_stopped(&failure).at_time(time),
+        ),
         other => Failure::one(
             FailureClass::RunFailed,
             Diagnostic::error("run.engine", other.to_string()),
         ),
     }
+}
+
+/// A run whose clock stopped moving (ADR-0022 §6): exit code 2, not kept, and not
+/// a stall, which is a run with no events left. Unlike a broken invariant it has a
+/// fix in the model, a duration whose draws are not almost all 0 ns, so it carries
+/// what was found, what is allowed and one valid value, all from the failure
+/// (ADR-0024 §9).
+fn clock_stopped(failure: &RunFailure) -> Diagnostic {
+    let mut line = Diagnostic::error("run.clock_stopped", failure.to_string());
+    line.path = failure.path().map(ToString::to_string);
+    line.found = failure.found();
+    line.allowed = failure.allowed();
+    line.example = failure.example();
+    line
 }
 
 /// A failed check on a finished run: exit code 2, with the last events.

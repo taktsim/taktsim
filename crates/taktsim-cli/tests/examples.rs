@@ -369,3 +369,61 @@ fn an_on_demand_source_filling_too_many_places_exits_1_at_the_capacity() {
     }
     assert!(dir.store_is_empty());
 }
+
+/// A cycle time whose draws almost all round to 0 ns: a gamma of mean 1 s and cv
+/// 10⁶, as in `taktsim-components`' `clock_stopped.rs`.
+const CLOCK_STOPS: &str = "format: \"1.0\"\n\
+model: {name: m, seed: 1}\n\
+experiment: {type: terminating, horizon: 1h}\n\
+components:\n\
+  - {id: source, type: Source}\n\
+  - {id: cut, type: Machine, cycle_time: {dist: gamma, mean: 1s, cv: 1000000}}\n\
+  - {id: sink, type: Sink}\n\
+flow:\n\
+  - [source, cut, sink]\n";
+
+/// ADR-0022 §6, ADR-0024 §9: a run whose clock stops moving, a component that
+/// addressed more than 1,000,000 events to itself at one instant, is a failed run,
+/// exit 2, `run.clock_stopped`, not `run.stalled` (no events left), and nothing is
+/// kept. Its line names the component's entry and the instant, says what was found
+/// and what is allowed, and gives one valid value, which does run.
+#[test]
+fn a_clock_that_stops_moving_exits_2_and_is_not_kept() {
+    let dir = Dir::new();
+    dir.write("m.yaml", CLOCK_STOPS);
+    let outcome = dir.taktsim(&["run", "m.yaml", "--format", "json"]);
+    assert_eq!(outcome.code, 2, "{}", outcome.stderr);
+    assert_eq!(outcome.stdout, "");
+    let lines = outcome.lines();
+    assert_eq!(lines.len(), 1, "{}", outcome.stderr);
+    let line = &lines[0];
+    assert_eq!(line["kind"], "error", "{line}");
+    assert_eq!(line["type"], "run.clock_stopped", "{line}");
+    assert_eq!(line["path"], "components[1]", "{line}");
+    assert_eq!(line["time"], "0s", "{line}");
+    let found = line["found"].as_str().unwrap();
+    assert!(
+        found.starts_with("1000001 events `cut` addressed to itself at 0s"),
+        "{found}"
+    );
+    assert!(
+        line["allowed"]
+            .as_str()
+            .unwrap()
+            .starts_with("at most 1000000 events"),
+        "{line}"
+    );
+    let example = line["example"].as_str().unwrap();
+    assert_eq!(example, "{dist: lognormal, mean: 42s, sigma: 0.08}");
+    let runs = dir.path().join(".taktsim").join("runs");
+    let kept = std::fs::read_dir(&runs).map_or(0, Iterator::count);
+    assert_eq!(kept, 0, "a failed run is not kept");
+
+    // The example, in place of the cycle time, runs.
+    dir.write(
+        "m.yaml",
+        &CLOCK_STOPS.replace("{dist: gamma, mean: 1s, cv: 1000000}", example),
+    );
+    let fixed = dir.taktsim(&["run", "m.yaml", "--format", "json"]);
+    assert_eq!(fixed.code, 0, "{}", fixed.stderr);
+}
