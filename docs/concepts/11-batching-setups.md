@@ -66,6 +66,16 @@ In the model, the setup is one line:
 > none either. A station that collects orders until it has a full batch and lets
 > them leave together is a separate component, `BatchProcess`, which comes in
 > v0.2.
+>
+> With `batch`, the Source's `interarrival` is the time between whole batches,
+> not between parts, and the next interval starts only once the last part of
+> the batch has left the Source. A Source right in front of welding is
+> therefore held up while welding works through a batch, never overloads it,
+> and the capacity limit below never shows. To reproduce the page's load, put a
+> `Buffer` with far more places than the queue ever reaches between the two, as
+> on [page 5](05-utilization.md), and scale the interval by the batch size:
+> with batches of 10 parts, `interarrival: { dist: exponential, mean: 600s }`
+> for a part every 60 s on average.
 
 ## Capacity: the smallest batch that keeps up
 
