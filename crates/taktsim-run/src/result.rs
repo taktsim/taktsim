@@ -1346,7 +1346,8 @@ impl Record for AccuracyKeys {
         let kind = fields.required::<String>("kind");
         // Describing the schema has no kind; `schema` places these keys.
         let describing = fields.node().is_none();
-        let under = |words: &[&str]| !describing && kind.as_deref().is_some_and(|k| words.contains(&k));
+        let under =
+            |words: &[&str]| !describing && kind.as_deref().is_some_and(|k| words.contains(&k));
         let interval = if under(&["sampling"]) {
             fields.optional("interval")
         } else {

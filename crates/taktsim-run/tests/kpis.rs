@@ -920,6 +920,7 @@ fn never_built() -> BuildError {
     BuildError::UnknownVariant {
         path: taktsim_model::FieldPath::default(),
         name: "never".to_owned(),
+        declared: Vec::new(),
     }
 }
 

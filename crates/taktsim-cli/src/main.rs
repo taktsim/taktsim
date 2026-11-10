@@ -21,8 +21,8 @@ use clap::Parser;
 use taktsim_components::{Flow, Registry, standard, standard_schema};
 use taktsim_model::Json;
 use taktsim_run::{
-    Budget, Diagnostic, Ended, Failure, ModelSource, RunRequest, SCHEMA_NAMES, Store,
-    expand_seeds, schema_named, schema_names,
+    Budget, Diagnostic, Ended, Failure, ModelSource, RunRequest, SCHEMA_NAMES, Store, expand_seeds,
+    schema_named, schema_names,
 };
 
 use crate::args::{Cli, Command, Format, RunArgs};

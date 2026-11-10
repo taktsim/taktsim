@@ -257,38 +257,47 @@ impl Store {
     }
 
     /// Keeps `document` as the experiment `id`, written in `tmp/` and renamed. If it is
-    /// there already it is never overwritten, and that one is returned: an id names one
-    /// document. With `compare`, it must have the same bytes apart from
-    /// `provenance.platform` (ADR-0025 §10).
+    /// there already it is never overwritten, and that one is returned, with its bytes:
+    /// an id names one document. A stored one must first pass `filed_under`, as a run's
+    /// stored result does (ADR-0024 §8). With `compare`, it must have the same bytes
+    /// apart from `provenance.platform` (ADR-0025 §10).
     pub(crate) fn keep_experiment(
         &self,
         id: &ExperimentId,
         document: &ResultDocument,
         compare: bool,
-    ) -> Result<ResultDocument, Failure> {
+        filed_under: impl Fn(&ResultDocument) -> Result<(), Failure>,
+    ) -> Result<StoredResult, Failure> {
         let target = self.experiment_dir(id);
         let path = target.join(RESULT_FILE);
         let kept = if let Some(stored) = read_document(&path)? {
-            stored.document
+            stored
         } else {
-            {
-                let temp = self.begin()?;
-                let file = temp.file(RESULT_FILE);
-                fs::write(&file, document.to_text())
-                    .map_err(|e| io_failure("store.write", &file, &e))?;
-                let parent = self.root.join("experiments");
-                fs::create_dir_all(&parent).map_err(|e| io_failure("store.write", &parent, &e))?;
-                match fs::rename(&temp.dir, &target) {
-                    Ok(()) => return Ok(document.clone()),
-                    // Another process kept it just now.
-                    Err(_) if path.is_file() => {}
-                    Err(e) => return Err(io_failure("store.write", &target, &e)),
+            let text = document.to_text();
+            let temp = self.begin()?;
+            let file = temp.file(RESULT_FILE);
+            fs::write(&file, &text).map_err(|e| io_failure("store.write", &file, &e))?;
+            let parent = self.root.join("experiments");
+            fs::create_dir_all(&parent).map_err(|e| io_failure("store.write", &parent, &e))?;
+            match fs::rename(&temp.dir, &target) {
+                Ok(()) => {
+                    return Ok(StoredResult {
+                        document: document.clone(),
+                        text,
+                    });
                 }
-                read_document(&path)?.map_or_else(|| document.clone(), |stored| stored.document)
+                // Another process kept it just now.
+                Err(_) if path.is_file() => {}
+                Err(e) => return Err(io_failure("store.write", &target, &e)),
             }
+            read_document(&path)?.unwrap_or(StoredResult {
+                document: document.clone(),
+                text,
+            })
         };
+        filed_under(&kept.document)?;
         if compare {
-            let mut same_platform = kept.clone();
+            let mut same_platform = kept.document.clone();
             same_platform
                 .provenance
                 .platform
@@ -363,15 +372,15 @@ fn read_document(path: &Path) -> Result<Option<StoredResult>, Failure> {
     match decode_str(&text, Format::Json) {
         Ok(document) => Ok(Some(StoredResult { document, text })),
         Err(errors) => {
-        let mut line = Diagnostic::error(
-            "store.result",
-            format!("{} is not a result this build reads", path.display()),
-        )
-        .at("--store")
-        .found(errors.first().to_string())
-        .allowed(crate::RESULT_FORMAT);
-        line.file = Some(path.display().to_string());
-        Err(Failure::one(FailureClass::Io, line))
+            let mut line = Diagnostic::error(
+                "store.result",
+                format!("{} is not a result this build reads", path.display()),
+            )
+            .at("--store")
+            .found(errors.first().to_string())
+            .allowed(crate::RESULT_FORMAT);
+            line.file = Some(path.display().to_string());
+            Err(Failure::one(FailureClass::Io, line))
         }
     }
 }

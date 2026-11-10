@@ -556,6 +556,14 @@
                   ]
                 },
                 "then": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    },
+                    "units_inside": {
+                      "type": "number"
+                    }
+                  },
                   "required": [
                     "units_inside",
                     "detail"
@@ -574,6 +582,21 @@
                   ]
                 },
                 "then": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    },
+                    "of": {
+                      "maximum": 4294967295,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "undefined": {
+                      "maximum": 4294967295,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
                   "required": [
                     "undefined",
                     "of",
@@ -585,35 +608,31 @@
             "description": "What can be said about a value's error. Read a kind you do not know as no statement, never as an error.",
             "properties": {
               "detail": {
-                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` and `detail` under `none`."
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` under `none`, `units_inside` under `censored`, `undefined` and `of` under `partly_undefined`, and `detail` under each of the last three."
               },
               "interval": {
-                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` and `detail` under `none`."
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` under `none`, `units_inside` under `censored`, `undefined` and `of` under `partly_undefined`, and `detail` under each of the last three."
               },
               "kind": {
                 "type": "string"
               },
               "of": {
-                "maximum": 4294967295,
-                "minimum": 0,
-                "type": "integer"
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` under `none`, `units_inside` under `censored`, `undefined` and `of` under `partly_undefined`, and `detail` under each of the last three."
               },
               "reached": {
                 "type": "boolean"
               },
               "reason": {
-                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` and `detail` under `none`."
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` under `none`, `units_inside` under `censored`, `undefined` and `of` under `partly_undefined`, and `detail` under each of the last three."
               },
               "target": {
                 "$ref": "#/$defs/AccuracyTarget"
               },
               "undefined": {
-                "maximum": 4294967295,
-                "minimum": 0,
-                "type": "integer"
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` under `none`, `units_inside` under `censored`, `undefined` and `of` under `partly_undefined`, and `detail` under each of the last three."
               },
               "units_inside": {
-                "type": "number"
+                "description": "Typed by the kind that defines it: `interval` under `sampling`, `reason` under `none`, `units_inside` under `censored`, `undefined` and `of` under `partly_undefined`, and `detail` under each of the last three."
               }
             },
             "required": [

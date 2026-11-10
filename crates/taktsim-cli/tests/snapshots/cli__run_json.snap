@@ -106,7 +106,7 @@ exit: 0
             {
               "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
               "kind": "censored",
-              "units_inside": 7
+              "units_inside": 7.0
             }
           ],
           "labels": {
@@ -124,7 +124,7 @@ exit: 0
             {
               "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
               "kind": "censored",
-              "units_inside": 7
+              "units_inside": 7.0
             }
           ],
           "labels": {
@@ -142,7 +142,7 @@ exit: 0
             {
               "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
               "kind": "censored",
-              "units_inside": 7
+              "units_inside": 7.0
             }
           ],
           "labels": {
@@ -160,7 +160,7 @@ exit: 0
             {
               "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
               "kind": "censored",
-              "units_inside": 7
+              "units_inside": 7.0
             }
           ],
           "labels": {
@@ -178,7 +178,7 @@ exit: 0
             {
               "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
               "kind": "censored",
-              "units_inside": 7
+              "units_inside": 7.0
             }
           ],
           "labels": {
@@ -196,7 +196,7 @@ exit: 0
             {
               "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
               "kind": "censored",
-              "units_inside": 7
+              "units_inside": 7.0
             }
           ],
           "labels": {
@@ -214,7 +214,7 @@ exit: 0
             {
               "detail": "lead time covers delivered units only, so it understates while units are still inside at the end",
               "kind": "censored",
-              "units_inside": 7
+              "units_inside": 7.0
             }
           ],
           "labels": {

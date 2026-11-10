@@ -189,8 +189,9 @@ impl Default for RunRequest<'_> {
 pub struct RunResponse {
     /// The result.
     pub result: ResultDocument,
-    /// The result as a document: the bytes in the store for a run that is kept or
-    /// reused, including any key this build does not read (ADR-0024 §3).
+    /// The result as a document: the bytes in the store for a run or an experiment
+    /// that is kept or reused, including any key this build does not read (ADR-0024
+    /// §3, ADR-0025 §10).
     pub text: String,
     /// Whether it came from the store without running.
     pub reused: bool,
@@ -680,6 +681,7 @@ pub fn run<D: Domain>(
             };
             Ok(RunResponse {
                 result: one.result,
+                text: one.text,
                 reused: one.reused,
                 warnings: seeding.warnings,
                 ended,
@@ -722,6 +724,8 @@ pub(crate) struct Ready {
     id: RunId,
     written: Summary,
     pub(crate) result: ResultDocument,
+    /// The bytes of `result` written beside it.
+    text: String,
     /// What one replication like this takes in memory, in bytes.
     pub(crate) memory: u64,
 }
@@ -735,7 +739,8 @@ pub(crate) enum Worked {
     Partial(Box<One>),
 }
 
-/// The stored run of `model` with `seed`, if the request reuses one.
+/// The stored run of `model` with `seed`, if the request reuses one, checked against
+/// the id it is filed under (ADR-0024 §6, §8).
 fn stored<D: Domain>(
     model: &Model,
     seed: Option<u64>,
@@ -746,11 +751,23 @@ fn stored<D: Domain>(
         return Ok(None);
     }
     let id = run_id::<D>(model, seed)?;
-    Ok(store.read_result(&id)?.map(|result| One {
-        result,
+    Ok(read_filed(store, &id, model)?.map(|stored| One {
+        result: stored.document,
+        text: stored.text,
         reused: true,
         partial: None,
     }))
+}
+
+/// The stored result of the run `id` of `model`, if it is in the store, once it is
+/// checked to be that run's: every path that reads a run's result back, reused or
+/// just committed, reads it here.
+fn read_filed(store: &Store, id: &RunId, model: &Model) -> Result<Option<StoredResult>, Failure> {
+    let stored = store.read_result(id)?;
+    if let Some(stored) = &stored {
+        check_filed_under(&stored.document, id, model)?;
+    }
+    Ok(stored)
 }
 
 /// One run of `model` with `seed`, from the store or run and kept (ADR-0024 §3, §8).
@@ -766,11 +783,15 @@ fn run_one<D: Domain>(
     }
     match work_one(registry, model, seed, request, request.cancel, store)? {
         Worked::Partial(one) => Ok(*one),
-        Worked::Ready(ready) => Ok(One {
-            result: commit(store, *ready)?,
-            reused: false,
-            partial: None,
-        }),
+        Worked::Ready(ready) => {
+            let stored = commit(store, model, *ready)?;
+            Ok(One {
+                result: stored.document,
+                text: stored.text,
+                reused: false,
+                partial: None,
+            })
+        }
     }
 }
 
@@ -831,8 +852,10 @@ fn work_one<D: Domain>(
         fold: &fold,
     };
     if !complete {
+        let result = result_document(registry, model, &finished(None))?;
         return Ok(Worked::Partial(Box::new(One {
-            result: result_document(registry, model, &finished(None))?,
+            text: result.to_text(),
+            result,
             reused: false,
             partial: Some(report.summary.outcome),
         })));
@@ -850,15 +873,22 @@ fn work_one<D: Domain>(
         id,
         written,
         result,
+        text,
     })))
 }
 
-/// Renames a finished run into the store: the coordinator's part. A run with its id
-/// already there is compared and never overwritten.
-fn commit(store: &Store, ready: Ready) -> Result<ResultDocument, Failure> {
+/// Renames a finished run of `model` into the store: the coordinator's part. A run
+/// with its id already there is checked and compared as in M7, and never
+/// overwritten; its stored bytes are returned (ADR-0024 §8).
+fn commit(store: &Store, model: &Model, ready: Ready) -> Result<StoredResult, Failure> {
     match store.commit(&ready.temp, &ready.id)? {
-        Commit::Stored => Ok(ready.result),
-        Commit::AlreadyThere => compare_with_stored(store, &ready.id, &ready.written),
+        Commit::Stored => Ok(StoredResult {
+            document: ready.result,
+            text: ready.text,
+        }),
+        Commit::AlreadyThere => {
+            compare_with_stored(store, &ready.id, model, &ready.result, &ready.written)
+        }
     }
 }
 
@@ -954,6 +984,53 @@ fn check_filed_under(result: &ResultDocument, id: &RunId, model: &Model) -> Resu
     Ok(())
 }
 
+/// An experiment's id is computed from its runs, so a stored experiment document
+/// can be checked against the directory it is filed under, as a run's result is
+/// (ADR-0024 §6, ADR-0025 §10). `made` is the document of the counted runs, each
+/// read back from its own checked result. A stored document that states another
+/// id, runs whose ids compute to another one, runs or seeds other than the counted
+/// ones, hashes other than the model's, or another `complete`, is not this
+/// experiment's, and must not be returned as it.
+fn check_experiment_filed_under(
+    stored: &ResultDocument,
+    id: &ExperimentId,
+    made: &ResultDocument,
+) -> Result<(), Failure> {
+    let disagrees = |what: &str| {
+        stored_run_differs(format!(
+            "the result filed under experiment {id} is not that experiment's: {what}"
+        ))
+    };
+    if stored.experiment_id.as_ref() != Some(id) {
+        return Err(disagrees("it states another experiment id"));
+    }
+    let ids: Option<Vec<RunId>> = stored.runs.iter().map(|run| run.run_id.clone()).collect();
+    let computed = ids.map(ExperimentId::over).and_then(Result::ok);
+    if computed.as_ref() != Some(id) {
+        return Err(disagrees("its runs compute to another experiment id"));
+    }
+    if stored.runs != made.runs {
+        return Err(disagrees("it states other runs than the counted ones"));
+    }
+    let seeds: Vec<u64> = stored.runs.iter().filter_map(|run| run.seed).collect();
+    if stored.provenance.seeds != seeds {
+        return Err(disagrees("its provenance states other seeds than its runs"));
+    }
+    if stored.provenance.model_hash != made.provenance.model_hash
+        || stored.provenance.system_hash != made.provenance.system_hash
+    {
+        return Err(disagrees("it does not state the hashes of its model"));
+    }
+    if stored.complete != made.complete {
+        return Err(disagrees(if stored.complete {
+            "it says it is complete, and these runs are not"
+        } else {
+            "it says it is partial, and these runs are complete"
+        }));
+    }
+    Ok(())
+}
+
 /// A run with this id is in the store already: it must be the run just made. Its
 /// stream must be the same, or the engine changed or determinism broke; and so must
 /// everything its result states but `provenance.platform`, or the stored numbers
@@ -966,10 +1043,7 @@ fn compare_with_stored(
     result: &ResultDocument,
     written: &Summary,
 ) -> Result<StoredResult, Failure> {
-    let stored = store.read_result(id)?;
-    if let Some(stored) = &stored {
-        check_filed_under(&stored.document, id, model)?;
-    }
+    let stored = read_filed(store, id, model)?;
     let stored_hash = stored
         .iter()
         .flat_map(|stored| &stored.document.runs)
@@ -1215,7 +1289,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(TRACE_FILE);
         std::fs::write(&path, &trace).unwrap();
-        let fold = fold_trace::<Flow>(&path).unwrap();
+        let places = Places::of(&registry, model.document());
+        let fold = fold_trace::<Flow>(&path, &places).unwrap();
         assert!(check_no_draw_claim(&registry, &model, &path, &fold).is_ok());
 
         std::fs::write(&path, &trace[..trace.len() / 2]).unwrap();

@@ -23,7 +23,7 @@ use crate::result::{
     Accuracy, AccuracyKind, AccuracyPlan, Metric, MetricValue, Over, Provenance, ResultDocument,
     Scalar,
 };
-use crate::store::Store;
+use crate::store::{Store, StoredResult};
 use crate::{One, Ready, RunRequest, RunResponse, Worked};
 
 /// What a long command may spend (ADR-0019 item 4, ADR-0025 §4). Each is a flag; which
@@ -692,6 +692,8 @@ enum Arrived {
 struct Coordinator<'r> {
     sequencer: Sequencer,
     plan: &'r RowPlan,
+    /// What a committed run is checked against (ADR-0024 §6, §8).
+    model: &'r Model,
     store: &'r Store,
     /// One cancel flag per replication.
     flags: &'r [AtomicBool],
@@ -768,15 +770,15 @@ impl Coordinator<'_> {
                 Some(Waiting::Stored(one)) => *one,
                 Some(Waiting::Fresh(ready)) => {
                     let id = ready.id.clone();
-                    crate::commit(self.store, *ready)?;
+                    crate::commit(self.store, self.model, *ready)?;
                     // Each counted run is read back from the store, fresh or reused,
-                    // so both follow one path (ADR-0025 §5).
-                    let result = self
-                        .store
-                        .read_result(&id)?
+                    // so both follow one path (ADR-0025 §5), and both are checked
+                    // against the id they are filed under (ADR-0024 §8).
+                    let stored = crate::read_filed(self.store, &id, self.model)?
                         .ok_or_else(|| internal_line("a committed run is not in the store"))?;
                     One {
-                        result,
+                        result: stored.document,
+                        text: stored.text,
                         reused: false,
                         partial: None,
                     }
@@ -958,6 +960,7 @@ fn replicate<D: Domain>(
     let mut coordinator = Coordinator {
         sequencer,
         plan,
+        model,
         store,
         flags: &flags,
         limit: seeds.len(),
@@ -1089,6 +1092,7 @@ pub(crate) fn run_experiment<D: Domain>(
         let mut result = partial.result;
         stop_reason.clone_into(&mut result.stop_reason);
         return Ok(RunResponse {
+            text: result.to_text(),
             result,
             reused: false,
             warnings: Vec::new(),
@@ -1109,12 +1113,18 @@ pub(crate) fn run_experiment<D: Domain>(
         Stop::Clock => seeds.sequential(),
         Stop::EventLimit(_) | Stop::Failed(_) | Stop::Cancelled => false,
     };
-    let result = match (result.experiment_id.clone(), determined) {
-        (Some(id), true) => store.keep_experiment(&id, &result, !request.reuse)?,
-        (Some(_) | None, true | false) => result,
+    let kept = match (result.experiment_id.clone(), determined) {
+        (Some(id), true) => store.keep_experiment(&id, &result, !request.reuse, |stored| {
+            crate::check_experiment_filed_under(stored, &id, &result)
+        })?,
+        (Some(_) | None, true | false) => StoredResult {
+            text: result.to_text(),
+            document: result,
+        },
     };
     Ok(RunResponse {
-        result,
+        result: kept.document,
+        text: kept.text,
         reused,
         warnings: Vec::new(),
         ended,
