@@ -1841,7 +1841,8 @@ fn describe_is_the_committed_file() {
 }
 
 /// §10's table: the four commands and their flags. §9: per command only the codes it can give: `run`
-/// has 0, 1, 2, 3, 7; `validate` 0, 1, 7. Codes 4, 5, 6 are on no M7 command. Spec §5: what each writes,
+/// has 0, 1, 2, 3, 7; `validate` 0, 1, 7; and every command 101, the invariant-violation path. Codes
+/// 4, 5, 6 are on no M7 command. Spec §5: what each writes,
 /// whether it needs a budget or a person, and one example, which must itself run.
 #[test]
 fn describe_states_the_table_of_commands() {
@@ -1849,9 +1850,9 @@ fn describe_states_the_table_of_commands() {
     write(&dir, "line.yaml", DRAWN);
     let doc = describe(&dir);
     let want: &[(&str, &[&str], &[i128], bool)] = &[
-        ("describe", &["--format"], &[0, 1, 7], false),
-        ("schema", &["<type>", "--format"], &[0, 1, 7], false),
-        ("validate", &["<model>", "--format"], &[0, 1, 7], false),
+        ("describe", &["--format"], &[0, 1, 7, 101], false),
+        ("schema", &["<type>", "--format"], &[0, 1, 7, 101], false),
+        ("validate", &["<model>", "--format"], &[0, 1, 7, 101], false),
         (
             "run",
             &[
@@ -1863,7 +1864,7 @@ fn describe_states_the_table_of_commands() {
                 "--max-events",
                 "--no-reuse",
             ],
-            &[0, 1, 2, 3, 7],
+            &[0, 1, 2, 3, 7, 101],
             true,
         ),
     ];
