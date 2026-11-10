@@ -1069,8 +1069,9 @@ impl Component<FlowMessage> for MachineBehaviour {
 
 impl MachineBehaviour {
     /// What an `Accept` from the target at `position` gets: nothing while down; the
-    /// first finished unit, or the first meant for that target when routed; nothing if
-    /// the unit it was told of has gone (ADR-0023 §3, §6).
+    /// first finished unit, or the first meant for that target when routed; at a
+    /// station with a rule, the unit it picked, and nothing if that unit has gone
+    /// (ADR-0023 §3, §6).
     fn give(&mut self, position: usize, now: SimTime) -> Option<Part> {
         if self.down {
             return None;
@@ -1078,16 +1079,13 @@ impl MachineBehaviour {
         if !self.outlet.is_routed() {
             return self.finished.pop_front();
         }
-        let finished = &self.finished;
-        let gone = self.outlet.answers_a_unit_gone(position, |token| {
-            finished.iter().any(|p| p.item.as_u64() == token)
-        });
-        if gone {
-            return None;
-        }
-        let at = finished
-            .iter()
-            .position(|p| self.outlet.meant_for(p.route, position, now))?;
+        let at = match self.outlet.answered(position) {
+            Some(token) => self.finished.iter().position(|p| p.item.as_u64() == token),
+            None => self
+                .finished
+                .iter()
+                .position(|p| self.outlet.meant_for(p.route, position, now)),
+        }?;
         self.finished.remove(at)
     }
 

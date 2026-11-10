@@ -726,3 +726,54 @@ fn a_re_described_offer_is_answered_by_the_unit_it_now_describes() {
     );
     support::check_records(&r);
 }
+
+#[test]
+fn an_accept_from_a_station_with_a_rule_gets_the_unit_it_picked() {
+    // `h` is on a failure cycle and holds up to three finished parts. `t` alone takes the
+    // parts with a priority, and shares a pool with `u` for the others. When `t` and `u`
+    // free together, the pool's offer moves from `t` to `u`, and `h` describes to `t` the
+    // part with a priority before `t` picks. `t`'s `Accept` answers that description, so
+    // it gets that part, not the pool's part whose offer left `t` at that instant.
+    let text = format!(
+        "{}control:\n  dispatch: {{t: earliest_due_date, u: fifo}}\n",
+        document(
+            "200s",
+            "  - {id: s1, type: Source, interarrival: 1s, priority_mix: [{priority: 0, share: 60%}, \
+             {priority: 2, share: 40%}], due_in: {dist: uniform, min: 1s, max: 100s}}\n  \
+             - {id: h, type: Machine, cycle_time: 1s, capacity: 3 parts, mtbf: 6s, mttr: 3s}\n  \
+             - {id: t, type: Machine, cycle_time: 5s}\n  \
+             - {id: u, type: Machine, cycle_time: 5s}\n  - {id: sink, type: Sink}",
+            "  - [s1, h]\n  - {from: h, to: t, when: \"priority > 0\"}\n  \
+             - {from: h, to: [u, t], choose: preferred}\n  - {from: [t, u], to: sink}",
+        )
+    );
+    for seed in 1..10 {
+        let r = run(&text, seed);
+        support::check_records(&r);
+        // What `h` had last described to `t` when `t` picked is what comes.
+        let (mut described, mut picked) = (None, None);
+        for e in r.events() {
+            match (&e.message, e.from.as_str(), e.to.as_str()) {
+                (FlowMessage::OfferOf(unit), "h", "t") => described = unit.item,
+                (FlowMessage::Pick, "t", "t") => picked = described,
+                (message, "h", "t") if is_arrive(message) => {
+                    assert_eq!(e.item, picked, "seed {seed}: {e:?}");
+                }
+                _ => {}
+            }
+        }
+        if seed == 3 {
+            // At 50 s `h` describes item 16, then item 18, to `t`, and moves item 16's
+            // offer to `u`, all before `t` picks: `t` gets item 18, and `u` item 16.
+            let at_50s = |name: &str| -> Vec<u64> {
+                r.arrivals(name)
+                    .iter()
+                    .filter(|e| e.time == t("50s"))
+                    .map(|e| e.item.unwrap().as_u64())
+                    .collect()
+            };
+            assert_eq!(at_50s("t"), [18]);
+            assert_eq!(at_50s("u"), [16]);
+        }
+    }
+}

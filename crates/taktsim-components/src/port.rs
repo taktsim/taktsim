@@ -541,11 +541,19 @@ impl Outlet {
         position: usize,
         mut present: impl FnMut(u64) -> bool,
     ) -> bool {
+        self.answered(position).is_some_and(|token| !present(token))
+    }
+
+    /// The token of the unit the `Accept` of the target at `position` answers, if that
+    /// target has a rule: the description it picked (module docs). Each is answered
+    /// once. The holder gives that unit if it is still here, and nothing otherwise: an
+    /// `Accept` that crossed a move of a standing offer at that instant answers the
+    /// description, not the offer that moved (ADR-0023 §5, disagreement 14).
+    pub(crate) fn answered(&mut self, position: usize) -> Option<u64> {
         self.routed
             .as_deref_mut()
             .and_then(|routed| routed.described.get_mut(position))
             .and_then(|described| described.answering.take())
-            .is_some_and(|token| !present(token))
     }
 
     /// Offers to every target without an outstanding offer, in declared order.
