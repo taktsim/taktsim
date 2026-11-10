@@ -913,8 +913,9 @@ struct InletRule {
     /// Offers in the order they came: the place in the inlet.
     offers: Vec<DescribedOffer>,
     pending: Vec<Pending>,
-    /// A `Decline` came at this instant, after the last pick.
-    declined: bool,
+    /// When a `Decline` last came that no pick has followed yet: the next pick at that
+    /// instant is on record, whenever in the instant its offer comes.
+    declined_at: Option<SimTime>,
     /// A `Pick` is on its way, at this instant.
     pick_due: bool,
 }
@@ -969,7 +970,7 @@ impl Inlet {
                     plan,
                     offers: Vec::new(),
                     pending: Vec::new(),
-                    declined: false,
+                    declined_at: None,
                     pick_due: false,
                 })
             }),
@@ -1138,6 +1139,10 @@ impl Inlet {
             return Ok(());
         }
         let mut follows = rule.pending.last().map_or(follows, |p| Some(p.variant));
+        let after_decline = rule.declined_at == Some(ctx.now());
+        if free > 0 && !rule.offers.is_empty() {
+            rule.declined_at = None;
+        }
         while free > 0 && !rule.offers.is_empty() {
             let mut ranked: Vec<(u64, SimTime, usize)> = rule
                 .offers
@@ -1169,7 +1174,7 @@ impl Inlet {
                 follows,
                 candidates,
                 total,
-                after_decline: rule.declined,
+                after_decline,
             });
             self.reserved += 1;
             free -= 1;
@@ -1232,15 +1237,20 @@ impl Inlet {
         })));
     }
 
-    /// A `Decline` from `from` released its place. A rule's pick is discarded, since
-    /// it had no effect, and the next pick of this instant goes on record.
-    pub(crate) fn declined(&mut self, from: ComponentId) -> Result<(), ComponentError> {
+    /// A `Decline` from `from` released its place at `now`. A rule's pick is
+    /// discarded, since it had no effect, and the next pick of this instant goes on
+    /// record, even if the offer it takes comes after this event.
+    pub(crate) fn declined(
+        &mut self,
+        from: ComponentId,
+        now: SimTime,
+    ) -> Result<(), ComponentError> {
         self.release("Decline")?;
         if let Some(rule) = self.rule.as_deref_mut() {
             if let Some(position) = rule.pending.iter().position(|p| p.from == from) {
                 rule.pending.remove(position);
             }
-            rule.declined = true;
+            rule.declined_at = Some(now);
         }
         Ok(())
     }
@@ -1265,13 +1275,6 @@ impl Inlet {
         view: TargetView,
         ctx: &mut Context<'_, FlowMessage>,
     ) -> Result<(), ComponentError> {
-        // A `Decline` marks the pick it causes, which may come at a later event of
-        // this instant.
-        if let Some(rule) = self.rule.as_deref_mut()
-            && !rule.pick_due
-        {
-            rule.declined = false;
-        }
         let Some(reporting) = self.reporting.as_deref_mut() else {
             return Ok(());
         };

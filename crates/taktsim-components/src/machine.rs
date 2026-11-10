@@ -949,7 +949,7 @@ impl Component<FlowMessage> for MachineBehaviour {
             FlowMessage::Offer => self.inlet.offered(d.from),
             FlowMessage::OfferOf(unit) => self.inlet.offered_unit(d.from, **unit),
             FlowMessage::Withdraw => self.inlet.withdrawn(d.from),
-            FlowMessage::Decline => self.inlet.declined(d.from)?,
+            FlowMessage::Decline => self.inlet.declined(d.from, ctx.now())?,
             FlowMessage::Status(status) => self.outlet.status(d.from, status, ctx.now()),
             FlowMessage::Arrive(attrs) => {
                 self.inlet.release("Arrive")?;

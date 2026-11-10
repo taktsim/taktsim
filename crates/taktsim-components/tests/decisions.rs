@@ -283,6 +283,56 @@ fn declined_pick_writes_no_record_and_the_re_pick_writes_one() {
 }
 
 #[test]
+fn a_re_pick_after_a_decline_is_on_record_when_its_offer_comes_after_the_decline() {
+    // As above, `holder` is down at 12 s with a part offered to `t`, and `t` frees then.
+    // `x` makes two parts at 12 s, on a `preferred` edge to `u` and `t`; `u` has room and
+    // a rule too, so the first stands at `u` until `u` picks. `t` picks first: `holder`'s
+    // part, alone, and gets a `Decline`. No other offer waits at `t` when the `Decline`
+    // lands. Then `u` takes `x`'s first part, and `x` offers its second to `t`, the only
+    // target with room. `t` picks it alone, after a pick that failed at this instant, so
+    // that pick is on record (ADR-0023 §9).
+    let yaml = format!(
+        "{}control:\n  dispatch: {{t: fifo, u: fifo}}\n",
+        document(
+            "13s",
+            "  - {id: feed, type: Source}\n  \
+             - {id: holder, type: Machine, cycle_time: 2s, mtbf: 9s, mttr: 5s}\n  \
+             - {id: x, type: Source, interarrival: 12s, batch: 2 parts}\n  \
+             - {id: u, type: Machine, cycle_time: 10s}\n  \
+             - {id: t, type: Machine, cycle_time: 10s}\n  - {id: sink, type: Sink}",
+            "  - [feed, holder]\n  - [holder, t]\n  - {from: x, to: [u, t], choose: preferred}\n  \
+             - {from: [u, t], to: sink}",
+        )
+    );
+    let r = run(&yaml, 1);
+    let declined: Vec<_> = r
+        .events()
+        .iter()
+        .filter(|e| matches!(e.message, FlowMessage::Decline))
+        .map(|e| (e.time, e.from.clone(), e.to.clone()))
+        .collect();
+    assert_eq!(declined, [(t("12s"), "holder".to_owned(), "t".to_owned())]);
+    let came: Vec<_> = r
+        .arrivals("t")
+        .iter()
+        .map(|e| (e.from.clone(), e.time))
+        .collect();
+    assert_eq!(
+        came,
+        [("holder".to_owned(), t("2s")), ("x".to_owned(), t("12s"))]
+    );
+    assert_eq!(r.arrivals("u").len(), 1);
+    let dispatches = r.dispatches();
+    assert_eq!(dispatches.len(), 1, "{dispatches:?}");
+    let (time, by, record) = &dispatches[0];
+    assert_eq!((*time, r.name(*by)), (t("12s"), "t"));
+    assert_eq!(record.total, 1);
+    assert_eq!(record.candidates[0].from, r.id("x"));
+    assert_eq!(record.candidates[0].item, r.arrivals("t")[1].item);
+    check_records(&r);
+}
+
+#[test]
 fn a_station_with_a_rule_picks_after_the_offers_of_the_instant() {
     // `holder` offers `u` and `t`, first free. `u` has no rule and takes an offer when it
     // comes; `t` picks at its `Pick`, after every offer of the instant (ADR-0023 §6). So
