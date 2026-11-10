@@ -1023,6 +1023,58 @@ fn no_reuse_returns_the_stored_bytes() {
     assert_eq!(again.result.provenance.platform, other);
 }
 
+/// A store is created only where its own files can do no harm: its `.gitignore` of
+/// `*` in a directory of models would hide them from version control (principle 1),
+/// and beside a `.gitignore` already there its runs would not be ignored. A directory
+/// that is neither new, empty, nor a store is refused, exit 7, and left as it was.
+#[test]
+fn a_directory_that_is_not_a_store_is_not_made_one() {
+    let dir = TempDir::new();
+    let yaml = drawing_model(", seed: 1");
+    for (name, files) in [
+        ("models", &["m.yaml"][..]),
+        ("ignores", &[".gitignore"][..]),
+        ("both", &[".gitignore", "m.yaml"][..]),
+    ] {
+        let root = dir.path().join(name);
+        std::fs::create_dir_all(&root).unwrap();
+        for file in files {
+            std::fs::write(root.join(file), "kept\n").unwrap();
+        }
+        let failure =
+            run_text(&yaml, &RunRequest::new(), &Store::open(&root).unwrap()).expect_err(name);
+        assert_eq!(failure.class, FailureClass::Io, "{name}");
+        let line = &failure.diagnostics[0];
+        assert_eq!(line.type_name, "store.not_a_store", "{name}");
+        assert_eq!(line.path.as_deref(), Some("--store"));
+        assert!(line.found.as_deref().unwrap().contains(files[0]), "{name}");
+        assert_eq!(line.example, None, "exit 7 has no example");
+        assert_eq!(listing(&root), set(files), "{name}: nothing written");
+        for file in files {
+            assert_eq!(std::fs::read_to_string(root.join(file)).unwrap(), "kept\n");
+        }
+    }
+    // A new directory, an empty one, and one an interrupted first write left.
+    let interrupted = dir.path().join("interrupted");
+    std::fs::create_dir_all(interrupted.join("runs")).unwrap();
+    std::fs::create_dir_all(interrupted.join("tmp")).unwrap();
+    let empty = dir.path().join("empty");
+    std::fs::create_dir_all(&empty).unwrap();
+    for root in [dir.path().join("new"), empty, interrupted] {
+        let store = Store::open(&root).unwrap();
+        run_text(&yaml, &RunRequest::new(), &store).unwrap();
+        assert_eq!(
+            listing(&root),
+            set(&[".gitignore", "runs", "store.json", "tmp"])
+        );
+        // A store with files of its own and of a person's stays a store.
+        std::fs::write(root.join("notes.txt"), "mine\n").unwrap();
+        assert!(run_text(&yaml, &RunRequest::new(), &store).unwrap().reused);
+        let other = drawing_model(", seed: 2");
+        assert!(!run_text(&other, &RunRequest::new(), &store).unwrap().reused);
+    }
+}
+
 /// The store's own files are written on the first write and never again: a person
 /// may change them, say to keep runs under version control, and a later run leaves
 /// that alone (ADR-0024 §8).
