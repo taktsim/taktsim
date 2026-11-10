@@ -579,6 +579,43 @@ fn a_failed_write_is_reported_at_finish_and_leaves_a_truncated_trace() {
     ));
 }
 
+/// After a failed run, `abandon` writes the open chunk without an end marker:
+/// every record reaches the output, and readers say the trace is cut off.
+#[test]
+fn an_abandoned_trace_keeps_its_open_chunk_and_reads_as_cut_off() {
+    let records = many_records();
+    let mut writer = TraceWriter::new(Vec::new(), &header(1)).unwrap();
+    for record in &records {
+        writer.record(&record.as_trace());
+    }
+    let bytes = writer.abandon().unwrap();
+    let (read, error) = read_all(&bytes);
+    assert_eq!(text(&read), text(&records));
+    assert!(
+        matches!(error, Some(ReadError::Truncated { .. })),
+        "{error:?}"
+    );
+
+    // Nothing recorded: the header alone.
+    let writer = TraceWriter::<_, Toy>::new(Vec::new(), &header(1)).unwrap();
+    let bytes = writer.abandon().unwrap();
+    assert_eq!(read_all(&bytes).0.len(), 0);
+
+    // A failed write is still reported.
+    let out = Failing {
+        written: Arc::default(),
+        limit: 100_000,
+    };
+    let mut writer = TraceWriter::new(out, &header(1)).unwrap();
+    for record in &records {
+        writer.record(&record.as_trace());
+    }
+    let Err(e) = writer.abandon() else {
+        panic!("a full disk went unnoticed");
+    };
+    assert!(e.to_string().contains("disk full"), "{e}");
+}
+
 #[test]
 fn records_that_do_not_fit_are_reported_at_finish() {
     let cases = [

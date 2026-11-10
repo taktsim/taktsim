@@ -81,8 +81,9 @@ pub struct Summary {
 /// next record does not fit, so memory stays at one chunk whatever the
 /// length of the run. Recording cannot fail the run (ADR-0018): the first
 /// error is kept, later records are dropped, and `finish` returns it. A
-/// trace whose writer failed or was dropped without `finish` has no end
-/// marker, so readers report it as truncated.
+/// trace whose writer failed, was [abandoned](Self::abandon) after a failed
+/// run, or was dropped without `finish` has no end marker, so readers report
+/// it as truncated; only a dropped writer loses its open chunk.
 ///
 /// ```
 /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message, RunLimits};
@@ -287,6 +288,74 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
             end: self.end,
         };
         Ok((self.out, summary))
+    }
+
+    /// Writes the open chunk and flushes `out`, but writes no end marker, and
+    /// returns `out`: for a run that failed (spec §4, "a violation aborts the
+    /// run with the event trace that led to it"). Readers then read every
+    /// record, up to the one before the failure, and report the trace as cut
+    /// off (ADR-0021).
+    ///
+    /// # Errors
+    ///
+    /// The first error while recording or writing. The trace then ends at the
+    /// last chunk written before it.
+    ///
+    /// ```
+    /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message, RunLimits};
+    /// use taktsim_trace::{DecodeError, Decoder, Encoder, Header, ModelHash, ReadError, SystemHash, TraceMessage, TraceReader, TraceWriter};
+    ///
+    /// #[derive(Debug)]
+    /// struct Tick;
+    /// impl Message for Tick {}
+    /// impl TraceMessage for Tick {
+    ///     const FORMAT: &'static str = "tick/1";
+    ///     fn encode(&self, _: &mut Encoder<'_>) {}
+    ///     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
+    /// }
+    ///
+    /// /// Ticks every second and fails at the third tick.
+    /// struct Fragile(u32);
+    /// impl Component<Tick> for Fragile {
+    ///     fn start(&mut self, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
+    ///         ctx.schedule("1s".parse()?, Tick)?;
+    ///         Ok(())
+    ///     }
+    ///     fn handle(&mut self, _: Delivery<'_, Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
+    ///         self.0 += 1;
+    ///         if self.0 == 3 {
+    ///             return Err(ComponentError::Unexpected { state: "fragile", event: "a third tick".into() });
+    ///         }
+    ///         ctx.schedule("1s".parse()?, Tick)?;
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// let mut engine = Engine::new(EngineConfig::new(1));
+    /// engine.add_component("fragile", Box::new(Fragile(0)))?;
+    /// let header = Header::for_engine(&engine, ModelHash::sha256(b"f"), SystemHash::sha256(b"f"));
+    /// let mut writer = TraceWriter::new(Vec::new(), &header)?;
+    /// assert!(engine.run(RunLimits::until("1min".parse()?), &mut writer).is_err());
+    /// let bytes = writer.abandon()?;
+    /// let records: Vec<_> = TraceReader::<_, Tick>::new(bytes.as_slice())?.collect();
+    /// // The two ticks before the failure are there, then the reader says the trace is cut off.
+    /// assert!(records.len() >= 3);
+    /// assert!(records[..records.len() - 1].iter().all(Result::is_ok));
+    /// assert!(matches!(records.last(), Some(Err(ReadError::Truncated { .. }))));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn abandon(mut self) -> Result<W, WriteError> {
+        if self.error.is_none() && !self.chunk.is_empty() {
+            self.close_chunk();
+        }
+        if let Some(error) = self.error {
+            return Err(error);
+        }
+        let offset = self.bytes;
+        self.out
+            .flush()
+            .map_err(|source| WriteError::Io { offset, source })?;
+        Ok(self.out)
     }
 
     /// Writes the open chunk: tag, length, records, first record, its
