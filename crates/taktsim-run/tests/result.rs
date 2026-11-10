@@ -302,6 +302,52 @@ fn unknown_kind_reads_as_no_statement() {
     assert!(decode_str::<Accuracy>("{reason: r}", Format::Yaml).is_err());
 }
 
+/// A float with no fraction of its own reads back as the same float, also above
+/// 2^53 − 1, where the reader refuses an integer: the document is read back on
+/// reuse, so it must read as what was written (ADR-0024 §3).
+#[test]
+fn a_whole_float_reads_back_as_a_float() {
+    let mut document = sample_documents().remove(0);
+    let interval = SamplingInterval {
+        mean: 1e17,
+        half_width: 2.0,
+        std_dev: 0.0,
+        replications: 20,
+        level: 1.0,
+    };
+    let accuracy = Accuracy {
+        kind: AccuracyKind::Sampling(interval),
+        target: Some(AccuracyTarget {
+            relative: Some(1.0),
+        }),
+        reached: Some(true),
+    };
+    document.metrics.push(Metric {
+        name: "throughput(sink)".to_owned(),
+        unit: "items/h".to_owned(),
+        over: Over::Window {
+            from: "0s".parse().unwrap(),
+            to: "8h".parse().unwrap(),
+        },
+        observable: None,
+        values: [2.0, -4.0, 0.0, 1e17, 1e300]
+            .into_iter()
+            .map(|x| MetricValue {
+                value: Scalar::Number(x),
+                labels: None,
+                accuracy: vec![accuracy.clone()],
+            })
+            .collect(),
+    });
+    let text = document.to_text();
+    let read: ResultDocument = decode_str(&text, Format::Json).unwrap();
+    assert_eq!(read, document);
+    assert_eq!(read.to_text(), text);
+    let schema = result_schema();
+    let json = decode_str::<Raw>(&text, Format::Json).unwrap().0;
+    assert!(Checker { root: &schema }.valid(&schema, &json));
+}
+
 #[test]
 fn single_run_states_no_interval() {
     let dir = TempDir::new();

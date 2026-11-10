@@ -224,7 +224,15 @@ impl Json {
             Self::Integer(n) => {
                 let _ = write!(out, "{n}");
             }
-            Self::Float(x) => out.push_str(&crate::jcs::number_to_string(*x)),
+            Self::Float(x) => {
+                let text = crate::jcs::number_to_string(*x);
+                out.push_str(&text);
+                // A float with no fraction would read back as an integer: a
+                // different variant, or one refused above 2^53 − 1 (ADR-0020).
+                if !text.contains(['.', 'e']) {
+                    out.push_str(".0");
+                }
+            }
             Self::String(s) => crate::jcs::write_string(out, s),
         }
     }
@@ -505,5 +513,26 @@ mod tests {
             "{\"b\":false,\"e\":[],\"f\":0.5,\"i\":-3,\"n\":null,\"o\":{},\
              \"s\":\"a\\\"\\\\\\u0001§\",\"x\":{\"y\":true}}"
         );
+    }
+
+    /// A float is written so that it reads back as a float: with a fraction when
+    /// it has none of its own, also above 2^53 − 1, where an integer is refused.
+    #[test]
+    fn a_float_without_a_fraction_is_written_as_a_float() {
+        for (x, text) in [
+            (2.0, "2.0"),
+            (-3.0, "-3.0"),
+            (0.0, "0.0"),
+            (1e17, "100000000000000000.0"),
+            (1e21, "1e+21"),
+            (0.5, "0.5"),
+            (1e-7, "1e-7"),
+        ] {
+            assert_eq!(Json::Float(x).to_string(), text, "{x}");
+            assert_eq!(Json::Float(x).to_pretty(), text, "{x}");
+            let node = crate::syntax::parse(text, crate::Format::Json).unwrap();
+            assert_eq!(node.to_json(), Json::Float(x), "{text}");
+        }
+        assert_eq!(Json::Integer(2).to_string(), "2");
     }
 }
