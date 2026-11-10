@@ -102,6 +102,13 @@ Rules checked at load time, each with a field path and an example:
   in one instant, so a larger one could exhaust memory on one PC and not on
   another, and a model that loads must run the same everywhere. Relaxable later.
 - `batch` needs `interarrival`: an on-demand Source makes one part at a time.
+- The Buffers an on-demand Source reaches through Buffers alone hold at most
+  65,535 places together, for the same reason: the Source fills them all at time
+  zero. Reported once, at the `capacity` of the largest of them (the first in
+  document order of equal ones), with the capacity that brings the total to the
+  limit as the example. Counted per Source, as `batch` is. A Buffer behind a timed
+  Source, or behind a station, stays uncapped: it fills at a rate, and page 5 needs
+  large buffers. Relaxable later (question 20).
 - Every path from an on-demand Source to a Sink passes a Machine. Otherwise
   parts would reach the Sink for ever at one instant.
 - `interarrival`, `cycle_time`, `mtbf`, `mttr` and `per_variant` are not a
@@ -483,6 +490,37 @@ distribution, whose reach past the limit depends on the seed, and for a constant
 would refuse `cycle_time: 150000d` with a horizon of 213,000 days, where the end that
 does not fit is after the horizon anyway.
 
+**A clock that stops moving.** A duration whose draws almost always round to
+0 ns, such as `{dist: gamma, mean: 1s, cv: 1000000}`, loads: whether a draw is
+zero depends on the seed, as the end of the clock does. Its timer then keeps
+landing at the instant it was set, and the clock would stay there. The run layer
+ends such a run with `RunFailure::Stalled` once one component has addressed more
+than `TIMERS_PER_INSTANT` = 1,000,000 events to itself at one instant, naming the
+component (its id and the field path of its entry), the instant, and the events of
+every component at that instant. The records up to that event are in the trace,
+which has no end marker, as for any failed run. The budget is always on and counts
+events, never wall-clock time or memory, so the failure is the same on every PC.
+
+Counted per component, of the events it addresses to itself (its timers), because
+that is what the model's limits bound. A component's timers at one instant are at
+most one per unit in cycle (at most 65,535) plus a failure, a repair and a setup,
+and a timer set at an instant lands at it again only on a draw of 0 ns. All the
+events at one instant have no such bound: any number of Sources may release a
+batch of 65,535 parts together. One million is about 15 times the most a component
+reaches without a run of 0 ns draws; a reading for the owner, not a measurement.
+Raising `capacity` or `batch` past 65,535 later means checking this number again.
+
+The check is in the run layer (`Prepared::run`, `run_traced`), not in
+`taktsim-core`: the run layer steps the engine with `max_events` short enough that
+the budget cannot be passed unseen, and reads the events through the trace sink.
+The steps leave events and trace exactly as one call would (a test replays such a
+trace). Core does not change. Code that drives an `Engine` directly, as the
+benchmarks do, has no budget, and keeps `max_events` and `cancel`.
+
+Refusing such parameters at load was the alternative (question 21 a): a threshold
+on the chance of a non-zero draw would need one rule per distribution, and a
+threshold the owner would have to choose.
+
 **Room for v0.5.** An operating-time clock is a new optional key (say
 `failure_clock: operating`), absent meaning calendar for ever, so no model or
 hash changes. M5 has no such key. The failure timer is held in one small type
@@ -849,6 +887,8 @@ below is after v0.1 ships.
 | Blocking after service and the handshake | every golden trace, every queueing result | every trace; throughput of every finite-buffer line | `two_stations_without_buffer_give_two_thirds`, `reservation_never_lasts_past_its_instant`, golden cases |
 | Failure rules (calendar, any state, resume) | throughput of unreliable lines | every result with failures | `failure_while_blocked_or_idle`, `interrupted_cycle_resumes_with_remaining_time` |
 | A wait past the end of the clock never ends (§6) | what a very long duration means, the trace of such a run | results of models with durations of centuries; refusing them instead breaks those models | `a_cycle_past_the_clock_never_ends_and_the_run_reaches_its_horizon`, `a_paused_cycle_whose_rest_ends_past_the_clock_never_ends`, `long_durations_never_fail_a_run` |
+| On-demand Sources fill at most 65,535 buffer places through buffers alone (vocabulary, question 20) | which models load; the error's path, at the largest buffer's `capacity` | relaxing it is free; tightening it, or extending it to timed Sources (question 20 b), breaks models that load | `an_on_demand_source_fills_at_most_65535_places`, `a_buffer_fed_at_a_rate_stays_uncapped`, `a_buffer_two_on_demand_sources_fill_is_reported_once`, `malformed` corpus |
+| `RunFailure::Stalled` past 1,000,000 events one component addresses to itself at one instant (§6, question 21) | which runs end with a failure, and where the trace stops; the failure's fields | raising the number is free for a model that loads today; lowering it, counting all events of an instant instead, or making it an option, changes which runs fail | `a_clock_that_stops_moving_ends_the_run_with_the_component_and_the_instant`, `the_most_timers_a_model_allows_at_one_instant_run_untouched`, `an_event_limit_past_one_step_is_the_engine_s` |
 | Blocked Source (S2) | offered load under blocking | results of overloaded lines | `blocked_source_holds_and_loses_nothing`, `created_equals_emitted_plus_held` |
 | Setup rules (first unit free, FIFO, one variant at a time, `0s` is no changeover) | throughput with variants | results with setups | `first_unit_costs_no_setup`, `changeover_waits_for_units_in_cycle`, `zero_matrix_entry_is_no_changeover` |
 | Flow defaults (one edge per source, first free in list order, oldest offer first, event order when room opens at one instant) | M6's defaults, every branch and merge | every model with a branch | `branch_ties_go_to_the_first_declared`, `branch_room_opening_together_follows_event_order`, `merge_serves_oldest_offer`, `withdrawn_offer_loses_its_place`, `second_edge_from_a_component_is_rejected` |
@@ -880,11 +920,16 @@ below is after v0.1 ships.
 | 11 | Spec §5 lists the horizon as a run input; ADR-0020 §8 has it in the model hash | spec §5, ADR-0019 §5, ADR-0020 §8 | `Model::with_horizon` satisfies both: the input makes a new version, whose hash spec §9's promise then holds for |
 | 12 | §4 says an `Accept` that crosses a `Withdraw` "gets a `Decline`, and the outlet sends `Withdraw` again before any new `Offer`". Read literally this does not end: with room at the target, each new offer is answered and declined at one instant for ever. `Accept` carries no number, so the outlet cannot tell which offer it answers | §4 above; `crates/taktsim-components/src/port.rs` | question 18: the answer depends on what the outlet has, and the `Withdraw` is what keeps the two sides in step |
 
+| 13 | The reason for capping `batch` and a Machine's `capacity` ("a model that loads must run the same everywhere") applies to a Buffer too, but the rule named only those two. An on-demand Source fills its buffers at time zero, so `capacity: 1000000000000 parts` loaded and then ran out of memory with the clock at zero. (The M5 pull request's disagreement 19.) | vocabulary rules, §7 | question 20: (a) is implemented; (b), a run that grows without limit behind a timed Source, is open |
+| 14 | A constant `0s` is refused because a zero-length timer never lets time advance, but a distribution whose draws almost always round to 0 ns (gamma, mean 1 s, cv 10⁶) loaded, and the clock then stayed at zero unless an event limit or cancel was set. (The M5 pull request's disagreement 20.) | vocabulary rules, §6 | question 21: (b) is implemented |
+
 ## Consequences
 
 - A model that loads with the standard catalog always builds, and runs on every
   tier-1 target with the same bytes; golden cases check it. A duration past the end
-  of the clock does not fail a run (§6).
+  of the clock does not fail a run (§6). A clock that stops moving fails it the same
+  way everywhere (§6). A run can still grow until memory decides, behind a timed
+  Source with a very large buffer (question 20 b, open).
 - `taktsim validate` gets flow and variant errors with paths for free.
 - Fifteen events per part on the five-component line, plus 8 notes. Traces grow
   accordingly; memory does not (ADR-0021). Each branch adds `Withdraw` events.
@@ -983,3 +1028,22 @@ the M5 pull request merges.
 19. **A wait past the end of the clock (§6).** It never ends, rather than failing the
     run or being refused at load, and a run with nothing else due ends `idle` at its
     horizon. *Recommended:* yes. Implementation proceeds on this.
+20. **Buffer memory (vocabulary; the M5 pull request's question 22, disagreement
+    13).** (a) Refuse at load, with the path of the buffer's `capacity`, more than
+    65,535 places that an on-demand Source reaches through buffers alone, since it
+    fills them at time zero. (b) State how a run that grows without limit ends, the
+    same way on every PC, for example a typed limit on parts alive: a timed Source
+    whose interarrival draws are short against the line's rate fills a buffer of
+    10¹² places until memory decides, and so would a Source whose interarrival
+    keeps drawing 0 ns, since the budget of question 21 counts events, not parts.
+    A buffer behind a timed Source stays uncapped, as page 5 needs. *Recommended:*
+    both. **(a) is implemented**; (b) is open, a separate change before or with M7,
+    if you agree.
+21. **Durations that almost always draw zero (§6; the M5 pull request's question
+    23, disagreement 14).** (a) Refuse parameters whose chance of a non-zero draw is
+    below a stated threshold; (b) a budget of events per instant that ends the run
+    with a typed error naming the component. *Recommended:* (b), because it covers
+    every distribution with one rule and fails the same way everywhere.
+    **Implemented** as §6 describes: per component, of the events it addresses to
+    itself, 1,000,000, in the run layer, always on. Confirm the number and the
+    counting, or name another.
