@@ -119,6 +119,10 @@ struct StandingOffer {
     /// The candidates when the offer was last placed or moved, and the time.
     copy: Vec<RouteCandidate>,
     copied_at: SimTime,
+    /// A re-rank was called for while the `Accept` of the target where it stands was on
+    /// its way: it waits for that `Accept`, which may take a part of another edge or
+    /// be declined, and leave this part here.
+    rerank_due: bool,
 }
 
 /// What was last said about the unit behind an offer to a station with a rule, by a
@@ -213,6 +217,7 @@ impl Routed {
                     left_at: SimTime::START,
                     copy: Vec::new(),
                     copied_at: SimTime::START,
+                    rerank_due: false,
                 }),
                 Pick::One | Pick::FirstFree | Pick::Split { .. } => None,
             })
@@ -283,31 +288,36 @@ impl Routed {
 
     /// Places or moves the standing offers (ADR-0023 §5). It moves when a target
     /// with room outranks the one where the offer stands, and only after a room flag
-    /// changed or a repair. While a target's `Accept` of this holder is on its way, the
-    /// part is leaving, and nothing moves.
+    /// changed or a repair. While the `Accept` of the target where the offer stands is
+    /// on its way, the part may be leaving, and nothing moves: the re-rank waits for
+    /// that `Accept`, since it may take a part of another edge that names the same
+    /// target (§1), or be declined.
     fn place_standing_offers(&mut self, ids: &[Target], now: SimTime) {
         let rerank = std::mem::take(&mut self.rerank);
         for edge in 0..self.standing.len() {
-            let Some(offer) = self.standing[edge].as_ref() else {
+            let Some(offer) = self.standing[edge].as_mut() else {
                 continue;
             };
             let (rule, stand) = (offer.rule, offer.stand);
+            let wanted = rerank || std::mem::take(&mut offer.rerank_due);
             if self.on_edge[edge] == 0 {
-                if let Some(offer) = self.standing[edge].as_mut() {
-                    offer.stand = None;
-                }
+                offer.stand = None;
+                continue;
+            }
+            let list = &self.table.edges[edge].targets;
+            if let Some(at) = stand
+                && self.known[list[at]].accept_due
+            {
+                offer.rerank_due = wanted;
                 continue;
             }
             let Some(best) = self.best(edge, rule, now) else {
                 continue;
             };
-            let list = &self.table.edges[edge].targets;
             let place = match stand {
                 None => true,
                 Some(at) => {
-                    let due = self.known[list[at]].accept_due;
-                    rerank
-                        && !due
+                    wanted
                         && best != at
                         && self.known[list[best]].room
                         && self.rank_at(list, best, rule, now) < self.rank_at(list, at, rule, now)

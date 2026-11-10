@@ -412,3 +412,26 @@ fn an_accept_gives_a_part_its_offer_stood_for_when_edges_share_a_target() {
         r.routes()
     );
 }
+
+#[test]
+fn an_offer_moves_when_an_accept_lands_and_takes_another_part() {
+    // Two parts reach `buf` at 10 s: the first for `a` alone, the second on a pool
+    // whose offer stands at `a`. `a` accepts: its `Status` (no room, `Accept` follows)
+    // comes while its `Accept` is on its way, so nothing moves then. The `Accept` takes
+    // the first part, which comes first, and the pool's part is still here: its offer
+    // moves to `b`, which has room, and does not wait at `a`.
+    let yaml = document(
+        "30s",
+        "  - {id: s1, type: Source, interarrival: 10s, priority: 1}\n  \
+         - {id: s2, type: Source, interarrival: 10s}\n  \
+         - {id: buf, type: Buffer, capacity: 10 parts}\n  \
+         - {id: a, type: Machine, cycle_time: 5s}\n  \
+         - {id: b, type: Machine, cycle_time: 5s}\n  - {id: sink, type: Sink}",
+        "  - [s1, buf]\n  - [s2, buf]\n  - {from: buf, to: a, when: \"priority > 0\"}\n  \
+         - {from: buf, to: [a, b], choose: preferred}\n  - {from: [a, b], to: sink}",
+    );
+    let r = run(&yaml, 1);
+    support::check_records(&r);
+    assert_eq!(arrivals_at(&r, "a")[0], t("10s"));
+    assert_eq!(arrivals_at(&r, "b")[0], t("10s"));
+}
