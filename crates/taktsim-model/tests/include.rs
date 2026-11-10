@@ -146,3 +146,25 @@ fn includes_after_a_failed_one_are_still_read() {
     assert_eq!(files, [Some("lib/missing.yaml"), Some("lib/line.yaml")]);
     assert!(errors.first().kind().is_io());
 }
+
+/// A file that cannot be read is named by its own name and placed at the entry of
+/// `include:` that names it, where the fix goes, in either form of the entry.
+#[test]
+fn an_unreadable_include_is_at_its_entry() {
+    let catalog = catalog();
+    let files = BTreeMap::from([("lib/line.yaml".to_owned(), LINE.to_owned())]);
+    for (entries, path) in [
+        ("[lib/line.yaml, lib/missing.yaml]", "include[1]"),
+        ("[{path: lib/missing.yaml}, lib/line.yaml]", "include[0]"),
+    ] {
+        let model = MODEL.replace("[lib/line.yaml]", entries);
+        let errors = Loader::new(&catalog)
+            .with_resolver(&files)
+            .load_str(&model, Format::Yaml)
+            .unwrap_err();
+        let error = errors.first();
+        assert!(error.kind().is_io(), "{entries}");
+        assert_eq!(error.file(), Some("lib/missing.yaml"), "{entries}");
+        assert_eq!(error.path().to_string(), path, "{entries}");
+    }
+}

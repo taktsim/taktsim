@@ -347,6 +347,34 @@ fn a_model_file_that_cannot_be_read_is_an_io_failure() {
     assert_eq!(failure.diagnostics[0].example, None);
 }
 
+/// An included file that cannot be read is at its `include` entry, where the fix
+/// goes, not at `<model>`: the model argument was read (ADR-0024 §9).
+#[test]
+fn an_included_file_that_cannot_be_read_is_at_its_entry() {
+    let registry = standard().unwrap();
+    let dir = TempDir::new();
+    let model = dir.path().join("inc.yaml");
+    std::fs::write(
+        &model,
+        drawing_model(", seed: 1").replace("experiment:", "include: [missing.yaml]\nexperiment:"),
+    )
+    .unwrap();
+    let failure = run(
+        &registry,
+        ModelSource::Path(&model),
+        &RunRequest::new(),
+        &dir.store(),
+    )
+    .unwrap_err();
+    let report = taktsim_run::validate(&registry, ModelSource::Path(&model));
+    for line in [&failure.diagnostics[0], &report.errors[0]] {
+        assert_eq!(line.type_name, "model.io");
+        assert_eq!(line.path.as_deref(), Some("include[0]"));
+        assert_eq!(line.file.as_deref(), Some("missing.yaml"));
+    }
+    assert_eq!(failure.class, FailureClass::Io);
+}
+
 #[test]
 fn a_zero_horizon_is_invalid_with_its_path() {
     let dir = TempDir::new();

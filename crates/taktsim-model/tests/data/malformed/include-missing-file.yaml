@@ -11,4 +11,4 @@ flow:
   - [source, cut, sink]
 observe:
   - throughput(sink)
-# expect: parts/missing.yaml: (document) @ - Io
+# expect: parts/missing.yaml: include[0] @ - Io
