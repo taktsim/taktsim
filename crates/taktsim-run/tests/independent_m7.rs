@@ -459,7 +459,16 @@ fn machine_capacity_counts_by_hand() {
 /// A horizon of 30 min with a cycle of 1 h: nothing reaches the Sink, and that is stated
 /// (ADR-0024 §3: "`delivered(sink) = 0` is stated, not missing").
 /// A Source of 1 h with a horizon of 30 min creates nothing; `created(source) = 0` likewise.
-/// Each with the unit `items`, and rows for neither a Machine nor a Buffer.
+/// M7's counts each with the unit `items`, and no `scrapped` or `consumed` row at zero.
+///
+/// ADR-0025 §2 adds every registered KPI for every component its signature accepts,
+/// after `items_alive`, sorted by KPI name and then in model order, so a Machine and a
+/// Buffer now have rows. By hand: the Source on demand creates one part at 0, which cut
+/// takes at once (released at 0, so `held(source)` = 0), and the Source then waits for
+/// cut for all 30 min. Cut works on it for the whole window with its one place:
+/// `busy` 1, `utilization` 1, `wip(cut)` 1, `wip()` 1. `buf` stays empty. The Sink
+/// receives nothing, a true 0 for `throughput(sink)`, and with no delivered unit
+/// `lead_time(sink)` has no value, so it has no row (ADR-0025 §2, "Undefined values").
 #[test]
 fn zero_rows_are_stated_and_only_the_documented_rows_exist() {
     let (_, store) = fresh_store("zero_rows");
@@ -478,12 +487,60 @@ fn zero_rows_are_stated_and_only_the_documented_rows_exist() {
     assert_eq!(metric(&doc, "delivered(sink)"), 0);
     assert_eq!(metric(&doc, "created(source)"), 1);
     assert_eq!(metric(&doc, "items_alive"), 1);
+    let rows: Vec<(&str, &str, Option<String>, Scalar)> = doc
+        .metrics
+        .iter()
+        .flat_map(|m| {
+            m.values.iter().map(|v| {
+                let labels = v.labels.as_ref().map(|labels| {
+                    labels
+                        .iter()
+                        .map(|(k, v)| format!("{k}={v}"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                });
+                (m.name.as_str(), m.unit.as_str(), labels, v.value)
+            })
+        })
+        .collect();
+    let share = |state: &str, resource: &str, value: u64| {
+        (
+            format!("state_shares({resource})"),
+            "share",
+            Some(format!("resource={resource},state={state}")),
+            Scalar::Integer(value),
+        )
+    };
+    let plain = |name: &str, unit: &'static str, value: u64| {
+        (name.to_owned(), unit, None, Scalar::Integer(value))
+    };
+    let expected = [
+        plain("created(source)", "items", 1),
+        plain("delivered(sink)", "items", 0),
+        plain("items_alive", "items", 1),
+        plain("held(source)", "items", 0),
+        share("waiting", "source", 1),
+        share("blocked", "source", 0),
+        share("idle", "cut", 0),
+        share("busy", "cut", 1),
+        share("blocked", "cut", 0),
+        share("starved", "cut", 0),
+        share("down", "cut", 0),
+        share("setup", "cut", 0),
+        plain("throughput(sink)", "items/s", 0),
+        plain("utilization(cut)", "share", 1),
+        plain("wip()", "items", 1),
+        plain("wip(cut)", "items", 1),
+        plain("wip(buf)", "items", 0),
+    ];
+    let expected: Vec<(&str, &str, Option<String>, Scalar)> = expected
+        .iter()
+        .map(|(name, unit, labels, value)| (name.as_str(), *unit, labels.clone(), *value))
+        .collect();
     assert_eq!(
-        names(&doc),
-        ["created(source)", "delivered(sink)", "items_alive"],
-        "no row for a Machine or Buffer, no scrapped or consumed row at zero"
+        rows, expected,
+        "no scrapped or consumed row at zero, no lead time without a delivery"
     );
-    assert!(doc.metrics.iter().all(|m| m.unit == "items"));
 
     let late = model(
         None,
@@ -1650,12 +1707,45 @@ fn a_model_that_draws_nothing_has_one_run_whatever_the_seed() {
     assert_eq!(c.warnings[0].path.as_deref(), Some("model.seed"));
 }
 
+/// Items alive at the end that have left `source`: from the trace, an item is where it
+/// was created until an event carrying it reaches another component (ADR-0025 §1, "One
+/// table of levels"), and a Source's item is released at its first move.
+fn released_and_alive_at_end(loaded: &Loaded, source: &str) -> u32 {
+    let me = index_of(&loaded.header, source);
+    let mut at: BTreeMap<ItemId, usize> = BTreeMap::new();
+    for record in &loaded.records {
+        match record {
+            Record::ItemCreated { item, by, .. } => {
+                at.insert(*item, by.index());
+            }
+            Record::Event {
+                target,
+                from,
+                item: Some(item),
+                ..
+            } if from != target => {
+                at.insert(*item, target.index());
+            }
+            Record::ItemDisposed { item, .. } => {
+                at.remove(item);
+            }
+            Record::Event { .. } | Record::Note { .. } => {}
+        }
+    }
+    u32::try_from(at.values().filter(|&&place| place != me).count()).unwrap()
+}
+
 /// ADR-0024 §4: every value has at least one accuracy statement. In M7, `single_replication`
 /// for a run with a seed and `no_random_draws` for one with none; neither is a sampling
 /// interval, and every number says so.
+///
+/// ADR-0025 §3 adds one more entry, to lead time only: when units were still inside at the
+/// end, each `lead_time` row carries a second statement, `censored`, with the number of
+/// units inside, released and not yet disposed. Counted here from the trace. The first
+/// statement is unchanged, and no other row has a second.
 #[test]
 fn every_value_states_what_can_be_said_of_its_error() {
-    let (_, store) = fresh_store("accuracy");
+    let (root, store) = fresh_store("accuracy");
     let drawn = ok(&model(Some(1), "10min", RANDOM, FLOW_LINE), &store);
     let exact = ok(
         &model(
@@ -1670,19 +1760,48 @@ fn every_value_states_what_can_be_said_of_its_error() {
         ),
         &store,
     );
+    let mut censored_rows = 0;
+    let mut runs_with_units_inside = 0;
     for (doc, want) in [(&drawn, "single_replication"), (&exact, "no_random_draws")] {
         assert_ne!(doc.metrics, [] as [taktsim_run::Metric; 0]);
+        let inside = released_and_alive_at_end(&load(&root, &doc.runs[0]), "source");
+        if inside > 0 {
+            runs_with_units_inside += 1;
+        }
         for metric in &doc.metrics {
             for value in &metric.values {
-                assert_eq!(value.accuracy.len(), 1);
                 let AccuracyKind::None { reason, detail } = &value.accuracy[0].kind else {
                     panic!("{}: not `none`", metric.name);
                 };
                 assert_eq!(reason, want, "{}", metric.name);
                 assert_ne!(detail, "");
+                if metric.name.starts_with("lead_time(") && inside > 0 {
+                    assert_eq!(value.accuracy.len(), 2, "{}", metric.name);
+                    let AccuracyKind::Censored {
+                        units_inside,
+                        detail,
+                    } = &value.accuracy[1].kind
+                    else {
+                        panic!("{}: not `censored`", metric.name);
+                    };
+                    assert_eq!(
+                        units_inside.to_bits(),
+                        f64::from(inside).to_bits(),
+                        "{}",
+                        metric.name
+                    );
+                    assert_ne!(detail, "");
+                    censored_rows += 1;
+                } else {
+                    assert_eq!(value.accuracy.len(), 1, "{}", metric.name);
+                }
             }
         }
     }
+    // Both runs deliver parts in 10 min, so each has the seven rows of lead time
+    // (ADR-0025 §3), and each that ended with units inside states it on all seven.
+    assert!(runs_with_units_inside > 0, "the second entry is reached");
+    assert_eq!(censored_rows, 7 * runs_with_units_inside);
 }
 
 /// ADR-0024 §3: every declared observable is either among the `observables` of some

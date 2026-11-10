@@ -74,6 +74,11 @@ fn stall_is_exit_2_and_not_kept() {
 /// Items held by a wait that ends past the end of the clock are no stall: the wait's
 /// end is after every horizon, so the run reached its horizon, complete and kept
 /// (ADR-0022 §6, ADR-0024 §3). Core's word stays `Idle`; the result's is `horizon`.
+///
+/// `items_alive` is M7's last row; ADR-0025 §2 puts the KPI rows after it. Of the test
+/// types, only `wip()` takes them: Burst hands its three items to Keep at 0, which
+/// releases them (Burst's `CREATION` is `HeldUntilFirstMove`), and Keep holds them to the
+/// end of the hour, so `wip()` = 3 = `items_alive` with nothing held.
 #[test]
 fn items_held_by_a_wait_past_the_clock_reach_the_horizon() {
     let dir = TempDir::new();
@@ -91,9 +96,26 @@ fn items_held_by_a_wait_past_the_clock_reach_the_horizon() {
     assert!(response.result.runs[0].run_id.is_some(), "kept");
     assert!(response.result.experiment_id.is_some());
     assert_eq!(response.result.runs[0].end_time.to_string(), "1h");
-    let alive = response.result.metrics.last().unwrap();
-    assert_eq!(alive.name, "items_alive");
+    let names: Vec<&str> = response
+        .result
+        .metrics
+        .iter()
+        .map(|metric| metric.name.as_str())
+        .collect();
+    let at = names
+        .iter()
+        .position(|name| *name == "items_alive")
+        .unwrap();
+    assert_eq!(
+        names[at + 1..],
+        ["wip()"],
+        "the KPI rows follow items_alive"
+    );
+    let alive = &response.result.metrics[at];
     assert_eq!(alive.values[0].value, taktsim_run::Scalar::Integer(3));
+    let wip = &response.result.metrics[at + 1];
+    assert_eq!(wip.values.len(), 1);
+    assert_eq!(wip.values[0].value, taktsim_run::Scalar::Integer(3));
 }
 
 /// With nothing left in the system, a wait past the clock still means the next event
@@ -109,7 +131,12 @@ fn a_wait_past_the_clock_in_an_empty_system_is_the_horizon_too() {
     let response = run_with(&test_registry(), &yaml, &RunRequest::new(), &dir.store()).unwrap();
     assert!(response.result.complete);
     assert_eq!(response.result.stop_reason, "horizon");
-    let alive = response.result.metrics.last().unwrap();
+    let alive = response
+        .result
+        .metrics
+        .iter()
+        .find(|metric| metric.name == "items_alive")
+        .unwrap();
     assert_eq!(alive.values[0].value, taktsim_run::Scalar::Integer(0));
 }
 
