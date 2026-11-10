@@ -9,8 +9,8 @@
 //!   (format version, engine version, record and message formats, model
 //!   and system hashes, seed, component ids), then the records in chunks
 //!   of at most [`CHUNK_CAPACITY`] bytes with a CRC32 each, then an end
-//!   marker with the record counts and the SHA-256 of the record stream
-//!   ([`TraceHash`]).
+//!   marker with the record counts, the SHA-256 of the record stream
+//!   ([`TraceHash`]) and how the run ended ([`RunEnd`]).
 //! - [`TraceReader`] reads it back record by record and detects damaged,
 //!   cut-off and foreign data with a typed [`ReadError`].
 //! - [`replay`] re-executes a run and checks it against its trace at every
@@ -72,7 +72,8 @@
 //! let mut engine = line(42)?;
 //! let header = Header::for_engine(&engine, ModelHash::sha256(b"the model text"), SystemHash::sha256(b"its system"));
 //! let mut writer = TraceWriter::new(Vec::new(), &header)?;
-//! engine.run(RunLimits::until("1h".parse()?), &mut writer)?;
+//! let ran = engine.run(RunLimits::until("1h".parse()?), &mut writer)?;
+//! writer.run_ended(&ran);
 //! let (trace, summary) = writer.finish()?;
 //! // Each item: created, an event delivering it, disposed of; plus the
 //! // source's timer events.
@@ -113,4 +114,4 @@ pub use header::{
 pub use read::{Block, ReadError, TraceReader};
 pub use record::Record;
 pub use replay::{ReplayError, ReplayReport, replay};
-pub use write::{Summary, TraceWriter, WriteError};
+pub use write::{RunEnd, Summary, TraceWriter, WriteError};

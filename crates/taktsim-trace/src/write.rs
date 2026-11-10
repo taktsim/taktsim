@@ -4,11 +4,45 @@ use std::io::{self, Write};
 use std::marker::PhantomData;
 
 use sha2::{Digest, Sha256};
-use taktsim_core::{TraceRecord, TraceSink};
+use taktsim_core::{RunOutcome, RunSummary, TraceRecord, TraceSink};
+use taktsim_units::SimTime;
 
 use crate::codec::{EncodeError, TraceMessage};
 use crate::header::{CHUNK_CAPACITY, CHUNK_CRC_OVER, CHUNK_TAG, END_TAG, Header, TraceHash};
 use crate::record;
+
+/// How a run ended, as its trace states it (ADR-0022 §9): the simulation time
+/// it reached and why it stopped. Time-weighted results need the end: the last
+/// event is not it.
+///
+/// ```
+/// use taktsim_core::RunOutcome;
+/// use taktsim_trace::RunEnd;
+///
+/// let end = RunEnd { time: "8h".parse()?, outcome: RunOutcome::Horizon };
+/// assert_eq!(end.to_string(), "8h (horizon)");
+/// assert_eq!(RunEnd { time: "2s".parse()?, outcome: RunOutcome::Cancelled }.to_string(), "2s (cancelled)");
+/// # Ok::<(), taktsim_units::UnitError>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RunEnd {
+    /// The simulation time the run reached.
+    pub time: SimTime,
+    /// Why it stopped.
+    pub outcome: RunOutcome,
+}
+
+impl std::fmt::Display for RunEnd {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let outcome = match self.outcome {
+            RunOutcome::Horizon => "horizon",
+            RunOutcome::Idle => "idle",
+            RunOutcome::EventLimit => "event limit",
+            RunOutcome::Cancelled => "cancelled",
+        };
+        write!(f, "{} ({outcome})", self.time)
+    }
+}
 
 /// What a finished trace holds, from the writer or from a reader that read
 /// it to the end.
@@ -16,7 +50,7 @@ use crate::record;
 /// ```
 /// use taktsim_trace::{Summary, TraceHash};
 ///
-/// let s = Summary { records: 0, events: 0, chunks: 0, bytes: 100, hash: TraceHash::sha256(b"") };
+/// let s = Summary { records: 0, events: 0, chunks: 0, bytes: 100, hash: TraceHash::sha256(b""), end: None };
 /// assert_eq!(s.records, 0);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,10 +65,15 @@ pub struct Summary {
     pub bytes: u64,
     /// The SHA-256 of the record stream.
     pub hash: TraceHash,
+    /// How the run ended, if the writer was told
+    /// ([`TraceWriter::run_ended`]). Without it, the trace says nothing
+    /// about the time after its last record.
+    pub end: Option<RunEnd>,
 }
 
 /// Writes a trace as the engine runs: pass it to
-/// [`Engine::run`](taktsim_core::Engine::run) as the trace sink, then call
+/// [`Engine::run`](taktsim_core::Engine::run) as the trace sink, state how the
+/// run ended with [`run_ended`](Self::run_ended), then call
 /// [`finish`](Self::finish).
 ///
 /// Records are collected into one chunk of at most
@@ -42,8 +81,9 @@ pub struct Summary {
 /// next record does not fit, so memory stays at one chunk whatever the
 /// length of the run. Recording cannot fail the run (ADR-0018): the first
 /// error is kept, later records are dropped, and `finish` returns it. A
-/// trace whose writer failed or was dropped without `finish` has no end
-/// marker, so readers report it as truncated.
+/// trace whose writer failed, was [abandoned](Self::abandon) after a failed
+/// run, or was dropped without `finish` has no end marker, so readers report
+/// it as truncated; only a dropped writer loses its open chunk.
 ///
 /// ```
 /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message, RunLimits};
@@ -75,7 +115,8 @@ pub struct Summary {
 /// let header = Header::for_engine(&engine, ModelHash::sha256(b"clock"), SystemHash::sha256(b"clock"));
 /// // A `File` in practice; a `Vec` here.
 /// let mut writer = TraceWriter::new(Vec::new(), &header)?;
-/// engine.run(RunLimits::until("1min".parse()?), &mut writer)?;
+/// let ran = engine.run(RunLimits::until("1min".parse()?), &mut writer)?;
+/// writer.run_ended(&ran);
 /// let (bytes, summary) = writer.finish()?;
 /// assert_eq!((summary.records, summary.events), (60, 60));
 /// assert_eq!(summary.bytes, bytes.len() as u64);
@@ -96,6 +137,7 @@ pub struct TraceWriter<W: Write, M> {
     bytes: u64,
     components: usize,
     hasher: Sha256,
+    end: Option<RunEnd>,
     error: Option<WriteError>,
     _message: PhantomData<fn(&M)>,
 }
@@ -146,9 +188,41 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
             bytes: bytes.len() as u64,
             components: header.components.len(),
             hasher: Sha256::new(),
+            end: None,
             error: None,
             _message: PhantomData,
         })
+    }
+
+    /// States how the run ended, for the end marker (ADR-0022 §9). Replay then
+    /// runs the engine to that time and finds an event the trace is missing,
+    /// and a reader can weigh by time. Calling it again replaces the end, for a
+    /// run advanced in steps.
+    ///
+    /// ```
+    /// use taktsim_core::{RunOutcome, RunSummary};
+    /// use taktsim_trace::{Header, ModelHash, RunEnd, SystemHash, TraceWriter};
+    /// # use taktsim_trace::{DecodeError, Decoder, Encoder, TraceMessage};
+    /// # #[derive(Debug)] struct Tick;
+    /// # impl taktsim_core::Message for Tick {}
+    /// # impl TraceMessage for Tick {
+    /// #     const FORMAT: &'static str = "tick/1";
+    /// #     fn encode(&self, _: &mut Encoder<'_>) {}
+    /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
+    /// # }
+    ///
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
+    /// let mut writer = TraceWriter::<_, Tick>::new(Vec::new(), &header)?;
+    /// writer.run_ended(&RunSummary { outcome: RunOutcome::Idle, events: 0, now: "1h".parse()? });
+    /// let (_, summary) = writer.finish()?;
+    /// assert_eq!(summary.end, Some(RunEnd { time: "1h".parse()?, outcome: RunOutcome::Idle }));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn run_ended(&mut self, summary: &RunSummary) {
+        self.end = Some(RunEnd {
+            time: summary.now,
+            outcome: summary.outcome,
+        });
     }
 
     /// Writes the last chunk and the end marker, flushes `out` and returns
@@ -192,6 +266,12 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
         end.extend_from_slice(&self.events.to_le_bytes());
         end.extend_from_slice(&self.chunks.to_le_bytes());
         end.extend_from_slice(hash.as_bytes());
+        let (has_end, end_time, outcome) = self.end.map_or((0, 0, 0), |e| {
+            (1, e.time.as_nanos(), crate::read::outcome_code(e.outcome))
+        });
+        end.push(has_end);
+        end.extend_from_slice(&end_time.to_le_bytes());
+        end.push(outcome);
         let crc = crc32fast::hash(&end);
         end.extend_from_slice(&crc.to_le_bytes());
         let offset = self.bytes;
@@ -205,8 +285,77 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
             chunks: self.chunks,
             bytes: self.bytes + end.len() as u64,
             hash,
+            end: self.end,
         };
         Ok((self.out, summary))
+    }
+
+    /// Writes the open chunk and flushes `out`, but writes no end marker, and
+    /// returns `out`: for a run that failed (spec §4, "a violation aborts the
+    /// run with the event trace that led to it"). Readers then read every
+    /// record, up to the one before the failure, and report the trace as cut
+    /// off (ADR-0021).
+    ///
+    /// # Errors
+    ///
+    /// The first error while recording or writing. The trace then ends at the
+    /// last chunk written before it.
+    ///
+    /// ```
+    /// use taktsim_core::{Component, ComponentError, Context, Delivery, Engine, EngineConfig, Message, RunLimits};
+    /// use taktsim_trace::{DecodeError, Decoder, Encoder, Header, ModelHash, ReadError, SystemHash, TraceMessage, TraceReader, TraceWriter};
+    ///
+    /// #[derive(Debug)]
+    /// struct Tick;
+    /// impl Message for Tick {}
+    /// impl TraceMessage for Tick {
+    ///     const FORMAT: &'static str = "tick/1";
+    ///     fn encode(&self, _: &mut Encoder<'_>) {}
+    ///     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
+    /// }
+    ///
+    /// /// Ticks every second and fails at the third tick.
+    /// struct Fragile(u32);
+    /// impl Component<Tick> for Fragile {
+    ///     fn start(&mut self, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
+    ///         ctx.schedule("1s".parse()?, Tick)?;
+    ///         Ok(())
+    ///     }
+    ///     fn handle(&mut self, _: Delivery<'_, Tick>, ctx: &mut Context<'_, Tick>) -> Result<(), ComponentError> {
+    ///         self.0 += 1;
+    ///         if self.0 == 3 {
+    ///             return Err(ComponentError::Unexpected { state: "fragile", event: "a third tick".into() });
+    ///         }
+    ///         ctx.schedule("1s".parse()?, Tick)?;
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// let mut engine = Engine::new(EngineConfig::new(1));
+    /// engine.add_component("fragile", Box::new(Fragile(0)))?;
+    /// let header = Header::for_engine(&engine, ModelHash::sha256(b"f"), SystemHash::sha256(b"f"));
+    /// let mut writer = TraceWriter::new(Vec::new(), &header)?;
+    /// assert!(engine.run(RunLimits::until("1min".parse()?), &mut writer).is_err());
+    /// let bytes = writer.abandon()?;
+    /// let records: Vec<_> = TraceReader::<_, Tick>::new(bytes.as_slice())?.collect();
+    /// // The two ticks before the failure are there, then the reader says the trace is cut off.
+    /// assert!(records.len() >= 3);
+    /// assert!(records[..records.len() - 1].iter().all(Result::is_ok));
+    /// assert!(matches!(records.last(), Some(Err(ReadError::Truncated { .. }))));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn abandon(mut self) -> Result<W, WriteError> {
+        if self.error.is_none() && !self.chunk.is_empty() {
+            self.close_chunk();
+        }
+        if let Some(error) = self.error {
+            return Err(error);
+        }
+        let offset = self.bytes;
+        self.out
+            .flush()
+            .map_err(|source| WriteError::Io { offset, source })?;
+        Ok(self.out)
     }
 
     /// Writes the open chunk: tag, length, records, first record, its
@@ -301,11 +450,12 @@ impl<W: Write, M: TraceMessage> TraceSink<M> for TraceWriter<W, M> {
 const _: () = assert!(CHUNK_CAPACITY <= u32::MAX as usize);
 
 /// A record's time.
-fn record_time<M>(record: &TraceRecord<'_, M>) -> taktsim_units::SimTime {
+fn record_time<M>(record: &TraceRecord<'_, M>) -> SimTime {
     match record {
         TraceRecord::Event { time, .. }
         | TraceRecord::ItemCreated { time, .. }
-        | TraceRecord::ItemDisposed { time, .. } => *time,
+        | TraceRecord::ItemDisposed { time, .. }
+        | TraceRecord::Note { time, .. } => *time,
     }
 }
 
@@ -313,7 +463,9 @@ fn record_time<M>(record: &TraceRecord<'_, M>) -> taktsim_units::SimTime {
 fn highest_component<M>(record: &TraceRecord<'_, M>) -> taktsim_core::ComponentId {
     match record {
         TraceRecord::Event { target, from, .. } => *target.max(from),
-        TraceRecord::ItemCreated { by, .. } | TraceRecord::ItemDisposed { by, .. } => *by,
+        TraceRecord::ItemCreated { by, .. }
+        | TraceRecord::ItemDisposed { by, .. }
+        | TraceRecord::Note { by, .. } => *by,
     }
 }
 

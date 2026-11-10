@@ -14,7 +14,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::component::{Catalog, Component};
+use taktsim_units::SimDuration;
+
+use crate::component::{Catalog, Component, Findings};
 use crate::decode::{Decode, Decoder, Fields, Schemas};
 use crate::document::{
     Document, Edge, MainFile, Observable, Parts, Precision, RawExpr, read_main, read_parts,
@@ -65,7 +67,7 @@ use crate::syntax::{self, Format, Node};
 /// assert!(a.canonical_json().starts_with(r#"{"components":[{"id":"a","type":"Station"}"#));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Model {
     document: Document,
     canonical: String,
@@ -130,6 +132,88 @@ impl Model {
     #[must_use]
     pub fn canonical_json(&self) -> &str {
         &self.canonical
+    }
+
+    /// A new version of this model with another horizon (ADR-0022 §2): the
+    /// document re-normalized and hashed again. Its system hash stays the
+    /// same and its model hash changes (ADR-0020 §8), so a run with another
+    /// horizon is described by a model that says so. This model is not
+    /// changed (principle 5).
+    ///
+    /// # Errors
+    ///
+    /// [`LoadErrorKind::NotAllowed`] at `experiment.horizon` for a horizon of
+    /// zero, the rule the loader applies to a written one.
+    ///
+    /// ```
+    /// use taktsim_model::{Catalog, ComponentParams, Encode, Fields, Format, Json, Loader};
+    ///
+    /// #[derive(Debug)]
+    /// struct Station {}
+    /// impl Encode for Station {
+    ///     fn encode(&self) -> Json { Json::object([]) }
+    /// }
+    /// impl ComponentParams for Station {
+    ///     const TYPE: &'static str = "Station";
+    ///     const EXAMPLE: &'static str = "{id: a, type: Station}";
+    ///     fn decode(_: &mut Fields<'_, '_>) -> Option<Self> { Some(Self {}) }
+    /// }
+    ///
+    /// let catalog = Catalog::new().with::<Station>()?;
+    /// let model = Loader::new(&catalog).load_str(
+    ///     "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 8h}\n\
+    ///      components: [{id: a, type: Station}, {id: b, type: Station}]\nflow: [[a, b]]\n",
+    ///     Format::Yaml,
+    /// )?;
+    /// let shorter = model.with_horizon("1h".parse()?)?;
+    /// assert_eq!(shorter.document().experiment().horizon().to_string(), "1h");
+    /// assert_eq!(model.document().experiment().horizon().to_string(), "8h");
+    /// assert_eq!(shorter.system_hash(), model.system_hash());
+    /// assert_ne!(shorter.hash(), model.hash());
+    /// assert!(model.with_horizon("0s".parse()?).is_err());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn with_horizon(&self, horizon: SimDuration) -> Result<Self, LoadErrors> {
+        let path = FieldPath::from(vec![
+            Segment::Key("experiment".to_owned()),
+            Segment::Key("horizon".to_owned()),
+        ]);
+        if horizon == SimDuration::ZERO {
+            let kind = LoadErrorKind::NotAllowed {
+                found: horizon.to_string(),
+                allowed: "a duration longer than 0s".to_owned(),
+                example: "8h".to_owned(),
+            };
+            return Err(LoadErrors::single(LoadError::new(None, None, path, kind)));
+        }
+        let mut document = self.document.clone();
+        document.experiment.set_horizon(horizon);
+        Self::normalized(document, self.includes.clone()).map_err(LoadErrors::single)
+    }
+
+    /// Normalizes, canonicalizes and hashes a checked document: the whole
+    /// normalized form for the model hash, and the object of only its system
+    /// sections for the system hash.
+    fn normalized(document: Document, includes: Vec<Included>) -> Result<Self, LoadError> {
+        let json = document.to_json().map_err(|(component, kind)| {
+            let place = component.place();
+            LoadError::new(
+                place.file().map(str::to_owned),
+                Some(place.location()),
+                component.path().clone(),
+                kind,
+            )
+        })?;
+        let canonical = canonical_text(&json)?;
+        let system = Json::object(SYSTEM_SECTIONS.map(|key| (key, json[key].clone())));
+        let system_canonical = canonical_text(&system)?;
+        Ok(Self {
+            hash: ModelHash::of(canonical.as_bytes()),
+            system_hash: SystemHash::of(system_canonical.as_bytes()),
+            canonical,
+            document,
+            includes,
+        })
     }
 
     /// The included files with the SHA-256 of their content, in `include:`
@@ -462,48 +546,39 @@ impl Run<'_> {
             flow,
             observe,
         };
-        self.hash(document, included, &main_place)
+        self.finish(document, included, &main_place)
     }
 
-    /// Normalizes, canonicalizes and hashes a checked document: the whole
-    /// normalized form for the model hash, and the object of only its
-    /// system sections for the system hash.
-    fn hash(
+    /// Runs what the domain checks across the document (ADR-0022 §2), then
+    /// normalizes and hashes it.
+    fn finish(
         &mut self,
         document: Document,
         included: Vec<Included>,
         main_place: &Place,
     ) -> Option<Model> {
-        let json = match document.to_json() {
-            Ok(json) => json,
-            Err((component, kind)) => {
-                self.error(&component.place().clone(), component.path().clone(), kind);
-                return None;
-            }
-        };
-        let canonical = self.canonical(&json, main_place)?;
-        let system = Json::object(SYSTEM_SECTIONS.map(|key| (key, json[key].clone())));
-        let system_canonical = self.canonical(&system, main_place)?;
-        Some(Model {
-            hash: ModelHash::of(canonical.as_bytes()),
-            system_hash: SystemHash::of(system_canonical.as_bytes()),
-            canonical,
-            document,
-            includes: included,
-        })
-    }
-
-    /// The canonical JSON of a normalized value, or an error at the model
-    /// file if a number has no canonical form.
-    fn canonical(&mut self, json: &Json, main_place: &Place) -> Option<String> {
-        match canonicalize(json) {
-            Ok(text) => Some(text),
-            Err(e) => {
-                let kind = LoadErrorKind::Normalize {
-                    type_name: "(document)".to_owned(),
-                    problem: crate::error::NormalizeProblem::Number(e.to_string()),
+        let mut findings = Findings::new();
+        self.catalog.check(&document, &mut findings);
+        if !findings.is_empty() {
+            self.errors.extend(findings.into_errors());
+            return None;
+        }
+        match Model::normalized(document, included) {
+            Ok(model) => Some(model),
+            Err(error) => {
+                // A number with no canonical form has no place of its own:
+                // report it at the model file.
+                let error = if error.location().is_none() {
+                    LoadError::new(
+                        main_place.file().map(str::to_owned),
+                        Some(main_place.location()),
+                        error.path().clone(),
+                        error.kind().clone(),
+                    )
+                } else {
+                    error
                 };
-                self.error(main_place, FieldPath::default(), kind);
+                self.errors.push(error);
                 None
             }
         }
@@ -676,6 +751,7 @@ impl Run<'_> {
             let kind = LoadErrorKind::UnknownComponent {
                 id: r.id().to_owned(),
                 suggestion: suggest(r.id(), known.iter().copied()),
+                declared: known.first().map(|id| (*id).to_owned()),
             };
             self.error(r.place(), r.path().clone(), kind);
         }
@@ -821,6 +897,18 @@ impl Run<'_> {
         });
         exact.unwrap_or(start)
     }
+}
+
+/// The canonical JSON of a normalized value; an error without a place if a
+/// number has no canonical form.
+fn canonical_text(json: &Json) -> Result<String, LoadError> {
+    canonicalize(json).map_err(|e| {
+        let kind = LoadErrorKind::Normalize {
+            type_name: "(document)".to_owned(),
+            problem: crate::error::NormalizeProblem::Number(e.to_string()),
+        };
+        LoadError::new(None, None, FieldPath::default(), kind)
+    })
 }
 
 /// An included file, for the message when it is not a mapping.

@@ -7,6 +7,7 @@ use proptest::prelude::*;
 use support::{Sink, Source, Station, Toy};
 use taktsim_core::{
     Component, ComponentError, Context, Delivery, Engine, EngineConfig, EngineError, RunLimits,
+    RunOutcome, RunSummary,
 };
 use taktsim_trace::{
     Header, ModelHash, ReadError, ReplayError, SystemHash, TraceReader, TraceWriter, replay,
@@ -333,4 +334,370 @@ fn a_run_that_fails_fails_its_replay() {
         e.to_string().starts_with("the replayed run failed: "),
         "{e}"
     );
+}
+
+/// Notes once per event, its text depending on `word`.
+struct Noter(&'static str);
+
+impl Component<Toy> for Noter {
+    fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+        ctx.note(&Toy::Note {
+            text: "start".to_owned(),
+            share: 0.5,
+        });
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+    fn handle(
+        &mut self,
+        _: Delivery<'_, Toy>,
+        ctx: &mut Context<'_, Toy>,
+    ) -> Result<(), ComponentError> {
+        ctx.note(&Toy::Note {
+            text: self.0.to_owned(),
+            share: 0.25,
+        });
+        ctx.schedule("1s".parse()?, Toy::Next)?;
+        Ok(())
+    }
+}
+
+#[allow(clippy::unwrap_used)] // test helper
+fn noter(word: &'static str) -> Engine<Toy> {
+    let mut engine = Engine::new(EngineConfig::new(3));
+    engine
+        .add_component("noter", Box::new(Noter(word)))
+        .unwrap();
+    engine
+}
+
+#[test]
+fn notes_are_kept_and_compared_by_replay() {
+    let trace = trace_of(noter("busy"), "3s");
+    let reader = TraceReader::<_, Toy>::new(trace.as_slice()).unwrap();
+    let names = reader.header().components.clone();
+    let lines: Vec<String> = reader
+        .map(|r| r.unwrap().display(&names).to_string())
+        .collect();
+    assert_eq!(
+        lines[0],
+        "0s note by noter Note { text: \"start\", share: 0.5 }"
+    );
+    assert_eq!(lines[1], "1s event #0 noter -> noter Next");
+    assert_eq!(
+        lines[2],
+        "1s note by noter Note { text: \"busy\", share: 0.25 }"
+    );
+    assert_eq!(lines.len(), 7);
+
+    // The same run replays; events count events only.
+    let report = replay_with(&trace, noter("busy")).unwrap();
+    assert_eq!((report.records, report.events), (7, 3));
+
+    // A note that differs is a divergence, naming both.
+    let Err(ReplayError::Diverged {
+        record,
+        expected,
+        found,
+    }) = replay_with(&trace, noter("down"))
+    else {
+        panic!("a different note replayed");
+    };
+    assert_eq!(record, 2);
+    assert!(expected.contains("busy"), "{expected}");
+    assert!(found.contains("down"), "{found}");
+}
+
+#[test]
+fn a_missing_note_is_a_divergence() {
+    // A run that wrote notes, replayed by an engine that writes none.
+    struct Quiet;
+    impl Component<Toy> for Quiet {
+        fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+            ctx.schedule("1s".parse()?, Toy::Next)?;
+            Ok(())
+        }
+        fn handle(
+            &mut self,
+            _: Delivery<'_, Toy>,
+            ctx: &mut Context<'_, Toy>,
+        ) -> Result<(), ComponentError> {
+            ctx.schedule("1s".parse()?, Toy::Next)?;
+            Ok(())
+        }
+    }
+    let trace = trace_of(noter("busy"), "3s");
+    let mut engine = Engine::new(EngineConfig::new(3));
+    engine.add_component("noter", Box::new(Quiet)).unwrap();
+    let Err(ReplayError::Diverged {
+        record: 0, found, ..
+    }) = replay_with(&trace, engine)
+    else {
+        panic!("a missing note replayed");
+    };
+    assert_eq!(found, "no further record before the engine's next event");
+}
+
+/// Runs `engine` with `limits`, stating the end, into an in-memory trace.
+#[allow(clippy::unwrap_used)] // test helper
+fn trace_stating_end(mut engine: Engine<Toy>, limits: RunLimits<'_>) -> Vec<u8> {
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine.run(limits, &mut writer).unwrap();
+    writer.run_ended(&ran);
+    writer.finish().unwrap().0
+}
+
+#[test]
+fn cancelled_run_states_its_end() {
+    let flag = std::sync::atomic::AtomicBool::new(true);
+    let trace = trace_stating_end(
+        support::single_server(1).unwrap(),
+        RunLimits::until(t("1h")).cancel_on(&flag),
+    );
+    let mut reader = TraceReader::<_, Toy>::new(trace.as_slice()).unwrap();
+    while reader.next_record().unwrap().is_some() {}
+    let end = reader.summary().unwrap().end.unwrap();
+    assert_eq!(end.outcome, RunOutcome::Cancelled);
+    assert_eq!(end.time, SimTime::START);
+    assert_eq!(end.to_string(), "0s (cancelled)");
+    // A cancelled run had events left: replay compares its clock, and does
+    // not look for them.
+    let report = replay_with(&trace, support::single_server(1).unwrap()).unwrap();
+    assert_eq!(report.end, Some(end));
+}
+
+#[test]
+fn every_way_a_run_ends_replays() {
+    // The horizon, with an event still to come.
+    let trace = trace_stating_end(
+        support::single_server(1).unwrap(),
+        RunLimits::until(t("30min")),
+    );
+    let report = replay_with(&trace, support::single_server(1).unwrap()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::Horizon, t("30min")));
+    // Stopped by the event limit: the clock is at the last event.
+    let trace = trace_stating_end(
+        support::single_server(1).unwrap(),
+        RunLimits::until(t("30min")).max_events(10),
+    );
+    let report = replay_with(&trace, support::single_server(1).unwrap()).unwrap();
+    assert_eq!(report.end.unwrap().outcome, RunOutcome::EventLimit);
+    // No events left.
+    let empty = || Engine::<Toy>::new(EngineConfig::new(1));
+    let trace = trace_stating_end(empty(), RunLimits::until(t("5min")));
+    let report = replay_with(&trace, empty()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::Idle, t("5min")));
+}
+
+#[test]
+fn replay_finds_an_event_missing_before_the_end() {
+    // The trace stops at 10 min but states an end at 1 h: an event was due.
+    let mut engine = support::single_server(1).unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine
+        .run(RunLimits::until(t("10min")), &mut writer)
+        .unwrap();
+    writer.run_ended(&RunSummary {
+        now: t("1h"),
+        ..ran
+    });
+    let (trace, summary) = writer.finish().unwrap();
+    let Err(ReplayError::Diverged {
+        record,
+        expected,
+        found,
+    }) = replay_with(&trace, support::single_server(1).unwrap())
+    else {
+        panic!("a trace with a missing event replayed");
+    };
+    assert_eq!(record, summary.records);
+    assert_eq!(expected, "the end of the run at 1h (horizon)");
+    assert_eq!(found, "an event due by 1h");
+}
+
+#[test]
+fn replay_compares_the_stated_outcome_and_clock() {
+    fn stated(ran: RunSummary, engine: &Engine<Toy>) -> Vec<u8> {
+        let header = Header::for_engine(
+            engine,
+            ModelHash::sha256(b"replay tests"),
+            SystemHash::default(),
+        );
+        let mut writer = TraceWriter::<_, Toy>::new(Vec::new(), &header).unwrap();
+        writer.run_ended(&ran);
+        writer.finish().unwrap().0
+    }
+    let empty = || Engine::<Toy>::new(EngineConfig::new(1));
+    // Stated: an event was left at the horizon; the engine has none.
+    let ran = RunSummary {
+        outcome: RunOutcome::Horizon,
+        events: 0,
+        now: t("5min"),
+    };
+    let Err(ReplayError::Diverged { found, .. }) = replay_with(&stated(ran, &empty()), empty())
+    else {
+        panic!("another outcome replayed");
+    };
+    assert_eq!(found, "5min (idle)");
+    // Stated: stopped at a time the engine's clock is not at.
+    let ran = RunSummary {
+        outcome: RunOutcome::EventLimit,
+        events: 0,
+        now: t("5min"),
+    };
+    let Err(ReplayError::Diverged { found, .. }) = replay_with(&stated(ran, &empty()), empty())
+    else {
+        panic!("another clock replayed");
+    };
+    assert_eq!(found, "the engine's clock at 0s");
+    // Stated: an end before the last event.
+    let mut engine = support::single_server(1).unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine
+        .run(RunLimits::until(t("10min")), &mut writer)
+        .unwrap();
+    writer.run_ended(&RunSummary {
+        now: t("1s"),
+        ..ran
+    });
+    let trace = writer.finish().unwrap().0;
+    let Err(ReplayError::Diverged { found, .. }) =
+        replay_with(&trace, support::single_server(1).unwrap())
+    else {
+        panic!("an end before the last event replayed");
+    };
+    assert!(found.starts_with("the engine's clock at "), "{found}");
+}
+
+#[test]
+fn a_stepped_run_whose_last_step_delivered_nothing_replays() {
+    // The first step reaches its horizon, so the clock is past the last event;
+    // the second stops at the event limit before delivering anything. The
+    // stated end is the first horizon, which no event in the trace carries.
+    let mut engine = support::single_server(3).unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let first = engine.run(RunLimits::until(t("1h")), &mut writer).unwrap();
+    assert_eq!((first.outcome, first.now), (RunOutcome::Horizon, t("1h")));
+    writer.run_ended(&first);
+    let second = engine
+        .run(RunLimits::until(t("2h")).max_events(0), &mut writer)
+        .unwrap();
+    assert_eq!(
+        (second.outcome, second.events, second.now),
+        (RunOutcome::EventLimit, 0, t("1h"))
+    );
+    writer.run_ended(&second);
+    let trace = writer.finish().unwrap().0;
+    let report = replay_with(&trace, support::single_server(3).unwrap()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::EventLimit, t("1h")));
+
+    // The same with a cancelled last step.
+    let mut engine = support::single_server(3).unwrap();
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let first = engine.run(RunLimits::until(t("1h")), &mut writer).unwrap();
+    writer.run_ended(&first);
+    let flag = std::sync::atomic::AtomicBool::new(true);
+    let second = engine
+        .run(RunLimits::until(t("2h")).cancel_on(&flag), &mut writer)
+        .unwrap();
+    assert_eq!(
+        (second.outcome, second.now),
+        (RunOutcome::Cancelled, t("1h"))
+    );
+    writer.run_ended(&second);
+    let trace = writer.finish().unwrap().0;
+    let report = replay_with(&trace, support::single_server(3).unwrap()).unwrap();
+    assert_eq!(report.end.unwrap().outcome, RunOutcome::Cancelled);
+
+    // An event limit stated past an event that was due is still found.
+    let mut engine = support::single_server(3).unwrap();
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine
+        .run(RunLimits::until(t("10min")).max_events(3), &mut writer)
+        .unwrap();
+    writer.run_ended(&RunSummary {
+        now: t("1h"),
+        ..ran
+    });
+    let (trace, summary) = writer.finish().unwrap();
+    let Err(ReplayError::Diverged { record, found, .. }) =
+        replay_with(&trace, support::single_server(3).unwrap())
+    else {
+        panic!("an event limit past a due event replayed");
+    };
+    assert_eq!(record, summary.records);
+    assert!(found.starts_with("the engine's clock at "), "{found}");
+}
+
+#[test]
+fn a_stepped_run_cancelled_after_going_idle_replays() {
+    // One event at 1s, then nothing. The first step ends idle with the clock
+    // moved to its horizon, 1h; the second is cancelled before it starts, at
+    // 1h. Replaying to that end goes idle again, which reaches it.
+    struct Once;
+    impl Component<Toy> for Once {
+        fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+            ctx.schedule(support::d("1s"), Toy::Next)?;
+            Ok(())
+        }
+        fn handle(
+            &mut self,
+            _: Delivery<'_, Toy>,
+            _: &mut Context<'_, Toy>,
+        ) -> Result<(), ComponentError> {
+            Ok(())
+        }
+    }
+    let build = || -> Result<Engine<Toy>, EngineError> {
+        let mut engine = Engine::new(EngineConfig::new(1));
+        engine.add_component("once", Box::new(Once))?;
+        Ok(engine)
+    };
+    let mut engine = build().unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let first = engine.run(RunLimits::until(t("1h")), &mut writer).unwrap();
+    assert_eq!((first.outcome, first.now), (RunOutcome::Idle, t("1h")));
+    writer.run_ended(&first);
+    let flag = std::sync::atomic::AtomicBool::new(true);
+    let second = engine
+        .run(RunLimits::until(t("2h")).cancel_on(&flag), &mut writer)
+        .unwrap();
+    assert_eq!(
+        (second.outcome, second.now),
+        (RunOutcome::Cancelled, t("1h"))
+    );
+    writer.run_ended(&second);
+    let trace = writer.finish().unwrap().0;
+    let report = replay_with(&trace, build().unwrap()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::Cancelled, t("1h")));
+    assert_eq!(report.events, 1);
 }

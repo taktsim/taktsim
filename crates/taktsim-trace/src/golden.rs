@@ -207,8 +207,9 @@ impl Golden {
 
     /// The text compared with the committed snapshot: provenance without
     /// the engine version (record and message formats, model and system
-    /// hashes, seed, components), counts, the stream hash, then one line per
-    /// record (the first 400 and the last 100 of a longer trace).
+    /// hashes, seed, components), counts, the stream hash, how the run ended,
+    /// then one line per record (the first 400 and the last 100 of a longer
+    /// trace).
     ///
     /// ```
     /// # use taktsim_core::{Engine, EngineConfig};
@@ -222,7 +223,7 @@ impl Golden {
     /// # }
     /// let case = golden::Case { name: "doc_snapshot", model_hash: ModelHash::default(), system_hash: SystemHash::default(), until: "1h".parse()? };
     /// let golden = golden::record(&case, || Ok(Engine::<Tick>::new(EngineConfig::new(5))))?;
-    /// assert!(golden.snapshot().starts_with("case: doc_snapshot\nrecords: taktsim-core/1\nmessages: tick/1\n"));
+    /// assert!(golden.snapshot().starts_with("case: doc_snapshot\nrecords: taktsim-core/2\nmessages: tick/1\n"));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[must_use]
@@ -234,7 +235,7 @@ impl Golden {
         let _ = write!(
             text,
             "case: {}\nrecords: {}\nmessages: {}\nmodel hash: {}\nsystem hash: {}\nseed: {}\n\
-             components: {}\nrecords: {} ({} events) in {} chunks\nstream sha256: {}\n---\n",
+             components: {}\nrecords: {} ({} events) in {} chunks\nstream sha256: {}\nend: {}\n---\n",
             self.name,
             h.record_format,
             h.message_format,
@@ -246,6 +247,8 @@ impl Golden {
             s.events,
             s.chunks,
             s.hash,
+            s.end
+                .map_or_else(|| "not stated".to_owned(), |end| end.to_string()),
         );
         for line in &self.head {
             text.push_str(line);
@@ -362,9 +365,10 @@ pub fn record<M: TraceMessage>(
     let mut engine = build()?;
     let header = Header::for_engine(&engine, case.model_hash, case.system_hash);
     let mut writer = TraceWriter::new(Vec::new(), &header)?;
-    engine
+    let ran = engine
         .run(RunLimits::until(case.until), &mut writer)
         .map_err(Box::new)?;
+    writer.run_ended(&ran);
     let (bytes, summary) = writer.finish()?;
     let mut reader = TraceReader::<_, M>::new(bytes.as_slice())?;
     let mut head = Vec::new();

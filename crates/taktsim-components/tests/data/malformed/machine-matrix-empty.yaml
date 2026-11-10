@@ -1,0 +1,10 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source}
+  - {id: m, type: Machine, cycle_time: 1min, setup: {matrix: []}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, m, sink]
+# expect: components[1].setup.matrix @ 6:62 TooFew

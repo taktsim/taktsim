@@ -11,3 +11,16 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+taktsim-units.workspace = true
+taktsim-core.workspace = true
+taktsim-model.workspace = true
+taktsim-trace.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+taktsim-trace = { workspace = true, features = ["golden"] }
+insta.workspace = true
+proptest.workspace = true
+regex.workspace = true

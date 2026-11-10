@@ -1,0 +1,10 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source}
+  - {id: buf, type: Buffer, capacity: 2 parts}
+  - {id: sink, type: Sink}
+flow:
+  - [source, buf, sink]
+# expect: components[0] @ 5:5 NotAllowed

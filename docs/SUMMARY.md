@@ -45,3 +45,6 @@
   - [0017 CSV adapter and observation table](adr/0017-csv-adapter-and-observation-table.md)
   - [0018 Engine architecture](adr/0018-engine-architecture.md)
   - [0019 CLI as the agent interface](adr/0019-cli-agent-interface.md)
+  - [0020 Model loader](adr/0020-model-loader.md)
+  - [0021 Trace format and replay](adr/0021-trace-format-and-replay.md)
+  - [0022 Components: Source, Machine, Buffer, Sink](adr/0022-components-source-machine-buffer-sink.md)

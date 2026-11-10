@@ -763,6 +763,45 @@ impl<M: Message> Context<'_, M> {
         Ok(())
     }
 
+    /// Writes `message` to the trace, at the current time, without delivering
+    /// it to anyone: for something a component wants on record, such as a
+    /// change of state (ADR-0022 §9). Replay compares it with every other
+    /// record. It is not an event: it takes no sequence number and no
+    /// component sees it.
+    ///
+    /// ```
+    /// # use taktsim_core::*;
+    /// # #[derive(Debug)] struct Busy;
+    /// # impl Message for Busy {}
+    /// struct Noter;
+    /// impl Component<Busy> for Noter {
+    ///     fn start(&mut self, ctx: &mut Context<'_, Busy>) -> Result<(), ComponentError> {
+    ///         ctx.note(&Busy);
+    ///         Ok(())
+    ///     }
+    ///     fn handle(&mut self, _: Delivery<'_, Busy>, _: &mut Context<'_, Busy>) -> Result<(), ComponentError> { Ok(()) }
+    /// }
+    /// struct Notes(u32);
+    /// impl TraceSink<Busy> for Notes {
+    ///     fn record(&mut self, record: &TraceRecord<'_, Busy>) {
+    ///         if let TraceRecord::Note { .. } = record { self.0 += 1; }
+    ///     }
+    /// }
+    /// let mut engine = Engine::new(EngineConfig::new(1));
+    /// engine.add_component("noter", Box::new(Noter))?;
+    /// let mut notes = Notes(0);
+    /// let summary = engine.run(RunLimits::until("1s".parse()?), &mut notes)?;
+    /// assert_eq!((notes.0, summary.events), (1, 0));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn note(&mut self, message: &M) {
+        self.trace.record(&TraceRecord::Note {
+            time: self.state.now,
+            by: self.me,
+            message,
+        });
+    }
+
     /// A random stream for `purpose` of this component (ADR-0013), e.g.
     /// `"cycle_time"`. Only while starting, so every conflict between
     /// streams is found before the first event.

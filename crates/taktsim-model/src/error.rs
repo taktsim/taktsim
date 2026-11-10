@@ -214,7 +214,17 @@ impl FieldPath {
         self.0.pop();
     }
 
-    pub(crate) fn child(&self, segment: Segment) -> Self {
+    /// This path with `segment` added, e.g. a key inside a component entry,
+    /// for an error a catalog's check reports.
+    ///
+    /// ```
+    /// use taktsim_model::{FieldPath, Segment};
+    ///
+    /// let path = FieldPath::from(vec![Segment::Key("flow".into())]).child(Segment::Index(2));
+    /// assert_eq!(path.to_string(), "flow[2]");
+    /// ```
+    #[must_use]
+    pub fn child(&self, segment: Segment) -> Self {
         let mut path = self.clone();
         path.push(segment);
         path
@@ -725,6 +735,9 @@ pub enum LoadErrorKind {
         id: String,
         /// The closest existing id, if one is close.
         suggestion: Option<String>,
+        /// The first id declared in the model, for the example when none is
+        /// close; `None` if the model declares no component.
+        declared: Option<String>,
     },
     /// A list with too few entries.
     #[error("{what} needs at least {min} entries, found {found}")]
@@ -745,7 +758,7 @@ pub enum LoadErrorKind {
         id: String,
     },
     /// An edge from a component to itself.
-    #[error("an edge from `{id}` to itself; route rework to another component")]
+    #[error("an edge from `{id}` to itself")]
     SelfLoop {
         /// The component.
         id: String,
@@ -975,12 +988,6 @@ impl LoadErrorKind {
             | Self::MergeKey
             | Self::ComplexKey
             | Self::DuplicateKey { .. }
-            | Self::Repeated { .. }
-            | Self::SelfLoop { .. }
-            | Self::DuplicateEdge { .. }
-            | Self::DuplicateObservable { .. }
-            | Self::DuplicateId { .. }
-            | Self::CaseClash { .. }
             | Self::IncludeUnavailable
             | Self::NestedInclude
             | Self::IncludeSelf { .. }
@@ -1011,8 +1018,23 @@ impl LoadErrorKind {
             } => {
                 return suggestion.clone().or_else(|| allowed.first().cloned());
             }
-            Self::UnknownComponent { suggestion, .. } => return suggestion.clone(),
+            Self::UnknownComponent {
+                suggestion,
+                declared,
+                ..
+            } => return suggestion.clone().or_else(|| declared.clone()),
             Self::Unit(error) => return unit_example(error),
+            // Each once: the end listed once, the edge declared once.
+            Self::Repeated { id } => return Some(format!("[{id}]")),
+            Self::DuplicateEdge { from, to, .. } => {
+                return Some(format!("{{from: {from}, to: {to}}}"));
+            }
+            Self::DuplicateObservable { text, .. } => return Some(text.clone()),
+            // An id not yet used.
+            Self::DuplicateId { id, .. } | Self::CaseClash { id, .. } => {
+                return Some(format!("{id}-2"));
+            }
+            Self::SelfLoop { .. } => "{from: weld, to: inspect}",
             Self::Distribution(_) => "{dist: lognormal, mean: 42s, sigma: 0.08}",
             Self::Expression { .. } | Self::NotAnObservable { .. } => "throughput(sink)",
             Self::NotAllowed { example, .. } => return Some(example.clone()),
@@ -1343,6 +1365,23 @@ mod tests {
         assert_eq!(edit_distance("sed", "seed"), 1);
         assert_eq!(edit_distance("kitten", "sitting"), 3);
         assert_eq!(edit_distance("abc", ""), 3);
+    }
+
+    #[test]
+    fn an_unknown_component_gets_the_closest_id_then_a_declared_one() {
+        let kind =
+            |suggestion: Option<&str>, declared: Option<&str>| LoadErrorKind::UnknownComponent {
+                id: "nowhere".to_owned(),
+                suggestion: suggestion.map(str::to_owned),
+                declared: declared.map(str::to_owned),
+            };
+        let example = |k: LoadErrorKind| k.example();
+        assert_eq!(
+            example(kind(Some("sink"), Some("a"))).as_deref(),
+            Some("sink")
+        );
+        assert_eq!(example(kind(None, Some("a"))).as_deref(), Some("a"));
+        assert_eq!(example(kind(None, None)), None);
     }
 
     #[test]

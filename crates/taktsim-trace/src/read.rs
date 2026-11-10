@@ -6,6 +6,8 @@ use std::marker::PhantomData;
 use std::ops::Range;
 
 use sha2::{Digest, Sha256};
+use taktsim_core::RunOutcome;
+use taktsim_units::SimTime;
 
 use crate::codec::{DecodeError, TraceMessage};
 use crate::header::{
@@ -13,7 +15,7 @@ use crate::header::{
     Header, MAGIC, ModelHash, RECORD_FORMAT, SystemHash, TraceHash,
 };
 use crate::record::{self, EVENT, Record};
-use crate::write::Summary;
+use crate::write::{RunEnd, Summary};
 
 /// Reads a trace record by record, holding one chunk in memory.
 ///
@@ -407,8 +409,8 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
         let mut end = [0; 1 + END_SIZE];
         end[0] = END_TAG;
         self.read_exact(&mut end[1..], start)?;
-        let stored = le_u32(&end[57..61]);
-        let computed = crc32fast::hash(&end[..57]);
+        let stored = le_u32(&end[67..71]);
+        let computed = crc32fast::hash(&end[..67]);
         if computed != stored {
             return Err(ReadError::Checksum {
                 block: Block::End,
@@ -440,6 +442,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
                 counted: counted.to_string(),
             });
         }
+        let stated_end = run_end(end[57], le_u64(&end[58..66]), end[66], start)?;
         let after = self.offset;
         let mut extra = [0];
         loop {
@@ -461,6 +464,7 @@ impl<R: Read, M: TraceMessage> TraceReader<R, M> {
             chunks: self.chunks,
             bytes: self.offset,
             hash,
+            end: stated_end,
         });
         Ok(())
     }
@@ -603,6 +607,54 @@ impl<R: Read, M: TraceMessage> Iterator for TraceReader<R, M> {
     }
 }
 
+/// A run outcome's code in the end marker.
+pub(crate) const fn outcome_code(outcome: RunOutcome) -> u8 {
+    match outcome {
+        RunOutcome::Horizon => 0,
+        RunOutcome::Idle => 1,
+        RunOutcome::EventLimit => 2,
+        RunOutcome::Cancelled => 3,
+    }
+}
+
+/// The end marker's statement of how the run ended, checked.
+fn run_end(has_end: u8, time: u64, outcome: u8, at: u64) -> Result<Option<RunEnd>, ReadError> {
+    let invalid = |what, found: String, allowed: &str| ReadError::Invalid {
+        offset: at,
+        what,
+        found,
+        allowed: allowed.to_owned(),
+    };
+    match has_end {
+        0 if time == 0 && outcome == 0 => Ok(None),
+        0 => Err(invalid(
+            "end of a trace that states none",
+            format!("end time {time} ns, outcome {outcome}"),
+            "both 0",
+        )),
+        1 => {
+            let outcome = match outcome {
+                0 => RunOutcome::Horizon,
+                1 => RunOutcome::Idle,
+                2 => RunOutcome::EventLimit,
+                3 => RunOutcome::Cancelled,
+                other => {
+                    return Err(invalid(
+                        "run outcome",
+                        other.to_string(),
+                        "0 (horizon), 1 (idle), 2 (event limit) or 3 (cancelled)",
+                    ));
+                }
+            };
+            Ok(Some(RunEnd {
+                time: SimTime::from_nanos(time),
+                outcome,
+            }))
+        }
+        other => Err(invalid("has end", other.to_string(), "0 or 1")),
+    }
+}
+
 fn le_u32(bytes: &[u8]) -> u32 {
     let mut array = [0; 4];
     array.copy_from_slice(bytes);
@@ -648,10 +700,10 @@ impl fmt::Display for Block {
 /// ```
 /// use taktsim_trace::ReadError;
 ///
-/// let e = ReadError::UnsupportedVersion { found: 2, supported: 1 };
+/// let e = ReadError::UnsupportedVersion { found: 3, supported: 2 };
 /// assert_eq!(
 ///     e.to_string(),
-///     "trace format version 2 is not supported: this build reads version 1 only; \
+///     "trace format version 3 is not supported: this build reads version 2 only; \
 ///      read the trace with the taktsim release that wrote it"
 /// );
 /// ```

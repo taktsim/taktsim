@@ -412,20 +412,20 @@ fn data_after_the_end_marker_is_rejected() {
 #[test]
 fn another_format_version_says_what_was_found_and_what_is_allowed() {
     let (mut bytes, _) = write(&header(1), &[]);
-    bytes[8..10].copy_from_slice(&2_u16.to_le_bytes());
+    bytes[8..10].copy_from_slice(&1_u16.to_le_bytes());
     let Err(e) = TraceReader::<_, Toy>::new(bytes.as_slice()) else {
-        panic!("version 2 was read");
+        panic!("version 1 was read");
     };
     assert!(matches!(
         e,
         ReadError::UnsupportedVersion {
-            found: 2,
+            found: 1,
             supported: FORMAT_VERSION
         }
     ));
     assert_eq!(
         e.to_string(),
-        "trace format version 2 is not supported: this build reads version 1 only; \
+        "trace format version 1 is not supported: this build reads version 2 only; \
          read the trace with the taktsim release that wrote it"
     );
 }
@@ -577,6 +577,43 @@ fn a_failed_write_is_reported_at_finish_and_leaves_a_truncated_trace() {
         TraceWriter::<_, Toy>::new(out, &header(1)),
         Err(WriteError::Io { offset: 0, .. })
     ));
+}
+
+/// After a failed run, `abandon` writes the open chunk without an end marker:
+/// every record reaches the output, and readers say the trace is cut off.
+#[test]
+fn an_abandoned_trace_keeps_its_open_chunk_and_reads_as_cut_off() {
+    let records = many_records();
+    let mut writer = TraceWriter::new(Vec::new(), &header(1)).unwrap();
+    for record in &records {
+        writer.record(&record.as_trace());
+    }
+    let bytes = writer.abandon().unwrap();
+    let (read, error) = read_all(&bytes);
+    assert_eq!(text(&read), text(&records));
+    assert!(
+        matches!(error, Some(ReadError::Truncated { .. })),
+        "{error:?}"
+    );
+
+    // Nothing recorded: the header alone.
+    let writer = TraceWriter::<_, Toy>::new(Vec::new(), &header(1)).unwrap();
+    let bytes = writer.abandon().unwrap();
+    assert_eq!(read_all(&bytes).0.len(), 0);
+
+    // A failed write is still reported.
+    let out = Failing {
+        written: Arc::default(),
+        limit: 100_000,
+    };
+    let mut writer = TraceWriter::new(out, &header(1)).unwrap();
+    for record in &records {
+        writer.record(&record.as_trace());
+    }
+    let Err(e) = writer.abandon() else {
+        panic!("a full disk went unnoticed");
+    };
+    assert!(e.to_string().contains("disk full"), "{e}");
 }
 
 #[test]

@@ -3,7 +3,7 @@ source: crates/taktsim-trace/tests/golden.rs
 expression: golden.snapshot()
 ---
 case: toy_tandem
-records: taktsim-core/1
+records: taktsim-core/2
 messages: taktsim-trace.toy/1
 model hash: cdf881adbf59db283b82d60a3c731a317d3e782c884be16184d2800206892a49
 system hash: be6e6bc459cdb5420f91ec83e0c356fcda2b9d0b4c0196f2b3f6c00d8674b132
@@ -11,6 +11,7 @@ seed: 7
 components: source, cut, weld, sink
 records: 1824 (1379 events) in 1 chunks
 stream sha256: 744ef2b5754faccc360ca0bef9f3300a49163501a3fd7d3db34cc92ddd46d4f9
+end: 4h (horizon)
 ---
 24.73972074s event #0 source -> source Next
 24.73972074s item 0 created by source

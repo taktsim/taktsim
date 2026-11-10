@@ -20,9 +20,9 @@ pub const MAGIC: [u8; 8] = *b"TAKT\r\n\x1a\n";
 /// every other version (ADR-0021).
 ///
 /// ```
-/// assert_eq!(taktsim_trace::FORMAT_VERSION, 1);
+/// assert_eq!(taktsim_trace::FORMAT_VERSION, 2);
 /// ```
-pub const FORMAT_VERSION: u16 = 1;
+pub const FORMAT_VERSION: u16 = 2;
 
 /// The name and version of the record layout this build writes and reads:
 /// the kinds of records and their fields after the common prefix (kind,
@@ -32,9 +32,9 @@ pub const FORMAT_VERSION: u16 = 1;
 /// decision 2026-11-05).
 ///
 /// ```
-/// assert_eq!(taktsim_trace::RECORD_FORMAT, "taktsim-core/1");
+/// assert_eq!(taktsim_trace::RECORD_FORMAT, "taktsim-core/2");
 /// ```
-pub const RECORD_FORMAT: &str = "taktsim-core/1";
+pub const RECORD_FORMAT: &str = "taktsim-core/2";
 
 /// The most record bytes in one chunk: 64 KiB (ADR-0004). A writer holds at
 /// most one chunk in memory, and a reader too.
@@ -54,8 +54,8 @@ pub(crate) const CHUNK_HEADER: usize = 4 + 4 + 8 + 8 + 4;
 /// The bytes of a chunk's header, tag included, that its CRC32 covers.
 pub(crate) const CHUNK_CRC_OVER: usize = 1 + CHUNK_HEADER - 4;
 /// The end marker after its tag: records u64, events u64, chunks u64, the
-/// stream hash, CRC32 u32.
-pub(crate) const END_SIZE: usize = 8 + 8 + 8 + 32 + 4;
+/// stream hash, has end u8, end time u64 (ns), outcome u8, CRC32 u32.
+pub(crate) const END_SIZE: usize = 8 + 8 + 8 + 32 + 1 + 8 + 1 + 4;
 
 /// A SHA-256 digest, written as 64 lowercase hex digits.
 fn hex(bytes: &[u8; 32], f: &mut fmt::Formatter<'_>) -> fmt::Result {

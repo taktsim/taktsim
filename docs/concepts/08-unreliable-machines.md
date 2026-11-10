@@ -79,11 +79,19 @@ faster than welding on average, but only just.
 </div>
 
 > **In taktsim.** For v0.1 the spec counts failures in calendar time: the
-> clock to the next failure runs whether cutting is working or waiting.
-> Failures that count only operating time come with the plant extensions
-> (§4). The spec's own example writes `mtbf: 6h` without a distribution, and
-> whether that means a fixed or a random interval is not settled yet, so
-> this page names the distribution.
+> clock to the next failure runs whether cutting is working or waiting, and
+> pauses only while it is down. `mtbf` is the up time from the end of a repair
+> to the next failure, and an interrupted cycle resumes with the time it had
+> left. Failures that count only operating time come with the plant extensions
+> (§4).
+>
+> A bare `mtbf: 6h` is a constant, like every bare duration: the machine fails
+> after exactly 6 h of up time, in every run. So name a distribution, as this
+> page does, unless regular failures are meant. With a constant, a shift
+> shorter than 6 h never sees a failure, and several runs agree perfectly, which
+> looks like precision and is not. Two stations with no buffer and the same
+> constant times stop together for ever, which makes their output about 5 % too
+> good.
 
 ## The numbers
 

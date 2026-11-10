@@ -27,8 +27,8 @@ fn header_bytes() -> Vec<u8> {
         .unwrap()
         .finish()
         .unwrap();
-    // Everything before the end marker (1 + 60 bytes).
-    bytes[..bytes.len() - 61].to_vec()
+    // Everything before the end marker (1 + 70 bytes).
+    bytes[..bytes.len() - 71].to_vec()
 }
 
 /// A chunk with a correct CRC; its first time is that of the first record
@@ -53,13 +53,27 @@ fn chunk(payload: &[u8], records: u32, first: u64) -> Vec<u8> {
     head
 }
 
-/// An end marker with a correct CRC.
+/// An end marker with a correct CRC, stating no end of the run.
 fn end(records: u64, events: u64, chunks: u64, hash: [u8; 32]) -> Vec<u8> {
+    end_stating(records, events, chunks, hash, (0, 0, 0))
+}
+
+/// An end marker with a correct CRC and the given has-end, time and outcome.
+fn end_stating(
+    records: u64,
+    events: u64,
+    chunks: u64,
+    hash: [u8; 32],
+    (has_end, time, outcome): (u8, u64, u8),
+) -> Vec<u8> {
     let mut end = vec![b'E'];
     for n in [records, events, chunks] {
         end.extend_from_slice(&n.to_le_bytes());
     }
     end.extend_from_slice(&hash);
+    end.push(has_end);
+    end.extend_from_slice(&time.to_le_bytes());
+    end.push(outcome);
     let crc = crc32fast::hash(&end);
     end.extend_from_slice(&crc.to_le_bytes());
     end
@@ -145,7 +159,7 @@ fn invalid_records_in_an_intact_chunk_are_named() {
     let cases: [(Vec<u8>, &str); 7] = [
         (
             bad_kind,
-            "invalid record kind before byte 1: found 9, allowed 1, 2 or 3 (taktsim-core/1)",
+            "invalid record kind before byte 1: found 9, allowed 1, 2, 3 or 4 (taktsim-core/2)",
         ),
         (
             created(2),
@@ -430,4 +444,72 @@ fn values_that_do_not_fit_are_refused() {
         panic!("a component number above u32::MAX was encoded");
     };
     assert!(e.to_string().starts_with("component number "), "{e}");
+}
+
+#[test]
+fn a_note_naming_an_unknown_component_is_refused() {
+    // Kind 4: time, by u32, message.
+    let mut body = 7_u64.to_le_bytes().to_vec();
+    body.extend_from_slice(&5_u32.to_le_bytes());
+    body.push(0);
+    let e = first_error(&trace(&framed(4, &body), 1));
+    let ReadError::Record { source, .. } = &e else {
+        panic!("{e}");
+    };
+    assert_eq!(
+        source.to_string(),
+        "invalid component before byte 15: found 5, allowed below 2, the number of components in the header"
+    );
+}
+
+#[test]
+fn a_hand_made_note_reads() {
+    let mut body = 7_u64.to_le_bytes().to_vec();
+    body.extend_from_slice(&1_u32.to_le_bytes());
+    body.push(0);
+    let bytes = trace(&framed(4, &body), 1);
+    let mut reader = TraceReader::<_, Toy>::new(bytes.as_slice()).unwrap();
+    let record = reader.next_record().unwrap().unwrap();
+    assert_eq!(
+        record,
+        Record::Note {
+            time: taktsim_units::SimTime::from_nanos(7),
+            by: taktsim_core::ComponentId::from_index(1),
+            message: Toy::Next,
+        }
+    );
+    assert_eq!(record.time(), taktsim_units::SimTime::from_nanos(7));
+}
+
+#[test]
+fn the_stated_end_of_a_run_is_checked() {
+    let empty: [u8; 32] = Sha256::digest([]).into();
+    let read = |stated| {
+        let mut bytes = header_bytes();
+        bytes.extend(end_stating(0, 0, 0, empty, stated));
+        let mut reader = TraceReader::<_, Toy>::new(bytes.as_slice()).unwrap();
+        reader.next_record().map(|_| reader.summary().unwrap().end)
+    };
+    assert_eq!(read((0, 0, 0)).unwrap(), None);
+    for (code, outcome) in [
+        (0, taktsim_core::RunOutcome::Horizon),
+        (1, taktsim_core::RunOutcome::Idle),
+        (2, taktsim_core::RunOutcome::EventLimit),
+        (3, taktsim_core::RunOutcome::Cancelled),
+    ] {
+        let time = taktsim_units::SimTime::from_nanos(9);
+        assert_eq!(
+            read((1, 9, code)).unwrap(),
+            Some(taktsim_trace::RunEnd { time, outcome })
+        );
+    }
+    for (stated, message) in [
+        ((2, 0, 0), "invalid has end"),
+        ((1, 0, 4), "invalid run outcome"),
+        ((0, 5, 0), "invalid end of a trace that states none"),
+        ((0, 0, 1), "invalid end of a trace that states none"),
+    ] {
+        let e = read(stated).unwrap_err();
+        assert!(e.to_string().starts_with(message), "{e}");
+    }
 }

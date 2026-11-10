@@ -1,0 +1,10 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, variants: {a: 50%, b: 50%}}
+  - {id: m, type: Machine, cycle_time: 1min, setup: {matrix: [{from: a, to: c, time: 1min}]}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, m, sink]
+# expect: components[1].setup.matrix[0].to @ 6:77 NotAllowed

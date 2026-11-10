@@ -497,6 +497,7 @@ fn document_kinds() -> Vec<LoadErrorKind> {
         LoadErrorKind::UnknownComponent {
             id: "snk".into(),
             suggestion: Some("sink".into()),
+            declared: Some("source".into()),
         },
         LoadErrorKind::TooFew {
             what: "a chain",
@@ -695,5 +696,118 @@ fn messages_name_the_fix() {
         Found::List,
     ] {
         assert_ne!(found.to_string(), "");
+    }
+}
+
+mod catalog_checks {
+    use taktsim_model::{Catalog, Findings, Format, LoadErrorKind, Loader};
+
+    use crate::support::catalog as stand_ins;
+
+    const LINE: &str = "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 8h}\n\
+                        components: [{id: source, type: Source, interarrival: 1min}, {id: sink, type: Sink}]\n\
+                        flow: [[source, sink]]\n";
+
+    fn rejecting() -> Catalog {
+        stand_ins().with_check(Box::new(|document, findings: &mut Findings| {
+            let c = &document.components()[1];
+            let kind = LoadErrorKind::NotAllowed {
+                found: "this sink".to_owned(),
+                allowed: "another".to_owned(),
+                example: "{id: sink, type: Sink}".to_owned(),
+            };
+            findings.error(c.place(), c.path(), kind);
+        }))
+    }
+
+    #[test]
+    fn a_catalog_check_is_reported_with_its_path() {
+        let catalog = rejecting();
+        let errors = Loader::new(&catalog)
+            .load_str(LINE, Format::Yaml)
+            .unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors.first().path().to_string(), "components[1]");
+        assert!(matches!(
+            errors.first().kind(),
+            LoadErrorKind::NotAllowed { .. }
+        ));
+    }
+
+    #[test]
+    fn no_check_runs_when_the_loader_found_errors() {
+        let catalog = rejecting();
+        let text = LINE.replace("[[source, sink]]", "[[source, nowhere]]");
+        let errors = Loader::new(&catalog)
+            .load_str(&text, Format::Yaml)
+            .unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(
+            errors.first().kind(),
+            LoadErrorKind::UnknownComponent { .. }
+        ));
+    }
+
+    /// Every kind gives, "where a valid alternative exists, `example()`" (ADR-0020):
+    /// for a reference, any declared id is one, close to what was written or not. A
+    /// model with no components gets that error instead, and no reference is checked.
+    #[test]
+    fn an_unknown_reference_has_an_example_wherever_a_component_exists() {
+        let example = |text: &str| {
+            let catalog = stand_ins();
+            let errors = Loader::new(&catalog)
+                .load_str(text, Format::Yaml)
+                .unwrap_err();
+            let reference = errors
+                .iter()
+                .find(|e| matches!(e.kind(), LoadErrorKind::UnknownComponent { .. }))
+                .unwrap_or_else(|| panic!("{errors}"));
+            reference.kind().example()
+        };
+        let closest = LINE.replace("[[source, sink]]", "[[source, sinkk]]");
+        assert_eq!(example(&closest).as_deref(), Some("sink"));
+        let none_close = LINE.replace("[[source, sink]]", "[[source, nowhere]]");
+        assert_eq!(example(&none_close).as_deref(), Some("source"));
+    }
+
+    #[test]
+    fn setting_a_check_again_replaces_it() {
+        let catalog = rejecting().with_check(Box::new(|_, _| {}));
+        assert!(Loader::new(&catalog).load_str(LINE, Format::Yaml).is_ok());
+    }
+
+    #[test]
+    fn a_check_can_be_run_on_a_document_from_elsewhere() {
+        let plain = stand_ins();
+        let model = Loader::new(&plain).load_str(LINE, Format::Yaml).unwrap();
+        let mut findings = Findings::new();
+        rejecting().check(model.document(), &mut findings);
+        let errors = findings.finish().unwrap_err();
+        assert_eq!(errors.first().path().to_string(), "components[1]");
+    }
+
+    #[test]
+    fn with_horizon_returns_a_new_version() {
+        let catalog = stand_ins();
+        let model = Loader::new(&catalog).load_str(LINE, Format::Yaml).unwrap();
+        let shorter = model.with_horizon("1h".parse().unwrap()).unwrap();
+        // The original is untouched.
+        assert_eq!(model.document().experiment().horizon().to_string(), "8h");
+        assert_eq!(shorter.document().experiment().horizon().to_string(), "1h");
+        // The system stays, the model hash changes (ADR-0020 §8).
+        assert_eq!(shorter.system_hash(), model.system_hash());
+        assert_ne!(shorter.hash(), model.hash());
+        // The new version is what a file with that horizon says.
+        let written = Loader::new(&catalog)
+            .load_str(&LINE.replace("horizon: 8h", "horizon: 1h"), Format::Yaml)
+            .unwrap();
+        assert_eq!(shorter.hash(), written.hash());
+        assert_eq!(shorter.canonical_json(), written.canonical_json());
+        // The same horizon gives the same model.
+        let same = model.with_horizon("8h".parse().unwrap()).unwrap();
+        assert_eq!(same.hash(), model.hash());
+        // A horizon of zero is refused, as in a file.
+        let err = model.with_horizon("0s".parse().unwrap()).unwrap_err();
+        assert_eq!(err.first().path().to_string(), "experiment.horizon");
     }
 }

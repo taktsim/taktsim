@@ -85,8 +85,8 @@ mod schema;
 mod syntax;
 
 pub use component::{
-    Catalog, CatalogError, Component, ComponentParams, ComponentRef, RESERVED_KEYS,
-    RESERVED_PREFIX, is_reserved_key,
+    Catalog, CatalogError, Component, ComponentParams, ComponentRef, DocumentCheck, Findings,
+    RESERVED_KEYS, RESERVED_PREFIX, is_reserved_key,
 };
 pub use decode::{Decode, Decoder, Fields, Record, Schemas};
 pub use distribution::{DISTRIBUTIONS, Distribution};

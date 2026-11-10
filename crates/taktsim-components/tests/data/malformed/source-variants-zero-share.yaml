@@ -1,0 +1,9 @@
+format: "1.0"
+model: {name: bad}
+experiment: {type: terminating, horizon: 1h}
+components:
+  - {id: source, type: Source, interarrival: 1min, variants: {a: 100%, b: 0%}}
+  - {id: sink, type: Sink}
+flow:
+  - [source, sink]
+# expect: components[0].variants.b @ 5:75 NotAllowed

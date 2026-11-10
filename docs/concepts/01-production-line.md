@@ -82,6 +82,8 @@ experiment:
   type: terminating
   horizon: 8h
 components:
+  - id: source
+    type: Source
   - id: cut
     type: Machine
     cycle_time: 42s
@@ -91,6 +93,8 @@ components:
   - id: weld
     type: Machine
     cycle_time: 45s
+  - id: sink
+    type: Sink
 flow:
   - [source, cut, buf1, weld, sink]
 observe:
@@ -100,8 +104,10 @@ observe:
 
 </div>
 
-`components` lists the stations and the buffer, and `flow` gives the order
-in which parts pass through them. `experiment` says what to simulate: one
+`components` lists the stations and the buffer, with a `source` where parts
+come from and a `sink` where they leave, and `flow` gives the order in which
+parts pass through them. This source has no arrival times: it makes a part
+whenever cutting takes one, so raw material never runs out. `experiment` says what to simulate: one
 8-hour shift (`horizon: 8h`). `terminating` means the run has a natural end,
 here the end of the shift, and starts from a defined state, here an empty
 line. `seed` fixes the random numbers, which matter from

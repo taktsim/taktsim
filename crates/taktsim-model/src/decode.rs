@@ -220,29 +220,34 @@ impl Schemas {
                 schemas: self,
                 properties: BTreeMap::new(),
                 required: Vec::new(),
+                rules: Vec::new(),
             },
         };
         read(&mut fields);
         let Mode::Describe {
             properties,
             required,
+            rules,
             ..
         } = fields.mode
         else {
             return Json::Null;
         };
-        let schema = Json::object([
+        let mut schema = Json::object([
             ("type", Json::from("object")),
             ("properties", Json::Object(properties)),
             ("additionalProperties", Json::from(false)),
         ]);
-        if required.is_empty() {
-            return schema;
+        if !required.is_empty() {
+            schema = schema.with(
+                "required",
+                &Json::Array(required.into_iter().map(Json::from).collect()),
+            );
         }
-        schema.with(
-            "required",
-            &Json::Array(required.into_iter().map(Json::from).collect()),
-        )
+        if !rules.is_empty() {
+            schema = schema.with("allOf", &Json::Array(rules));
+        }
+        schema
     }
 
     /// The observables the catalog declares.
@@ -438,8 +443,18 @@ impl Decoder {
         })
     }
 
-    /// Runs `read` with `segment` added to the path.
-    pub(crate) fn within<R>(&mut self, segment: Segment, read: impl FnOnce(&mut Self) -> R) -> R {
+    /// Runs `read` with `segment` added to the path, for a value a custom
+    /// [`Decode`] reads by hand, such as the entries of a mapping with free
+    /// keys.
+    ///
+    /// ```
+    /// use taktsim_model::{Decoder, Node, Segment};
+    ///
+    /// fn path_inside(cx: &mut Decoder) -> String {
+    ///     cx.within(Segment::Key("basic".into()), |cx| cx.path().to_string())
+    /// }
+    /// ```
+    pub fn within<R>(&mut self, segment: Segment, read: impl FnOnce(&mut Self) -> R) -> R {
         self.path.push(segment);
         let result = read(self);
         self.path.pop();
@@ -480,6 +495,8 @@ enum Mode<'n, 'd> {
         schemas: &'d mut Schemas,
         properties: BTreeMap<String, Json>,
         required: Vec<String>,
+        /// Rules between keys, each a schema the mapping must satisfy.
+        rules: Vec<Json>,
     },
 }
 
@@ -552,19 +569,73 @@ impl<'n> Fields<'n, '_> {
     }
 
     /// Where the value of `key` was read from, if it is present; `None`
-    /// when describing.
-    pub(crate) fn entry(&self, key: &str) -> Option<&'n Entry> {
+    /// when describing. For a rule between two keys, which needs a place to
+    /// report it.
+    ///
+    /// ```
+    /// use taktsim_model::Fields;
+    ///
+    /// fn has_mtbf(fields: &Fields<'_, '_>) -> bool {
+    ///     fields.entry("mtbf").is_some()
+    /// }
+    /// ```
+    #[must_use]
+    pub fn entry(&self, key: &str) -> Option<&'n Entry> {
         match &self.mode {
             Mode::Read { entries, .. } => entries.iter().find(|e| e.key() == key),
             Mode::Describe { .. } => None,
         }
     }
 
-    /// The mapping itself; `None` when describing.
-    pub(crate) const fn node(&self) -> Option<&'n Node> {
+    /// The mapping itself; `None` when describing. For a rule about the
+    /// whole mapping, which needs a place to report it.
+    ///
+    /// ```
+    /// use taktsim_model::Fields;
+    ///
+    /// fn line(fields: &Fields<'_, '_>) -> Option<usize> {
+    ///     fields.node().map(|n| n.start().line())
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn node(&self) -> Option<&'n Node> {
         match &self.mode {
             Mode::Read { node, .. } => Some(node),
             Mode::Describe { .. } => None,
+        }
+    }
+
+    /// States in the schema that `key`, when present, needs every key of
+    /// `needs` beside it. Reading checks nothing: the caller reports the
+    /// error where it stands, with its own message, so a rule between keys
+    /// that a schema can state is stated there too (ADR-0020 §11).
+    ///
+    /// ```
+    /// use taktsim_model::{Fields, Record};
+    ///
+    /// struct Failures;
+    ///
+    /// impl Record for Failures {
+    ///     const EXPECTED: &'static str = "`mtbf` and `mttr`, both or neither";
+    ///     const EXAMPLE: &'static str = "{mtbf: 6h, mttr: 12min}";
+    ///
+    ///     fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+    ///         fields.needs("mtbf", &["mttr"]);
+    ///         fields.needs("mttr", &["mtbf"]);
+    ///         Some(Self)
+    ///     }
+    /// }
+    /// ```
+    pub fn needs(&mut self, key: &'static str, needs: &[&'static str]) {
+        if let Mode::Describe { rules, .. } = &mut self.mode {
+            let required = |keys: Vec<Json>| Json::object([("required", Json::Array(keys))]);
+            rules.push(Json::object([
+                ("if", required(vec![Json::from(key)])),
+                (
+                    "then",
+                    required(needs.iter().map(|k| Json::from(*k)).collect()),
+                ),
+            ]));
         }
     }
 
@@ -575,6 +646,7 @@ impl<'n> Fields<'n, '_> {
             schemas,
             properties,
             required,
+            ..
         } = &mut self.mode
         else {
             return false;
