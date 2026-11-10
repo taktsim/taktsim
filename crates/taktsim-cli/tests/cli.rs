@@ -3,7 +3,6 @@
 
 mod support;
 
-use std::path::Path;
 use std::process::{Command, Stdio};
 
 use support::{Dir, EXACT, UNSEEDED};
@@ -333,15 +332,36 @@ fn validate_writes_nothing() {
 #[test]
 fn a_store_above_the_test_directory_is_never_used() {
     let outer = Dir::new();
-    std::fs::create_dir_all(outer.path().join(".taktsim")).unwrap();
+    uses_its_own_store(&outer);
+}
+
+/// The same below a directory reached through a link, as macOS's temporary directory
+/// is (`/var` -> `/private/var`): the binary names the store from its current
+/// directory, which the system gives as the physical path, so the test compares what
+/// the two paths name, not how they are spelled.
+#[cfg(unix)]
+#[test]
+fn a_store_below_a_linked_directory_is_its_own() {
+    let outer = Dir::new();
+    let linked = outer.path().join("linked");
+    std::fs::create_dir_all(outer.path().join("real")).unwrap();
+    std::os::unix::fs::symlink(outer.path().join("real"), &linked).unwrap();
+    let inner = Dir::new_in(&linked);
+    uses_its_own_store(&inner);
+}
+
+/// Runs in a new directory below `outer`, which has a store of its own, and checks
+/// that the run used the new directory's store and not `outer`'s.
+#[allow(clippy::unwrap_used)] // Test helper.
+fn uses_its_own_store(outer: &Dir) {
     let dir = Dir::new_in(outer.path()).with_line();
     let ran = dir.taktsim(&["run", "line.yaml", "--format", "json"]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     let progress = &ran.lines()[0];
     assert_eq!(progress["reused"], false);
     assert_eq!(
-        Path::new(progress["store"].as_str().unwrap()),
-        dir.path().join(".taktsim")
+        std::fs::canonicalize(progress["store"].as_str().unwrap()).unwrap(),
+        std::fs::canonicalize(dir.path().join(".taktsim")).unwrap()
     );
     assert!(
         outer.store_is_empty(),
