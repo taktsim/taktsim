@@ -1,0 +1,26 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+{
+  "errors": [
+    {
+      "allowed": "a duration (a constant), or a distribution such as `{dist: exponential, mean: 12min}`",
+      "column": 42,
+      "example": "{dist: lognormal, mean: 42s, sigma: 0.08}",
+      "file": "broken.yaml",
+      "found": "the number 10",
+      "kind": "error",
+      "line": 6,
+      "message": "expected a duration (a constant), or a distribution such as `{dist: exponential, mean: 12min}`, found the number 10",
+      "path": "components[1].cycle_time",
+      "type": "model.wrong_type"
+    }
+  ],
+  "format": "taktsim-validation/1",
+  "valid": false
+}
+--- stderr ---
+{"allowed":"a duration (a constant), or a distribution such as `{dist: exponential, mean: 12min}`","column":42,"example":"{dist: lognormal, mean: 42s, sigma: 0.08}","file":"broken.yaml","found":"the number 10","kind":"error","line":6,"message":"expected a duration (a constant), or a distribution such as `{dist: exponential, mean: 12min}`, found the number 10","path":"components[1].cycle_time","type":"model.wrong_type"}

@@ -26,9 +26,9 @@ fn seed_comes_from_options_then_model() {
     let model = load(&seeded(", seed: 42"));
     let registry = registry();
     let from_model = registry.prepare(&model, RunOptions::new()).unwrap();
-    assert_eq!(from_model.header().seed, 42);
+    assert_eq!(from_model.header().seed, Some(42));
     let from_options = registry.prepare(&model, RunOptions::new().seed(7)).unwrap();
-    assert_eq!(from_options.header().seed, 7);
+    assert_eq!(from_options.header().seed, Some(7));
     // The header names the seed that ran: each gives its own run.
     let run = |prepared: taktsim_components::Prepared<'_, _>| {
         let (bytes, report) = prepared.run_traced(Vec::new()).unwrap();
@@ -37,7 +37,7 @@ fn seed_comes_from_options_then_model() {
     };
     let (a_seed, a) = run(registry.prepare(&model, RunOptions::new()).unwrap());
     let (b_seed, b) = run(registry.prepare(&model, RunOptions::new().seed(7)).unwrap());
-    assert_eq!((a_seed, b_seed), (42, 7));
+    assert_eq!((a_seed, b_seed), (Some(42), Some(7)));
     assert_ne!(a, b);
 }
 
@@ -233,6 +233,11 @@ fn parameters_of_another_type_are_refused_by_name() {
     // a registry whose own check is empty.
     struct Open;
     impl taktsim_components::Domain for Open {
+        const PACKAGE: &'static str = "open";
+        const PACKAGE_VERSION: &'static str = "1.0.0";
+        fn draws_random(_: &taktsim_model::Document) -> bool {
+            false
+        }
         type Message = taktsim_components::FlowMessage;
         type Shared = taktsim_components::FlowShared;
         fn check(
@@ -663,4 +668,129 @@ fn a_failed_run_keeps_the_trace_that_led_to_it() {
     assert!(times.len() > 20, "{} records", times.len());
     assert!(times.iter().all(|time| *time <= t("10min")));
     assert!(times.contains(&t("9min")), "{times:?}");
+}
+
+/// A model of the standard catalog with these `components` and `flow`.
+fn drawn(components: &str, flow: &str) -> bool {
+    let model = load(&support::document("1h", components, flow));
+    registry().draws_random(model.document())
+}
+
+/// A chain with this Source and Machine, the rest not drawing.
+fn chain_draws(source: &str, machine: &str) -> bool {
+    drawn(
+        &format!(
+            "  - {{id: source, type: Source{source}}}\n  \
+             - {{id: cut, type: Machine{machine}}}\n  \
+             - {{id: buf, type: Buffer, capacity: 2 parts}}\n  - {{id: sink, type: Sink}}"
+        ),
+        "  - [source, cut, buf, sink]",
+    )
+}
+
+#[test]
+fn draws_random_answers_for_every_parameter() {
+    let exp = "{dist: exponential, mean: 1min}";
+    let cycle = ", cycle_time: 1min";
+    assert!(!chain_draws("", cycle));
+    assert!(!chain_draws(
+        ", interarrival: 1min, batch: 2 parts, priority: 3",
+        cycle
+    ));
+    assert!(!chain_draws(", variants: {a: 100%}", cycle));
+    assert!(!chain_draws("", ", cycle_time: 1min, capacity: 2 parts"));
+    assert!(!chain_draws("", ", cycle_time: 1min, mtbf: 1h, mttr: 5min"));
+
+    assert!(chain_draws(&format!(", interarrival: {exp}"), cycle));
+    assert!(chain_draws(", variants: {a: 50%, b: 50%}", cycle));
+    assert!(chain_draws("", &format!(", cycle_time: {exp}")));
+    assert!(chain_draws(
+        "",
+        &format!(", cycle_time: 1min, mtbf: {exp}, mttr: 5min")
+    ));
+    assert!(chain_draws(
+        "",
+        &format!(", cycle_time: 1min, mtbf: 1h, mttr: {exp}")
+    ));
+    assert!(chain_draws(
+        "",
+        &format!(", cycle_time: 1min, setup: {{per_variant: {exp}}}")
+    ));
+    assert!(chain_draws(
+        ", variants: {a: 50%, b: 50%}",
+        &format!(", cycle_time: 1min, setup: {{matrix: [{{from: a, to: b, time: {exp}}}]}}")
+    ));
+}
+
+#[test]
+fn a_constant_setup_draws_nothing() {
+    let setup = ", cycle_time: 1min, setup: {per_variant: 2min, matrix: [{from: default, to: other, time: 3min}]}";
+    let two_sources = format!(
+        "  - {{id: p, type: Source}}\n  - {{id: q, type: Source, variants: {{other: 100%}}}}\n  \
+         - {{id: cut, type: Machine{setup}}}\n  - {{id: sink, type: Sink}}"
+    );
+    assert!(!drawn(
+        &two_sources,
+        "  - {from: [p, q], to: cut}\n  - [cut, sink]"
+    ));
+}
+
+/// A model that draws nothing runs with no seed in its header, and another
+/// internal seed gives the same records.
+#[test]
+fn no_seed_runs_without_a_seed_in_the_header() {
+    let yaml = support::document(
+        "1h",
+        "  - {id: source, type: Source}\n  - {id: cut, type: Machine, cycle_time: 1min}\n  - {id: sink, type: Sink}",
+        "  - [source, cut, sink]",
+    );
+    let model = load(&yaml);
+    let registry = registry();
+    let (bytes, report) = registry
+        .prepare(&model, RunOptions::new().no_seed())
+        .unwrap()
+        .run_traced(Vec::new())
+        .unwrap();
+    let reader = TraceReader::<_, taktsim_components::FlowMessage>::new(bytes.as_slice()).unwrap();
+    assert_eq!(reader.header().seed, None);
+    let written = report.trace.unwrap();
+    // The check: another internal seed gives the same records.
+    let replayed = registry
+        .prepare(&model, RunOptions::new().no_seed_check())
+        .unwrap()
+        .replay(bytes.as_slice())
+        .unwrap();
+    assert_eq!(replayed.hash, written.hash);
+    // A seed afterwards replaces the request for none.
+    let seeded = registry
+        .prepare(&model, RunOptions::new().no_seed().seed(9))
+        .unwrap();
+    assert_eq!(seeded.header().seed, Some(9));
+}
+
+#[test]
+fn no_seed_is_refused_for_a_model_that_draws_and_names_what_draws() {
+    let yaml = support::document(
+        "1h",
+        "  - {id: source, type: Source}\n  - {id: cut, type: Machine, cycle_time: {dist: exponential, mean: 1min}}\n  - {id: sink, type: Sink}",
+        "  - [source, cut, sink]",
+    );
+    let Err(failure) = registry().prepare(&load(&yaml), RunOptions::new().no_seed()) else {
+        panic!("a drawing model ran with no seed");
+    };
+    let RunFailure::DrawsRandom { path } = &failure else {
+        panic!("{failure}");
+    };
+    assert_eq!(path.to_string(), "components[1]");
+}
+
+#[test]
+fn message_format_names_the_package() {
+    use taktsim_components::{Domain, Flow, FlowMessage};
+    use taktsim_trace::TraceMessage;
+
+    let (name, version) = FlowMessage::FORMAT.split_once('/').unwrap();
+    assert_eq!(name, Flow::PACKAGE);
+    assert!(version.parse::<u32>().is_ok());
+    assert_eq!(Flow::PACKAGE_VERSION, env!("CARGO_PKG_VERSION"));
 }

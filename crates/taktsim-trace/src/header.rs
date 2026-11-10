@@ -20,9 +20,9 @@ pub const MAGIC: [u8; 8] = *b"TAKT\r\n\x1a\n";
 /// every other version (ADR-0021).
 ///
 /// ```
-/// assert_eq!(taktsim_trace::FORMAT_VERSION, 2);
+/// assert_eq!(taktsim_trace::FORMAT_VERSION, 3);
 /// ```
-pub const FORMAT_VERSION: u16 = 2;
+pub const FORMAT_VERSION: u16 = 3;
 
 /// The name and version of the record layout this build writes and reads:
 /// the kinds of records and their fields after the common prefix (kind,
@@ -244,7 +244,7 @@ impl fmt::Display for TraceHash {
 /// let mut engine = Engine::new(EngineConfig::new(42));
 /// engine.add_component("m1", Box::new(Idle))?;
 /// let header = Header::for_engine(&engine, ModelHash::sha256(b"model"), SystemHash::sha256(b"system"));
-/// assert_eq!(header.seed, 42);
+/// assert_eq!(header.seed, Some(42));
 /// assert_eq!(header.components, ["m1"]);
 /// assert_eq!(header.message_format, "tick/1");
 /// assert_eq!(header.record_format, taktsim_trace::RECORD_FORMAT);
@@ -266,8 +266,9 @@ pub struct Header {
     pub model_hash: ModelHash,
     /// The system the run came from: the same across horizons and seeds.
     pub system_hash: SystemHash,
-    /// The run's seed.
-    pub seed: u64,
+    /// The run's seed; `None` for a run of a model that draws nothing, which
+    /// has no seed (ADR-0024 §5, §7). Written as `has seed` and `seed`.
+    pub seed: Option<u64>,
     /// The components' model ids, in the order they were added: records
     /// refer to components by position in this list.
     pub components: Vec<String>,
@@ -287,14 +288,14 @@ impl Header {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 7, vec!["m1".into()]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), Some(7), vec!["m1".into()]);
     /// assert_eq!(header.message_format, "tick/1");
     /// ```
     #[must_use]
     pub fn new<M: TraceMessage>(
         model_hash: ModelHash,
         system_hash: SystemHash,
-        seed: u64,
+        seed: Option<u64>,
         components: Vec<String>,
     ) -> Self {
         Self {
@@ -325,7 +326,7 @@ impl Header {
     ///
     /// let engine: Engine<Tick> = Engine::new(EngineConfig::new(9));
     /// let header = Header::for_engine(&engine, ModelHash::default(), SystemHash::default());
-    /// assert_eq!((header.seed, header.components.len()), (9, 0));
+    /// assert_eq!((header.seed, header.components.len()), (Some(9), 0));
     /// ```
     #[must_use]
     pub fn for_engine<M: TraceMessage>(
@@ -336,7 +337,7 @@ impl Header {
         Self::new::<M>(
             model_hash,
             system_hash,
-            engine.config().seed,
+            Some(engine.config().seed),
             component_names(engine),
         )
     }
@@ -358,7 +359,10 @@ impl Header {
         for b in self.system_hash.as_bytes() {
             out.u8(*b);
         }
-        out.u64(self.seed);
+        // `has seed`, then the seed, 0 if none: the pattern of events' `has
+        // item` and the end marker's `has end`.
+        out.u8(u8::from(self.seed.is_some()));
+        out.u64(self.seed.unwrap_or(0));
         // The count is a component number too: at most u32::MAX.
         out.component(ComponentId::from_index(self.components.len()));
         for name in &self.components {

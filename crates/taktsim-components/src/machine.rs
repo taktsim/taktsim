@@ -14,9 +14,9 @@ use taktsim_units::{Count, SimDuration, SimTime};
 use crate::clock;
 use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, MachineStateNote, VariantId};
-use crate::params::{CycleTime, Mtbf, Mttr, PerVariant, Units, VariantRef};
+use crate::params::{CycleTime, Mtbf, Mttr, PerVariant, Units, VariantRef, draws};
 use crate::port::{Inlet, Outlet};
-use crate::run::{BuildError, ComponentType, Wiring};
+use crate::run::{BuildError, ClockEnd, ComponentType, Wiring};
 use crate::state::MachineState;
 
 /// One entry of a setup's `matrix`: the time of one change of variant.
@@ -170,6 +170,25 @@ pub struct Setup {
 }
 
 impl Setup {
+    /// Whether any of its times is drawn.
+    fn draws_random(&self) -> bool {
+        let Self {
+            per_variant,
+            matrix,
+        } = self;
+        per_variant.as_ref().is_some_and(draws)
+            || matrix.as_ref().is_some_and(|Matrix(changes)| {
+                changes.iter().any(|change| {
+                    let Change {
+                        from: _,
+                        to: _,
+                        time,
+                    } = change;
+                    draws(time)
+                })
+            })
+    }
+
     /// The listed changes, sorted by `(from, to)`.
     pub(crate) fn changes(&self) -> &[Change] {
         self.matrix.as_ref().map_or(&[], |m| m.0.as_slice())
@@ -335,6 +354,20 @@ impl ComponentParams for Machine {
 impl ComponentType<Flow> for Machine {
     const STATION: bool = true;
 
+    fn draws_random(&self) -> bool {
+        let Self {
+            cycle_time,
+            mtbf,
+            mttr,
+            setup,
+            capacity: _,
+        } = self;
+        draws(cycle_time)
+            || mtbf.as_ref().is_some_and(draws)
+            || mttr.as_ref().is_some_and(draws)
+            || setup.as_ref().is_some_and(Setup::draws_random)
+    }
+
     fn build(
         &self,
         wiring: &Wiring<'_, FlowShared>,
@@ -351,6 +384,7 @@ impl ComponentType<Flow> for Machine {
                 up: sampler(mtbf)?,
                 repair: sampler(mttr)?,
                 streams: None,
+                clock_end: wiring.clock_end().clone(),
             }),
             (Some(_) | None, None) | (None, Some(_)) => None,
         };
@@ -382,6 +416,7 @@ impl ComponentType<Flow> for Machine {
             has_setup: self.setup.is_some(),
             source_near: wiring.shared().is_idle_when_empty(wiring.id()),
             downstream: wiring.downstream().to_vec(),
+            clock_end: wiring.clock_end().clone(),
             inlet: Inlet::default(),
             outlet: Outlet::default(),
             waiting: VecDeque::new(),
@@ -406,6 +441,8 @@ struct FailureProcess {
     repair: DurationDistribution,
     /// The `failures` and `repairs` streams, once started.
     streams: Option<(Stream, Stream)>,
+    /// Where it says that an up time or a repair ends past the clock.
+    clock_end: ClockEnd,
 }
 
 impl FailureProcess {
@@ -420,7 +457,7 @@ impl FailureProcess {
     fn arm(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         if let Some((failures, _)) = &mut self.streams {
             let up = clock::draw(&self.up, failures)?;
-            clock::schedule(up, FlowMessage::Failure, ctx)?;
+            clock::schedule(up, FlowMessage::Failure, &self.clock_end, ctx)?;
         }
         Ok(())
     }
@@ -430,7 +467,7 @@ impl FailureProcess {
     fn repair(&mut self, ctx: &mut Context<'_, FlowMessage>) -> Result<(), ComponentError> {
         if let Some((_, repairs)) = &mut self.streams {
             let time = clock::draw(&self.repair, repairs)?;
-            clock::schedule(time, FlowMessage::Repaired, ctx)?;
+            clock::schedule(time, FlowMessage::Repaired, &self.clock_end, ctx)?;
         }
         Ok(())
     }
@@ -447,13 +484,15 @@ enum Timer {
 }
 
 impl Timer {
-    /// Starts a timer of `after` with `message`; `None` is longer than the clock.
+    /// Starts a timer of `after` with `message`; `None` is longer than the clock,
+    /// and one that never ends is said on `clock_end`.
     fn start(
         after: Option<SimDuration>,
         message: FlowMessage,
+        clock_end: &ClockEnd,
         ctx: &mut Context<'_, FlowMessage>,
     ) -> Result<Self, ComponentError> {
-        Ok(match clock::schedule(after, message, ctx)? {
+        Ok(match clock::schedule(after, message, clock_end, ctx)? {
             Some((event, ends)) => Self::Running { event, ends },
             None => Self::Never,
         })
@@ -474,10 +513,11 @@ impl Timer {
     fn resume(
         &mut self,
         message: FlowMessage,
+        clock_end: &ClockEnd,
         ctx: &mut Context<'_, FlowMessage>,
     ) -> Result<(), ComponentError> {
         if let Self::Paused { remaining } = *self {
-            *self = Self::start(Some(remaining), message, ctx)?;
+            *self = Self::start(Some(remaining), message, clock_end, ctx)?;
         }
         Ok(())
     }
@@ -504,6 +544,8 @@ struct MachineBehaviour {
     /// non-stations only (ADR-0022 §5).
     source_near: bool,
     downstream: Vec<String>,
+    /// Where it says that a cycle or a changeover ends past the clock.
+    clock_end: ClockEnd,
     inlet: Inlet,
     outlet: Outlet,
     /// Arrived and not started, in arrival order.
@@ -579,7 +621,7 @@ impl MachineBehaviour {
                 let after = clock::draw(time, stream)?;
                 self.changeover = Some(Changeover {
                     to: variant,
-                    timer: Timer::start(after, FlowMessage::SetupDone, ctx)?,
+                    timer: Timer::start(after, FlowMessage::SetupDone, &self.clock_end, ctx)?,
                 });
                 break;
             }
@@ -592,7 +634,7 @@ impl MachineBehaviour {
                 });
             };
             let after = clock::draw(&self.cycle_time, stream)?;
-            let timer = Timer::start(after, FlowMessage::CycleDone { item }, ctx)?;
+            let timer = Timer::start(after, FlowMessage::CycleDone { item }, &self.clock_end, ctx)?;
             self.cycles.insert(item, (attrs, timer, self.started));
             self.started += 1;
         }
@@ -677,10 +719,12 @@ impl MachineBehaviour {
         let mut cycles: Vec<_> = self.cycles.iter_mut().collect();
         cycles.sort_by_key(|(_, (_, _, started))| *started);
         for (item, (_, timer, _)) in cycles {
-            timer.resume(FlowMessage::CycleDone { item: *item }, ctx)?;
+            timer.resume(FlowMessage::CycleDone { item: *item }, &self.clock_end, ctx)?;
         }
         if let Some(changeover) = &mut self.changeover {
-            changeover.timer.resume(FlowMessage::SetupDone, ctx)?;
+            changeover
+                .timer
+                .resume(FlowMessage::SetupDone, &self.clock_end, ctx)?;
         }
         if let Some(process) = &mut self.failures {
             process.arm(ctx)?;
@@ -845,6 +889,7 @@ mod tests {
             has_setup: false,
             source_near: true,
             downstream: Vec::new(),
+            clock_end: ClockEnd::default(),
             inlet: Inlet::default(),
             outlet: Outlet::default(),
             waiting: VecDeque::new(),

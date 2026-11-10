@@ -7,13 +7,16 @@
 //! of it fails, must not depend on a seed (principle 2, ADR-0022).
 //!
 //! The engine keeps its typed error for scheduling past the clock (ADR-0001): this
-//! is what a component does so that it never asks for that.
+//! is what a component does so that it never asks for that. It says so on the run's
+//! [`ClockEnd`], so that a run whose items such a wait holds reaches its horizon
+//! instead of reading as a stall (ADR-0024 §3).
 
 use taktsim_core::random::{DurationDistribution, Stream};
 use taktsim_core::{ComponentError, Context, EventId};
 use taktsim_units::{SimDuration, SimTime, UnitError};
 
 use crate::message::FlowMessage;
+use crate::run::ClockEnd;
 
 /// One draw, or `None` if it is longer than the clock can hold.
 ///
@@ -33,16 +36,19 @@ pub(crate) fn draw(
 }
 
 /// Schedules `message` after `after`, unless the end falls past the clock; returns
-/// the event and its time if it was scheduled.
+/// the event and its time if it was scheduled. A wait past the clock is said on
+/// `clock_end`.
 pub(crate) fn schedule(
     after: Option<SimDuration>,
     message: FlowMessage,
+    clock_end: &ClockEnd,
     ctx: &mut Context<'_, FlowMessage>,
 ) -> Result<Option<(EventId, SimTime)>, ComponentError> {
-    let Some(after) = after else {
-        return Ok(None);
-    };
-    let Ok(ends) = ctx.now().checked_add(after) else {
+    let now = ctx.now();
+    let Some((after, ends)) =
+        after.and_then(|after| now.checked_add(after).ok().map(|ends| (after, ends)))
+    else {
+        clock_end.wait_never_ends();
         return Ok(None);
     };
     let event = ctx.schedule(after, message)?;

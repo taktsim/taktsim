@@ -701,3 +701,77 @@ fn a_stepped_run_cancelled_after_going_idle_replays() {
     assert_eq!((end.outcome, end.time), (RunOutcome::Cancelled, t("1h")));
     assert_eq!(report.events, 1);
 }
+
+/// Ticks every minute and draws nothing.
+struct Metronome;
+
+impl Component<Toy> for Metronome {
+    fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+        ctx.schedule("1min".parse()?, Toy::Next)?;
+        Ok(())
+    }
+
+    fn handle(
+        &mut self,
+        _: Delivery<'_, Toy>,
+        ctx: &mut Context<'_, Toy>,
+    ) -> Result<(), ComponentError> {
+        ctx.schedule("1min".parse()?, Toy::Next)?;
+        Ok(())
+    }
+}
+
+/// Runs `engine` for an hour into a trace that states no seed.
+#[allow(clippy::unwrap_used)] // test helper
+fn trace_without_seed(mut engine: Engine<Toy>) -> Vec<u8> {
+    let mut header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"no seed"),
+        SystemHash::sha256(b"no seed"),
+    );
+    header.seed = None;
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let ran = engine.run(RunLimits::until(t("1h")), &mut writer).unwrap();
+    writer.run_ended(&ran);
+    writer.finish().unwrap().0
+}
+
+/// A trace that states no seed replays under any internal seed if the records
+/// are the same (ADR-0024 §5, §7), and diverges if they depend on the seed.
+#[test]
+fn run_without_seed_replays() {
+    let metronome = |seed| {
+        let mut engine = Engine::new(EngineConfig::new(seed));
+        engine.add_component("tick", Box::new(Metronome)).unwrap();
+        engine
+    };
+    let trace = trace_without_seed(metronome(0));
+    let report = replay(
+        TraceReader::new(trace.as_slice()).unwrap(),
+        &mut metronome(1),
+    )
+    .unwrap();
+    assert_eq!(report.events, 60);
+
+    // A model that does draw: no seed check stops it, the records do.
+    let trace = trace_without_seed(support::single_server(0).unwrap());
+    let mut other = support::single_server(1).unwrap();
+    let diverged = replay(TraceReader::new(trace.as_slice()).unwrap(), &mut other);
+    assert!(
+        matches!(
+            diverged,
+            Err(ReplayError::Diverged { .. } | ReplayError::State { .. })
+        ),
+        "{diverged:?}"
+    );
+    // A stated seed is still compared.
+    let stated = trace_of(support::single_server(0).unwrap(), "1h");
+    let mut other = support::single_server(1).unwrap();
+    assert!(matches!(
+        replay(TraceReader::new(stated.as_slice()).unwrap(), &mut other),
+        Err(ReplayError::Seed {
+            trace: 0,
+            engine: 1
+        })
+    ));
+}

@@ -1,0 +1,14 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 0
+--- stdout ---
+{
+  "errors": [],
+  "format": "taktsim-validation/1",
+  "model_hash": "8f66853706191250f21ebeff56b8ad316bf0175b0ff0a9e322b228291d4a1b21",
+  "system_hash": "e0e22c0f8cdadababc8602c28cd565ce8961b32491a47f65c71692ff8c01300a",
+  "valid": true
+}
+--- stderr ---

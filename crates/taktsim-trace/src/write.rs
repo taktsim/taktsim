@@ -163,7 +163,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec!["x".repeat(70_000)]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), Some(1), vec!["x".repeat(70_000)]);
     /// let result = TraceWriter::<_, Tick>::new(Vec::new(), &header);
     /// assert!(matches!(result, Err(WriteError::Header(_))));
     /// ```
@@ -211,7 +211,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), Some(1), vec![]);
     /// let mut writer = TraceWriter::<_, Tick>::new(Vec::new(), &header)?;
     /// writer.run_ended(&RunSummary { outcome: RunOutcome::Idle, events: 0, now: "1h".parse()? });
     /// let (_, summary) = writer.finish()?;
@@ -244,7 +244,7 @@ impl<W: Write, M: TraceMessage> TraceWriter<W, M> {
     /// #     fn decode(_: &mut Decoder<'_>) -> Result<Self, DecodeError> { Ok(Tick) }
     /// # }
     ///
-    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), 1, vec![]);
+    /// let header = Header::new::<Tick>(ModelHash::default(), SystemHash::default(), Some(1), vec![]);
     /// let writer = TraceWriter::<_, Tick>::new(Vec::new(), &header)?;
     /// let (bytes, summary) = writer.finish()?;
     /// assert_eq!((summary.records, summary.chunks), (0, 0));

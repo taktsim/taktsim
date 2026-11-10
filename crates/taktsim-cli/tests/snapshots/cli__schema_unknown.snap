@@ -1,0 +1,8 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+{"allowed":"all, model, result, validation, error, describe, Buffer, Machine, Sink, Source","example":"Machine","found":"Conveyor","kind":"error","message":"no schema of `Conveyor`","path":"<type>","type":"args.unknown_schema"}

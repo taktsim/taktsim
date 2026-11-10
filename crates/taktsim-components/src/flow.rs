@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use taktsim_model::expr::{Arity, Dimension, Signature, Type};
 use taktsim_model::{
-    CatalogError, Component as Entry, ComponentRef, Document, FieldPath, Findings, LoadErrorKind,
-    Location, Place, Segment,
+    CatalogError, Component as Entry, ComponentRef, Document, FieldPath, Findings, Json,
+    LoadErrorKind, Location, Place, Segment, model_schema,
 };
 
 use crate::buffer::Buffer;
@@ -537,6 +537,9 @@ impl Domain for Flow {
     type Message = FlowMessage;
     type Shared = FlowShared;
 
+    const PACKAGE: &'static str = "taktsim-components";
+    const PACKAGE_VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
     fn check(document: &Document, roles: &Roles, findings: &mut Findings) {
         let graph = Graph::new(document);
         check_ports(document, roles, &graph, findings);
@@ -575,6 +578,12 @@ impl Domain for Flow {
             idle,
         })
     }
+
+    /// Nothing outside the components' parameters draws until M6's `split` on
+    /// an edge.
+    fn draws_random(_: &Document) -> bool {
+        false
+    }
 }
 
 /// The standard catalog of production components: Source, Machine, Buffer and
@@ -612,4 +621,32 @@ pub fn standard() -> Result<Registry<Flow>, CatalogError> {
         .with_observable("lead_time", lead_time)?
         .with_observable("wip", wip)?
         .with_observable("state_shares", state_shares)
+}
+
+/// The JSON Schema of a model of the standard catalog: the bytes of
+/// `schemas/model/<format>.json`, once written with [`Json::to_pretty`] and a
+/// line end. `taktsim schema` and the schema generator print this one value.
+///
+/// # Errors
+///
+/// As [`standard`].
+///
+/// ```
+/// let schema = taktsim_components::standard_schema()?;
+/// assert_eq!(schema["properties"]["format"]["const"], "1.0");
+/// assert!(schema["$defs"]["Component"].as_object().is_some());
+/// # Ok::<(), taktsim_model::CatalogError>(())
+/// ```
+pub fn standard_schema() -> Result<Json, CatalogError> {
+    let registry = standard()?;
+    let catalog = registry.catalog();
+    // The types named from the catalog too, so the description cannot fall
+    // behind it.
+    let types: Vec<&str> = catalog.types().collect();
+    let description = format!(
+        "A taktsim model (spec §4) of the standard production catalog: {}. Generated from \
+         the Rust types; do not edit.",
+        types.join(", ")
+    );
+    Ok(model_schema(catalog).with("description", &description.as_str()))
 }

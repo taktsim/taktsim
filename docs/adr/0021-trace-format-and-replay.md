@@ -83,6 +83,13 @@ All integers little-endian; no field has a platform-dependent size.
 | item created | 2 | item u64, by u32 |
 | item disposed | 3 | item u64, by u32, how u8 (0 delivered, 1 scrapped, 2 consumed) |
 
+**Amended by ADR-0024 §7 (proposed):** the header's `seed u64` is now `has
+seed u8, seed u64` (0 if none, a byte other than 0 or 1 or a non-zero seed
+beside 0 is a corrupt header), and the format version is 3, so a run of a model
+that draws nothing says it has no seed. The stream hash does not change, since
+the header is not in the stream. `events` in the end marker counts records of
+kind 1 under the record format the header names.
+
 An event takes 36 bytes plus its message, an item record 23 or 24; the
 toy line of the measurement below averages 40 bytes per record (the
 measurement predates the prefix: it adds 2 bytes to item records and

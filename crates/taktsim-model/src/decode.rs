@@ -122,6 +122,30 @@ pub trait Record: Sized {
     const SCHEMA_NAME: Option<&'static str> = None;
     /// The schema's description, if any.
     const DESCRIPTION: Option<&'static str> = None;
+    /// Whether unknown keys are ignored when read, and `additionalProperties`
+    /// left out of the schema: for a document that later versions add fields
+    /// to (ADR-0024 §2), such as a result. A model file is closed.
+    ///
+    /// ```
+    /// use taktsim_model::{Fields, Format, Record, decode_str};
+    ///
+    /// struct Answer(u32);
+    ///
+    /// impl Record for Answer {
+    ///     const EXPECTED: &'static str = "an answer such as `{value: 42}`";
+    ///     const EXAMPLE: &'static str = "{value: 42}";
+    ///     const OPEN: bool = true;
+    ///
+    ///     fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+    ///         Some(Self(fields.required("value")?))
+    ///     }
+    /// }
+    ///
+    /// let answer: Answer = decode_str("{value: 42, added_later: true}", Format::Yaml)?;
+    /// assert_eq!(answer.0, 42);
+    /// # Ok::<(), taktsim_model::LoadErrors>(())
+    /// ```
+    const OPEN: bool = false;
 
     /// Reads the keys; returns `None` if any is missing or invalid, with
     /// the errors recorded through `fields`.
@@ -136,12 +160,16 @@ impl<T: Record> Decode for T {
     fn decode(node: &Node, cx: &mut Decoder) -> Option<Self> {
         let mut fields = cx.fields::<Self>(node)?;
         let value = T::read(&mut fields);
-        fields.finish();
+        if T::OPEN {
+            fields.ignore_rest();
+        } else {
+            fields.finish();
+        }
         value
     }
 
     fn schema(schemas: &mut Schemas) -> Json {
-        let schema = schemas.describe(|fields| {
+        let schema = schemas.describe_keys(T::OPEN, |fields| {
             let _ = T::read(fields);
         });
         match T::DESCRIPTION {
@@ -213,6 +241,11 @@ impl Schemas {
     /// The object schema of the keys `read` asks for: each a property,
     /// required or not, and no other key.
     pub(crate) fn describe(&mut self, read: impl FnOnce(&mut Fields<'_, '_>)) -> Json {
+        self.describe_keys(false, read)
+    }
+
+    /// As [`describe`](Self::describe); an `open` mapping may have other keys.
+    fn describe_keys(&mut self, open: bool, read: impl FnOnce(&mut Fields<'_, '_>)) -> Json {
         let mut scratch = Decoder::new(None);
         let mut fields = Fields {
             cx: &mut scratch,
@@ -236,8 +269,10 @@ impl Schemas {
         let mut schema = Json::object([
             ("type", Json::from("object")),
             ("properties", Json::Object(properties)),
-            ("additionalProperties", Json::from(false)),
         ]);
+        if !open {
+            schema = schema.with("additionalProperties", &Json::from(false));
+        }
         if !required.is_empty() {
             schema = schema.with(
                 "required",
@@ -1337,6 +1372,35 @@ mod tests {
                 ("additionalProperties", Json::from(false)),
             ])
         );
+    }
+
+    struct OpenPair(Pair);
+
+    impl Record for OpenPair {
+        const EXPECTED: &'static str = <Pair as Record>::EXPECTED;
+        const EXAMPLE: &'static str = <Pair as Record>::EXAMPLE;
+        const OPEN: bool = true;
+
+        fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
+            Pair::read(fields).map(Self)
+        }
+    }
+
+    #[test]
+    fn an_open_record_ignores_unknown_keys_and_says_so_in_its_schema() {
+        assert!(decode::<Pair>("{a: 1, later: 1}").is_err());
+        let open = decode::<OpenPair>("{a: 1, b: 2, later: {any: [thing]}}").unwrap();
+        assert_eq!((open.0.a, open.0.b), (1, Some(2)));
+        // What it does read stays checked.
+        assert!(decode::<OpenPair>("{a: x, later: 1}").is_err());
+        assert!(decode::<OpenPair>("{later: 1}").is_err());
+
+        let mut schemas = Schemas::default();
+        let schema = <OpenPair as Decode>::schema(&mut schemas);
+        assert_eq!(schema["additionalProperties"], Json::Null);
+        assert_eq!(schema["properties"]["a"]["type"], "integer");
+        let closed = <Pair as Decode>::schema(&mut schemas);
+        assert_eq!(closed["additionalProperties"], false);
     }
 
     #[test]

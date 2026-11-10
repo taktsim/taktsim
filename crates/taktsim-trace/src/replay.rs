@@ -39,8 +39,9 @@ pub struct ReplayReport {
 ///
 /// `engine` must be built from the same model as the trace, with the
 /// trace's seed, and not have run yet. Replay checks the header first (same
-/// engine version, seed and components), then runs the engine one event at
-/// a time, up to the time of the trace's next event, and compares:
+/// engine version, seed if the trace states one, and components), then runs the
+/// engine one event at a time, up to the time of the trace's next event, and
+/// compares:
 ///
 /// - every record the engine emits with the trace's next record, byte for
 ///   byte: the event's time, sequence number, target, sender, message and
@@ -118,10 +119,14 @@ pub fn replay<R: Read, M: TraceMessage>(
             engine: ENGINE_VERSION,
         });
     }
+    // A trace with no seed is of a model that claims to draw nothing: any
+    // internal seed must reproduce it, so the records are what is compared.
     let seed = engine.config().seed;
-    if header.seed != seed {
+    if let Some(stated) = header.seed
+        && stated != seed
+    {
         return Err(ReplayError::Seed {
-            trace: header.seed,
+            trace: stated,
             engine: seed,
         });
     }

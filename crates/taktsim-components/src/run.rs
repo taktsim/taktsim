@@ -6,10 +6,10 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use taktsim_core::random::DistributionError;
 use taktsim_core::{
@@ -22,7 +22,8 @@ use taktsim_model::{
     LoadErrors, Model, Segment,
 };
 use taktsim_trace::{
-    Header, ModelHash, Summary, SystemHash, TraceMessage, TraceWriter, WriteError,
+    Header, ModelHash, ReplayError, ReplayReport, Summary, SystemHash, TraceMessage, TraceReader,
+    TraceWriter, WriteError, replay,
 };
 use taktsim_units::SimTime;
 
@@ -39,8 +40,11 @@ use taktsim_units::SimTime;
 /// impl Domain for Lax {
 ///     type Message = taktsim_components::FlowMessage;
 ///     type Shared = ();
+///     const PACKAGE: &'static str = "lax";
+///     const PACKAGE_VERSION: &'static str = "1.0.0";
 ///     fn check(_: &Document, _: &Roles, _: &mut Findings) {}
 ///     fn prepare(_: &Document, _: &Roles) -> Result<(), BuildError> { Ok(()) }
+///     fn draws_random(_: &Document) -> bool { false }
 /// }
 ///
 /// let _ = taktsim_components::Registry::<Lax>::new();
@@ -52,6 +56,14 @@ pub trait Domain: 'static {
     /// What every builder reads, such as the model's variants.
     type Shared;
 
+    /// The package's name, in every run's provenance and run id (ADR-0024 §6):
+    /// the name before the `/` in its message format.
+    const PACKAGE: &'static str;
+    /// The package's version, usually `env!("CARGO_PKG_VERSION")`. A package
+    /// that changes what its components do gets a new version, and so new run
+    /// ids, even when its message format stays.
+    const PACKAGE_VERSION: &'static str;
+
     /// What it checks across a document, reported at a place and field path.
     /// Run at load time, and again when building.
     fn check(document: &Document, roles: &Roles, findings: &mut Findings);
@@ -62,6 +74,11 @@ pub trait Domain: 'static {
     ///
     /// A [`BuildError`] with the field path of what cannot be prepared.
     fn prepare(document: &Document, roles: &Roles) -> Result<Self::Shared, BuildError>;
+
+    /// Whether a run of `document` draws random numbers for what no single
+    /// component's parameters state, such as a split on an edge (ADR-0024 §5).
+    /// Required, so a domain must answer for it.
+    fn draws_random(document: &Document) -> bool;
 }
 
 /// Which edges a component type may have (ADR-0022 §3). A type with inlets or
@@ -159,6 +176,15 @@ pub trait ComponentType<D: Domain>: ComponentParams {
     /// Whether it does work: a station a part waits for (ADR-0022 §5).
     const STATION: bool = false;
 
+    /// Whether a run of this entry draws random numbers (ADR-0024 §5). `true`
+    /// unless the type says otherwise, because a false `false` labels one sample
+    /// path as exact. Taking a stream is not drawing, and sampling a constant
+    /// draws nothing. Destructure the parameters without `..`, so a new key
+    /// does not compile until it is answered for.
+    fn draws_random(&self) -> bool {
+        true
+    }
+
     /// Its behaviour in one run.
     ///
     /// # Errors
@@ -211,8 +237,58 @@ impl Roles {
     }
 }
 
+/// Where the components of one run say that a wait of theirs ends past the end of
+/// the clock, about 584 years, and so never ends (ADR-0022 §6). Such a wait's
+/// event is after every horizon. So a run that core reports as out of events
+/// while one is pending did not run dry: it reached its horizon (ADR-0024 §3),
+/// and items such a wait holds are not a stall.
+///
+/// Each run has its own, which every builder reaches through
+/// [`Wiring::clock_end`]; a clone says it for the same run. Once said it stays
+/// said, because a wait that never ends is pending for the rest of the run. Its
+/// answer reaches [`RunReport::wait_never_ends`].
+///
+/// ```
+/// use taktsim_components::ClockEnd;
+///
+/// let run = ClockEnd::default();
+/// let machine = run.clone();
+/// assert!(!run.any_wait_never_ends());
+/// machine.wait_never_ends();
+/// assert!(run.any_wait_never_ends());
+/// assert!(!ClockEnd::default().any_wait_never_ends(), "another run's");
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct ClockEnd(Arc<AtomicBool>);
+
+impl ClockEnd {
+    /// Says that a wait of this run ends past the end of the clock: it never
+    /// ends, and nothing is scheduled for it.
+    ///
+    /// ```
+    /// let run = taktsim_components::ClockEnd::default();
+    /// run.wait_never_ends();
+    /// assert!(run.any_wait_never_ends());
+    /// ```
+    pub fn wait_never_ends(&self) {
+        // One run is single-threaded; moving it to another thread orders this.
+        self.0.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether a component of this run said that a wait of its never ends.
+    ///
+    /// ```
+    /// assert!(!taktsim_components::ClockEnd::default().any_wait_never_ends());
+    /// ```
+    #[must_use]
+    pub fn any_wait_never_ends(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
 /// What a builder knows about its component: the id, the neighbours in declared
-/// order, and what the domain shares (ADR-0022 §2).
+/// order, what the domain shares (ADR-0022 §2), and where to say that a wait
+/// never ends.
 ///
 /// ```
 /// use taktsim_components::Wiring;
@@ -228,6 +304,7 @@ pub struct Wiring<'a, S> {
     upstream: &'a [String],
     downstream: &'a [String],
     shared: &'a S,
+    clock_end: &'a ClockEnd,
 }
 
 impl<'a, S> Wiring<'a, S> {
@@ -291,6 +368,20 @@ impl<'a, S> Wiring<'a, S> {
     pub const fn shared(&self) -> &'a S {
         self.shared
     }
+
+    /// Where its behaviour says that a wait ends past the end of the clock
+    /// (ADR-0022 §6); keep a clone. A type that never waits that long, or whose
+    /// waits all fit, does not need it.
+    ///
+    /// ```
+    /// fn keep(wiring: &taktsim_components::Wiring<'_, ()>) -> taktsim_components::ClockEnd {
+    ///     wiring.clock_end().clone()
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn clock_end(&self) -> &'a ClockEnd {
+        self.clock_end
+    }
 }
 
 /// Builds the behaviour of one entry.
@@ -311,6 +402,13 @@ fn build_entry<D: Domain, T: ComponentType<D>>(
         });
     };
     params.build(wiring)
+}
+
+/// Whether `entry` draws; an entry of another type is taken to draw.
+fn entry_draws<D: Domain, T: ComponentType<D>>(entry: &Entry) -> bool {
+    entry
+        .params::<T>()
+        .is_none_or(<T as ComponentType<D>>::draws_random)
 }
 
 /// The component types of a domain: its catalog and one builder per type,
@@ -343,6 +441,7 @@ fn build_entry<D: Domain, T: ComponentType<D>>(
 pub struct Registry<D: Domain> {
     catalog: Catalog,
     builders: BTreeMap<&'static str, Builder<D>>,
+    drawing: BTreeMap<&'static str, fn(&Entry) -> bool>,
     roles: Roles,
     _domain: PhantomData<fn() -> D>,
 }
@@ -375,6 +474,7 @@ impl<D: Domain> Registry<D> {
         Self {
             catalog: Catalog::new(),
             builders: BTreeMap::new(),
+            drawing: BTreeMap::new(),
             roles: Roles::default(),
             _domain: PhantomData,
         }
@@ -399,6 +499,7 @@ impl<D: Domain> Registry<D> {
         let catalog = self.catalog.with::<T>()?;
         self.roles.types.insert(T::TYPE, (T::PORTS, T::STATION));
         self.builders.insert(T::TYPE, build_entry::<D, T>);
+        self.drawing.insert(T::TYPE, entry_draws::<D, T>);
         let roles = Arc::new(self.roles.clone());
         self.catalog = catalog.with_check(Box::new(move |document, findings| {
             D::check(document, &roles, findings);
@@ -454,10 +555,46 @@ impl<D: Domain> Registry<D> {
         &self.roles
     }
 
+    /// Whether a run of `document` draws random numbers: the union of what its
+    /// components and the domain answer (ADR-0024 §5). A type this registry does
+    /// not know is taken to draw.
+    ///
+    /// ```
+    /// use taktsim_model::{Format, Loader};
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// let loader = Loader::new(registry.catalog());
+    /// let text = |cycle: &str| format!(
+    ///     "format: \"1.0\"\nmodel: {{name: m}}\nexperiment: {{type: terminating, horizon: 1h}}\n\
+    ///      components: [{{id: source, type: Source}}, {{id: cut, type: Machine, cycle_time: {cycle}}}, {{id: sink, type: Sink}}]\n\
+    ///      flow: [[source, cut, sink]]\n"
+    /// );
+    /// let constant = loader.load_str(&text("1min"), Format::Yaml)?;
+    /// assert!(!registry.draws_random(constant.document()));
+    /// let drawn = loader.load_str(&text("{dist: exponential, mean: 1min}"), Format::Yaml)?;
+    /// assert!(registry.draws_random(drawn.document()));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub fn draws_random(&self, document: &Document) -> bool {
+        D::draws_random(document) || self.drawing_component(document).is_some()
+    }
+
+    /// The first component of `document` that draws.
+    fn drawing_component<'d>(&self, document: &'d Document) -> Option<&'d Entry> {
+        document.components().iter().find(|entry| {
+            self.drawing
+                .get(entry.type_name())
+                .is_none_or(|draws| draws(entry))
+        })
+    }
+
     /// An engine for `document`, with the components in document order
     /// (ADR-0020 §7). It runs the domain's check again, so a document loaded
     /// with another catalog cannot reach the engine unchecked. Can be called
-    /// once per seed, from several threads.
+    /// once per seed, from several threads. Whether a wait of the run never
+    /// ends is not kept here; [`prepare`](Self::prepare) keeps it for its
+    /// [`RunReport`].
     ///
     /// # Errors
     ///
@@ -483,6 +620,16 @@ impl<D: Domain> Registry<D> {
         document: &Document,
         config: EngineConfig,
     ) -> Result<Engine<D::Message>, BuildError> {
+        self.build_for(document, config, &ClockEnd::default())
+    }
+
+    /// [`build`](Self::build), with the run's [`ClockEnd`] in every wiring.
+    fn build_for(
+        &self,
+        document: &Document,
+        config: EngineConfig,
+        clock_end: &ClockEnd,
+    ) -> Result<Engine<D::Message>, BuildError> {
         let mut findings = Findings::new();
         self.catalog.check(document, &mut findings);
         findings
@@ -506,6 +653,7 @@ impl<D: Domain> Registry<D> {
                 upstream: upstream.get(entry.id()).unwrap_or(&none),
                 downstream: downstream.get(entry.id()).unwrap_or(&none),
                 shared: &shared,
+                clock_end,
             };
             let behaviour = builder(entry, &wiring)?;
             engine
@@ -524,8 +672,9 @@ impl<D: Domain> Registry<D> {
     ///
     /// # Errors
     ///
-    /// [`RunFailure::NoSeed`] without a seed in the options or the model, or
-    /// [`RunFailure::Build`].
+    /// [`RunFailure::NoSeed`] without a seed in the options or the model,
+    /// [`RunFailure::DrawsRandom`] if [`RunOptions::no_seed`] asks for no seed
+    /// and the model draws, or [`RunFailure::Build`].
     ///
     /// ```
     /// use taktsim_components::RunOptions;
@@ -539,7 +688,7 @@ impl<D: Domain> Registry<D> {
     ///     Format::Yaml,
     /// )?;
     /// let prepared = registry.prepare(&model, RunOptions::new())?;
-    /// assert_eq!(prepared.header().seed, 42);
+    /// assert_eq!(prepared.header().seed, Some(42));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn prepare<'a>(
@@ -548,28 +697,48 @@ impl<D: Domain> Registry<D> {
         options: RunOptions<'a>,
     ) -> Result<Prepared<'a, D>, RunFailure> {
         let document = model.document();
-        let Some(seed) = options.seed.or_else(|| document.model().seed()) else {
-            return Err(RunFailure::NoSeed {
-                path: FieldPath::from(vec![
-                    Segment::Key("model".to_owned()),
-                    Segment::Key("seed".to_owned()),
-                ]),
-            });
+        let seed_path = || {
+            FieldPath::from(vec![
+                Segment::Key("model".to_owned()),
+                Segment::Key("seed".to_owned()),
+            ])
+        };
+        let seed = match options.without_seed {
+            Some(internal) => {
+                if let Some(entry) = self.drawing_component(document) {
+                    return Err(RunFailure::DrawsRandom {
+                        path: entry.path().clone(),
+                    });
+                }
+                if D::draws_random(document) {
+                    return Err(RunFailure::DrawsRandom { path: seed_path() });
+                }
+                internal
+            }
+            None => match options.seed.or_else(|| document.model().seed()) {
+                Some(seed) => seed,
+                None => return Err(RunFailure::NoSeed { path: seed_path() }),
+            },
         };
         let mut config = EngineConfig::new(seed);
         if !options.checks {
             config = config.without_checks();
         }
+        let clock_end = ClockEnd::default();
         let engine = self
-            .build(document, config)
+            .build_for(document, config, &clock_end)
             .map_err(|e| RunFailure::Build(Box::new(e)))?;
-        let header = Header::for_engine(
+        let mut header = Header::for_engine(
             &engine,
             ModelHash::from_bytes(*model.hash().as_bytes()),
             SystemHash::from_bytes(*model.system_hash().as_bytes()),
         );
+        if options.without_seed.is_some() {
+            header.seed = None;
+        }
         Ok(Prepared {
             engine,
+            clock_end,
             header,
             paths: document
                 .components()
@@ -629,6 +798,10 @@ pub struct RunOptions<'a> {
     pub max_events: Option<u64>,
     /// Once set, the run stops, e.g. a wall-clock budget kept by the caller.
     pub cancel: Option<&'a AtomicBool>,
+    /// A run with no seed: the engine's internal seed, which the header does not
+    /// state. Set by [`no_seed`](Self::no_seed) and
+    /// [`no_seed_check`](Self::no_seed_check).
+    without_seed: Option<u64>,
 }
 
 impl Default for RunOptions<'_> {
@@ -650,6 +823,7 @@ impl<'a> RunOptions<'a> {
             checks: true,
             max_events: None,
             cancel: None,
+            without_seed: None,
         }
     }
 
@@ -662,6 +836,72 @@ impl<'a> RunOptions<'a> {
     pub const fn seed(self, seed: u64) -> Self {
         Self {
             seed: Some(seed),
+            without_seed: None,
+            ..self
+        }
+    }
+
+    /// A run with no seed, for a model that draws nothing (ADR-0024 §5). The
+    /// header states none and the engine has an internal seed of 0, which
+    /// nothing may depend on. [`Registry::prepare`] refuses it for a model that
+    /// draws.
+    ///
+    /// ```
+    /// use taktsim_components::{RunFailure, RunOptions};
+    /// use taktsim_model::{Format, Loader};
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// let loader = Loader::new(registry.catalog());
+    /// let text = |cycle: &str| format!(
+    ///     "format: \"1.0\"\nmodel: {{name: m, seed: 42}}\nexperiment: {{type: terminating, horizon: 1h}}\n\
+    ///      components: [{{id: source, type: Source}}, {{id: cut, type: Machine, cycle_time: {cycle}}}, {{id: sink, type: Sink}}]\n\
+    ///      flow: [[source, cut, sink]]\n"
+    /// );
+    /// let exact = loader.load_str(&text("1min"), Format::Yaml)?;
+    /// let prepared = registry.prepare(&exact, RunOptions::new().no_seed())?;
+    /// assert_eq!(prepared.header().seed, None);
+    ///
+    /// let drawn = loader.load_str(&text("{dist: exponential, mean: 1min}"), Format::Yaml)?;
+    /// let refused = registry.prepare(&drawn, RunOptions::new().no_seed());
+    /// assert!(matches!(refused, Err(RunFailure::DrawsRandom { .. })));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub const fn no_seed(self) -> Self {
+        Self {
+            seed: None,
+            without_seed: Some(0),
+            ..self
+        }
+    }
+
+    /// As [`no_seed`](Self::no_seed), with an internal seed of 1: for replaying a
+    /// run with no seed under another seed, so a false claim of drawing nothing
+    /// diverges (ADR-0024 §5).
+    ///
+    /// ```
+    /// use taktsim_components::RunOptions;
+    /// use taktsim_core::NoTrace;
+    /// use taktsim_model::{Format, Loader};
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// let model = Loader::new(registry.catalog()).load_str(
+    ///     "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 1h}\n\
+    ///      components: [{id: source, type: Source}, {id: cut, type: Machine, cycle_time: 1min}, {id: sink, type: Sink}]\n\
+    ///      flow: [[source, cut, sink]]\n",
+    ///     Format::Yaml,
+    /// )?;
+    /// let (trace, _) = registry.prepare(&model, RunOptions::new().no_seed())?.run_traced(Vec::new())?;
+    /// let report = registry.prepare(&model, RunOptions::new().no_seed_check())?.replay(trace.as_slice())?;
+    /// assert!(report.events > 0);
+    /// # let _ = NoTrace;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub const fn no_seed_check(self) -> Self {
+        Self {
+            seed: None,
+            without_seed: Some(1),
             ..self
         }
     }
@@ -730,6 +970,7 @@ impl<'a> RunOptions<'a> {
 /// ```
 pub struct Prepared<'a, D: Domain> {
     engine: Engine<D::Message>,
+    clock_end: ClockEnd,
     header: Header,
     /// The field path of each component's entry, in engine order.
     paths: Vec<FieldPath>,
@@ -825,7 +1066,7 @@ impl<D: Domain> Prepared<'_, D> {
     ///     Format::Yaml,
     /// )?;
     /// let prepared = registry.prepare(&model, RunOptions::new().seed(9))?;
-    /// assert_eq!(prepared.header().seed, 9);
+    /// assert_eq!(prepared.header().seed, Some(9));
     /// assert_eq!(prepared.header().components, ["source", "sink"]);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -863,6 +1104,7 @@ impl<D: Domain> Prepared<'_, D> {
         Ok(RunReport {
             summary,
             items: self.engine.item_counts(),
+            wait_never_ends: self.clock_end.any_wait_never_ends(),
             trace: None,
         })
     }
@@ -921,6 +1163,7 @@ impl<D: Domain> Prepared<'_, D> {
             RunReport {
                 summary,
                 items: self.engine.item_counts(),
+                wait_never_ends: self.clock_end.any_wait_never_ends(),
                 trace: Some(trace),
             },
         ))
@@ -1016,6 +1259,39 @@ impl<M> TraceSink<M> for Watch<'_, M> {
     }
 }
 
+impl<D: Domain> Prepared<'_, D> {
+    /// Re-executes the run recorded in `reader` with this engine and compares it
+    /// at every event (ADR-0021), through the registry, so a caller needs no
+    /// type of the domain. It compares the seed if the trace states one.
+    ///
+    /// # Errors
+    ///
+    /// [`RunFailure::Replay`] if the trace cannot be read or the replay differs.
+    ///
+    /// ```
+    /// use taktsim_components::RunOptions;
+    /// use taktsim_model::{Format, Loader};
+    ///
+    /// let registry = taktsim_components::standard()?;
+    /// let model = Loader::new(registry.catalog()).load_str(
+    ///     "format: \"1.0\"\nmodel: {name: m, seed: 1}\nexperiment: {type: terminating, horizon: 1h}\n\
+    ///      components: [{id: source, type: Source, interarrival: {dist: exponential, mean: 1min}}, {id: sink, type: Sink}]\n\
+    ///      flow: [[source, sink]]\n",
+    ///     Format::Yaml,
+    /// )?;
+    /// let (trace, written) = registry.prepare(&model, RunOptions::new())?.run_traced(Vec::new())?;
+    /// let report = registry.prepare(&model, RunOptions::new())?.replay(trace.as_slice())?;
+    /// assert_eq!(Some(report.hash), written.trace.map(|t| t.hash));
+    /// assert!(registry.prepare(&model, RunOptions::new().seed(2))?.replay(trace.as_slice()).is_err());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn replay<R: Read>(mut self, reader: R) -> Result<ReplayReport, RunFailure> {
+        let trace = TraceReader::<R, D::Message>::new(reader)
+            .map_err(|e| RunFailure::Replay(Box::new(ReplayError::Trace(e))))?;
+        replay(trace, &mut self.engine).map_err(|e| RunFailure::Replay(Box::new(e)))
+    }
+}
+
 /// What a run did.
 ///
 /// ```
@@ -1025,6 +1301,7 @@ impl<M> TraceSink<M> for Watch<'_, M> {
 /// let report = RunReport {
 ///     summary: RunSummary { outcome: RunOutcome::Idle, events: 0, now: "1h".parse()? },
 ///     items: ItemCounts::default(),
+///     wait_never_ends: false,
 ///     trace: None,
 /// };
 /// assert_eq!(report.items.delivered.get(), 0);
@@ -1036,6 +1313,11 @@ pub struct RunReport {
     pub summary: RunSummary,
     /// Items by where they are or how they left.
     pub items: ItemCounts,
+    /// Whether a component has a wait that ends past the end of the clock and so
+    /// never ends (ADR-0022 §6), as its [`ClockEnd`] says. Its event is after
+    /// every horizon: with it, core's [`RunOutcome::Idle`](taktsim_core::RunOutcome::Idle)
+    /// means the run reached its horizon, not that it ran dry (ADR-0024 §3).
+    pub wait_never_ends: bool,
     /// What the trace holds, if it was written by
     /// [`run_traced`](Prepared::run_traced).
     pub trace: Option<Summary>,
@@ -1286,9 +1568,20 @@ pub enum RunFailure {
         /// Where the model would give it.
         path: FieldPath,
     },
+    /// A run with no seed was asked for, and the model draws random numbers.
+    #[error(
+        "{path}: this model draws random numbers, so a run of it needs a seed, e.g. `model: {{name: line-a, seed: 42}}`"
+    )]
+    DrawsRandom {
+        /// What draws: a component's entry, or `model.seed` if the domain does.
+        path: FieldPath,
+    },
     /// The document cannot become an engine.
     #[error(transparent)]
     Build(Box<BuildError>),
+    /// The replay failed.
+    #[error(transparent)]
+    Replay(Box<ReplayError>),
     /// The run failed.
     #[error("the run failed: {0}")]
     Run(#[source] Box<RunError>),
@@ -1332,9 +1625,11 @@ impl RunFailure {
     #[must_use]
     pub fn path(&self) -> Option<&FieldPath> {
         match self {
-            Self::NoSeed { path } | Self::ClockStopped { path, .. } => Some(path),
+            Self::NoSeed { path }
+            | Self::DrawsRandom { path }
+            | Self::ClockStopped { path, .. } => Some(path),
             Self::Build(error) => error.path(),
-            Self::Run(_) | Self::Write(_) => None,
+            Self::Replay(_) | Self::Run(_) | Self::Write(_) => None,
         }
     }
 
@@ -1351,7 +1646,11 @@ impl RunFailure {
     pub fn found(&self) -> Option<String> {
         match self {
             Self::NoSeed { .. } => Some("no seed in the run options or the model".to_owned()),
+            Self::DrawsRandom { .. } => {
+                Some("a run with no seed of a model that draws random numbers".to_owned())
+            }
             Self::Build(error) => error.found(),
+            Self::Replay(error) => Some(error.to_string()),
             Self::Run(error) => Some(error.to_string()),
             Self::Write(error) => Some(error.to_string()),
             Self::ClockStopped {
@@ -1386,12 +1685,16 @@ impl RunFailure {
                 "a seed in the run options or in the model; a run never takes one from entropy"
                     .to_owned(),
             ),
+            Self::DrawsRandom { .. } => Some(
+                "a seed in the run options or in the model; a run with no seed only of a model that draws nothing"
+                    .to_owned(),
+            ),
             Self::Build(error) => error.allowed(),
             Self::ClockStopped { .. } => Some(format!(
                 "at most {TIMERS_PER_INSTANT} events a component addresses to itself at one \
                  instant: durations whose draws are not almost all 0 ns"
             )),
-            Self::Run(_) | Self::Write(_) => None,
+            Self::Replay(_) | Self::Run(_) | Self::Write(_) => None,
         }
     }
 
@@ -1407,12 +1710,14 @@ impl RunFailure {
     #[must_use]
     pub fn example(&self) -> Option<String> {
         match self {
-            Self::NoSeed { .. } => Some("model: {name: line-a, seed: 42}".to_owned()),
+            Self::NoSeed { .. } | Self::DrawsRandom { .. } => {
+                Some("model: {name: line-a, seed: 42}".to_owned())
+            }
             Self::Build(error) => error.example(),
             Self::ClockStopped { .. } => {
                 Some("{dist: lognormal, mean: 42s, sigma: 0.08}".to_owned())
             }
-            Self::Run(_) | Self::Write(_) => None,
+            Self::Replay(_) | Self::Run(_) | Self::Write(_) => None,
         }
     }
 }

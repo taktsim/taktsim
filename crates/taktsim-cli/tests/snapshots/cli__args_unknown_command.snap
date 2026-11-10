@@ -1,0 +1,11 @@
+---
+source: crates/taktsim-cli/tests/cli.rs
+expression: dir.masked(&outcome)
+---
+exit: 1
+--- stdout ---
+--- stderr ---
+error[args.unknown_command] <command>: no command `simulate`
+  found: simulate
+  allowed: describe, schema, validate, run
+  example: taktsim describe

@@ -2,8 +2,8 @@
 # Every crate under crates/ (and python/) is a workspace member, uses the workspace lints and
 # license, and declares forbid(unsafe_code) and deny(missing_docs) at its root
 # (spec §7 Layer 1). Workspace crates depend in one direction only, dev
-# dependencies included (ADR-0022 §2): units <- core <- model, trace <-
-# components <- every client.
+# dependencies included (ADR-0022 §2, ADR-0024 §1): units <- core <- model, trace
+# <- components <- run <- cli, python.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -49,5 +49,7 @@ allowed taktsim-core "taktsim-units"
 allowed taktsim-model "taktsim-units taktsim-core"
 allowed taktsim-trace "taktsim-units taktsim-core"
 allowed taktsim-components "taktsim-units taktsim-core taktsim-model taktsim-trace"
+allowed taktsim-run "taktsim-units taktsim-core taktsim-model taktsim-trace taktsim-components taktsim-stats"
+allowed taktsim-cli "taktsim-units taktsim-model taktsim-components taktsim-run"
 
 exit "$fail"
