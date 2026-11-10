@@ -2,8 +2,8 @@
 
 mod support;
 
-use support::{document, is_arrive, run, t};
-use taktsim_components::{FlowMessage, SourceState};
+use support::{document, is_arrive, load, registry, run, t};
+use taktsim_components::{Domain, Flow, FlowMessage, SourceState, VariantId};
 use taktsim_trace::Record;
 
 const SINK: &str = "  - {id: sink, type: Sink}";
@@ -237,6 +237,37 @@ fn attributes_travel_with_the_item() {
         assert_eq!(pair[0].message, pair[1].message);
     }
     assert!(r.events().iter().any(|e| is_arrive(&e.message)));
+}
+
+/// A part's `VariantId` is the position of its name in the names every builder
+/// shares (`FlowShared::variants`): sorted, across all Sources, and the same name
+/// the trace states for that id.
+#[test]
+fn a_variant_id_is_the_position_of_its_name_in_the_shared_names() {
+    let yaml = document(
+        "10min",
+        &format!(
+            "  - {{id: a, type: Source, interarrival: 30s, variants: {{premium: 30%, basic: 70%}}}}\n  \
+             - {{id: b, type: Source, interarrival: 40s, variants: {{eco: 100%}}}}\n  \
+             - {{id: c, type: Source, interarrival: 50s}}\n{SINK}"
+        ),
+        "  - [a, sink]\n  - [b, sink]\n  - [c, sink]",
+    );
+    let registry = registry();
+    let shared = Flow::prepare(load(&yaml).document(), registry.roles()).unwrap();
+    assert_eq!(shared.variants(), ["basic", "default", "eco", "premium"]);
+    let r = run(&yaml, 3);
+    for (index, name) in shared.variants().iter().enumerate() {
+        let id = VariantId::new(u16::try_from(index).unwrap());
+        assert_eq!(r.variant_name(id).as_ref(), Some(name), "{id:?}");
+    }
+    // Every part delivered carries one of them.
+    for e in r.arrivals("sink") {
+        let FlowMessage::Arrive(attrs) = e.message else {
+            panic!("{e:?}")
+        };
+        assert!(usize::from(attrs.variant.get()) < shared.variants().len());
+    }
 }
 
 #[test]
