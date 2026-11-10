@@ -439,8 +439,9 @@ directory, else `.taktsim/` here, `--store` overrides. Layout below it:
   and the temporary one is dropped. No half-written run is ever visible.
 - **Reuse.** If `runs/<id>/result.json` exists and reads, `run` returns it without
   running (ADR-0019 item 5), as the bytes in the file, so a key this build does not read
-  is not lost. A result that does not compute to the id it is filed under is exit 2,
-  `run.stored_run_differs`, not this run. With `--max-events` too: nothing runs, so no limit is
+  is not lost. A result that does not compute to the id it is filed under, states
+  hashes other than its model's, names a trace other than `runs/<id>/trace.takt`, or
+  holds more than its one run, is exit 2, `run.stored_run_differs`, not this run. With `--max-events` too: nothing runs, so no limit is
   reached, and it is exit 0. `--no-reuse` runs anyway and, if the new run reached its
   end, compares the stream hash with the stored one, never overwriting: a difference is
   exit 2 and means the engine changed or determinism broke. This also matters while the
