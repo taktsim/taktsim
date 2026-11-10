@@ -15,7 +15,7 @@ use crate::flow::{Flow, FlowShared, variant_id};
 use crate::message::{FlowMessage, ItemAttrs, SourceStateNote, VariantId};
 use crate::params::{Interarrival, MAX_NAME, Units, VARIANT_NAME_RULE, draws, is_variant_name};
 use crate::port::Outlet;
-use crate::run::{BuildError, ComponentType, Ports, Wiring};
+use crate::run::{BuildError, ClockEnd, ComponentType, Ports, Wiring};
 use crate::state::SourceState;
 
 /// How far shares may be from 100 %, in percentage points: `Ratio` holds a
@@ -348,6 +348,7 @@ impl ComponentType<Flow> for Source {
             names,
             priority: self.priority.map_or(0, |p| p.0),
             downstream: wiring.downstream().to_vec(),
+            clock_end: wiring.clock_end().clone(),
             outlet: Outlet::default(),
             held: VecDeque::new(),
             created: 0,
@@ -369,6 +370,8 @@ struct SourceBehaviour {
     names: Vec<(VariantId, String)>,
     priority: u8,
     downstream: Vec<String>,
+    /// Where it says that its next interval ends past the clock.
+    clock_end: ClockEnd,
     outlet: Outlet,
     /// Created and not yet released, in creation order.
     held: VecDeque<(ItemId, ItemAttrs)>,
@@ -400,7 +403,7 @@ impl SourceBehaviour {
             (&self.interarrival, self.interval_stream.as_mut())
         {
             let after = clock::draw(distribution, stream)?;
-            clock::schedule(after, FlowMessage::NextArrival, ctx)?;
+            clock::schedule(after, FlowMessage::NextArrival, &self.clock_end, ctx)?;
         }
         Ok(())
     }
@@ -555,6 +558,7 @@ mod tests {
             names: Vec::new(),
             priority: 0,
             downstream: Vec::new(),
+            clock_end: ClockEnd::default(),
             outlet: Outlet::default(),
             held: VecDeque::new(),
             created: 0,

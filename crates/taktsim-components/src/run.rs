@@ -9,7 +9,7 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use taktsim_core::random::DistributionError;
 use taktsim_core::{
@@ -237,8 +237,58 @@ impl Roles {
     }
 }
 
+/// Where the components of one run say that a wait of theirs ends past the end of
+/// the clock, about 584 years, and so never ends (ADR-0022 §6). Such a wait's
+/// event is after every horizon. So a run that core reports as out of events
+/// while one is pending did not run dry: it reached its horizon (ADR-0024 §3),
+/// and items such a wait holds are not a stall.
+///
+/// Each run has its own, which every builder reaches through
+/// [`Wiring::clock_end`]; a clone says it for the same run. Once said it stays
+/// said, because a wait that never ends is pending for the rest of the run. Its
+/// answer reaches [`RunReport::wait_never_ends`].
+///
+/// ```
+/// use taktsim_components::ClockEnd;
+///
+/// let run = ClockEnd::default();
+/// let machine = run.clone();
+/// assert!(!run.any_wait_never_ends());
+/// machine.wait_never_ends();
+/// assert!(run.any_wait_never_ends());
+/// assert!(!ClockEnd::default().any_wait_never_ends(), "another run's");
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct ClockEnd(Arc<AtomicBool>);
+
+impl ClockEnd {
+    /// Says that a wait of this run ends past the end of the clock: it never
+    /// ends, and nothing is scheduled for it.
+    ///
+    /// ```
+    /// let run = taktsim_components::ClockEnd::default();
+    /// run.wait_never_ends();
+    /// assert!(run.any_wait_never_ends());
+    /// ```
+    pub fn wait_never_ends(&self) {
+        // One run is single-threaded; moving it to another thread orders this.
+        self.0.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether a component of this run said that a wait of its never ends.
+    ///
+    /// ```
+    /// assert!(!taktsim_components::ClockEnd::default().any_wait_never_ends());
+    /// ```
+    #[must_use]
+    pub fn any_wait_never_ends(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
 /// What a builder knows about its component: the id, the neighbours in declared
-/// order, and what the domain shares (ADR-0022 §2).
+/// order, what the domain shares (ADR-0022 §2), and where to say that a wait
+/// never ends.
 ///
 /// ```
 /// use taktsim_components::Wiring;
@@ -254,6 +304,7 @@ pub struct Wiring<'a, S> {
     upstream: &'a [String],
     downstream: &'a [String],
     shared: &'a S,
+    clock_end: &'a ClockEnd,
 }
 
 impl<'a, S> Wiring<'a, S> {
@@ -316,6 +367,20 @@ impl<'a, S> Wiring<'a, S> {
     #[must_use]
     pub const fn shared(&self) -> &'a S {
         self.shared
+    }
+
+    /// Where its behaviour says that a wait ends past the end of the clock
+    /// (ADR-0022 §6); keep a clone. A type that never waits that long, or whose
+    /// waits all fit, does not need it.
+    ///
+    /// ```
+    /// fn keep(wiring: &taktsim_components::Wiring<'_, ()>) -> taktsim_components::ClockEnd {
+    ///     wiring.clock_end().clone()
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn clock_end(&self) -> &'a ClockEnd {
+        self.clock_end
     }
 }
 
@@ -527,7 +592,9 @@ impl<D: Domain> Registry<D> {
     /// An engine for `document`, with the components in document order
     /// (ADR-0020 §7). It runs the domain's check again, so a document loaded
     /// with another catalog cannot reach the engine unchecked. Can be called
-    /// once per seed, from several threads.
+    /// once per seed, from several threads. Whether a wait of the run never
+    /// ends is not kept here; [`prepare`](Self::prepare) keeps it for its
+    /// [`RunReport`].
     ///
     /// # Errors
     ///
@@ -553,6 +620,16 @@ impl<D: Domain> Registry<D> {
         document: &Document,
         config: EngineConfig,
     ) -> Result<Engine<D::Message>, BuildError> {
+        self.build_for(document, config, &ClockEnd::default())
+    }
+
+    /// [`build`](Self::build), with the run's [`ClockEnd`] in every wiring.
+    fn build_for(
+        &self,
+        document: &Document,
+        config: EngineConfig,
+        clock_end: &ClockEnd,
+    ) -> Result<Engine<D::Message>, BuildError> {
         let mut findings = Findings::new();
         self.catalog.check(document, &mut findings);
         findings
@@ -576,6 +653,7 @@ impl<D: Domain> Registry<D> {
                 upstream: upstream.get(entry.id()).unwrap_or(&none),
                 downstream: downstream.get(entry.id()).unwrap_or(&none),
                 shared: &shared,
+                clock_end,
             };
             let behaviour = builder(entry, &wiring)?;
             engine
@@ -646,8 +724,9 @@ impl<D: Domain> Registry<D> {
         if !options.checks {
             config = config.without_checks();
         }
+        let clock_end = ClockEnd::default();
         let engine = self
-            .build(document, config)
+            .build_for(document, config, &clock_end)
             .map_err(|e| RunFailure::Build(Box::new(e)))?;
         let mut header = Header::for_engine(
             &engine,
@@ -659,6 +738,7 @@ impl<D: Domain> Registry<D> {
         }
         Ok(Prepared {
             engine,
+            clock_end,
             header,
             paths: document
                 .components()
@@ -890,6 +970,7 @@ impl<'a> RunOptions<'a> {
 /// ```
 pub struct Prepared<'a, D: Domain> {
     engine: Engine<D::Message>,
+    clock_end: ClockEnd,
     header: Header,
     /// The field path of each component's entry, in engine order.
     paths: Vec<FieldPath>,
@@ -1023,6 +1104,7 @@ impl<D: Domain> Prepared<'_, D> {
         Ok(RunReport {
             summary,
             items: self.engine.item_counts(),
+            wait_never_ends: self.clock_end.any_wait_never_ends(),
             trace: None,
         })
     }
@@ -1081,6 +1163,7 @@ impl<D: Domain> Prepared<'_, D> {
             RunReport {
                 summary,
                 items: self.engine.item_counts(),
+                wait_never_ends: self.clock_end.any_wait_never_ends(),
                 trace: Some(trace),
             },
         ))
@@ -1218,6 +1301,7 @@ impl<D: Domain> Prepared<'_, D> {
 /// let report = RunReport {
 ///     summary: RunSummary { outcome: RunOutcome::Idle, events: 0, now: "1h".parse()? },
 ///     items: ItemCounts::default(),
+///     wait_never_ends: false,
 ///     trace: None,
 /// };
 /// assert_eq!(report.items.delivered.get(), 0);
@@ -1229,6 +1313,11 @@ pub struct RunReport {
     pub summary: RunSummary,
     /// Items by where they are or how they left.
     pub items: ItemCounts,
+    /// Whether a component has a wait that ends past the end of the clock and so
+    /// never ends (ADR-0022 §6), as its [`ClockEnd`] says. Its event is after
+    /// every horizon: with it, core's [`RunOutcome::Idle`](taktsim_core::RunOutcome::Idle)
+    /// means the run reached its horizon, not that it ran dry (ADR-0024 §3).
+    pub wait_never_ends: bool,
     /// What the trace holds, if it was written by
     /// [`run_traced`](Prepared::run_traced).
     pub trace: Option<Summary>,
