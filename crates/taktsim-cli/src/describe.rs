@@ -139,6 +139,10 @@ struct Facts {
 /// The codes every command can give.
 const COMMON_ARGS: &[&str] = &["args.*"];
 const WRITE_ERROR: &[&str] = &["io.stdout"];
+/// The invariant-violation path of ADR-0007, which every command can reach: the
+/// panic hook's `internal.panic`, and a catalog the binary cannot build
+/// (`internal.catalog`).
+const INTERNAL: (u32, &[&str]) = (101, &["internal.*"]);
 
 /// The facts of a command. Exhaustive, so adding a command does not compile until
 /// it has them.
@@ -156,7 +160,7 @@ fn facts(command: &Command) -> Facts {
                 ),
                 ("type", Json::from("object")),
             ]),
-            exits: &[(0, &[]), (1, COMMON_ARGS), (7, WRITE_ERROR)],
+            exits: &[(0, &[]), (1, COMMON_ARGS), (7, WRITE_ERROR), INTERNAL],
             example: "taktsim describe",
         },
         Command::Schema { .. } => Facts {
@@ -168,7 +172,7 @@ fn facts(command: &Command) -> Facts {
                 ("description", Json::from("A JSON Schema, draft 2020-12.")),
                 ("type", Json::from("object")),
             ]),
-            exits: &[(0, &[]), (1, COMMON_ARGS), (7, WRITE_ERROR)],
+            exits: &[(0, &[]), (1, COMMON_ARGS), (7, WRITE_ERROR), INTERNAL],
             example: "taktsim schema Machine",
         },
         Command::Validate { .. } => Facts {
@@ -181,6 +185,7 @@ fn facts(command: &Command) -> Facts {
                 (0, &[]),
                 (1, &["args.*", "model.*"]),
                 (7, &["io.stdout", "model.io"]),
+                INTERNAL,
             ],
             example: "taktsim validate line.yaml --format json",
         },
@@ -218,6 +223,8 @@ fn facts(command: &Command) -> Facts {
                         "run.stored_run_differs",
                         "run.trace_format",
                         "run.replay_differs",
+                        "internal.no_trace",
+                        "internal.experiment_id",
                     ],
                 ),
                 (3, &[]),
@@ -233,6 +240,7 @@ fn facts(command: &Command) -> Facts {
                         "store.write",
                     ],
                 ),
+                INTERNAL,
             ],
             example: "taktsim run line.yaml --seed 42 --horizon 8h --format json",
         },

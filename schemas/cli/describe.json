@@ -33,6 +33,12 @@
           "error_types": [
             "io.stdout"
           ]
+        },
+        {
+          "code": 101,
+          "error_types": [
+            "internal.*"
+          ]
         }
       ],
       "input_schemas": [],
@@ -87,6 +93,12 @@
           "code": 7,
           "error_types": [
             "io.stdout"
+          ]
+        },
+        {
+          "code": 101,
+          "error_types": [
+            "internal.*"
           ]
         }
       ],
@@ -144,6 +156,12 @@
           "error_types": [
             "io.stdout",
             "model.io"
+          ]
+        },
+        {
+          "code": 101,
+          "error_types": [
+            "internal.*"
           ]
         }
       ],
@@ -377,7 +395,9 @@
             "run.store_differs",
             "run.stored_run_differs",
             "run.trace_format",
-            "run.replay_differs"
+            "run.replay_differs",
+            "internal.no_trace",
+            "internal.experiment_id"
           ]
         },
         {
@@ -394,6 +414,12 @@
             "store.read",
             "store.result",
             "store.write"
+          ]
+        },
+        {
+          "code": 101,
+          "error_types": [
+            "internal.*"
           ]
         }
       ],

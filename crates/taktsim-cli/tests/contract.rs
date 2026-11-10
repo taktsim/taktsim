@@ -276,6 +276,22 @@ fn documented_exit_codes() {
         assert_eq!(outcome.code, want, "{args:?}: {}", outcome.stderr);
         reached.insert((name, i128::from(want)));
     }
+    // The invariant-violation path, which no input reaches: the `test-panic`
+    // feature, which `--all-features` and CI turn on, asks for it.
+    let commands = ["describe", "schema", "validate", "run"];
+    if cfg!(feature = "test-panic") {
+        let asked: [&[&str]; 4] = [
+            &["describe"],
+            &["schema", "model"],
+            &["validate", "line.yaml"],
+            &["run", "line.yaml"],
+        ];
+        for (name, args) in commands.into_iter().zip(asked) {
+            let out = panicking(&dir, args);
+            assert_eq!(out.code, 101, "{args:?}: {}", out.stderr);
+            reached.insert((name, 101));
+        }
+    }
     let documented: BTreeSet<(&str, i128)> = ["describe", "schema", "validate", "run"]
         .into_iter()
         .flat_map(|name| {
@@ -286,11 +302,80 @@ fn documented_exit_codes() {
                 .map(move |c| (name, code_of(c)))
         })
         .collect();
-    let writing_stdout: BTreeSet<(&str, i128)> = BTreeSet::from([("describe", 7), ("schema", 7)]);
+    let mut elsewhere: BTreeSet<(&str, i128)> = BTreeSet::from([("describe", 7), ("schema", 7)]);
+    if !cfg!(feature = "test-panic") {
+        elsewhere.extend(commands.map(|name| (name, 101)));
+    }
     let not_reached: BTreeSet<_> = documented.difference(&reached).copied().collect();
-    assert_eq!(not_reached, writing_stdout, "the rest are covered here");
+    assert_eq!(not_reached, elsewhere, "the rest are covered here");
     let not_documented: Vec<_> = reached.difference(&documented).collect();
     assert_eq!(not_documented.len(), 0, "{not_documented:?}");
+}
+
+/// The binary run in `dir` with a panic asked for, under `--format json`.
+#[allow(clippy::unwrap_used)] // Test helper.
+fn panicking(dir: &Dir, args: &[&str]) -> support::Outcome {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_taktsim"))
+        .args(args)
+        .args(["--format", "json"])
+        .current_dir(dir.path())
+        .env("TAKTSIM_TEST_PANIC", "1")
+        .output()
+        .unwrap();
+    support::Outcome {
+        code: output.status.code().unwrap(),
+        stdout: String::from_utf8(output.stdout).unwrap(),
+        stderr: String::from_utf8(output.stderr).unwrap(),
+    }
+}
+
+/// Every command can reach the invariant-violation path of ADR-0007, so each lists
+/// 101 and the `internal.*` types (ADR-0024 §9: per command the codes it can give);
+/// an agent that handles exactly what `describe` lists is not told it cannot happen.
+#[test]
+fn every_command_lists_the_invariant_violation_path() {
+    let description = describe();
+    for name in ["describe", "schema", "validate", "run"] {
+        let exits = command(&description, name)["exit_codes"]
+            .as_array()
+            .unwrap();
+        let internal = exits
+            .iter()
+            .find(|e| e["code"] == Json::from(101))
+            .unwrap_or_else(|| panic!("{name} does not list 101"));
+        assert_eq!(
+            internal["error_types"],
+            Json::Array(vec![Json::from("internal.*")]),
+            "{name}"
+        );
+    }
+    // A library error of the `internal` namespace that is a failed run: exit 2.
+    let run = command(&description, "run")["exit_codes"]
+        .as_array()
+        .unwrap();
+    let failed = run.iter().find(|e| e["code"] == Json::from(2)).unwrap();
+    for kind in ["internal.no_trace", "internal.experiment_id"] {
+        assert!(
+            failed["error_types"]
+                .as_array()
+                .unwrap()
+                .contains(&Json::from(kind)),
+            "{kind}"
+        );
+    }
+    if cfg!(feature = "test-panic") {
+        let dir = Dir::new().with_line();
+        for args in [
+            &["describe"][..],
+            &["schema", "model"][..],
+            &["validate", "line.yaml"][..],
+            &["run", "line.yaml"][..],
+        ] {
+            let out = panicking(&dir, args);
+            assert_eq!(out.code, 101, "{args:?}");
+            assert_eq!(out.lines()[0]["type"], "internal.panic", "{args:?}");
+        }
+    }
 }
 
 /// Stdout that cannot be written is an I/O failure, not a success that said nothing.
