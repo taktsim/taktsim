@@ -170,6 +170,9 @@ impl Store {
     /// place and renamed in, so a process starting on the same new store reads the
     /// whole file or none (ADR-0024 §8).
     fn ensure(&self) -> Result<(), Failure> {
+        if !self.root.join("store.json").exists() {
+            self.check_new()?;
+        }
         for dir in [self.root.join("runs"), self.root.join("tmp")] {
             fs::create_dir_all(&dir).map_err(|e| io_failure("store.write", &dir, &e))?;
         }
@@ -190,6 +193,49 @@ impl Store {
         };
         write_new("store.json", "{\"store_format\": 1}\n")?;
         write_new(".gitignore", "*\n")
+    }
+
+    /// A store is created only in a new or empty directory, or one that holds only
+    /// what an interrupted first write left (`runs/`, `tmp/`). Anywhere else its
+    /// `.gitignore` of `*` would hide the directory's own files from version control
+    /// (principle 1), or, beside a `.gitignore` already there, its runs would not be
+    /// ignored.
+    fn check_new(&self) -> Result<(), Failure> {
+        if !self.root.is_dir() {
+            // Missing: created below. Not a directory: creating it below says so.
+            return Ok(());
+        }
+        let entries =
+            fs::read_dir(&self.root).map_err(|e| io_failure("store.read", &self.root, &e))?;
+        let mut foreign = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|e| io_failure("store.read", &self.root, &e))?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name != "runs" && name != "tmp" {
+                foreign.push(name);
+            }
+        }
+        foreign.sort();
+        let Some(first) = foreign.first() else {
+            return Ok(());
+        };
+        // Another process made it a store since `ensure` looked: `store.json` is
+        // renamed in before `.gitignore`, so a listing that holds either is that.
+        if self.root.join("store.json").exists() {
+            return Ok(());
+        }
+        let mut line = Diagnostic::error(
+            "store.not_a_store",
+            format!(
+                "{} is not a run store and not empty: a store's `.gitignore` of `*` would hide its files from version control",
+                self.root.display()
+            ),
+        )
+        .at("--store")
+        .found(format!("`{first}` and no `store.json`"))
+        .allowed("a new or empty directory, or a run store, such as `.taktsim`");
+        line.file = Some(self.root.display().to_string());
+        Err(Failure::one(FailureClass::Io, line))
     }
 
     fn run_dir(&self, id: &RunId) -> PathBuf {

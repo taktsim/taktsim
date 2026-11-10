@@ -281,6 +281,29 @@ fn the_store_is_found_upward_and_can_be_named() {
     assert!(dir.path().join("elsewhere").join("store.json").is_file());
 }
 
+/// `--store .` in a directory of models does not drop a store, and its `.gitignore`
+/// of `*`, among them: exit 7, `store.not_a_store`, and nothing written.
+#[test]
+fn a_directory_of_models_is_not_made_a_store() {
+    let dir = Dir::new().with_line();
+    let listing = || {
+        let mut names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        names.sort();
+        names
+    };
+    let before = listing();
+    let out = dir.taktsim(&["run", "line.yaml", "--store", ".", "--format", "json"]);
+    assert_eq!(out.code, 7, "{}", out.stderr);
+    assert_eq!(out.stdout, "");
+    assert_eq!(out.lines()[0]["type"], "store.not_a_store");
+    assert_eq!(out.lines()[0]["path"], "--store");
+    assert_eq!(listing(), before);
+    assert!(!dir.path().join(".gitignore").exists());
+}
+
 #[test]
 fn describe_and_schema_print_json_whatever_the_format() {
     let dir = Dir::new();
