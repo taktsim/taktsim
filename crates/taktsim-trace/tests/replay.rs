@@ -651,3 +651,53 @@ fn a_stepped_run_whose_last_step_delivered_nothing_replays() {
     assert_eq!(record, summary.records);
     assert!(found.starts_with("the engine's clock at "), "{found}");
 }
+
+#[test]
+fn a_stepped_run_cancelled_after_going_idle_replays() {
+    // One event at 1s, then nothing. The first step ends idle with the clock
+    // moved to its horizon, 1h; the second is cancelled before it starts, at
+    // 1h. Replaying to that end goes idle again, which reaches it.
+    struct Once;
+    impl Component<Toy> for Once {
+        fn start(&mut self, ctx: &mut Context<'_, Toy>) -> Result<(), ComponentError> {
+            ctx.schedule(support::d("1s"), Toy::Next)?;
+            Ok(())
+        }
+        fn handle(
+            &mut self,
+            _: Delivery<'_, Toy>,
+            _: &mut Context<'_, Toy>,
+        ) -> Result<(), ComponentError> {
+            Ok(())
+        }
+    }
+    let build = || -> Result<Engine<Toy>, EngineError> {
+        let mut engine = Engine::new(EngineConfig::new(1));
+        engine.add_component("once", Box::new(Once))?;
+        Ok(engine)
+    };
+    let mut engine = build().unwrap();
+    let header = Header::for_engine(
+        &engine,
+        ModelHash::sha256(b"replay tests"),
+        SystemHash::default(),
+    );
+    let mut writer = TraceWriter::new(Vec::new(), &header).unwrap();
+    let first = engine.run(RunLimits::until(t("1h")), &mut writer).unwrap();
+    assert_eq!((first.outcome, first.now), (RunOutcome::Idle, t("1h")));
+    writer.run_ended(&first);
+    let flag = std::sync::atomic::AtomicBool::new(true);
+    let second = engine
+        .run(RunLimits::until(t("2h")).cancel_on(&flag), &mut writer)
+        .unwrap();
+    assert_eq!(
+        (second.outcome, second.now),
+        (RunOutcome::Cancelled, t("1h"))
+    );
+    writer.run_ended(&second);
+    let trace = writer.finish().unwrap().0;
+    let report = replay_with(&trace, build().unwrap()).unwrap();
+    let end = report.end.unwrap();
+    assert_eq!((end.outcome, end.time), (RunOutcome::Cancelled, t("1h")));
+    assert_eq!(report.events, 1);
+}
