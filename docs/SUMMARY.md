@@ -48,3 +48,4 @@
   - [0020 Model loader](adr/0020-model-loader.md)
   - [0021 Trace format and replay](adr/0021-trace-format-and-replay.md)
   - [0022 Components: Source, Machine, Buffer, Sink](adr/0022-components-source-machine-buffer-sink.md)
+  - [0024 CLI validate and run, the result document and the run store](adr/0024-cli-validate-run-and-result-format.md)
