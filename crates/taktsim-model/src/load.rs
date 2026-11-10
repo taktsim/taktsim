@@ -602,8 +602,11 @@ impl Run<'_> {
         let bytes = match resolver.read(&spec.path) {
             Ok(bytes) => bytes,
             Err(e) => {
+                // Named by the file it could not read, and placed at the entry
+                // that names it, where the fix goes: nothing inside was read.
+                let kind = LoadErrorKind::Io { error: e.kind() };
                 self.errors
-                    .push(file_error(LoadErrorKind::Io { error: e.kind() }));
+                    .push(LoadError::new(name.clone(), None, spec.field.clone(), kind));
                 return None;
             }
         };
