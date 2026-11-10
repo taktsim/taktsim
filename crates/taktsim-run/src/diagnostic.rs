@@ -323,7 +323,8 @@ impl Record for Diagnostic {
 impl From<&LoadError> for Diagnostic {
     fn from(error: &LoadError) -> Self {
         let kind = error.kind();
-        // A model file that cannot be read has no path inside it yet.
+        // The model file itself that cannot be read has no path inside it; an
+        // included one is at its `include` entry.
         let path = if kind.is_io() && error.path().segments().is_empty() {
             "<model>".to_owned()
         } else {
