@@ -123,3 +123,61 @@ fn page_1_gives_its_table() {
     assert_eq!(r.report.items.delivered.get(), 639);
     assert_eq!(r.delivered()[0].0, support::t("87s"));
 }
+
+/// The text under `heading` in a Markdown file, up to the next heading.
+fn section<'a>(markdown: &'a str, heading: &str) -> Option<&'a str> {
+    let start = markdown.find(heading)? + heading.len();
+    let rest = &markdown[start..];
+    Some(&rest[..rest.find("\n#").unwrap_or(rest.len())])
+}
+
+/// The glossary and ADR-0022's prose define `idle` as the code does (ADR-0022
+/// §5's table): a Source reaching a station through non-stations makes it idle,
+/// even when a machine feeds it too. Neither may say "only sources feed it",
+/// which would call the merge's `weld` starved.
+#[test]
+fn the_documents_define_idle_as_the_code_does() {
+    let model = support::load(&support::document(
+        "1h",
+        "  - {id: src1, type: Source, interarrival: 1min}\n\
+         \x20 - {id: src2, type: Source, interarrival: 1min}\n\
+         \x20 - {id: cut, type: Machine, cycle_time: 1min}\n\
+         \x20 - {id: weld, type: Machine, cycle_time: 1min}\n\
+         \x20 - {id: sink, type: Sink}\n",
+        "  - [src2, cut]\n  - {from: [src1, cut], to: weld}\n  - [weld, sink]\n",
+    ));
+    let registry = support::registry();
+    let shared = <taktsim_components::Flow as taktsim_components::Domain>::prepare(
+        model.document(),
+        registry.roles(),
+    )
+    .unwrap();
+    assert!(shared.is_idle_when_empty("cut"));
+    assert!(shared.is_idle_when_empty("weld"));
+
+    let glossary = std::fs::read_to_string(repo(&["docs", "concepts", "glossary.md"])).unwrap();
+    let adr = std::fs::read_to_string(repo(&[
+        "docs",
+        "adr",
+        "0022-components-source-machine-buffer-sink.md",
+    ]))
+    .unwrap();
+    let texts = [
+        ("glossary, Idle", section(&glossary, "### Idle")),
+        ("glossary, Starved", section(&glossary, "### Starved")),
+        ("ADR-0022", section(&adr, "**Idle against starved.**")),
+    ];
+    for (place, text) in texts {
+        let text = text.unwrap_or_else(|| panic!("{place} is missing"));
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let lower = text.to_lowercase();
+        assert!(
+            !lower.contains("only sources feed"),
+            "{place} says only sources feed an idle station: {text}"
+        );
+        assert!(
+            lower.contains("through buffers alone"),
+            "{place} does not state the rule: {text}"
+        );
+    }
+}

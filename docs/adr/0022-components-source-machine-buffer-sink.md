@@ -373,11 +373,12 @@ time, so shares sum to one.
 **Idle against starved.** A practitioner will ask. Both wait with an empty
 machine; the difference is where to look. *Starved* means the line let this
 station down: another station is upstream and has not delivered, so look
-upstream (page 6's welding). *Idle* means nobody asked: only Sources feed this
-station, directly or through buffers, so its waiting says something about
-demand, not about the line. In an M/M/1 model the server is idle, 1 − ρ of the
-time, never starved. The first station of a line is idle; every later one is
-starved.
+upstream (page 6's welding). *Idle* means nobody asked: a Source reaches this
+station directly or through buffers alone, with no station on the way (a
+station may feed it as well), so its waiting says something about demand, not
+about the line. In an M/M/1 model the server is idle, 1 − ρ of the time, never
+starved. The first station of a line is idle; in a single line, every later one
+is starved.
 
 The rule is over stations (`STATION`, §2), not the type `Machine`, so a later
 Assembly or Inspection counts without editing it. It is defined on any graph: in

@@ -110,9 +110,10 @@ A chart of a sample: each bar counts the values that fell into one range.
 
 ### Idle
 
-A station is idle when it could work but has no part, and only sources feed it,
-directly or through buffers: nobody asked, so its waiting says something about
-demand, not about the line. A first station is idle; a later one is
+A station is idle when it could work but has no part, and a source reaches it
+directly or through buffers alone, with no station on the way (a station may
+feed it as well): nobody asked, so its waiting says something about demand, not
+about the line. A first station is idle; in a single line, a later one is
 [starved](#starved). [Page 5](05-utilization.md).
 
 ### Inspection
@@ -247,9 +248,10 @@ one less than the number of values, as STDEV does).
 
 ### Starved
 
-A station is starved when it could work but has no part, because a station
-before it has not delivered, so look upstream. A station that only sources feed,
-directly or through buffers, is [idle](#idle) instead.
+A station is starved when it could work but has no part, and every path from a
+source to it passes a station: a station before it has not delivered, so look
+upstream. A station that a source reaches directly or through buffers alone is
+[idle](#idle) instead, even if a station feeds it too.
 [Page 6](06-starving-blocking.md).
 
 ### Station
