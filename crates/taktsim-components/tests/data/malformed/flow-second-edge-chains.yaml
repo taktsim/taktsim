@@ -9,4 +9,4 @@ components:
 flow:
   - [source, m, sink]
   - [m, sink2]
-# expect: flow[1][0] @ 11:6 NotAllowed
+# expect: flow[1] @ 11:6 NotAllowed

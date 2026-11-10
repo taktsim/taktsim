@@ -98,7 +98,7 @@ impl Decode for Matrix {
                         &items[i],
                         format!("the change from `{}` to `{}` twice", change.from, change.to),
                         "each change once",
-                        Self::EXAMPLE,
+                        <Change as Record>::EXAMPLE,
                     );
                 });
                 ok = false;
@@ -304,19 +304,22 @@ impl ComponentParams for Machine {
         fields.needs("mtbf", &["mttr"]);
         fields.needs("mttr", &["mtbf"]);
         let lone = match (fields.entry("mtbf"), fields.entry("mttr")) {
-            (Some(entry), None) => Some(("mtbf", entry)),
-            (None, Some(entry)) => Some(("mttr", entry)),
+            (Some(_), None) => Some("mtbf"),
+            (None, Some(_)) => Some("mttr"),
             (Some(_), Some(_)) | (None, None) => None,
         };
-        if let Some((key, entry)) = lone {
-            fields.decoder().within(Segment::Key(key.to_owned()), |cx| {
-                cx.not_allowed(
-                    entry.value(),
-                    format!("`{key}` alone"),
-                    "`mtbf` and `mttr` together, or neither",
-                    "{mtbf: {dist: exponential, mean: 6h}, mttr: 12min}",
-                );
-            });
+        // Reported at the Machine, whose entry the example is: no value of
+        // the lone key alone would be valid.
+        if let Some(key) = lone
+            && let Some(node) = fields.node()
+        {
+            fields.decoder().not_allowed(
+                node,
+                format!("`{key}` alone"),
+                "`mtbf` and `mttr` together, or neither",
+                "{id: cut, type: Machine, cycle_time: 42s, mtbf: {dist: exponential, mean: 6h}, \
+                 mttr: 12min}",
+            );
             return None;
         }
         Some(Self {

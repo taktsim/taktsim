@@ -56,10 +56,11 @@ impl Decode for VariantMix {
             let name = entry.key();
             cx.within(Segment::Key(name.to_owned()), |cx| {
                 if !is_variant_name(name) {
+                    // The key is what is wrong, so the example is a name.
                     let kind = LoadErrorKind::NotAllowed {
                         found: name.to_owned(),
                         allowed: VARIANT_NAME_RULE.to_owned(),
-                        example: Self::EXAMPLE.to_owned(),
+                        example: "basic".to_owned(),
                     };
                     cx.error(entry.key_start(), kind);
                     ok = false;
@@ -268,19 +269,19 @@ impl ComponentParams for Source {
         let variants = fields.optional("variants");
         let priority = fields.optional("priority");
         fields.needs("batch", &["interarrival"]);
-        if let Some(entry) = fields.entry("batch")
+        // Reported at the Source, whose entry the example is: no value of
+        // `batch` alone would be valid.
+        if fields.entry("batch").is_some()
             && fields.entry("interarrival").is_none()
+            && let Some(node) = fields.node()
         {
-            let cx = fields.decoder();
-            cx.within(Segment::Key("batch".to_owned()), |cx| {
-                cx.not_allowed(
-                    entry.value(),
-                    "a batch on a Source without `interarrival`",
-                    "`batch` together with `interarrival`: an on-demand Source makes one part at \
-                     a time",
-                    "{id: source, type: Source, interarrival: 40s, batch: 2 parts}",
-                );
-            });
+            fields.decoder().not_allowed(
+                node,
+                "a batch on a Source without `interarrival`",
+                "`batch` together with `interarrival`: an on-demand Source makes one part at a \
+                 time",
+                "{id: source, type: Source, interarrival: 40s, batch: 2 parts}",
+            );
             return None;
         }
         Some(Self {

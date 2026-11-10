@@ -10,7 +10,7 @@ mod support;
 use std::path::Path;
 
 use support::{document, load, model_files, registry, try_load};
-use taktsim_model::{LoadErrors, Loader};
+use taktsim_model::{LoadErrors, Loader, Segment};
 
 /// Each error as `path @ line:column Kind`.
 fn summary(errors: &LoadErrors) -> Vec<String> {
@@ -135,9 +135,11 @@ fn second_edge_from_a_component_is_rejected() {
     ] {
         let errors = try_load(&document("1h", body, flow)).unwrap_err();
         assert_eq!(errors.len(), 1, "{errors}");
+        // At the second edge, with the one edge that replaces both.
+        assert_eq!(errors.first().path().to_string(), "flow[1]", "{errors}");
         assert_eq!(
             errors.first().kind().example().as_deref(),
-            Some("{from: cut, to: [weld-1, weld-2]}"),
+            Some("{from: source, to: [a, b]}"),
             "{errors}"
         );
     }
@@ -373,4 +375,75 @@ fn too_many_variant_names_are_reported_at_the_source_that_passes_the_limit() {
             "65536 variant names in the model, counting `default` for this Source, which declares none"
         )
     );
+}
+
+/// The shape of a flow-style YAML value from its first character: a list, a
+/// mapping or a scalar.
+fn shape(text: &str) -> &'static str {
+    match text.trim_start().chars().next() {
+        Some('[') => "a list",
+        Some('{') => "a mapping",
+        _ => "a scalar",
+    }
+}
+
+/// Every example is a value of the shape the error's path holds, so writing it
+/// at that path keeps the model's structure (spec §5: "one example of a valid
+/// value"). A reference gets an id, a matrix entry one entry, and a rule that no
+/// value of one key can satisfy is reported at the entry or edge it is about.
+/// The corpus is written in flow style, so the character an error points at
+/// tells the shape of the value there.
+#[test]
+fn every_example_has_the_shape_of_the_value_at_its_path() {
+    let registry = registry();
+    let loader = Loader::new(registry.catalog());
+    let mut failures = Vec::new();
+    for path in corpus() {
+        let text = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        let errors = loader.load_file(&path).unwrap_err();
+        for e in errors.iter() {
+            let (Some(at), Some(example)) = (e.location(), e.kind().example()) else {
+                continue;
+            };
+            let kind = format!("{:?}", e.kind());
+            let found = e.kind().found().unwrap_or_default();
+            // A missing field points at its parent, and a wrong type is a
+            // value of the wrong shape by definition.
+            if kind.starts_with("MissingField") || kind.starts_with("WrongType") {
+                continue;
+            }
+            // Known gap: a component that no edge enters or leaves is reported
+            // at its entry with the edge that would connect it as the example,
+            // because the missing edge has no path of its own.
+            if found.starts_with("no edge entering") || found.starts_with("no edge leaving") {
+                continue;
+            }
+            let value = &lines[at.line() - 1][at.column() - 1..];
+            let segments = e.path().segments();
+            let expected = match segments {
+                // A whole edge, pointed at by its source: a chain or a mapping.
+                [Segment::Key(flow), Segment::Index(_)] if flow == "flow" => {
+                    if shape(&example) == "a scalar" {
+                        "a list or a mapping"
+                    } else {
+                        shape(&example)
+                    }
+                }
+                _ => shape(value),
+            };
+            // A duration where a distribution is allowed is a constant one.
+            let constant = expected == "a scalar" && example.starts_with("{dist:");
+            if shape(&example) != expected && !constant {
+                failures.push(format!(
+                    "{} {}: the path holds {expected} (`{}`), the example `{example}` is {}",
+                    path.file_name().unwrap().to_string_lossy(),
+                    e.path(),
+                    value.chars().take(24).collect::<String>(),
+                    shape(&example),
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

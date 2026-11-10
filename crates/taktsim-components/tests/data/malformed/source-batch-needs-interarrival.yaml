@@ -7,4 +7,4 @@ components:
   - {id: sink, type: Sink}
 flow:
   - [source, m, sink]
-# expect: components[0].batch @ 5:39 NotAllowed
+# expect: components[0] @ 5:5 NotAllowed

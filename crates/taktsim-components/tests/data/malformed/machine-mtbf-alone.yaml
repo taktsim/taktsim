@@ -7,4 +7,4 @@ components:
   - {id: sink, type: Sink}
 flow:
   - [source, m, sink]
-# expect: components[1].mtbf @ 6:52 NotAllowed
+# expect: components[1] @ 6:5 NotAllowed

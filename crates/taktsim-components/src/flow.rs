@@ -198,6 +198,17 @@ fn check_ports(document: &Document, roles: &Roles, graph: &Graph<'_>, findings: 
         .map(|c| (c.id(), c.type_name()))
         .collect();
     let ports_of = |id: &str| types.get(id).and_then(|t| roles.ports(t));
+    // The example at a reference is an id: one the rule allows there.
+    let first_with = |allowed: fn(Ports) -> bool, fallback: &'static str| {
+        document
+            .components()
+            .iter()
+            .map(Entry::id)
+            .find(|id| ports_of(id).is_some_and(allowed))
+            .unwrap_or(fallback)
+    };
+    let with_outlet = first_with(Ports::has_outlet, "cut");
+    let with_inlet = first_with(Ports::has_inlet, "cut");
     for edge in document.flow() {
         for from in edge.from() {
             if ports_of(from.id()).is_some_and(|p| !p.has_outlet()) {
@@ -206,7 +217,7 @@ fn check_ports(document: &Document, roles: &Roles, graph: &Graph<'_>, findings: 
                     (from.place(), from.path()),
                     format!("an edge leaving `{}`", from.id()),
                     "edges leave components with an outlet: a Source, a Machine or a Buffer",
-                    "[source, cut, sink]",
+                    with_outlet,
                 );
             }
         }
@@ -217,7 +228,7 @@ fn check_ports(document: &Document, roles: &Roles, graph: &Graph<'_>, findings: 
                     (to.place(), to.path()),
                     format!("an edge entering `{}`", to.id()),
                     "edges enter components with an inlet: a Machine, a Buffer or a Sink",
-                    "[source, cut, sink]",
+                    with_inlet,
                 );
             }
         }
@@ -258,18 +269,30 @@ fn check_ports(document: &Document, roles: &Roles, graph: &Graph<'_>, findings: 
 
 /// At most one edge leaves a component in M5, in any spelling: M6 makes separate
 /// edges first-match in order (ADR-0022 §3).
-fn check_one_edge_per_source(document: &Document, findings: &mut Findings) {
+///
+/// Reported at the second edge, pointing at its source, with the one edge that
+/// replaces both as the example: no id at the reference alone would be valid.
+fn check_one_edge_per_source(document: &Document, graph: &Graph<'_>, findings: &mut Findings) {
     let mut first: BTreeMap<&str, usize> = BTreeMap::new();
     for (index, edge) in document.flow().iter().enumerate() {
         for from in edge.from() {
             let seen = *first.entry(from.id()).or_insert(index);
             if seen != index {
+                let mut targets: Vec<&str> = Vec::new();
+                for target in graph.targets(from.id()).map(ComponentRef::id) {
+                    if !targets.contains(&target) {
+                        targets.push(target);
+                    }
+                }
+                // `flow[i]`: the entry that holds the reference.
+                let segments = from.path().segments();
+                let path = FieldPath::from(segments.get(..2).unwrap_or(segments).to_vec());
                 not_allowed(
                     findings,
-                    (from.place(), from.path()),
+                    (from.place(), &path),
                     format!("a second edge leaving `{}`", from.id()),
                     "one edge leaving each component; a branch is one edge with several targets",
-                    "{from: cut, to: [weld-1, weld-2]}",
+                    &format!("{{from: {}, to: [{}]}}", from.id(), targets.join(", ")),
                 );
             }
         }
@@ -278,12 +301,19 @@ fn check_one_edge_per_source(document: &Document, findings: &mut Findings) {
 
 /// No loop: a loop with no condition or ratio would send parts round for ever,
 /// and finite buffers in a loop can deadlock. M6 lifts the rule with conditions.
-fn check_no_loops(document: &Document, graph: &Graph<'_>, findings: &mut Findings) {
+fn check_no_loops(document: &Document, roles: &Roles, graph: &Graph<'_>, findings: &mut Findings) {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Mark {
         OnPath,
         Done,
     }
+    // The example at the reference that closes a loop: an id that ends a path
+    // there, like a Sink, so it closes none.
+    let end = document
+        .components()
+        .iter()
+        .find(|c| roles.ports(c.type_name()) == Some(Ports::Inlet))
+        .map_or("sink", Entry::id);
     let mut marks: BTreeMap<&str, Mark> = BTreeMap::new();
     for start in document.components().iter().map(Entry::id) {
         if marks.contains_key(start) {
@@ -316,7 +346,7 @@ fn check_no_loops(document: &Document, graph: &Graph<'_>, findings: &mut Finding
                         format!("a loop: {}", names.join(" -> ")),
                         "a flow without loops: a loop with no condition or ratio would send \
                          parts round for ever, and routing with conditions arrives in M6",
-                        "[source, cut, sink]",
+                        end,
                     );
                 }
                 Some(Mark::Done) => {}
@@ -427,7 +457,7 @@ fn check_variants(document: &Document, findings: &mut Findings) {
                         (name.place(), name.path()),
                         format!("the variant `{}`, which no Source declares", name.id()),
                         &format!("a variant some Source declares: {}", known.join(", ")),
-                        "{id: source, type: Source, variants: {basic: 80%, premium: 20%}}",
+                        known.first().copied().unwrap_or("basic"),
                     );
                 }
             }
@@ -442,8 +472,8 @@ impl Domain for Flow {
     fn check(document: &Document, roles: &Roles, findings: &mut Findings) {
         let graph = Graph::new(document);
         check_ports(document, roles, &graph, findings);
-        check_one_edge_per_source(document, findings);
-        check_no_loops(document, &graph, findings);
+        check_one_edge_per_source(document, &graph, findings);
+        check_no_loops(document, roles, &graph, findings);
         check_on_demand(document, roles, &graph, findings);
         check_variants(document, findings);
     }

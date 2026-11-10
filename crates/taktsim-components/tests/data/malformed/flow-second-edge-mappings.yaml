@@ -10,4 +10,4 @@ flow:
   - [source, m]
   - {from: m, to: sink}
   - {from: m, to: sink2}
-# expect: flow[2].from @ 12:12 NotAllowed
+# expect: flow[2] @ 12:12 NotAllowed

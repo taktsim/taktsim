@@ -10,4 +10,4 @@ flow:
   - [source, m, sink]
   - {from: m, to: lonely}
 # expect: components[3] @ 8:5 NotAllowed
-# expect: flow[1].from @ 11:12 NotAllowed
+# expect: flow[1] @ 11:12 NotAllowed
