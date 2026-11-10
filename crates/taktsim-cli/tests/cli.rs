@@ -221,6 +221,35 @@ fn run_snapshots() {
     snapshot("run_invalid_model", &["run", "broken.yaml"]);
 }
 
+/// A global flag with no command: the error says no command was found, as it does
+/// with no arguments at all, not the binary's name, which clap holds there.
+#[test]
+fn a_global_flag_alone_finds_no_command() {
+    let dir = Dir::new();
+    for args in [
+        &[][..],
+        &["--format", "json"][..],
+        &["--format", "text"][..],
+    ] {
+        let out = dir.taktsim(args);
+        assert_eq!(out.code, 1, "{args:?}");
+        assert_eq!(out.stdout, "", "{args:?}");
+        if args.contains(&"json") {
+            let line = &out.lines()[0];
+            assert_eq!(line["type"], "args.missing_command");
+            assert_eq!(line["path"], "<command>");
+            assert_eq!(line["found"], "nothing");
+        } else {
+            assert!(
+                out.stderr.contains("\n  found: nothing\n"),
+                "{}",
+                out.stderr
+            );
+        }
+        assert!(!out.stderr.contains("taktsim\""), "{}", out.stderr);
+    }
+}
+
 #[test]
 fn argument_error_snapshots() {
     snapshot("args_no_command", &[]);
