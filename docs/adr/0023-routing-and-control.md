@@ -317,7 +317,8 @@ ADR-0022 says; anyone who wants oldest unit declares `fifo` (question 10).
 | `priority_class` | `255 − priority` | classes 0, 2, 1: takes 2; ties older |
 
 `minimum_setup` keeps the spec's "same variant first" and also uses `matrix` costs,
-which the spec's parenthesis does not mention. A machine with no `setup` is FIFO.
+which the spec's parenthesis does not mention. On a machine with no `setup` every change
+is free, so it takes the same variant first, as the spec says, then FIFO.
 
 **What a change is measured against.** Units in a machine start in arrival order, so the
 next accepted unit follows the last one committed, not what the machine is set up for
@@ -711,6 +712,7 @@ after v0.1 ships.
 | 17 | §6 has a Buffer rank by `follows` when `Accept` arrives, and `follows` is the newest reserved place. With two places free in one event, the first `Accept` lands after a `Status` already naming the second pick, so the Buffer gives a unit that ranks worse than what the station passed over | §6, §9 here | `minimum_setup` takes one place at a time, the next when this one's reply has landed at this instant. No other rule reads `follows`, and throughput does not change, since a reservation ends within its instant. The invariant on free places and waiting offers makes that one exception | no |
 | 18 | §7 made a due date past the end of the clock a typed run failure, while ADR-0022 §6 (question 19 there) makes every other draw past the clock mean never, so that whether a run fails does not depend on the seed. With a `due_in` distribution, §7 as written fails some runs by seed | §7 here, ADR-0022 §6 | such a date is no due date: it sorts last like a unit without one, and the run goes on (question 16) | no |
 | 19 | §6 step 1 said a station picks "when a place frees and two or more offers wait", and the implementation read it per event: offers made at one instant reach a free station one by one, so the first delivered took the place unranked and wrote no record. Which one that is depends on the order components are listed in, so a declared rule had no effect on units offered together, against spec §4 ("decide which waiting unit a resource takes next") and the roadmap's record for every choice | §6, §9, §10 here | a station with a rule picks at a `Pick`, a timer after no time at priority 8, after every offer of the instant; tag 19 in `taktsim-components/2`, which is not yet released. Models with a rule gain one event per pick; models without one are unchanged. The invariant on free places and waiting offers exempts the events before the `Pick` of that instant. The alternative, stating that simultaneous offers follow event order, leaves results depending on listing order | no |
+| 20 | §6 said a machine with no `setup` is FIFO under `minimum_setup`, while spec §4 says "same variant first" and §6's own table ranks a free change after the same variant. With no `setup` every change is free, and the implementation and its test take the same variant first | spec §4, §6 here | same variant first, then FIFO, as the spec says; §6 now states it. The alternative, FIFO, would need the key 0 for every unit on such a machine | no |
 
 ## Consequences
 

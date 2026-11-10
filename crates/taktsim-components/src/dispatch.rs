@@ -46,8 +46,9 @@ impl TakerPlan {
     }
 
     /// `2 × mean setup ns`, plus 1 if the variant changes: the same variant first,
-    /// then a free change, then the cheapest. The first unit, and a machine with no
-    /// `setup`, have no change to rank by, so the oldest goes first.
+    /// then a free change, then the cheapest. The first unit has no change to rank by,
+    /// so the oldest goes first. On a machine with no `setup` every change is free, so
+    /// the same variant goes first, as spec §4 says, then the oldest (ADR-0023 §6).
     fn setup_key(&self, follows: Option<VariantId>, variant: VariantId) -> u64 {
         let Some(from) = follows else {
             return 0;
