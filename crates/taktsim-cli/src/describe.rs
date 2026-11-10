@@ -227,6 +227,7 @@ fn facts(command: &Command) -> Facts {
                         "io.stdout",
                         "model.io",
                         "store.format",
+                        "store.not_a_store",
                         "store.read",
                         "store.result",
                         "store.write",
