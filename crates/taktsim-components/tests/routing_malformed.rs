@@ -92,8 +92,45 @@ fn every_rule_says_what_was_found_what_is_allowed_and_an_example() {
                 assert!(!found.is_empty() && !allowed.is_empty(), "{at}: {e}");
                 assert!(!example.is_empty(), "{at}: {e}");
             }
+            // What a person or an agent reads is one line, with single spaces.
+            let kind = e.kind();
+            for text in [kind.found(), kind.allowed(), kind.example()]
+                .into_iter()
+                .flatten()
+            {
+                assert!(
+                    !text.contains("  ") && !text.contains('\n'),
+                    "{at}: {text:?}"
+                );
+            }
         }
     }
+}
+
+#[test]
+fn a_loop_back_to_a_buffer_names_the_fact_and_the_fix() {
+    let registry = registry();
+    let loader = Loader::new(registry.catalog());
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("data")
+        .join("routing_malformed")
+        .join("loop-return-to-a-buffer.yaml");
+    let errors = loader.load_file(&path).unwrap_err();
+    let kind = errors.first().kind();
+    let found = kind.found().unwrap();
+    assert!(
+        found.ends_with("whose type `Buffer` does not state `takes_returns`"),
+        "{found:?}"
+    );
+    let allowed = kind.allowed().unwrap();
+    assert!(
+        allowed.starts_with(
+            "a return target with a return lane; for a Buffer, send the way back to the \
+             machine after the buffer"
+        ),
+        "{allowed:?}"
+    );
 }
 
 const TWO_SINKS: &str = "  - {id: source, type: Source, interarrival: 1min}\n  \

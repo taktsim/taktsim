@@ -991,9 +991,11 @@ fn check_loops(
                 findings,
                 (back.place(), back.path()),
                 format!(
-                    "a loop returning to `{target}`, whose type `{type_name}` does not state                      `takes_returns`"
+                    "a loop returning to `{target}`, whose type `{type_name}` does not state \
+                     `takes_returns`"
                 ),
-                "a return target with a return lane; for a Buffer, send the way back to the                  machine after the buffer, since a Buffer's fill must stay what its events say",
+                "a return target with a return lane; for a Buffer, send the way back to the \
+                 machine after the buffer, since a Buffer's fill must stay what its events say",
                 example,
             );
         }
