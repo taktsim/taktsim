@@ -1,6 +1,6 @@
 //! How a run ended, in a result's words (ADR-0024 §3). Core's `RunOutcome::Idle`
 //! says only that no events are left; what follows depends on what is still in
-//! the system.
+//! the system, and on whether a wait that never ends is pending.
 
 use taktsim_core::RunOutcome;
 
@@ -12,19 +12,25 @@ pub(crate) enum Ending {
         stop_reason: &'static str,
         complete: bool,
     },
-    /// Items are left and no event: no result.
+    /// Items are left, no event, and no wait that never ends: no result.
     Stalled,
 }
 
 /// The ending of a run with this `outcome` and this many `items_alive`.
-pub(crate) const fn ending(outcome: RunOutcome, items_alive: u64) -> Ending {
+/// `wait_never_ends` says that a component has a wait ending past the end of the
+/// clock (ADR-0022 §6): its event is after every horizon, so `Idle` with it is the
+/// horizon's row, whatever the items.
+pub(crate) const fn ending(outcome: RunOutcome, items_alive: u64, wait_never_ends: bool) -> Ending {
+    const HORIZON: Ending = Ending::Ended {
+        stop_reason: "horizon",
+        complete: true,
+    };
     match outcome {
-        RunOutcome::Horizon => Ending::Ended {
-            stop_reason: "horizon",
-            complete: true,
-        },
+        RunOutcome::Horizon => HORIZON,
         RunOutcome::Idle => {
-            if items_alive == 0 {
+            if wait_never_ends {
+                HORIZON
+            } else if items_alive == 0 {
                 Ending::Ended {
                     stop_reason: "drained",
                     complete: true,
@@ -55,17 +61,26 @@ mod tests {
             complete,
         };
         for alive in [0, 3] {
-            assert_eq!(ending(RunOutcome::Horizon, alive), ended("horizon", true));
+            for never in [false, true] {
+                assert_eq!(
+                    ending(RunOutcome::Horizon, alive, never),
+                    ended("horizon", true)
+                );
+                assert_eq!(
+                    ending(RunOutcome::EventLimit, alive, never),
+                    ended("event_limit", false)
+                );
+                assert_eq!(
+                    ending(RunOutcome::Cancelled, alive, never),
+                    ended("cancelled", false)
+                );
+            }
             assert_eq!(
-                ending(RunOutcome::EventLimit, alive),
-                ended("event_limit", false)
-            );
-            assert_eq!(
-                ending(RunOutcome::Cancelled, alive),
-                ended("cancelled", false)
+                ending(RunOutcome::Idle, alive, true),
+                ended("horizon", true)
             );
         }
-        assert_eq!(ending(RunOutcome::Idle, 0), ended("drained", true));
-        assert_eq!(ending(RunOutcome::Idle, 1), Ending::Stalled);
+        assert_eq!(ending(RunOutcome::Idle, 0, false), ended("drained", true));
+        assert_eq!(ending(RunOutcome::Idle, 1, false), Ending::Stalled);
     }
 }

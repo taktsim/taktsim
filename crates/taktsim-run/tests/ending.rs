@@ -67,6 +67,48 @@ fn stall_is_exit_2_and_not_kept() {
     assert_eq!(temp, 0);
 }
 
+/// Items held by a wait that ends past the end of the clock are no stall: the wait's
+/// end is after every horizon, so the run reached its horizon, complete and kept
+/// (ADR-0022 §6, ADR-0024 §3). Core's word stays `Idle`; the result's is `horizon`.
+#[test]
+fn items_held_by_a_wait_past_the_clock_reach_the_horizon() {
+    let dir = TempDir::new();
+    let response = run_with(
+        &test_registry(),
+        &burst_into("never"),
+        &RunRequest::new(),
+        &dir.store(),
+    )
+    .unwrap();
+    assert!(response.result.complete);
+    assert_eq!(response.result.stop_reason, "horizon");
+    assert_eq!(response.result.runs[0].stop_reason, "horizon");
+    assert!(response.result.runs[0].complete);
+    assert!(response.result.runs[0].run_id.is_some(), "kept");
+    assert!(response.result.experiment_id.is_some());
+    assert_eq!(response.result.runs[0].end_time.to_string(), "1h");
+    let alive = response.result.metrics.last().unwrap();
+    assert_eq!(alive.name, "items_alive");
+    assert_eq!(alive.values[0].value, taktsim_run::Scalar::Integer(3));
+}
+
+/// With nothing left in the system, a wait past the clock still means the next event
+/// is after the horizon: `horizon`, not `drained`, which says nothing more would come.
+#[test]
+fn a_wait_past_the_clock_in_an_empty_system_is_the_horizon_too() {
+    let dir = TempDir::new();
+    let yaml = model(
+        "",
+        "  - {id: burst, type: Burst, count: 0}\n  - {id: keep, type: Keep, how: never}",
+        "  - [burst, keep]",
+    );
+    let response = run_with(&test_registry(), &yaml, &RunRequest::new(), &dir.store()).unwrap();
+    assert!(response.result.complete);
+    assert_eq!(response.result.stop_reason, "horizon");
+    let alive = response.result.metrics.last().unwrap();
+    assert_eq!(alive.values[0].value, taktsim_run::Scalar::Integer(0));
+}
+
 /// A reader decides from `complete`, whatever word `stop_reason` holds: each of
 /// these words goes with the value of the table, and a new word changes nothing a
 /// reader does.
