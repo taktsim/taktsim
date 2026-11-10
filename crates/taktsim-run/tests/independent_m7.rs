@@ -1685,8 +1685,13 @@ fn every_value_states_what_can_be_said_of_its_error() {
     }
 }
 
-/// ADR-0024 §3: every declared observable is either the `observable` of some metric or in
-/// `unreported`, once, and M7 computes none. The text is the declared text.
+/// ADR-0024 §3: every declared observable is either among the `observables` of some
+/// metric or in `unreported`, once. The text is the declared text.
+///
+/// M7 computed none, so all four were `unreported`. M8 answers each (ADR-0025 §2), and a
+/// precision target runs until it is reached, which needs both budgets (ADR-0019 item 4,
+/// ADR-0025 §4); the refusal without them is pinned in `tests/experiments.rs`. Each
+/// declared text is on exactly the metric of its name, and on no other.
 #[test]
 fn declared_observables_are_answered_or_unreported() {
     let (_, store) = fresh_store("unreported");
@@ -1695,24 +1700,35 @@ fn declared_observables_are_answered_or_unreported() {
                 components:\n  - {id: source, type: Source, interarrival: {dist: exponential, mean: 1min}}\n  - {id: cut, type: Machine, cycle_time: 42s}\n  - {id: buf, type: Buffer, capacity: 5 parts}\n  - {id: sink, type: Sink}\n\
                 flow:\n  - [source, cut, buf, sink]\n\
                 observe:\n  - throughput(sink)\n  - wip(buf)\n  - state_shares(cut)\n";
-    let doc = ok(text, &store);
-    let mut told: Vec<&str> = doc
-        .unreported
+    let request = RunRequest {
+        budget: taktsim_run::Budget {
+            max_runs: std::num::NonZeroU32::new(20),
+            max_seconds: std::num::NonZeroU64::new(600),
+        },
+        ..RunRequest::new()
+    };
+    let doc = go(text, &store, &request).unwrap().result;
+    assert_eq!(doc.unreported.len(), 0, "{:?}", doc.unreported);
+    let tagged: Vec<(&str, Vec<&str>)> = doc
+        .metrics
         .iter()
-        .map(|u| u.observable.as_str())
+        .filter(|m| !m.observables.is_empty())
+        .map(|m| {
+            (
+                m.name.as_str(),
+                m.observables.iter().map(String::as_str).collect(),
+            )
+        })
         .collect();
-    told.sort_unstable();
     assert_eq!(
-        told,
+        tagged,
         [
-            "lead_time(sink)",
-            "state_shares(cut)",
-            "throughput(sink)",
-            "wip(buf)"
+            ("lead_time(sink)", vec!["lead_time(sink)"]),
+            ("state_shares(cut)", vec!["state_shares(cut)"]),
+            ("throughput(sink)", vec!["throughput(sink)"]),
+            ("wip(buf)", vec!["wip(buf)"]),
         ]
     );
-    assert!(doc.metrics.iter().all(|m| m.observables.is_empty()));
-    assert!(doc.unreported.iter().all(|u| !u.reason.is_empty()));
 }
 
 /// The windows: `0s` to the end for a count, `{at: end}` for `items_alive`.
