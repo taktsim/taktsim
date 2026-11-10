@@ -1715,13 +1715,22 @@ fn includes_are_pinned_and_covered_by_the_hash() {
 // Spec §4's own example
 // ---------------------------------------------------------------------------
 
-/// Spec §4's document is valid (`docs` examples must be) and runs. It states `seed: 42`, so `seeds` is
-/// `[42]`; the seed is drawn on because `interarrival` is exponential. It declares `throughput(sink)`
-/// twice, in `observe` and in `precision`, `state_shares(cut, weld)` and `wip(buf1)`: M7 computes none,
-/// so the three texts stand in `unreported`, once each (ADR-0024 §3 and its consequence "A model that
-/// declares `experiment.precision` runs once in M7, with the KPI under `unreported`"). A source every 40 s
-/// (exponential) with weld at 45 s plus setups: over 28 800 s, created is near the source's rate or below
-/// it, held up by the bottleneck: at most 28 800 / 40 + 4 sqrt(720) = 827.
+/// Spec §4's document is valid (`docs` examples must be) and runs. It states `seed: 42`; the seed is
+/// drawn on because `interarrival` is exponential. It declares `throughput(sink)` twice, in `observe`
+/// and in `precision`, `state_shares(cut, weld)` and `wip(buf1)`.
+///
+/// M7 ran it once and left the three texts in `unreported`. M8 changes that contract on purpose:
+/// `experiment.precision` runs replications until the target is reached, which requires both budgets
+/// (ADR-0019 item 4, ADR-0025 §4), so without them it is exit 1, nothing on stdout, and one error per
+/// missing flag with the flag as its path. With them it is a sequential experiment over `42, 43, …`
+/// (ADR-0025 §4, S1), of at least n₀ = 10 replications, that ends `precision_reached`, complete
+/// (ADR-0025 §5), and answers every declared text on the metrics it names (ADR-0025 §2):
+/// `state_shares(cut, weld)` on both machines' rows.
+///
+/// Each counted run's own document is kept in the store (ADR-0025 §5) and is M7's, so the counts are
+/// checked run by run, as integers. A source every 40 s (exponential) with weld at 45 s plus setups:
+/// over 28 800 s, created is near the source's rate or below it, held up by the bottleneck: at most
+/// 28 800 / 40 + 4 sqrt(720) = 827.
 #[test]
 fn the_spec_example_validates_and_runs() {
     let dir = fresh("spec_example");
@@ -1729,34 +1738,91 @@ fn the_spec_example_validates_and_runs() {
     let valid = taktsim(&dir, &["validate", "line-a.yaml", "--format", "json"]);
     assert_eq!(valid.code, 0, "{}", valid.stdout);
 
-    let out = taktsim(&dir, &["run", "line-a.yaml", "--format", "json"]);
+    let refused = taktsim(&dir, &["run", "line-a.yaml", "--format", "json"]);
+    assert_eq!(refused.code, 1, "{}", refused.stderr);
+    assert_eq!(refused.stdout, "");
+    let errors = errors_of(&refused.stderr);
+    let named: Vec<(&str, &str)> = errors
+        .iter()
+        .map(|e| (e["type"].as_str().unwrap(), e["path"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        named,
+        [
+            ("run.no_budget", "--max-runs"),
+            ("run.no_budget", "--max-seconds")
+        ]
+    );
+    assert!(!dir.join(".taktsim").join("runs").exists());
+
+    let out = taktsim(
+        &dir,
+        &[
+            "run",
+            "line-a.yaml",
+            "--max-runs",
+            "20",
+            "--max-seconds",
+            "600",
+            "--format",
+            "json",
+        ],
+    );
     assert_eq!(out.code, 0, "{}", out.stderr);
     let doc = json(&out.stdout);
     assert_eq!(doc["complete"], true);
-    assert_eq!(doc["stop_reason"], "horizon");
-    assert_eq!(doc["provenance"]["seeds"][0], Json::from(42));
-    assert_eq!(doc["runs"][0]["end_time"], "8h");
-    assert_eq!(doc["runs"][0]["seed"], Json::from(42));
-    let mut told: Vec<&str> = doc["unreported"]
+    assert_eq!(doc["stop_reason"], "precision_reached");
+    let runs = doc["runs"].as_array().unwrap();
+    assert!((10..=20).contains(&runs.len()), "{} runs", runs.len());
+    let seeds: Vec<Json> = (42..).take(runs.len()).map(Json::from).collect();
+    assert_eq!(doc["provenance"]["seeds"].as_array().unwrap(), &seeds);
+    for (run, seed) in runs.iter().zip(&seeds) {
+        assert_eq!(run["seed"], *seed);
+        assert_eq!(run["end_time"], "8h");
+        assert_eq!(run["stop_reason"], "horizon");
+    }
+    assert_eq!(doc["unreported"].as_array().unwrap().len(), 0);
+    let tagged: Vec<(&str, Vec<&str>)> = doc["metrics"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|u| u["observable"].as_str().unwrap())
+        .filter_map(|m| {
+            let list = m["observables"].as_array()?;
+            Some((
+                m["name"].as_str().unwrap(),
+                list.iter().map(|o| o.as_str().unwrap()).collect(),
+            ))
+        })
         .collect();
-    told.sort_unstable();
     assert_eq!(
-        told,
-        ["state_shares(cut, weld)", "throughput(sink)", "wip(buf1)"]
+        tagged,
+        [
+            ("state_shares(cut)", vec!["state_shares(cut, weld)"]),
+            ("state_shares(weld)", vec!["state_shares(cut, weld)"]),
+            ("throughput(sink)", vec!["throughput(sink)"]),
+            ("wip(buf1)", vec!["wip(buf1)"]),
+        ]
     );
 
-    let created = value(&doc, "created(source)");
-    let delivered = value(&doc, "delivered(sink)");
-    assert!(created <= 827, "created {created}");
-    assert!(
-        delivered <= 640,
-        "weld at 45 s delivers at most 28 800 / 45"
-    );
-    assert_eq!(created - delivered, value(&doc, "items_alive"));
+    for run in runs {
+        let id = run["run_id"].as_str().unwrap();
+        let stored = fs::read_to_string(
+            dir.join(".taktsim")
+                .join("runs")
+                .join(id)
+                .join("result.json"),
+        )
+        .unwrap();
+        let one = json(&stored);
+        let created = value(&one, "created(source)");
+        let delivered = value(&one, "delivered(sink)");
+        assert!(created <= 827, "{id}: created {created}");
+        assert!(
+            delivered <= 640,
+            "{id}: weld at 45 s delivers at most 28 800 / 45"
+        );
+        assert_eq!(created - delivered, value(&one, "items_alive"), "{id}");
+    }
     assert_matches_schema(&schema_of(&dir, "result"), &doc, "the spec's result");
 }
 
@@ -2163,7 +2229,18 @@ fn what_comes_out_matches_the_published_schemas() {
         (&["run", "m.yaml", "--seed", "1"], &result),
         (&["run", "m.yaml", "--seed", "1"], &result),
         (&["run", "exact.yaml", "--seed", "1"], &result),
-        (&["run", "spec.yaml"], &result),
+        // A precision target needs both budgets (ADR-0019 item 4, ADR-0025 §4).
+        (
+            &[
+                "run",
+                "spec.yaml",
+                "--max-runs",
+                "20",
+                "--max-seconds",
+                "600",
+            ],
+            &result,
+        ),
         (
             &["run", "m.yaml", "--seed", "2", "--max-events", "3"],
             &result,
@@ -2734,18 +2811,48 @@ fn a_horizon_flag_over_an_include_is_the_same_model() {
 }
 
 /// `--horizon` makes another version of the model, and changes nothing else in it: what `observe` and
-/// `precision` declare stays declared, in the stored model and in `unreported`.
+/// `precision` declare stays declared, in the stored model and in the result.
+///
+/// M7 left the three declared texts in `unreported`; M8 answers them, each on the metrics it names
+/// (ADR-0025 §2), so they are now found there, with `unreported` empty. The precision target needs both
+/// budgets (ADR-0019 item 4, ADR-0025 §4); at 10 min a 2 % target needs some hundreds of replications,
+/// so the budget is 1,000, and the experiment ends complete.
 #[test]
 fn a_horizon_flag_keeps_what_the_model_declares() {
     let dir = fresh("horizon_keeps");
     write(&dir, "m.yaml", SPEC_EXAMPLE);
     let out = taktsim(
         &dir,
-        &["run", "m.yaml", "--horizon", "10min", "--format", "json"],
+        &[
+            "run",
+            "m.yaml",
+            "--horizon",
+            "10min",
+            "--max-runs",
+            "1000",
+            "--max-seconds",
+            "600",
+            "--format",
+            "json",
+        ],
     );
     assert_eq!(out.code, 0, "{}", out.stderr);
     let doc = json(&out.stdout);
-    assert_eq!(doc["unreported"].as_array().unwrap().len(), 3);
+    assert_eq!(doc["unreported"].as_array().unwrap().len(), 0);
+    let mut answered: Vec<&str> = doc["metrics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m["observables"].as_array())
+        .flatten()
+        .map(|o| o.as_str().unwrap())
+        .collect();
+    answered.sort_unstable();
+    answered.dedup();
+    assert_eq!(
+        answered,
+        ["state_shares(cut, weld)", "throughput(sink)", "wip(buf1)"]
+    );
     let id = doc["runs"][0]["run_id"].as_str().unwrap();
     let stored = fs::read_to_string(
         dir.join(".taktsim")
@@ -2781,7 +2888,12 @@ fn valid_models_match_the_published_schema() {
 
         let file = format!("{name}.yaml");
         write(&dir, &file, text);
-        let out = taktsim(&dir, &["run", &file, "--seed", "1", "--format", "json"]);
+        let mut args = vec!["run", &file, "--seed", "1", "--format", "json"];
+        if text.contains("precision") {
+            // A precision target needs both budgets (ADR-0019 item 4, ADR-0025 §4).
+            args.extend(["--max-runs", "20", "--max-seconds", "600"]);
+        }
+        let out = taktsim(&dir, &args);
         assert_eq!(out.code, 0, "{name}: {}", out.stderr);
         let doc = json(&out.stdout);
         let id = doc["runs"][0]["run_id"].as_str().unwrap();
