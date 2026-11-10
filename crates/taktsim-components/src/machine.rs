@@ -1079,7 +1079,7 @@ impl MachineBehaviour {
             return self.finished.pop_front();
         }
         let finished = &self.finished;
-        let gone = self.outlet.answers_a_unit_gone(position, now, |token| {
+        let gone = self.outlet.answers_a_unit_gone(position, |token| {
             finished.iter().any(|p| p.item.as_u64() == token)
         });
         if gone {

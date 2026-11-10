@@ -707,7 +707,7 @@ impl SourceBehaviour {
             return self.held.pop_front();
         }
         let held = &self.held;
-        let gone = self.outlet.answers_a_unit_gone(position, now, |token| {
+        let gone = self.outlet.answers_a_unit_gone(position, |token| {
             held.iter().any(|p| p.item.as_u64() == token)
         });
         if gone {
@@ -733,7 +733,7 @@ impl SourceBehaviour {
             self.outlet.meant_for(part.route, position, ctx.now())
                 && !self
                     .outlet
-                    .answers_a_unit_gone(position, ctx.now(), |token| token == part.number)
+                    .answers_a_unit_gone(position, |token| token == part.number)
         });
         let Some(part) = usable else {
             ctx.send(from, FlowMessage::Decline)?;

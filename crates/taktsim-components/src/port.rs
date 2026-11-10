@@ -21,6 +21,14 @@
 //! again is treated the same way, since it would make a new entry at a target that
 //! has already picked the old one.
 //!
+//! Which description an `Accept` from a station with a rule answers is known all the
+//! same. The station picks at its `Pick`, when nothing of the instant is left to deliver
+//! before it, so every description sent until then has reached it. A description the
+//! holder sends after the pick and before the `Accept` lands can only follow the
+//! station's own `Status`, which says the `Accept` follows: the `Accept` answers the
+//! description that was current when that `Status` came, or the current one if none
+//! came.
+//!
 //! A plain outlet has no route table: every part is for every target, as in M5, so a
 //! chain costs what it did. A routed outlet counts the parts meant for each target
 //! and each edge, and offers accordingly.
@@ -114,40 +122,35 @@ struct StandingOffer {
 }
 
 /// What was last said about the unit behind an offer to a station with a rule, by a
-/// token that names the unit.
+/// token that names the unit, and which description the `Accept` on its way answers
+/// (module docs).
 #[derive(Debug, Clone, Default)]
 struct Described {
     current: Option<(OfferedUnit, u64)>,
-    /// The descriptions sent at `said_at` that an `Accept` may yet answer, oldest first.
-    /// An `Accept` carries no number, so it is taken to answer the oldest: a station
-    /// may have acted on any of them, in the order they reached it.
-    unanswered: VecDeque<u64>,
-    said_at: Option<SimTime>,
+    /// The description current when the station's `Status` said its `Accept` follows:
+    /// the one it picked.
+    picked: Option<u64>,
+    /// The description the `Accept` that has landed answers, until the holder asks.
+    answering: Option<u64>,
 }
 
 impl Described {
-    /// A description goes out at `now`. If the station already holds an offer, it can
-    /// still answer the one before.
-    fn said(&mut self, unit: OfferedUnit, token: u64, offer_stood: bool, now: SimTime) {
-        if self.said_at != Some(now) {
-            self.unanswered.clear();
-            if offer_stood && let Some((_, before)) = self.current {
-                self.unanswered.push_back(before);
-            }
-            self.said_at = Some(now);
-        }
-        self.unanswered.push_back(token);
+    /// A description goes out.
+    fn said(&mut self, unit: OfferedUnit, token: u64) {
         self.current = Some((unit, token));
     }
 
-    /// The token of the description an `Accept` at `now` answers.
-    fn answered(&mut self, now: SimTime) -> Option<u64> {
-        if self.said_at == Some(now)
-            && let Some(token) = self.unanswered.pop_front()
-        {
-            return Some(token);
-        }
-        self.current.map(|(_, token)| token)
+    /// The station's `Status` says its `Accept` follows: it picked what it was told.
+    fn accept_follows(&mut self) {
+        self.picked = self.current.map(|(_, token)| token);
+    }
+
+    /// The station's `Accept` has landed.
+    fn accept_landed(&mut self) {
+        self.answering = self
+            .picked
+            .take()
+            .or_else(|| self.current.map(|(_, token)| token));
     }
 }
 
@@ -521,19 +524,17 @@ impl Outlet {
     /// Whether the `Accept` of the target at `position` answers a description of a
     /// unit no longer here, by `present`. Then the holder answers `Decline`: the
     /// station ranked what it was told, and the unit it would get now may rank lower
-    /// than the ones it passed over (ADR-0023, disagreement 14). Each description is
-    /// answered once, so an instant ends: a new offer after a `Decline` is the next
-    /// to be answered.
+    /// than the ones it passed over (ADR-0023, disagreement 14). The `Accept` answers
+    /// the description the station picked (module docs), and each is answered once.
     pub(crate) fn answers_a_unit_gone(
         &mut self,
         position: usize,
-        now: SimTime,
         mut present: impl FnMut(u64) -> bool,
     ) -> bool {
         self.routed
             .as_deref_mut()
             .and_then(|routed| routed.described.get_mut(position))
-            .and_then(|described| described.answered(now))
+            .and_then(|described| described.answering.take())
             .is_some_and(|token| !present(token))
     }
 
@@ -618,7 +619,7 @@ impl Outlet {
             if target.offered {
                 target.crossing_at = Some(now);
             }
-            described.said(unit, token, target.offered, now);
+            described.said(unit, token);
             target.offered = true;
             ctx.send(target.id, FlowMessage::OfferOf(Box::new(unit)))?;
         }
@@ -637,6 +638,9 @@ impl Outlet {
         };
         let known = &mut routed.known[position];
         routed.rerank |= known.room != status.room;
+        if status.accept_follows && !known.accept_due {
+            routed.described[position].accept_follows();
+        }
         *known = Known {
             room: status.room,
             queue: status.queue,
@@ -682,6 +686,7 @@ impl Outlet {
         }
         if let Some(routed) = self.routed.as_deref_mut() {
             routed.known[position].accept_due = false;
+            routed.described[position].accept_landed();
         }
         Ok(position)
     }
@@ -1376,6 +1381,72 @@ mod tests {
         inlet.offered_unit(a, unit(3));
         assert_eq!(order(&inlet), [(b, 1), (a, 3)]);
         assert!(inlet.has_waiting());
+    }
+
+    fn unit_of(item: u64) -> OfferedUnit {
+        OfferedUnit {
+            item: Some(ItemId::from_raw(item)),
+            ..unit(0)
+        }
+    }
+
+    /// A routed outlet with one target, behind one plain edge.
+    fn routed_outlet() -> Outlet {
+        let table = RouteTable {
+            edges: vec![crate::route::RouteEdge {
+                when: None,
+                targets: vec![0],
+                pick: Pick::One,
+            }],
+            targets: vec![crate::route::TargetPlan {
+                taker: None,
+                places: 1,
+                returns: false,
+            }],
+            has_when: false,
+            has_split: false,
+            variants: Arc::new(Vec::new()),
+        };
+        let mut outlet = Outlet::with_unoffered_target();
+        outlet.routed = Some(Box::new(Routed::new(Arc::new(table), None)));
+        outlet
+    }
+
+    #[test]
+    fn an_accept_answers_the_description_its_station_picked() {
+        // Told of 1, then of 2 before it picked: the station picked 2.
+        let mut described = Described::default();
+        described.said(unit_of(1), 1);
+        described.said(unit_of(2), 2);
+        described.accept_landed();
+        assert_eq!(described.answering, Some(2));
+        // Told of 1, picked it (its `Status` says the `Accept` follows), then told of 2
+        // before the `Accept` landed: the `Accept` answers 1.
+        let mut described = Described::default();
+        described.said(unit_of(1), 1);
+        described.accept_follows();
+        described.said(unit_of(2), 2);
+        described.accept_landed();
+        assert_eq!(described.answering, Some(1));
+        // The next `Accept` with no `Status` before it answers what is current.
+        described.accept_landed();
+        assert_eq!(described.answering, Some(2));
+    }
+
+    #[test]
+    fn an_accept_for_a_unit_gone_is_declined_once() {
+        let mut outlet = routed_outlet();
+        let routed = outlet.routed.as_deref_mut().unwrap();
+        routed.described[0].said(unit_of(1), 1);
+        routed.described[0].accept_follows();
+        routed.described[0].said(unit_of(2), 2);
+        routed.described[0].accept_landed();
+        // Only 2 is still here: the station picked 1, which has gone.
+        assert!(outlet.answers_a_unit_gone(0, |token| token == 2));
+        // Each description is answered once.
+        assert!(!outlet.answers_a_unit_gone(0, |token| token == 2));
+        // A plain outlet tells nothing about units.
+        assert!(!Outlet::with_unoffered_target().answers_a_unit_gone(0, |_| false));
     }
 
     #[test]

@@ -5,7 +5,7 @@ mod support;
 
 use std::fmt::Write as _;
 
-use support::{arrive_attrs, document, offered_unit, run, t};
+use support::{arrive_attrs, document, is_arrive, offered_unit, run, t};
 use taktsim_components::{FlowMessage, ItemAttrs};
 use taktsim_model::DispatchRule;
 
@@ -571,10 +571,11 @@ fn an_on_demand_source_with_a_rule_downstream_offers_what_it_drew() {
     assert!(came.contains(&3) && came.contains(&1), "{came:?}");
 }
 
-/// Two stations with rules behind one Buffer, free at one instant: the second was told
-/// of the unit the first takes.
+/// Two stations with rules behind one Buffer, free at one instant. The first to pick
+/// takes the unit both were told of; the Buffer describes its next unit to the second
+/// before the second picks, so the second gets the unit it picked, with no `Decline`.
 #[test]
-fn a_station_told_of_a_unit_that_has_gone_picks_again() {
+fn two_stations_with_rules_free_together_each_get_the_unit_they_picked() {
     let text = format!(
         "{}control:\n  dispatch: {{t1: fifo, t2: fifo}}\n",
         document(
@@ -604,11 +605,21 @@ fn a_station_told_of_a_unit_that_has_gone_picks_again() {
     let times = |name: &str| -> Vec<_> { r.arrivals(name).iter().map(|e| e.time).collect() };
     assert_eq!(times("t1")[..3], [t("1s"), t("11s"), t("21s")]);
     assert_eq!(times("t2")[..3], [t("1s"), t("11s"), t("21s")]);
-    // The stale answer was declined, and the pick after it went on record.
+    let mut items: Vec<_> = ["t1", "t2"]
+        .iter()
+        .flat_map(|name| r.arrivals(name))
+        .map(|e| e.item.unwrap().as_u64())
+        .collect();
+    let all = items.len();
+    items.sort_unstable();
+    items.dedup();
+    assert_eq!(items.len(), all);
+    // Every pick answered a unit that was there: the second station picked what it was
+    // told last, not what it was told first.
     assert!(
-        r.events()
+        !r.events()
             .iter()
-            .any(|e| e.from == "buf" && matches!(e.message, FlowMessage::Decline))
+            .any(|e| matches!(e.message, FlowMessage::Decline))
     );
     support::check_records(&r);
 }
@@ -643,4 +654,75 @@ fn minimum_setup_takes_one_place_at_a_time_and_a_buffer_ranks_by_the_right_unit(
             assert!(open <= 1, "{e:?}");
         }
     }
+}
+
+/// The messages `from` and `to` exchanged at `time`, in order, as names.
+fn exchanged(r: &support::Run, from: &str, to: &str, time: &str) -> Vec<String> {
+    r.events()
+        .iter()
+        .filter(|e| e.time == t(time))
+        .filter(|e| (e.from == from && e.to == to) || (e.from == to && e.to == from))
+        .map(|e| {
+            let item = |item: Option<taktsim_core::ItemId>| item.map(taktsim_core::ItemId::as_u64);
+            if let FlowMessage::OfferOf(unit) = &e.message {
+                format!("OfferOf({:?})", item(unit.item))
+            } else if is_arrive(&e.message) {
+                format!("Arrive({:?})", item(e.item))
+            } else {
+                format!("{:?}", e.message)
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn a_re_described_offer_is_answered_by_the_unit_it_now_describes() {
+    // Three parts reach `buf` at 10 s. `m`, with no rule, takes item 0 when the offers
+    // come; `buf` then describes item 1 to `t`, and `t` picks after that description has
+    // reached it. Its `Accept` answers item 1, which is there: no `Decline`. Nor for item
+    // 2 after it.
+    let text = format!(
+        "{}control:\n  dispatch: {{t: fifo}}\n",
+        document(
+            "11s",
+            "  - {id: source, type: Source, interarrival: 10s, batch: 3 parts}\n  \
+             - {id: buf, type: Buffer, capacity: 10 parts}\n  \
+             - {id: m, type: Machine, cycle_time: 100s}\n  \
+             - {id: t, type: Machine, cycle_time: 100s, capacity: 3 parts}\n  \
+             - {id: sink, type: Sink}",
+            "  - [source, buf]\n  - {from: buf, to: [m, t]}\n  - {from: [m, t], to: sink}",
+        )
+    );
+    let r = run(&text, 1);
+    assert!(
+        !r.events()
+            .iter()
+            .any(|e| matches!(e.message, FlowMessage::Decline)),
+        "{:?}",
+        exchanged(&r, "buf", "t", "10s")
+    );
+    let items: Vec<_> = r
+        .arrivals("t")
+        .iter()
+        .map(|e| e.item.unwrap().as_u64())
+        .collect();
+    assert_eq!(items, [1, 2]);
+    assert_eq!(
+        exchanged(&r, "buf", "t", "10s"),
+        [
+            "OfferOf(Some(0))",
+            "OfferOf(Some(1))",
+            "Accept",
+            "Arrive(Some(1))",
+            "Withdraw",
+            "OfferOf(Some(2))",
+            "Accept",
+            "Arrive(Some(2))",
+            // A description was sent again at this instant, so after each `Accept` the
+            // outlet withdraws once more, in case an offer was still on its way: the
+            // target has no entry left, and nothing changes (`port` module docs).
+            "Withdraw",
+        ]
+    );
+    support::check_records(&r);
 }

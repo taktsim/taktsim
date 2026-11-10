@@ -245,11 +245,9 @@ impl BufferBehaviour {
             return self.parts.pop_first().map(|(_, (part, _))| part);
         }
         let parts = &self.parts;
-        let gone = self
-            .outlet
-            .answers_a_unit_gone(position, ctx.now(), |token| {
-                parts.values().any(|(p, _)| p.item.as_u64() == token)
-            });
+        let gone = self.outlet.answers_a_unit_gone(position, |token| {
+            parts.values().any(|(p, _)| p.item.as_u64() == token)
+        });
         if gone {
             return None;
         }
