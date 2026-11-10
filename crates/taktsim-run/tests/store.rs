@@ -1022,3 +1022,28 @@ fn no_reuse_returns_the_stored_bytes() {
     assert_eq!(again.text, stored);
     assert_eq!(again.result.provenance.platform, other);
 }
+
+/// The store's own files are written on the first write and never again: a person
+/// may change them, say to keep runs under version control, and a later run leaves
+/// that alone (ADR-0024 §8).
+#[test]
+fn a_store_writes_its_own_files_once() {
+    let dir = TempDir::new();
+    let store = dir.store();
+    run_text(&drawing_model(", seed: 1"), &RunRequest::new(), &store).unwrap();
+    let root = store.root();
+    let ignore = "*\n!runs/\n";
+    let format = "{\"store_format\": 1, \"later\": true}\n";
+    std::fs::write(root.join(".gitignore"), ignore).unwrap();
+    std::fs::write(root.join("store.json"), format).unwrap();
+    let store = Store::open(root).unwrap();
+    run_text(&drawing_model(", seed: 2"), &RunRequest::new(), &store).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.join(".gitignore")).unwrap(),
+        ignore
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("store.json")).unwrap(),
+        format
+    );
+}
