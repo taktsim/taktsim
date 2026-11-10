@@ -3,6 +3,8 @@
 
 mod support;
 
+use std::fmt::Write as _;
+
 use support::{check_records, document, run, t};
 use taktsim_components::{FlowMessage, RouteRule};
 use taktsim_model::DispatchRule;
@@ -461,6 +463,52 @@ fn long_queue_lists_best_1024_and_total() {
     let (_, _, next) = &dispatches[position + 1];
     assert_eq!(next.candidates[0].item, long.candidates[1].item);
     // A smaller queue lists everything.
+    check_records(&r);
+}
+
+#[test]
+fn a_station_with_more_than_1024_offers_lists_best_1024_and_total() {
+    // 1,025 sources, one offer each at 1 h, into one station with a rule: its own pick,
+    // at its inlet, lists the best 1,024 and the total (ADR-0023 §9, C2).
+    let feeders = 1025;
+    let mut components = String::new();
+    let mut names = Vec::new();
+    for i in 0..feeders {
+        let _ = writeln!(
+            components,
+            "  - {{id: s{i}, type: Source, interarrival: 1h}}"
+        );
+        names.push(format!("s{i}"));
+    }
+    components.push_str("  - {id: m, type: Machine, cycle_time: 1s}\n  - {id: sink, type: Sink}");
+    let flow = format!("  - {{from: [{}], to: m}}\n  - [m, sink]", names.join(", "));
+    let yaml = format!(
+        "{}control:\n  dispatch: {{m: fifo}}\n",
+        document("3601500ms", &components, &flow)
+    );
+    let r = run(&yaml, 1);
+    let dispatches = r.dispatches();
+    assert_eq!(dispatches.len(), 2, "two picks by 1 h 1.5 s");
+    let (time, by, first) = &dispatches[0];
+    assert_eq!((*time, r.name(*by)), (t("1h"), "m"));
+    assert_eq!(first.total, 1025);
+    assert_eq!(first.candidates.len(), 1024);
+    // The one left out ranks after every unit listed: it is last in the next pick, of
+    // the 1,024 left, which lists them all.
+    let (_, _, next) = &dispatches[1];
+    assert_eq!(next.total, 1024);
+    assert_eq!(next.candidates.len(), 1024);
+    let listed: Vec<_> = first.candidates.iter().map(|c| c.from).collect();
+    let left_out: Vec<_> = next
+        .candidates
+        .iter()
+        .filter(|c| !listed.contains(&c.from))
+        .collect();
+    assert_eq!(left_out.len(), 1);
+    assert_eq!(
+        next.candidates.last().map(|c| c.from),
+        Some(left_out[0].from)
+    );
     check_records(&r);
 }
 
