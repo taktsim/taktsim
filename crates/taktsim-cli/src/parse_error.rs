@@ -192,8 +192,14 @@ fn diagnostic(error: &clap::Error, args: &[OsString]) -> Diagnostic {
     let no_command = kind == ErrorKind::MissingSubcommand
         || kind == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand;
     if kind == ErrorKind::InvalidSubcommand || no_command {
-        let found = context(error, ContextKind::InvalidSubcommand);
-        let found = found.first().map_or("nothing", String::as_str);
+        // With no command, clap's context holds the binary's own name, which the
+        // user did not type as a command.
+        let words = context(error, ContextKind::InvalidSubcommand);
+        let found = if no_command {
+            "nothing"
+        } else {
+            words.first().map_or("nothing", String::as_str)
+        };
         let (type_name, message) = if kind == ErrorKind::InvalidSubcommand {
             ("args.unknown_command", format!("no command `{found}`"))
         } else {
