@@ -169,6 +169,141 @@ fn a_changeover_past_the_clock_never_ends() {
     assert_eq!(last.state, MachineState::Setup);
 }
 
+/// Every kind of wait that passes the clock is said on the run's `ClockEnd` and
+/// reaches the report, so the run layer can tell such a run from a stall (ADR-0024 §3).
+#[test]
+fn each_wait_past_the_clock_reaches_the_report() {
+    let changeover = "  - {id: a, type: Source, interarrival: 1s, variants: {red: 100%}}\n  \
+                      - {id: b, type: Source, interarrival: 2s, variants: {blue: 100%}}\n  \
+                      - {id: m, type: Machine, cycle_time: 1s, setup: {per_variant: 150000d}}\n  \
+                      - {id: sink, type: Sink}";
+    let interval = "  - {id: source, type: Source, interarrival: 150000d}\n  \
+                    - {id: m, type: Machine, cycle_time: 1s}\n  - {id: sink, type: Sink}";
+    let cases = [
+        ("cycle", on_demand("cycle_time: 150000d"), LINE),
+        ("interval", interval.to_owned(), LINE),
+        (
+            "up time",
+            on_demand("cycle_time: 1000d, mtbf: 150000d, mttr: 1d"),
+            LINE,
+        ),
+        (
+            "repair",
+            on_demand("cycle_time: 1min, mtbf: 1h, mttr: 150000d"),
+            LINE,
+        ),
+        (
+            "rest of a paused cycle",
+            on_demand("cycle_time: 150000d, mtbf: 1d, mttr: 100000d"),
+            LINE,
+        ),
+        (
+            "changeover",
+            changeover.to_owned(),
+            "  - {from: [a, b], to: m}\n  - [m, sink]",
+        ),
+    ];
+    for (what, body, flow) in &cases {
+        let r = run(&document("213000d", body, flow), 1);
+        assert!(r.report.wait_never_ends, "{what}");
+    }
+}
+
+/// Waits that all fit say nothing, however long, while a wait that ends exactly at
+/// the end of the clock happens and the one it starts would not fit.
+#[test]
+fn waits_that_fit_say_nothing() {
+    // Cycles end at 60,000 d and 120,000 d; the third, to 180,000 d, is pending at
+    // the horizon.
+    let long = document("150000d", &on_demand("cycle_time: 60000d"), LINE);
+    // Failure at 30,000 d, repair at 30,001 d, cycle end at 50,001 d. The next cycle
+    // is paused at 60,001 d and at 90,002 d, and its rest, resumed at 90,003 d, ends at
+    // 100,003 d.
+    let paused = document(
+        "100000d",
+        &on_demand("cycle_time: 50000d, mtbf: 30000d, mttr: 1d"),
+        LINE,
+    );
+    let short = document("1h", &on_demand("cycle_time: 1min"), LINE);
+    for model in [&long, &paused, &short] {
+        let r = run(model, 1);
+        assert_eq!(r.report.summary.outcome, RunOutcome::Horizon, "{model}");
+        assert!(!r.report.wait_never_ends, "{model}");
+    }
+    let paused = run(&paused, 1);
+    assert_eq!(paused.times("m", cycle_done), [t("50001d")]);
+    assert_eq!(
+        paused.times("m", failure),
+        [t("30000d"), t("60001d"), t("90002d")]
+    );
+
+    let limit = "18446744073.709551615s";
+    let r = run(
+        &document(limit, &on_demand(&format!("cycle_time: {limit}")), LINE),
+        1,
+    );
+    assert_eq!(r.times("m", cycle_done), [t(limit)]);
+    assert!(
+        r.report.wait_never_ends,
+        "the second cycle would end past it"
+    );
+}
+
+/// The model of ADR-0024 §3's question: a part arrives at 150,000 d and its cycle of
+/// 100,000 d would end past the clock, as would the next interval. Core runs out of
+/// events with the part in the machine, and the report says why.
+#[test]
+fn a_part_held_by_a_wait_past_the_clock_is_reported_with_it() {
+    let body = "  - {id: source, type: Source, interarrival: 150000d}\n  \
+                - {id: m, type: Machine, cycle_time: 100000d}\n  - {id: sink, type: Sink}";
+    let r = run(&document("200000d", body, LINE), 1);
+    assert_eq!(r.report.summary.outcome, RunOutcome::Idle);
+    assert_eq!(r.report.items.held.get(), 1);
+    assert!(r.report.wait_never_ends);
+    assert_eq!(r.end, t("200000d"));
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// In the standard catalog a Source's interval, a cycle or a repair is always
+    /// pending (ADR-0024 §3), so a run with items left and no event has a wait past the
+    /// clock: none of these runs is a stall.
+    #[test]
+    fn items_left_with_no_event_always_have_a_wait_past_the_clock(
+        cycle in 1_000_u32..213_503,
+        up in 1_000_u32..213_503,
+        repair in 1_000_u32..213_503,
+        interval in 1_000_u32..213_503,
+        horizon in 1_000_u32..213_503,
+        exponential in any::<bool>(),
+        seed in 1_u64..1_000,
+    ) {
+        let duration = |days: u32| {
+            if exponential {
+                format!("{{dist: exponential, mean: {days}d}}")
+            } else {
+                format!("{days}d")
+            }
+        };
+        let body = format!(
+            "  - {{id: source, type: Source, interarrival: {}}}\n  \
+             - {{id: m, type: Machine, cycle_time: {}, mtbf: {}, mttr: {}}}\n  \
+             - {{id: sink, type: Sink}}",
+            duration(interval),
+            duration(cycle),
+            duration(up),
+            duration(repair),
+        );
+        let r = run(&document(&format!("{horizon}d"), &body, LINE), seed);
+        let items = r.report.items;
+        let left = items.held.get() + items.in_transit.get();
+        if r.report.summary.outcome == RunOutcome::Idle {
+            prop_assert!(r.report.wait_never_ends, "{} items left", left);
+        }
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
