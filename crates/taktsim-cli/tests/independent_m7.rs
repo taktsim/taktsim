@@ -2914,33 +2914,48 @@ fn the_example_of_an_error_fixes_the_model() {
     assert!(wrong.is_empty(), "{wrong}");
 }
 
-/// A clock that would pass what a time can hold (about 584 years) during a run is an engine error at exit 2,
-/// at the component and the time: 200 000 d + 200 000 d is more than 213 503 d. It is not a panic, and
-/// nothing is kept (§9). It could not be refused at load time, since only the run reaches that moment.
+/// A wait whose end would pass what a time can hold (about 584 years, 213 503 d) never ends (ADR-0022 §6),
+/// and items such a wait holds are no stall: its end is after every horizon, so the run reaches its
+/// horizon, complete, exit 0, and is kept (ADR-0024 §3). This test once expected exit 2 for the overflow
+/// itself; M5 made such a wait never end instead, so that whether a model that loads also runs does not
+/// depend on the seed (principle 2).
+///
+/// A part arrives at 150 000 d; its cycle of 100 000 d and the next interval would both end past the
+/// clock, so core runs out of events at 150 000 d with the part in `cut`. And the first model of this test:
+/// `cut`'s second cycle of 200 000 d would end past the clock while `weld`'s 30 s are pending.
+///
+/// A genuine stall, items left with no event and no such wait, cannot be built from the standard catalog;
+/// it stays `run.stalled`, `RunFailed`, in `taktsim-run`'s `stall_is_exit_2_and_not_kept` and
+/// `a_stall_is_a_failure_with_when_and_what`, and `RunFailed` is exit 2 in `the_exit_codes_of_adr_0019`.
 #[test]
-fn a_clock_that_overflows_is_a_failed_run() {
+fn a_wait_past_the_clock_runs_to_its_horizon() {
     let dir = fresh("clock_overflow");
-    write(
-        &dir,
-        "m.yaml",
-        &EXACT
-            .replace("horizon: 125s", "horizon: 200000d")
-            .replace("cycle_time: 10s", "cycle_time: 200000d"),
-    );
-    let out = taktsim(&dir, &["run", "m.yaml", "--format", "json"]);
-    assert_eq!(out.code, 2, "{}", out.stderr);
-    assert_eq!(out.stdout, "");
-    let error = &errors_of(&out.stderr)[0];
-    assert_eq!(error["path"], "components[1]");
-    assert_eq!(error["time"], "200000d");
-    assert!(
-        error["recent"]
+    let held = "format: \"1.0\"\nmodel: {name: m}\nexperiment: {type: terminating, horizon: 200000d}\n\
+components:\n  - {id: source, type: Source, interarrival: 150000d}\n  - {id: cut, type: Machine, cycle_time: 100000d}\n  - {id: sink, type: Sink}\n\
+flow:\n  - [source, cut, sink]\n";
+    let overflowing = EXACT
+        .replace("horizon: 125s", "horizon: 200000d")
+        .replace("cycle_time: 10s", "cycle_time: 200000d");
+    for (name, text, alive) in [("held", held, 1), ("overflowing", overflowing.as_str(), 2)] {
+        write(&dir, "m.yaml", text);
+        let out = taktsim(&dir, &["run", "m.yaml", "--format", "json"]);
+        assert_eq!(out.code, 0, "{name}: {}", out.stderr);
+        let doc = json(&out.stdout);
+        assert_eq!(doc["complete"], true, "{name}");
+        assert_eq!(doc["stop_reason"], "horizon", "{name}");
+        assert_eq!(doc["runs"][0]["stop_reason"], "horizon", "{name}");
+        assert_eq!(doc["runs"][0]["end_time"], "200000d", "{name}");
+        assert!(doc["runs"][0]["run_id"].as_str().is_some(), "{name}: kept");
+        let items_alive = doc["metrics"]
             .as_array()
-            .is_some_and(|recent| !recent.is_empty())
-    );
-    assert!(!error.as_object().unwrap().contains_key("example"));
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == "items_alive")
+            .map(|m| m["values"][0]["value"].clone());
+        assert_eq!(items_alive, Some(Json::from(alive)), "{name}");
+    }
     let runs = dir.join(".taktsim").join("runs");
-    assert!(!runs.exists() || sorted_dir(&runs).is_empty());
+    assert_eq!(sorted_dir(&runs).len(), 2);
 }
 
 /// ADR-0024 §9: `type` is a stable word in a namespace, and an agent acts on it. `describe` and `schema`
