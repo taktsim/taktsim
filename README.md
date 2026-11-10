@@ -48,10 +48,12 @@ Use it to:
 
 > [!NOTE]
 > Part of v0.1, not released yet. The format is specified in [spec
-> §4](docs/spec.md). For now `run` reports counts from one seed: parts
-> created, parts delivered and parts still in the line, each marked as
-> having no error bound. Throughput and WIP with confidence intervals
-> come with replications (milestone M8 of the [roadmap](docs/roadmap.md)).
+> §4](docs/spec.md). With one seed, `run` reports counts, throughput,
+> WIP, lead time, utilization and the share of time in each state, and
+> says that one run gives no error bound. Over several seeds
+> (`--seed 1..20`), or until a declared `precision` is met within
+> `--max-runs` and `--max-seconds`, each number comes with a confidence
+> interval (milestone M8 of the [roadmap](docs/roadmap.md)).
 
 The line above, as a model file:
 
@@ -109,10 +111,10 @@ approach.
   valid example, never halfway through a simulation.
 - **Same input, same answer.** The same model and seed give the same
   result, byte for byte, on Windows, Linux and macOS.
-- **Numbers come with error bars.** Results will carry confidence
-  intervals (planned for M8); until then a number from one seed says
-  that it has none. The engine is tested against queueing problems
-  whose exact answers are known.
+- **Numbers come with error bars.** A result over several seeds
+  carries confidence intervals; a number from one seed says that it has
+  none. The engine is tested against queueing problems whose exact
+  answers are known.
 - **AI agents can use it too.** The `taktsim` command describes its own
   commands and results as JSON, so an agent can build, run and refine
   models the same way a person does.
