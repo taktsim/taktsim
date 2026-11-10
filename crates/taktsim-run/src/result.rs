@@ -1013,7 +1013,9 @@ impl Encode for Accuracy {
     }
 }
 
-/// The keys of an [`Accuracy`].
+/// The keys of an [`Accuracy`]. `interval`, `reason` and `detail` are read only
+/// under the kind that defines them: a kind this build does not know may use the
+/// same keys in another shape, and still reads as no statement (ADR-0024 §4).
 struct AccuracyKeys {
     kind: String,
     interval: Option<SamplingInterval>,
@@ -1029,10 +1031,20 @@ impl Record for AccuracyKeys {
     const OPEN: bool = true;
 
     fn read(fields: &mut Fields<'_, '_>) -> Option<Self> {
-        let kind = fields.required("kind");
-        let interval = fields.optional("interval");
-        let reason = fields.optional("reason");
-        let detail = fields.optional("detail");
+        let kind = fields.required::<String>("kind");
+        // Describing the schema has no kind; `schema` places these keys.
+        let describing = fields.node().is_none();
+        let under = |word: &str| !describing && kind.as_deref() == Some(word);
+        let interval = if under("sampling") {
+            fields.optional("interval")
+        } else {
+            Some(None)
+        };
+        let (reason, detail) = if under("none") {
+            (fields.optional("reason"), fields.optional("detail"))
+        } else {
+            (Some(None), Some(None))
+        };
         let target = fields.optional("target");
         let reached = fields.optional("reached");
         Some(Self {
@@ -1080,7 +1092,9 @@ impl Decode for Accuracy {
     }
 
     fn schema(schemas: &mut Schemas) -> Json {
-        let when = |word: &str, then: &[&str]| {
+        // Each kind's own keys are typed only under that kind, as `decode` reads
+        // them, so the schema accepts a later kind that uses them otherwise.
+        let when = |word: &str, keys: Vec<(&str, Json)>| {
             Json::object([
                 (
                     "if",
@@ -1094,25 +1108,51 @@ impl Decode for Accuracy {
                 ),
                 (
                     "then",
-                    Json::object([(
-                        "required",
-                        Json::Array(then.iter().map(|k| Json::from(*k)).collect()),
-                    )]),
+                    Json::object([
+                        (
+                            "required",
+                            Json::Array(keys.iter().map(|(k, _)| Json::from(*k)).collect()),
+                        ),
+                        ("properties", Json::object(keys)),
+                    ]),
                 ),
             ])
         };
-        <AccuracyKeys as Decode>::schema(schemas)
+        let sampling = when(
+            "sampling",
+            vec![("interval", schemas.of::<SamplingInterval>())],
+        );
+        let none = when(
+            "none",
+            vec![
+                ("reason", schemas.of::<String>()),
+                ("detail", schemas.of::<String>()),
+            ],
+        );
+        let mut schema = <AccuracyKeys as Decode>::schema(schemas);
+        // Declared on every kind, so a reader finds each key the document may hold,
+        // but typed only in `allOf`, under its kind.
+        if let Json::Object(keys) = &mut schema
+            && let Some(Json::Object(properties)) = keys.get_mut("properties")
+        {
+            for key in ["interval", "reason", "detail"] {
+                properties.insert(
+                    key.to_owned(),
+                    Json::object([(
+                        "description",
+                        Json::from(
+                            "Typed by the kind that defines it: `interval` under `sampling`, `reason` and `detail` under `none`.",
+                        ),
+                    )]),
+                );
+            }
+        }
+        schema
             .with(
                 "description",
                 &"What can be said about a value's error. Read a kind you do not know as no statement, never as an error.",
             )
-            .with(
-                "allOf",
-                &Json::Array(vec![
-                    when("sampling", &["interval"]),
-                    when("none", &["reason", "detail"]),
-                ]),
-            )
+            .with("allOf", &Json::Array(vec![sampling, none]))
     }
 }
 
