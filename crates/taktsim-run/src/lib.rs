@@ -555,7 +555,7 @@ pub fn run<D: Domain>(
     if request.reuse
         && let Some(stored) = store.read_result(&id)?
     {
-        check_filed_under(&stored.document, &id)?;
+        check_filed_under(&stored.document, &id, &model)?;
         return Ok(RunResponse {
             result: stored.document,
             text: stored.text,
@@ -624,7 +624,7 @@ pub fn run<D: Domain>(
             document: result,
             text,
         },
-        Commit::AlreadyThere => compare_with_stored(store, &id, &written)?,
+        Commit::AlreadyThere => compare_with_stored(store, &id, &model, &written)?,
     };
     Ok(RunResponse {
         result: stored.document,
@@ -659,16 +659,22 @@ fn stored_run_differs(what: String) -> Failure {
 
 /// A run's id is computed from what it ran, so its result can be checked against the
 /// directory it is filed under (spec §5, ADR-0024 §6). A result that says or computes
-/// to another id is not this run's, and must not be returned as this run.
-fn check_filed_under(result: &ResultDocument, id: &RunId) -> Result<(), Failure> {
+/// to another id, states hashes other than `model`'s, names a trace other than the
+/// one filed beside it, or holds more than its one run, is not this run's, and must
+/// not be returned as this run.
+fn check_filed_under(result: &ResultDocument, id: &RunId, model: &Model) -> Result<(), Failure> {
     let disagrees = |what: &str| {
         stored_run_differs(format!(
             "the result filed under run {id} is not that run's: {what}"
         ))
     };
     let provenance = &result.provenance;
-    let Some(run) = result.runs.first() else {
-        return Err(disagrees("it names no run"));
+    let [run] = result.runs.as_slice() else {
+        return Err(disagrees(if result.runs.is_empty() {
+            "it names no run"
+        } else {
+            "it states more than its one run"
+        }));
     };
     if run.run_id.as_ref() != Some(id) {
         return Err(disagrees("it states another run id"));
@@ -689,9 +695,17 @@ fn check_filed_under(result: &ResultDocument, id: &RunId) -> Result<(), Failure>
     if provenance.seeds.as_slice() != run.seed.as_slice() {
         return Err(disagrees("its provenance states another seed than its run"));
     }
+    if provenance.model_hash != model.hash() || provenance.system_hash != model.system_hash() {
+        return Err(disagrees("it does not state the hashes of its model"));
+    }
     let Some(trace) = &run.trace else {
         return Err(disagrees("it names no trace"));
     };
+    if trace.path != format!("runs/{id}/{TRACE_FILE}") {
+        return Err(disagrees(
+            "it names another trace than the one filed with it",
+        ));
+    }
     let inputs = RunIdInputs {
         engine: &provenance.engine,
         engine_version: &provenance.engine_version,
@@ -713,11 +727,12 @@ fn check_filed_under(result: &ResultDocument, id: &RunId) -> Result<(), Failure>
 fn compare_with_stored(
     store: &Store,
     id: &RunId,
+    model: &Model,
     written: &Summary,
 ) -> Result<StoredResult, Failure> {
     let stored = store.read_result(id)?;
     if let Some(stored) = &stored {
-        check_filed_under(&stored.document, id)?;
+        check_filed_under(&stored.document, id, model)?;
     }
     let stored_hash = stored
         .iter()
@@ -868,12 +883,7 @@ pub fn replay_stored<D: Domain>(
             line.file = Some(model_path.display().to_string());
             Failure::one(FailureClass::Io, line)
         })?;
-    if model.hash() != provenance.model_hash || model.system_hash() != provenance.system_hash {
-        return Err(stored_run_differs(format!(
-            "the stored model of run {id} does not have the hashes its result states"
-        )));
-    }
-    check_filed_under(&result, id)?;
+    check_filed_under(&result, id, &model)?;
     let trace_path = store.run_file(id, TRACE_FILE);
     let seed = result.runs.first().and_then(|run| run.seed);
     let document = model.document();
